@@ -705,12 +705,9 @@ def n2h2cia(WAVEN):
 
     #Finding the range within the defined wavenumbers
     N2H2CIA = np.zeros(len(WAVEN))
-    iin = np.where((WAVEN>=np.min(WAVEN1)) & (WAVEN<=np.max(WAVEN1)))
-    iin = iin[0]
+    iin = np.where((WAVEN>=np.min(WAVEN1)) & (WAVEN<=np.max(WAVEN1)))[0]
 
     N2H2CIA[iin] = np.interp(WAVEN[iin],WAVEN1,H2N2COEF1)
-
-    #N2H2CIA[iin] = f(WAVEN[iin])
 
     #Convert to cm-1 (amagat)-2
     N2H2CIA = N2H2CIA * 1.0e-5
