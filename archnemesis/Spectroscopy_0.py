@@ -1364,14 +1364,14 @@ def read_ltahead(filename):
     else:
         f = open(filename+'.lta','r')
 
-    irec0 = int(np.fromfile(f,dtype='int32',count=1))
-    nwave = int(np.fromfile(f,dtype='int32',count=1))
-    vmin = float(np.fromfile(f,dtype='float32',count=1))
-    delv = float(np.fromfile(f,dtype='float32',count=1))
-    npress = int(np.fromfile(f,dtype='int32',count=1))
-    ntemp = int(np.fromfile(f,dtype='int32',count=1))
-    gasID = int(np.fromfile(f,dtype='int32',count=1))
-    isoID = int(np.fromfile(f,dtype='int32',count=1))
+    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
+    nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
+    vmin = float(np.fromfile(f,dtype='float32',count=1)[0])
+    delv = float(np.fromfile(f,dtype='float32',count=1)[0])
+    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
+    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
+    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
+    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
 
     presslevels = np.fromfile(f,dtype='float32',count=npress)
     if ntemp > 0:
@@ -1425,16 +1425,16 @@ def read_ktahead(filename):
     else:
         f = open(filename+'.kta','r')
 
-    irec0 = int(np.fromfile(f,dtype='int32',count=1))
-    nwave = int(np.fromfile(f,dtype='int32',count=1))
-    vmin = float(np.fromfile(f,dtype='float32',count=1))
-    delv = float(np.fromfile(f,dtype='float32',count=1))
-    fwhm = float(np.fromfile(f,dtype='float32',count=1))
-    npress = int(np.fromfile(f,dtype='int32',count=1))
-    ntemp = int(np.fromfile(f,dtype='int32',count=1))
-    ng = int(np.fromfile(f,dtype='int32',count=1))
-    gasID = int(np.fromfile(f,dtype='int32',count=1))
-    isoID = int(np.fromfile(f,dtype='int32',count=1))
+    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
+    nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
+    vmin = float(np.fromfile(f,dtype='float32',count=1)[0])
+    delv = float(np.fromfile(f,dtype='float32',count=1)[0])
+    fwhm = float(np.fromfile(f,dtype='float32',count=1)[0])
+    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
+    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
+    ng = int(np.fromfile(f,dtype='int32',count=1)[0])
+    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
+    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
 
     g_ord = np.fromfile(f,dtype='float32',count=ng)
     del_g = np.fromfile(f,dtype='float32',count=ng)
@@ -1567,14 +1567,14 @@ def read_lbltable(filename,wavemin,wavemax):
     nbytes_float32 = 4
 
     #Reading header
-    irec0 = int(np.fromfile(f,dtype='int32',count=1))
-    nwavelta = int(np.fromfile(f,dtype='int32',count=1))
-    vmin = float(np.fromfile(f,dtype='float32',count=1))
-    delv = float(np.fromfile(f,dtype='float32',count=1))
-    npress = int(np.fromfile(f,dtype='int32',count=1))
-    ntemp = int(np.fromfile(f,dtype='int32',count=1))
-    gasID = int(np.fromfile(f,dtype='int32',count=1))
-    isoID = int(np.fromfile(f,dtype='int32',count=1))
+    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
+    nwavelta = int(np.fromfile(f,dtype='int32',count=1)[0])
+    vmin = float(np.fromfile(f,dtype='float32',count=1)[0])
+    delv = float(np.fromfile(f,dtype='float32',count=1)[0])
+    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
+    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
+    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
+    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
 
     presslevels = np.fromfile(f,dtype='float32',count=npress)
     
@@ -1673,16 +1673,16 @@ def read_ktable(filename,wavemin,wavemax):
     ioff = 0
 
     #Reading header
-    irec0 = int(np.fromfile(f,dtype='int32',count=1))
-    nwavekta = int(np.fromfile(f,dtype='int32',count=1))
-    vmin = float(np.fromfile(f,dtype='float32',count=1))
-    delv = float(np.fromfile(f,dtype='float32',count=1))
-    fwhm = float(np.fromfile(f,dtype='float32',count=1))
-    npress = int(np.fromfile(f,dtype='int32',count=1))
-    ntemp = int(np.fromfile(f,dtype='int32',count=1))
-    ng = int(np.fromfile(f,dtype='int32',count=1))
-    gasID = int(np.fromfile(f,dtype='int32',count=1))
-    isoID = int(np.fromfile(f,dtype='int32',count=1))
+    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
+    nwavekta = int(np.fromfile(f,dtype='int32',count=1)[0])
+    vmin = float(np.fromfile(f,dtype='float32',count=1)[0])
+    delv = float(np.fromfile(f,dtype='float32',count=1)[0])
+    fwhm = float(np.fromfile(f,dtype='float32',count=1)[0])
+    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
+    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
+    ng = int(np.fromfile(f,dtype='int32',count=1)[0])
+    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
+    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
 
     ioff = ioff + 10 * nbytes_int32
 
@@ -1695,8 +1695,8 @@ def read_ktable(filename,wavemin,wavemax):
 
     ioff = ioff + 2*ng*nbytes_float32
 
-    dummy = np.fromfile(f,dtype='float32',count=1)
-    dummy = np.fromfile(f,dtype='float32',count=1)
+    dummy = np.fromfile(f,dtype='float32',count=1)[0]
+    dummy = np.fromfile(f,dtype='float32',count=1)[0]
 
     ioff = ioff + 2*nbytes_float32
 
