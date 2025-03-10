@@ -1599,31 +1599,22 @@ class Measurement_0:
             if wavemin>=wavemax:
                 raise ValueError('error in wavesetc :: the spectral points defining the instrument lineshape must be increasing')
 
+            # Find indices just below and above wavemin and wavemax
+            index_min = np.searchsorted(Spectroscopy.WAVE, wavemin, side="left")
+            index_max = np.searchsorted(Spectroscopy.WAVE, wavemax, side="right")
+            
+            # Ensure indices are within valid bounds
+            index_min = max(index_min - 1, 0)  # Get the one just below
+            index_max = min(index_max, len(Spectroscopy.WAVE) - 1)  # Get the one just above
+
             #Checking that the lbl-tables encompass this wavelength range
             err = 0.01
             if (wavemin<(1-err)*Spectroscopy.WAVE.min() or wavemax>(1+err)*Spectroscopy.WAVE.max()):
                 print('Required wavelength range :: ',wavemin,wavemax)
                 print('Wavelength range in lbl-tables :: ',Spectroscopy.WAVE.min(),Spectroscopy.WAVE.max())
                 raise ValueError('error from wavesetc :: Channel wavelengths not covered by lbl-tables')
-
-
-            #Selecting the necessary wavenumbers
-            iwave = np.where( (Spectroscopy.WAVE>=wavemin) & (Spectroscopy.WAVE<=wavemax) )
-            iwave = iwave[0]
             
-            #Adding two more points to avoid problems with edges
-            iwavex = np.zeros(len(iwave)+2,dtype='int32')
-            if iwave[0]>0:
-                iwavex[0] = iwave[0] - 1
-            if iwave[len(iwave)-1]<Spectroscopy.NWAVE-1:
-                iwavex[len(iwave)+1] = iwave[len(iwave)-1] + 1
-            else:
-                iwavex[len(iwave)+1] = Spectroscopy.NWAVE-1
-            iwavex[1:len(iwave)+1] = iwave[:]
-
-            iwavex = np.unique(iwavex)
-            
-            self.WAVE = Spectroscopy.WAVE[iwave]
+            self.WAVE = Spectroscopy.WAVE[index_min:index_max+1]
             self.NWAVE = len(self.WAVE)
                         
         else:
