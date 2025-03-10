@@ -2,13 +2,15 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import matplotlib.pyplot as plt
+from numba import jit
+
 AVOGAD = 6.02214076e23
 """
 Object to store layering scheme settings and averaged properties of each layer.
 """
 class Layer_0:
     def __init__(self, RADIUS=None, LAYHT=0, LAYTYP=1, LAYINT=1, NLAY=20, NINT=101,
-                INTERTYP=1, LAYANG=0.0, H_base=None, P_base=None):
+                LAYANG=0.0, H_base=None, P_base=None):
         """
         After creating a Layer object, call the method
             integrate(self, H, P, T, LAYANG, ID, VMR) to calculate
@@ -41,9 +43,6 @@ class Layer_0:
             Number of layers to split the atmosphere into. Default 20.
         @param NINT: int
             Number of integration points to be used if LAYINT=1.
-        @param INTERTYP: int
-            Interger specifying interpolation scheme.  Default 1.
-            1=linear, 2=quadratic spline, 3=cubic spline
         @param H_base: 1D array
             Heights of the layer bases defined by user. Default None.
         @param P_base: 1D array
@@ -118,7 +117,6 @@ class Layer_0:
         self.LAYINT = LAYINT
         self.NINT = NINT
         self.LAYHT = LAYHT
-        self.INTERTYP = INTERTYP
         self.H_base = H_base
         self.P_base = P_base
         self.LAYANG = None     #Angle used to split the layers. Usually it is zero unless it is a limb calculation that it is 90.
@@ -417,7 +415,7 @@ class Layer_0:
         # get layer base height and base pressure
         BASEH, BASEP = layer_split(RADIUS=self.RADIUS, H=H, P=P, LAYANG=LAYANG,
             LAYHT=self.LAYHT, NLAY=self.NLAY, LAYTYP=self.LAYTYP,
-            INTERTYP=self.INTERTYP, H_base=self.H_base, P_base=self.P_base)
+            H_base=self.H_base, P_base=self.P_base)
         self.BASEH = BASEH
         self.BASEP = BASEP
 
@@ -585,60 +583,111 @@ def interp(X_data, Y_data, X, ITYPE=1):
     from scipy.interpolate import interp1d
     
     if ITYPE == 1:
-        interp = interp1d
         f = interp1d(X_data, Y_data, kind='linear', fill_value='extrapolate')
         Y = f(X)
 
     elif ITYPE == 2:
-        interp = interp1d
-        f = interp(X_data, Y_data, kind='quadratic', fill_value='extrapolate')
+        f = interp1d(X_data, Y_data, kind='quadratic', fill_value='extrapolate')
         Y = f(X)
 
     elif ITYPE == 3:
         interp = interp1d
-        f = interp(X_data, Y_data, kind='cubic', fill_value='extrapolate')
+        f = interp1d(X_data, Y_data, kind='cubic', fill_value='extrapolate')
         Y = f(X)
 
     return Y
 
 #########################################################################################
 
-def interpg(X_data, Y_data, X):
+@jit(nopython=True)
+def interp_numba(X_data, Y_data, X):
     """
-    Routine for 1D interpolation
+    Optimised routine for 1D linear interpolation using Numba JIT.
 
     Inputs
     ------
-    @param X_data: 1D array
-
+    @param X_data: 1D array (monotonic increasing values)
     @param Y_data: 1D array
+    @param X: 1D array (values to interpolate)
 
-    @param X: real
+    Returns
+    -------
+    @return Y: Interpolated values at X
+    @return J: Indices of the left bounding points
+    @return F: Fractional distances between interpolation points
+    """
 
-    @param ITYPE: int
-        1=linear interpolation
+    # Ensure X is always an array
+    instance=False
+    if isinstance(X, (float, np.float64, int)):
+        instance=True
+        X = np.array([X])  # Convert single value to array
+        
+    if np.any(np.diff(X_data) <= 0):
+        raise ValueError("error in interp :: X_data must be strictly increasing.")
+        
+    NX = len(X)
+    Y = np.zeros(NX)
+    J = np.zeros(NX, dtype=np.int32)
+    F = np.zeros(NX)
+
+    for IX in range(NX):
+        j = 0
+        while j < len(X_data) and X_data[j] <= X[IX]:
+            j += 1
+        j = min(j, len(X_data) - 1)  # Ensure j does not exceed bounds
+
+        if j == 0:
+            j = 1  # Avoid out-of-bounds access
+
+        J[IX] = j - 1
+        F[IX] = (X[IX] - X_data[j - 1]) / (X_data[j] - X_data[j - 1])
+        Y[IX] = (1.0 - F[IX]) * Y_data[j - 1] + F[IX] * Y_data[j]
+
+    if instance==True:
+        return Y[0] 
+    else:
+        return Y
+
+#########################################################################################
+
+@jit(nopython=True)
+def interpg(X_data, Y_data, X):
+    """
+    Optimised routine for 1D linear interpolation using Numba JIT.
+
+    Inputs
+    ------
+    @param X_data: 1D array (monotonic increasing values)
+    @param Y_data: 1D array
+    @param X: 1D array (values to interpolate)
+
+    Returns
+    -------
+    @return Y: Interpolated values at X
+    @return J: Indices of the left bounding points
+    @return F: Fractional distances between interpolation points
     """
 
     NX = len(X)
     Y = np.zeros(NX)
-    J = np.zeros(NX,dtype='int32')
+    J = np.zeros(NX, dtype=np.int32)
     F = np.zeros(NX)
+
     for IX in range(NX):
-
         j = 0
-        while X_data[j]<=X[IX]:
-            j = j + 1
-            if j==len(X_data):
-                j = len(X_data) - 1
-                break
-        
-        if j==0:
-            j = 1
-        J[IX] = j - 1
-        F[IX] = (X[IX]-X_data[j-1])/(X_data[j]-X_data[j-1])
-        Y[IX] = (1.0-F[IX])*Y_data[j-1] + F[IX]*Y_data[j]
+        while j < len(X_data) and X_data[j] <= X[IX]:
+            j += 1
+        j = min(j, len(X_data) - 1)  # Ensure j does not exceed bounds
 
-    return Y,J,F
+        if j == 0:
+            j = 1  # Avoid out-of-bounds access
+
+        J[IX] = j - 1
+        F[IX] = (X[IX] - X_data[j - 1]) / (X_data[j] - X_data[j - 1])
+        Y[IX] = (1.0 - F[IX]) * Y_data[j - 1] + F[IX] * Y_data[j]
+
+    return Y, J, F
 
 #########################################################################################
 
@@ -1273,7 +1322,7 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
 #########################################################################################
 
 def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
-        LAYTYP=1, INTERTYP=1, H_base=None, P_base=None):
+        LAYTYP=1, H_base=None, P_base=None):
     """
     Splits an atmosphere into NLAY layers.
     Takes a set of altitudes H with corresponding pressures P and returns
@@ -1310,9 +1359,6 @@ def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
         Heights of the layer bases defined by user. Default None.
     @param P_base: 1D array
         Pressures of the layer bases defined by user. Default None.
-    @param INTERTYP: int
-        Interger specifying interpolation scheme.  Default 1.
-        1=linear, 2=quadratic spline, 3=cubic spline
 
     Returns
     -------
@@ -1332,18 +1378,18 @@ def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
     #    'Cannot input both layer base heights and base pressures'
 
     if LAYTYP == 0: # split by equal pressure intervals
-        PBOT = interp(H,P,LAYHT,INTERTYP)  # pressure at base of lowest layer
+        PBOT = interp(H,P,LAYHT)  # pressure at base of lowest layer
         BASEP = np.linspace(PBOT,P[-1],NLAY+1)[:-1]
-        BASEH = interp(P,H,BASEP,INTERTYP)
+        BASEH = interp(P[::-1],H[::-1],BASEP)
 
     elif LAYTYP == 1: # split by equal log pressure intervals
-        PBOT = interp(H,P,LAYHT,INTERTYP)  # pressure at base of lowest layer
+        PBOT = interp(H,P,LAYHT)  # pressure at base of lowest layer
         BASEP = np.logspace(np.log10(PBOT),np.log10(P[-1]),NLAY+1)[:-1]
-        BASEH = interp(P,H,BASEP,INTERTYP)
+        BASEH = interp(P[::-1],H[::-1],BASEP)
 
     elif LAYTYP == 2: # split by equal height intervals
         BASEH = np.linspace(LAYHT, H[-1], NLAY+1)[:-1]
-        BASEP = interp(H,P,BASEH,INTERTYP)
+        BASEP = interp(H,P,BASEH)
 
     elif LAYTYP == 3: # split by equal line-of-sight path intervals
         assert LAYANG<=90 and LAYANG>=0,\
@@ -1355,7 +1401,7 @@ def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
         SMAX = np.sqrt(zmax**2-(z0*sin)**2)-z0*cos # total path length
         BASES = np.linspace(0, SMAX, NLAY+1)[:-1]
         BASEH = np.sqrt(BASES**2+z0**2+2*BASES*z0*cos) - RADIUS
-        logBASEP = interp(H,np.log(P),BASEH,INTERTYP)
+        logBASEP = interp(H,np.log(P),BASEH)
         BASEP = np.exp(logBASEP)
 
     elif LAYTYP == 4: # split by specifying input base pressures
@@ -1366,11 +1412,11 @@ def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
             'Input layer base pressures out of range of atmosphere profile'
         BASEP = P_base
         NLAY = len(BASEP)
-        BASEH = interp(P,H,BASEP,INTERTYP)
+        BASEH = interp(P[::-1],H[::-1],BASEP)
 
     elif LAYTYP == 5: # split by specifying input base heights
         BASEH = H_base
-        logBASEP = interp(H,np.log(P),BASEH,INTERTYP)
+        logBASEP = interp(H,np.log(P),BASEH)
         BASEP = np.exp(logBASEP)
 
     else:
