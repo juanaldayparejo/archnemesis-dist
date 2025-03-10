@@ -218,7 +218,7 @@ class ForwardModel_0:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
 
         self.check_gas_spec_atm()
-
+        self.check_wave_range_aerosols()
         
         SPECONV = np.zeros(self.Measurement.MEAS.shape) #Initalise the array where the spectra will be stored (NWAVE,NGEOM)
         for IGEOM in range(self.Measurement.NGEOM):
@@ -2907,8 +2907,8 @@ class ForwardModel_0:
             raise ValueError('error in calc_path_C :: All geometries must be either upward-looking or downward-loong in this version (i.e. EMISS_ANG>90 or EMISS_ANG<90)')  
         
         #Checking that multiple scattering is turned on
-        #if Scatter.ISCAT!=1:
-        #    raise ValueError('error in calc_path_C :: This version of the code is meant to use multiple scattering (ISCAT=1)')
+        if Scatter.ISCAT!=1:
+            raise ValueError('error in calc_path_C :: This version of the code is meant to use multiple scattering (ISCAT=1)')
 
         #Checking that there is only 1 NAV per geometry
         for iGEOM in range(Measurement.NGEOM):
@@ -3122,6 +3122,7 @@ class ForwardModel_0:
             #dTAUCIA = np.zeros((self.MeasurementX.NWAVE,self.LayerX.NLAY,7))
             print('CIRSrad :: CIA not included in calculations')
         else:
+            print('CIRSrad :: Calculating CIA opacities')
             TAUCIA,dTAUCIA = self.calc_tau_cia() #(NWAVE,NLAY);(NWAVE,NLAY,7)
             self.LayerX.TAUCIA = TAUCIA
             
@@ -3937,17 +3938,12 @@ class ForwardModel_0:
 
             # Derivative with respect to fraction
             dktdF = (kthi - ktlo) * dfhldF + (ktlophi - ktloplo) * dfhhdF
-            
+                        
             #Cheking that interpolation can be performed to the calculation wavenumbers
-            inwave = np.where( (CIA.WAVEN>=WAVEN.min()) & (CIA.WAVEN<=WAVEN.max()) )
-            inwave = inwave[0]
-            if len(inwave)>0: 
+            if( (CIA.WAVEN.min()<=WAVEN.min()) & (CIA.WAVEN.max()>=WAVEN.max()) ):
                 
-                #k_cia = np.zeros([NWAVEC,CIA.NPAIR])
-                #dkdT_cia = np.zeros([NWAVEC,CIA.NPAIR])
-                inwave1 = np.where( (WAVEN>=CIA.WAVEN.min()) & (WAVEN<=CIA.WAVEN.max()) )
-                inwave1 = inwave1[0]
-
+                inwave1 = np.where( (WAVEN>=CIA.WAVEN.min()) & (WAVEN<=CIA.WAVEN.max()) )[0]
+                
                 sum1 = np.zeros(NWAVEC)  #Temporary array to store the contribution from all CIA pairs
                 for ipair in range(CIA.NPAIR):
                     
@@ -3965,6 +3961,7 @@ class ForwardModel_0:
                 
                     
                     if((len(igas1)==1) & (len(igas2)==1)):
+                        
                         #Both gases are defined in the atmosphere and therefore we can have CIA absorption
                         igas1 = igas1[0]
                         igas2 = igas2[0]
@@ -3975,10 +3972,8 @@ class ForwardModel_0:
                         dkdT_cia = np.zeros(NWAVEC)
                         
                         f = interpolate.interp1d(CIA.WAVEN,kt[ipair,:])
-                        #k_cia[inwave1,ipair] = f(WAVEN[inwave1])
                         k_cia[inwave1] = f(WAVEN[inwave1])
                         f = interpolate.interp1d(CIA.WAVEN,dktdT[ipair,:])
-                        #dkdT_cia[inwave1,ipair] = f(WAVEN[inwave1])
                         dkdT_cia[inwave1] = f(WAVEN[inwave1])
                 
                         if INORMALD[ipair]==True:
@@ -4071,7 +4066,9 @@ class ForwardModel_0:
         from scipy import interpolate
 
         if (WAVEC.min() < Scatter.WAVE.min()) & (WAVEC.max() > Scatter.WAVE.min()):
-            raise ValueError('error in Scatter_0() :: Spectral range for calculation is outside of range in which the Aerosol properties are defined')
+            print('spectral range for calculation = ',WAVEC.min(),'-',WAVEC.max())
+            print('spectra range for optical properties = ',Scatter.WAVE.min(),'-',Scatter.WAVE.max())
+            raise ValueError('error calc_tau_dust :: Spectral range for calculation is outside of range in which the Aerosol properties are defined')
         
         # Calculating the opacity at each vertical layer for each dust population
         NWAVEC = len(WAVEC)
@@ -5337,6 +5334,26 @@ class ForwardModel_0:
             
             if not any(id_val == gasID and iso_val == isoID for id_val, iso_val in zip(self.AtmosphereX.ID, self.AtmosphereX.ISO)):
                 raise ValueError(f"error in check_gas_spec_atm :: No match found for gasID={gasID} and isoID={isoID} from Spectroscopy in Atmosphere")
+
+    def check_wave_range_aerosols(self,rel_tolerance=1.0e-6):
+        """
+        Check whether the wavelength range at which the aerosols are listed covers well the calculation wavelengths
+        """
+        
+        # Retrieve min and max wavelengths for calculations
+        wavecalc_min = self.SpectroscopyX.WAVE.min()
+        wavecalc_max = self.SpectroscopyX.WAVE.max()
+        
+        # Retrieve min and max wavelengths for aerosols (scatter)
+        wavetau_min = self.ScatterX.WAVE.min()
+        wavetau_max = self.ScatterX.WAVE.max()
+        
+        # Apply tolerance check
+        if (wavetau_min > (1. + rel_tolerance) * wavecalc_min) or (wavetau_max < (1. - rel_tolerance) * wavecalc_max):
+            raise ValueError(
+                        f"Aerosol wavelength range [{wavetau_min}, {wavetau_max}] does not fully cover "
+                        f"the calculation wavelength range [{wavecalc_min}, {wavecalc_max}] "
+                        )
 
 
 #END OF FORWARD MODEL CLASS
