@@ -63,7 +63,7 @@ def file_lines(fname):
 
 ###############################################################################################
 
-def read_input_files_hdf5(runname):
+def read_input_files_hdf5(runname,calc_SE=True):
 
     """
         FUNCTION NAME : read_input_files_hdf5()
@@ -76,7 +76,9 @@ def read_input_files_hdf5(runname):
       
             runname :: Name of the NEMESIS run
 
-        OPTIONAL INPUTS: None
+        OPTIONAL INPUTS:
+        
+            calc_SE :: If True, it will calculate the Measurement error matrix SE (useful only for retrievals, not for forward models)
         
         OUTPUTS : 
 
@@ -158,8 +160,7 @@ def read_input_files_hdf5(runname):
     ###############################################################
 
     Measurement = Measurement_0()
-    Measurement.read_hdf5(runname)
-    Measurement.calc_MeasurementVector()
+    Measurement.read_hdf5(runname,calc_MeasurementVector=calc_SE)
     
     #Initialise Spectroscopy class and read file
     ###############################################################
