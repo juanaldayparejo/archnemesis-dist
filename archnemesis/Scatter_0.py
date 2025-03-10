@@ -103,18 +103,29 @@ class Scatter_0:
         -------
         Scatter_0.assess()
         Scatter_0.write_hdf5()
+        Scatter_0.read_hdf5()
+        Scatter_0.initialise_arrays()
         Scatter_0.calc_GAUSS_LOBATTO()
         Scatter_0.read_xsc()
         Scatter_0.write_xsc()
         Scatter_0.read_hgphase()
+        Scatter_0.wrtite_hgphase()
         Scatter_0.calc_hgphase()
+        Scatter_0.interp_phase()
         Scatter_0.calc_phase()
-        Scatter_0.calc_tau_dust()
-        Scatter_0.calc_tau_rayleighj()
-        Scatter_0.calc_tau_rayleighv()
-        Scatter_0.calc_tau_rayleighls()
-        Scatter_0.read_refind_file()
+        Scatter_0.calc_phase_ray()
+        Scatter_0.read_phase()
+        Scatter_0.write_phase()
+        Scatter_0.read_lpphase()
+        Scatter_0.write_lpphase()
+        Scatter_0.calc_lpphase()
+        Scatter_0.check_phase_norm()
+        Scatter_0.check_fourier_decomposition()
         Scatter_0.read_refind()
+        Scatter_0.read_refind_file()
+        Scatter_0.makephase()
+        
+        
         Scatter_0.miescat()
         Scatter_0.initialise_arrays()
         """
@@ -174,6 +185,8 @@ class Scatter_0:
 
         self.calc_GAUSS_LOBATTO()
 
+
+    ###########################################################################################################################
 
     def assess(self):
         """
@@ -270,6 +283,8 @@ class Scatter_0:
                     
                     assert self.WLPOL.shape == (self.NWAVE,self.NLPOL,self.NDUST) , \
                         'WLPOL must have size (NWAVE,NLPOL,NDUST)'
+
+    ###########################################################################################################################
 
     def write_hdf5(self,runname):
         """
@@ -411,6 +426,8 @@ class Scatter_0:
 
         f.close()
 
+    ###########################################################################################################################
+
     def read_hdf5(self,runname):
         """
         Read the Scatter properties from an HDF5 file
@@ -461,6 +478,8 @@ class Scatter_0:
         self.calc_GAUSS_LOBATTO()
 
         f.close()
+        
+    ###########################################################################################################################
 
     def initialise_arrays(self,NDUST,NWAVE,NTHETA,NLPOL=100):
         """
@@ -485,6 +504,8 @@ class Scatter_0:
         elif self.IMIE==2:
             self.NLPOL = NLPOL
             self.WLPOL = np.zeros((self.NWAVE,self.NLPOL,self.NDUST))
+            
+    ###########################################################################################################################
 
     def calc_GAUSS_LOBATTO(self):
         """
@@ -495,6 +516,8 @@ class Scatter_0:
         x,w = gauss_lobatto(nzen,n_digits=12)
         self.MU = np.array(x[self.NMU:nzen],dtype='float64')
         self.WTMU = np.array(w[self.NMU:nzen],dtype='float64')
+        
+    ###########################################################################################################################
 
     def read_xsc(self,runname,MakePlot=False):
         """
@@ -556,6 +579,8 @@ class Scatter_0:
             plt.tight_layout()
             plt.show()
 
+    ###########################################################################################################################
+
     def write_xsc(self,runname,MakePlot=False):
         """
         Write the aerosol scattering and absorving properties to the .xsc file
@@ -576,6 +601,8 @@ class Scatter_0:
 
         f.close()
         
+    ###########################################################################################################################
+    
     def read_hgphase(self,NDUST=None):
         """
         Read the Henyey-Greenstein phase function parameters stored in the hgphaseN.dat files
@@ -612,6 +639,8 @@ class Scatter_0:
         self.G1 = np.array(g1,dtype='float64')
         self.G2 =  np.array(g2,dtype='float64')
         self.F =  np.array(fr,dtype='float64')
+        
+    ###########################################################################################################################
 
     def write_hgphase(self):
         """
@@ -628,6 +657,8 @@ class Scatter_0:
                 f.write('%10.7f \t %10.7f \t %10.7f \t %10.7f \n' % (self.WAVE[j],self.F[j,IDUST],self.G1[j,IDUST],self.G2[j,IDUST]))
 
             f.close()
+            
+    ###########################################################################################################################
 
     def calc_hgphase(self,Theta):
         
@@ -659,6 +690,8 @@ class Scatter_0:
         phase = np.transpose(phase,axes=[1,0,2])
         
         return phase
+    
+    ###########################################################################################################################
 
     def interp_phase(self,Theta):
         """
@@ -685,6 +718,8 @@ class Scatter_0:
         phase = s(Theta)
 
         return phase
+    
+    ###########################################################################################################################
 
     def calc_phase(self,Theta,Wave):
         """
@@ -712,6 +747,16 @@ class Scatter_0:
         from scipy.interpolate import interp1d
 
         nwave = len(Wave)
+
+        #Check if the wavelengths are within the required spectral range
+        rel_tolerance = 1.0e-6
+        
+        if (self.WAVE.min() > (1. + rel_tolerance) * Wave.min()) or (self.WAVE.max() < (1. - rel_tolerance) * Wave.max()):
+            raise ValueError(
+                        f"Aerosol wavelength range [{self.WAVE.min()}, {self.WAVE.max()}] does not fully cover "
+                        f"the calculation wavelength range [{Wave.min()}, {Wave.max()}] "
+                        )
+
 
         if np.isscalar(Theta)==True:
             Thetax = [Theta]
@@ -743,10 +788,12 @@ class Scatter_0:
 
 
         #Interpolating the phase function to the wavelengths defined in Wave
-        s = interp1d(self.WAVE,phase1,axis=0)
+        s = interp1d(self.WAVE,phase1,axis=0,bounds_error=False,fill_value='extrapolate')
         phase = s(Wave)
 
         return phase
+    
+    ###########################################################################################################################
 
     def calc_phase_ray(self,Theta):
         """
@@ -773,6 +820,8 @@ class Scatter_0:
         phase = phase / (4.0*np.pi)
 
         return phase
+    
+    ###########################################################################################################################
 
     def read_phase(self,NDUST=None):
         """
@@ -864,6 +913,8 @@ class Scatter_0:
         self.KSCA[:,:] = self.KEXT[:,:] * self.SGLALB[:,:]
         self.KABS[:,:] = self.KEXT[:,:] - self.KSCA[:,:]
         self.PHASE[:,:,:] = phase[0:self.NWAVE,0:self.NTHETA,0:self.NDUST]
+        
+    ###########################################################################################################################
 
     def write_phase(self,IDUST):
         """
@@ -915,6 +966,8 @@ class Scatter_0:
 
         f.write(str1+str2+str3+str4)
         f.close()
+        
+    ###########################################################################################################################
 
     def read_lpphase(self,NDUST=None):
         """
@@ -944,6 +997,8 @@ class Scatter_0:
 
         self.WAVE = wave
         self.WLPOL = wlpol
+        
+    ###########################################################################################################################
 
     def write_lpphase(self):
         """
@@ -959,6 +1014,8 @@ class Scatter_0:
             pickle.dump(self.WAVE,filehandler,pickle.HIGHEST_PROTOCOL)
             pickle.dump(self.WLPOL[:,:,i],filehandler,pickle.HIGHEST_PROTOCOL)
             filehandler.close()
+            
+    ###########################################################################################################################
 
     def calc_lpphase(self,Theta):
         """
@@ -994,6 +1051,8 @@ class Scatter_0:
                     
         return phase
     
+    ###########################################################################################################################
+    
     def check_phase_norm(self):
         """
         Function to quickly check whether the phase function is correctly normalised to 1 
@@ -1011,6 +1070,37 @@ class Scatter_0:
         print('Normalisation of phase function should be 1.0')
         print('Minimum integral of phase function is ',total.min())
         print('Maximum integral of phase function is ',total.max())
+        
+    ###########################################################################################################################
+    
+    def check_fourier_decomposition(self,idust=0):
+        """
+        Function to quickly check whether the phase function is accurately described 
+        with the specified number of Fourier components (NF)
+        """
+        
+        from archnemesis.Multiple_Scattering_Core import check_fourier_decomposition
+        
+        #Defining angles
+        Ntheta = 361
+        Theta = np.linspace(0.,180.,Ntheta)
+        
+        phase = self.calc_phase(Theta, self.WAVE)  #(NWAVE,NTHETA,NDUST)
+        
+        iwave = 0 #Generally the lowerst wavelength will suffer more
+        phase_reconstructed = check_fourier_decomposition(Theta,phase[iwave,:,idust],self.NF,self.NPHI)
+        
+        fig,ax1 = plt.subplots(1,1,figsize=(9,3))
+        
+        ax1.plot(Theta,phase[iwave,:,idust],label='Original')
+        ax1.plot(Theta,phase_reconstructed,label='Reconstructed')
+        ax1.set_facecolor('lightgray')
+        
+        ax1.grid()
+        ax1.set_xlabel('Scattering angle ($^\circ$)')
+        ax1.set_ylabel('Phase function')
+        
+    ###########################################################################################################################
     
     def read_refind(self,aeroID):
         """
@@ -1039,6 +1129,8 @@ class Scatter_0:
         self.WAVER = wave_aero
         self.REFIND_REAL = refind_real_aero1
         self.REFIND_IM = refind_im_aero1
+        
+    ###########################################################################################################################
 
     def read_refind_file(self,filename,MakePlot=False):
         """
@@ -1098,6 +1190,8 @@ class Scatter_0:
         f.close()
 
         return ispace,nwave,wave,refind_real,refind_im
+    
+    ###########################################################################################################################
 
     def makephase(self, idust, iscat, pars, rs=None):
         """
