@@ -280,14 +280,14 @@ class ForwardModel_0:
                     SPEC1 = SPEC1X
 
                 #Averaging the spectra in case NAV>1
-                if self.Measurement.NAV[IGEOM]>1:
+                if self.Measurement.NAV[IGEOM]>=1:
                     SPEC[:] = SPEC[:] + self.Measurement.WGEOM[IGEOM,IAV] * SPEC1[:,0]
                     WGEOMTOT = WGEOMTOT + self.Measurement.WGEOM[IGEOM,IAV]
                 else:
                     SPEC[:] = SPEC1[:,0]
 
-            if self.Measurement.NAV[IGEOM]>1:
-                SPEC[:] = SPEC[:] / WGEOMTOT
+            #if self.Measurement.NAV[IGEOM]>=1:
+            #    SPEC[:] = SPEC[:] / WGEOMTOT
 
             #Applying any changes to the spectra required by the state vector
             SPEC,dSPEC = self.subspecret(SPEC,dSPEC)
@@ -457,7 +457,7 @@ class ForwardModel_0:
                     dSPEC1[:,0,self.Variables.JSURF] = dTSURF[:,0]
 
                 #Averaging the spectra in case NAV>1
-                if self.Measurement.NAV[IGEOM]>1:
+                if self.Measurement.NAV[IGEOM]>=1:
                     SPEC[:] = SPEC[:] + self.Measurement.WGEOM[IGEOM,IAV] * SPEC1[:,0]
                     dSPEC[:,:] = dSPEC[:,:] + self.Measurement.WGEOM[IGEOM,IAV] * dSPEC1[:,0,:]
                     WGEOMTOT = WGEOMTOT + self.Measurement.WGEOM[IGEOM,IAV]
@@ -465,9 +465,9 @@ class ForwardModel_0:
                     SPEC[:] = SPEC1[:,0]
                     dSPEC[:,:] = dSPEC1[:,0,:]
 
-            if self.Measurement.NAV[IGEOM]>1:
-                SPEC[:] = SPEC[:] / WGEOMTOT
-                dSPEC[:,:] = dSPEC[:,:] / WGEOMTOT
+            #if self.Measurement.NAV[IGEOM]>1:
+            #    SPEC[:] = SPEC[:] / WGEOMTOT
+            #    dSPEC[:,:] = dSPEC[:,:] / WGEOMTOT
 
             #Applying any changes to the spectra required by the state vector
             SPEC,dSPEC = self.subspecret(SPEC,dSPEC)
