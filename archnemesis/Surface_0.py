@@ -785,6 +785,9 @@ class Surface_0:
 
         bbsurf = planck(ISPACE,WAVE,self.TSURF)
 
+        # bbsurf has shape (self.NEM, self.NLOCATIONS)
+        # so self.EMISSIVITY must have that shape as well if it is 2D
+        # Therefore, spectral axis is 0th axis.
         f = interp1d(self.VEM,self.EMISSIVITY, axis=0)
         emissivity = f(WAVE)
 
