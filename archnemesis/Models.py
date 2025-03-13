@@ -2223,7 +2223,7 @@ def model446(Scatter,idust,wavenorm,xwave,rsize,lookupfile,MakePlot=False):
         if Scatter.ISPACE==0:
             label='Wavenumber (cm$^{-1}$)'
         else:
-            label='Wavelength ($\mu$m)'
+            label=r'Wavelength ($\mu$m)'
         ax2.set_xlabel(label)
         ax1.set_xlabel('Extinction coefficient')
         ax2.set_xlabel('Single scattering albedo')
@@ -2472,9 +2472,9 @@ def model887(Scatter,xsc,idust,MakePlot=False):
         ax1.semilogy(Scatter.WAVE,Scatter.KEXT[:,idust])
         ax1.grid()
         if Scatter.ISPACE==1:
-            ax1.set_xlabel('Wavelength ($\mu$m)')
+            ax1.set_xlabel(r'Wavelength ($\mu$m)')
         else:
-            ax1.set_xlabel('Wavenumber (cm$^{-1}$')
+            ax1.set_xlabel(r'Wavenumber (cm$^{-1}$')
         plt.tight_layout()
         plt.show()
     

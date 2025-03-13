@@ -4182,7 +4182,7 @@ class ForwardModel_0:
             if ISPACE==0:
                 vlabel = 'Wavenumber (cm$^{-1}$)'
             elif ISPACE==1:
-                vlabel = 'Wavelength ($\mu$m)'
+                vlabel = r'Wavelength ($\mu$m)'
             ax1.set_xlabel(vlabel)
             ax1.set_ylabel('Rayleigh scattering optical depth')
             ax1.set_facecolor('lightgray')
@@ -4846,7 +4846,7 @@ class ForwardModel_0:
 
     ###############################################################################################
     def streamflux(self,NLAY,NMU,MU,WTMU,Umif,Uplf):
-        """
+        r"""
         Subroutine to calculate the upward and downward flux in the boundaries of each layer.
 
         The output of scloud11flux is the radiance observed in each viewing direction in the
