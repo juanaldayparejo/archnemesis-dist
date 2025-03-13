@@ -3,12 +3,13 @@ import pytest
 import archnemesis as ans
 import importlib
 from pathlib import Path
+import os
 
 def test_no_syntax_warnings_on_compile(recwarn):
     caught_warnings = []
     
     for path in ans.__path__:
-        for dirpath, dirnames, filenames in Path(path).walk():
+        for dirpath, dirnames, filenames in os.walk(str(path)):
             for filename in filenames:
                 if filename.endswith('.py'):
                     file = Path(dirpath) / filename
