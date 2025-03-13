@@ -2356,13 +2356,13 @@ class Measurement_0:
         fig,ax1 = plt.subplots(1,1,figsize=(10,4))
 
         if self.ISPACE==0:
-            xlabel='Wavenumber (cm$^{-1}$)'
+            xlabel=r'Wavenumber (cm$^{-1}$)'
             xsymbol = r'$\nu$'
-            xunit = 'cm$^{-1}$'
+            xunit = r'cm$^{-1}$'
         elif self.ISPACE==1:
-            xlabel='Wavelength ($\mu$m)'
-            xsymbol = '$\lambda$'
-            xunit = '$\mu$m'
+            xlabel=r'Wavelength ($\mu$m)'
+            xsymbol = r'$\lambda$'
+            xunit = r'$\mu$m'
 
         iconv = 0
         ax1.plot(self.VFIL[0:self.NFIL[iconv],iconv]-self.VCONV[iconv,0],self.AFIL[0:self.NFIL[iconv],iconv],label=xsymbol+' = '+str(np.round(self.VCONV[iconv,0],1))+' '+xunit)
@@ -2406,9 +2406,9 @@ class Measurement_0:
             im1 = ax1.plot(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom],color=cmap(color))
 
         if np.mean(self.VCONV)>30.:
-            ax1.set_xlabel('Wavenumber (cm$^{-1}$)')
+            ax1.set_xlabel(r'Wavenumber (cm$^{-1}$)')
         else:
-            ax1.set_xlabel('Wavelength ($\mu$m)')
+            ax1.set_xlabel(r'Wavelength ($\mu$m)')
         ax1.set_ylabel('Transmission')
         ax1.set_title('Latitude = '+str(np.round(self.LATITUDE,1))+' - Longitude = '+str(np.round(self.LONGITUDE,1)))
         ax1.set_facecolor('lightgray')
@@ -2500,13 +2500,13 @@ class Measurement_0:
             ax3.set_yscale('log')
 
             if np.mean(self.VCONV)>30.:
-                ax3.set_xlabel('Wavenumber (cm$^{-1}$)')
-                ax3.set_ylabel('Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
-                ax2.set_ylabel('Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
+                ax3.set_xlabel(r'Wavenumber (cm$^{-1}$)')
+                ax3.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
+                ax2.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
             else:
-                ax3.set_xlabel('Wavelength ($\mu$m)')
-                ax3.set_ylabel('Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
-                ax2.set_ylabel('Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
+                ax3.set_xlabel(r'Wavelength ($\mu$m)')
+                ax3.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
+                ax2.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
 
             ax3.grid()
 
@@ -2644,13 +2644,13 @@ class Measurement_0:
             ax6.set_yscale('log')
 
             if np.mean(self.VCONV)>30.:
-                ax6.set_xlabel('Wavenumber (cm$^{-1}$)')
-                ax6.set_ylabel('Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
-                ax5.set_ylabel('Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
+                ax6.set_xlabel(r'Wavenumber (cm$^{-1}$)')
+                ax6.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
+                ax5.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
             else:
-                ax6.set_xlabel('Wavelength ($\mu$m)')
-                ax6.set_ylabel('Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
-                ax5.set_ylabel('Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
+                ax6.set_xlabel(r'Wavelength ($\mu$m)')
+                ax6.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
+                ax5.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
 
             ax6.grid()
             ax5.set_title('Geometry '+str(igeom+1))

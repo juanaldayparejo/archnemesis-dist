@@ -1097,7 +1097,7 @@ class Scatter_0:
         ax1.set_facecolor('lightgray')
         
         ax1.grid()
-        ax1.set_xlabel('Scattering angle ($^\circ$)')
+        ax1.set_xlabel(r'Scattering angle ($^\circ$)')
         ax1.set_ylabel('Phase function')
         
     ###########################################################################################################################
