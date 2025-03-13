@@ -785,7 +785,7 @@ class Surface_0:
 
         bbsurf = planck(ISPACE,WAVE,self.TSURF)
 
-        f = interp1d(self.VEM,self.EMISSIVITY)
+        f = interp1d(self.VEM,self.EMISSIVITY, axis=0)
         emissivity = f(WAVE)
 
         radground = bbsurf * emissivity
