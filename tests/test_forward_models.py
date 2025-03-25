@@ -8,8 +8,8 @@ def test_thermal_emission_cirs():
     '''
     Jupiter thermal emission test against NEMESIS
     '''
-    
-    os.chdir('tests/files/Jupiter_CIRS_nadir_thermal_emission/') #Changing directory to read files
+    test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Jupiter_CIRS_nadir_thermal_emission/')
+    os.chdir(test_dir) #Changing directory to read files
     runname = 'cirstest'
     
     #Reading the input files
@@ -175,8 +175,8 @@ def test_multiple_scattering_cirs():
     '''
     Jupiter multiple scattering test against NEMESIS
     '''
-    
-    os.chdir('tests/files/Jupiter_CIRS_angled_thermal_emission_scattering/') #Changing directory to read files
+    test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Jupiter_CIRS_angled_thermal_emission_scattering/')
+    os.chdir(test_dir) #Changing directory to read files
     runname = 'cirstest'
     
     #Reading the input files
