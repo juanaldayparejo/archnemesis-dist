@@ -62,12 +62,15 @@ class CIA_0:
         Methods
         ----------
         CIA_0.assess()
+        CIA_0.summary_info()
         CIA_0.write_hdf5()
         CIA_0.read_hdf5()
         CIA_0.read_cia()
         CIA_0.plot_cia()
         CIA_0.calc_tau_cia()
         CIA_0.locate_INORMAL_pairs()
+        CIA_0.read_ciatable()
+        CIA_0.read_ciatable_tab()
         CIA_0.write_ciatable_hdf5()
         CIA_0.read_ciatable_hdf5()
         """
