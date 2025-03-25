@@ -320,8 +320,7 @@ class Atmosphere_0:
             grp = f.create_group("Telluric/Atmosphere")
 
         #Writing the main dimensions
-        print(f'{self.NP=} {type(self.NP)=}')
-        dset = grp.create_dataset('NP',data=self.NP, dtype=type(self.NP))
+        dset = grp.create_dataset('NP',data=self.NP)
         dset.attrs['title'] = "Number of vertical points in profiles"
 
         dset = grp.create_dataset('NVMR',data=self.NVMR)

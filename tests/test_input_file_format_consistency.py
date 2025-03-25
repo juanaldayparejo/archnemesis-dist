@@ -114,6 +114,11 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_paramters():
         else:
             continue
         
+        
+        delete_h5_at_end=True
+        if os.path.exists(runname+'.h5'):
+            delete_h5_at_end = False
+        
         ###### PERFORM TEST ######
         print('#'*40)
         print(f'In directory "{current_example_dir}", performing input file format consistency test...')
@@ -216,6 +221,10 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_paramters():
                 assert ensure_equal_value(o_attr, n_attr), f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class must have same values regardless of input format: {o_attr} != {n_attr}"
 
         ###### END TEST ######
+        
+        # Delete any created '*.h5' file
+        if delete_h5_at_end:
+            os.remove(runname+'.h5')
         
         # Change back to starting directory after test has completed
         os.chdir(starting_dir)
