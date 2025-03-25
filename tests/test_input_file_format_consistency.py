@@ -133,7 +133,7 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_paramters():
             elif hasattr(item, 'write_input_hdf5'):
                 item.write_input_hdf5(runname)
             else:
-                raise RuntimeError(f'For example at "{current_example_dir}", class "{type(item)}" does not have an attribute like "write{_input,_}hdf5", cannot continue writing new style file.')
+                raise RuntimeError(f'For example at "{current_example_dir}", class "{type(item)}" does not have an attribute like "write{{_input,_}}hdf5", cannot continue writing new style file.')
 
         # Read HDF5 format
         Atmosphere_,Measurement_,Spectroscopy_,Scatter_,Stellar_,Surface_,CIA_,Layer_,Variables_,Retrieval_,Telluric_ = ans.Files.read_input_files_hdf5(runname)
