@@ -338,7 +338,6 @@ class Measurement_0:
         for i in range(self.NGEOM):
             print('')
             print('GEOMETRY '+str(i+1))
-            #print('Minimum wavelength/wavenumber :: ',self.VCONV[0,i],' - Maximum wavelength/wavenumber :: ',self.VCONV[self.NCONV[i]-1,i])
             print('Minimum wavelength/wavenumber :: '
                 +wavelength_str(self.VCONV[0,i])
                 +'/'
