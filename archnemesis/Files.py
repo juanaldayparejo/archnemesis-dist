@@ -121,12 +121,13 @@ def read_input_files_hdf5(runname,calc_SE=True):
 
     isurf = planet_info[str(Atmosphere.IPLANET)]["isurf"]
     Surface = Surface_0()
-    if isurf==1:
-        Surface.read_hdf5(runname)
-        if np.mean(Surface.TSURF)<0.0:
-            Surface.GASGIANT=True   #If T is negative then we omit the surface
-    else:
-        Surface.GASGIANT=True
+    # Always read the Surface entry in HDF5 file as defaults are set
+    # there for gas giants that are different for the defaults
+    # when constructing via Surface_0()
+    Surface.read_hdf5(runname)
+    if np.mean(Surface.TSURF)<0.0:
+        Surface.GASGIANT=True   #If T is negative then we omit the surface
+
 
     #Initialise Scatter class and read file
     ###############################################################
@@ -498,6 +499,11 @@ def read_input_files(runname):
             Surface.GASGIANT=True
     else:
         Surface.GASGIANT=True
+    
+    if Surface.GASGIANT:
+        Surface.LOWBC = 0
+        Surface.TSURF = 0.0
+        Surface.GALB = 0.0
 
     #Reading Spectroscopy parameters from .lls or .kls files
     ##############################################################
@@ -1217,10 +1223,14 @@ def read_inp(runname,Measurement=None,Scatter=None,Spectroscopy=None):
 
     #Getting number of lines 
     nlines = file_lines(runname+'.inp')
-    if nlines==7:
+    if nlines < 7:
+        raise RuntimeError(f"Not enough lines when reading {runname}.inp")
+    elif nlines==7:
         iiform=0
-    if nlines==8:
+    elif nlines==8:
         iiform=1
+    elif nlines > 8:
+        iiform=2
 
     #Opening file
     f = open(runname+'.inp','r')
@@ -1262,6 +1272,12 @@ def read_inp(runname,Measurement=None,Scatter=None,Spectroscopy=None):
         tmp = f.readline().split()
         iform = int(tmp[0])
         Measurement.IFORM=iform
+    elif iiform == 2:
+        tmp = f.readline().split()
+        iform = int(tmp[0])
+        Measurement.IFORM=iform
+        tmp = f.readline().split()
+        Measurement.V_DOPPLER=float(tmp[0])
     else:
         Measurement.IFORM=0
     

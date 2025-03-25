@@ -398,7 +398,7 @@ class Scatter_0:
                     dset.attrs['title'] = "Assymmetry parameter of second Henyey-Greenstein function"
                     dset.attrs['units'] = ""
 
-                    dset = grp.create_dataset('F',data=self.G1)
+                    dset = grp.create_dataset('F',data=self.F)
                     dset.attrs['title'] = "Relative contribution from first Henyey-Greenstein function (from 0 to 1)"
                     dset.attrs['units'] = ""
 
@@ -557,7 +557,6 @@ class Scatter_0:
         self.SGLALB = sglalb
         self.KSCA = self.SGLALB * self.KEXT
         self.KABS = self.KEXT - self.KSCA
-        self.PHASE = np.zeros((self.NWAVE,self.NTHETA,self.NDUST))
 
         if MakePlot==True:
 

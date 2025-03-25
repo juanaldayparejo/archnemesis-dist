@@ -154,8 +154,8 @@ class CIA_0:
                 'TEMP must have size (NT)'
                 
         if self.K_CIA is not None:
-            assert self.K_CIA.shape == (self.NPAIR,self.NT,self.NWAVE) , \
-                'K_CIA must have size (NPAIR,NT,NWAVE)'
+            assert self.K_CIA.shape == (self.NPAIR,max(self.NPARA,1),self.NT,self.NWAVE) , \
+                'K_CIA must have size (NPAIR,NPARA or 1,NT,NWAVE)'
 
     ##################################################################################
 
@@ -208,7 +208,7 @@ class CIA_0:
         f.close()
         
         #Reading the CIA table from the name specified
-        self.read_ciatable_hdf5(self.CIADATA+self.CIATABLE)
+        self.read_ciatable(self.CIADATA+self.CIATABLE)
     
     ##################################################################################
         
@@ -235,15 +235,23 @@ class CIA_0:
         dset = grp.create_dataset('INORMAL',data=self.INORMAL)
         dset.attrs['title'] = "Flag indicating whether the ortho/para-H2 ratio is in equilibrium (0 for 1:1) or normal (1 for 3:1)"
         
-        #Writing the name of the CIA table
+        #Write the directory where CIA tables are stored
         dt = h5py.special_dtype(vlen=str)
         CIADATA = ['']*1
         CIADATA[0] = self.CIADATA
         dset = grp.create_dataset('CIADATA',data=CIADATA,dtype=dt)
         dset.attrs['title'] = "Path to directory where CIA table is stored"
         
-        CIATABLE = ['']*1
-        CIATABLE[0] = self.CIATABLE
+        # Convert CIATABLE to HDF5 format if we do not have an HDF5 format of this table
+        CIATABLE_str = self.CIATABLE
+        if CIATABLE_str.endswith('.tab'):
+            CIATABLE_str = CIATABLE_str[:-4]+'.h5'
+        
+        if not os.path.exists(self.CIADATA+CIATABLE_str):
+            self.write_ciatable_hdf5(self.CIADATA+CIATABLE_str)
+        
+        # Write the name of the CIATABLE
+        CIATABLE = [CIATABLE_str]
         dset = grp.create_dataset('CIATABLE',data=CIATABLE,dtype=dt)
         dset.attrs['title'] = "Name of the CIA table file"
         
@@ -257,9 +265,7 @@ class CIA_0:
         @param runname: str
             Name of the NEMESIS run
         """
-
-        from scipy.io import FortranFile
-
+        
         #Reading .cia file
         f = open(self.runname+'.cia','r')
         s = f.readline().split()
@@ -270,58 +276,9 @@ class CIA_0:
         NPARA = int(s[0])
         f.close()
 
-        f = FortranFile(self.CIADATA+cianame, 'r' )
-        
-        if NPARA!=0:
-            NPAIR = 2
-            TEMPS = f.read_reals(dtype='float32')
-            FRAC = np.abs(f.read_reals(dtype='float32'))
-            K_H2H2 = f.read_reals(dtype='float32')
-            K_H2HE = f.read_reals(dtype='float32')
-            KCIA_list = np.vstack([K_H2H2,K_H2HE]).reshape((-1,),order='F')
-            IPAIRG1=[39,39]
-            IPAIRG2=[39,40]
-            INORMALT=[0,0]
-            
-            self.FRAC = FRAC
-            
-            
-        #Reading the actual CIA file
-        if NPARA==0:
-            NPAIR = 9 # 9 pairs of collision induced absorption opacities
-            TEMPS = f.read_reals( dtype='float64' )
-            KCIA_list = f.read_reals( dtype='float32' )
-            IPAIRG1=[39,39,39,39,39,22,22,6,39]
-            IPAIRG2=[39,40,39,40,22,6,22,6,6]
-            INORMALT=[0,0,1,1,0,0,0,0,0]
+        self.CIATABLE=cianame
 
-        NT = len(TEMPS)
-        NWAVE = int(len(KCIA_list)/NT/NPAIR/max(NPARA,1))
-        NU_GRID = np.linspace(0,dnu*(NWAVE-1),NWAVE)
-        K_CIA = np.zeros((NPAIR,max(NPARA,1),NT,NWAVE)) # NPAIR x NPARA x NT x NWAVE
-    
-        index = 0
-        for iwn in range(NWAVE):
-            for itemp in range(NT):
-                for ipara in range(max(NPARA,1)):
-                    for ipair in range(NPAIR):
-                        K_CIA[ipair,ipara,itemp,iwn] = KCIA_list[index]
-                        index += 1
-                        
-        #Changing the units of the CIA table (NEMESIS format) from cm-1 amagat-2 to cm5 molecule-2
-        AMAGAT = 2.68675E19 #molecule cm-3 (definition of amagat unit)
-        K_CIA = K_CIA / (AMAGAT**2.) #cm5 molecule-2
-
-        self.NWAVE = NWAVE
-        self.NT = NT
-        self.NPAIR = NPAIR
-        self.NPARA = NPARA
-        self.IPAIRG1 = IPAIRG1
-        self.IPAIRG2 = IPAIRG2
-        self.INORMALT = INORMALT
-        self.WAVEN = NU_GRID
-        self.TEMP = TEMPS
-        self.K_CIA = K_CIA
+        self.read_ciatable(self.CIADATA+self.CIATABLE, dnu, NPARA)
 
     ##################################################################################
 
@@ -401,7 +358,104 @@ class CIA_0:
         return outx
         
     ##################################################################################
+    
+    def read_ciatable(self, filename, *args):
+        """
+        Dispatch to correct read_ciatable_X function
+        """
+        file_read_successfully = False
+        
+        if filename.endswith(".tab"):
+            self.read_ciatable_tab(filename, *args)
+            file_read_successfully = True
+        elif filename.endswith(".h5"):
+            self.read_ciatable_hdf5(filename)
+            file_read_successfully = True
+        else:
+            # Try opening files in different modes use first that works
+            if not file_read_successfully:
+                try:
+                    read_ciatable_hdf5(filename+'.h5')
+                    file_read_successfully = True
+                except Exception:
+                    file_read_successfully = False
+            if not file_read_successfully:
+                try:
+                    read_ciatable_tab(filename+'.tab', *args)
+                    file_read_successfully = True
+                except Exception:
+                    file_read_successfully = False
+        
+        if not file_read_successfully:
+            raise RuntimeError(f"Failed to read ciatable '{filename}'")
+    
+    ##################################################################################
+    
+    def read_ciatable_tab(self, filename, dnu, NPARA):
+        """
+        Read the CIA look-up table in .tab format
+        """
+        
+        from scipy.io import FortranFile
+        
+        try:
+            f = FortranFile(filename, 'r' )
+            
+            if NPARA!=0:
+                NPAIR = 2
+                TEMPS = f.read_reals(dtype='float32')
+                FRAC = np.abs(f.read_reals(dtype='float32'))
+                K_H2H2 = f.read_reals(dtype='float32')
+                K_H2HE = f.read_reals(dtype='float32')
+                KCIA_list = np.vstack([K_H2H2,K_H2HE]).reshape((-1,),order='F')
+                IPAIRG1=np.array([39,39])
+                IPAIRG2=np.array([39,40])
+                INORMALT=np.array([0,0])
+                
+                self.FRAC = FRAC
+                
+                
+            #Reading the actual CIA file
+            if NPARA==0:
+                NPAIR = 9 # 9 pairs of collision induced absorption opacities
+                TEMPS = f.read_reals( dtype='float64' )
+                KCIA_list = f.read_reals( dtype='float32' )
+                IPAIRG1=np.array([39,39,39,39,39,22,22,6,39])
+                IPAIRG2=np.array([39,40,39,40,22,6,22,6,6])
+                INORMALT=np.array([0,0,1,1,0,0,0,0,0])
+        finally:
+            f.close()
 
+        NT = len(TEMPS)
+        NWAVE = int(len(KCIA_list)/NT/NPAIR/max(NPARA,1))
+        NU_GRID = np.linspace(0,dnu*(NWAVE-1),NWAVE)
+        K_CIA = np.zeros((NPAIR,max(NPARA,1),NT,NWAVE)) # NPAIR x NPARA x NT x NWAVE
+    
+        index = 0
+        for iwn in range(NWAVE):
+            for itemp in range(NT):
+                for ipara in range(max(NPARA,1)):
+                    for ipair in range(NPAIR):
+                        K_CIA[ipair,ipara,itemp,iwn] = KCIA_list[index]
+                        index += 1
+                        
+        #Changing the units of the CIA table (NEMESIS format) from cm-1 amagat-2 to cm5 molecule-2
+        AMAGAT = 2.68675E19 #molecule cm-3 (definition of amagat unit)
+        K_CIA = K_CIA / (AMAGAT**2.) #cm5 molecule-2
+
+        self.NWAVE = NWAVE
+        self.NT = NT
+        self.NPAIR = NPAIR
+        self.NPARA = NPARA
+        self.IPAIRG1 = IPAIRG1
+        self.IPAIRG2 = IPAIRG2
+        self.INORMALT = INORMALT
+        self.WAVEN = NU_GRID
+        self.TEMP = TEMPS
+        self.K_CIA = K_CIA
+    
+    ##################################################################################
+    
     def write_ciatable_hdf5(self,filename):
         """
         Write the CIA look-up table in an HDF5 file
@@ -412,45 +466,44 @@ class CIA_0:
         #Assessing that all the parameters have the correct type and dimension
         self.assess()
         
-        
-        if filename[len(filename)-3:len(filename)]=='.h5':
-            f = h5py.File(filename,'w')
-        else:
-            f = h5py.File(filename+'.h5','w')
-        
-        
-        #Writing the main dimensions
-        dset = f.create_dataset('NPAIR',data=self.NPAIR)
-        dset.attrs['title'] = "Number of CIA pairs included in the look-up table"
+        if not filename.endswith('.h5'):
+            filename += '.h5'
+            
+        with h5py.File(filename,'w') as f:
+            #Writing the main dimensions
+            dset = f.create_dataset('NPARA',data=self.NPARA)
+            dset.attrs['title'] = "Number of para-H2 fractions listed in the CIA table"
+            
+            dset = f.create_dataset('NPAIR',data=self.NPAIR)
+            dset.attrs['title'] = "Number of CIA pairs included in the look-up table"
 
-        dset = f.create_dataset('NWAVE',data=self.NWAVE)
-        dset.attrs['title'] = "Number of wavenumber points in the look-up table"
+            dset = f.create_dataset('NWAVE',data=self.NWAVE)
+            dset.attrs['title'] = "Number of wavenumber points in the look-up table"
 
-        dset = f.create_dataset('NT',data=self.NT)
-        dset.attrs['title'] = "Number of temperatures at which the CIA cross sections are tabulated"
+            dset = f.create_dataset('NT',data=self.NT)
+            dset.attrs['title'] = "Number of temperatures at which the CIA cross sections are tabulated"
+            
+            dset = f.create_dataset('IPAIRG1',data=self.IPAIRG1)
+            dset.attrs['title'] = "ID of the first gas of each CIA pair (e.g., N2-CO2; IPAIRG1 = N2 = 22)"
+            
+            dset = f.create_dataset('IPAIRG2',data=self.IPAIRG2)
+            dset.attrs['title'] = "ID of the second gas of each CIA pair (e.g., N2-CO2; IPAIRG2 = CO2 = 2)"
+            
+            dset = f.create_dataset('INORMALT',data=self.INORMALT)
+            dset.attrs['title'] = "Flag indicating whether the cross sections correspond to equilibrium or normal hydrogen"
+            
+            dset = f.create_dataset('WAVEN',data=self.WAVEN)
+            dset.attrs['title'] = "Wavenumber"
+            dset.attrs['units'] = "cm-1"
+            
+            dset = f.create_dataset('TEMP',data=self.TEMP)
+            dset.attrs['title'] = "Temperature"
+            dset.attrs['units'] = "K"
+            
+            dset = f.create_dataset('K_CIA',data=self.K_CIA)
+            dset.attrs['title'] = "CIA cross sections"
+            dset.attrs['units'] = "cm5 molecule-2"
         
-        dset = f.create_dataset('IPAIRG1',data=self.IPAIRG1)
-        dset.attrs['title'] = "ID of the first gas of each CIA pair (e.g., N2-CO2; IPAIRG1 = N2 = 22)"
-        
-        dset = f.create_dataset('IPAIRG2',data=self.IPAIRG2)
-        dset.attrs['title'] = "ID of the second gas of each CIA pair (e.g., N2-CO2; IPAIRG2 = CO2 = 2)"
-        
-        dset = f.create_dataset('INORMALT',data=self.INORMALT)
-        dset.attrs['title'] = "Flag indicating whether the cross sections correspond to equilibrium or normal hydrogen"
-        
-        dset = f.create_dataset('WAVEN',data=self.WAVEN)
-        dset.attrs['title'] = "Wavenumber"
-        dset.attrs['units'] = "cm-1"
-        
-        dset = f.create_dataset('TEMP',data=self.TEMP)
-        dset.attrs['title'] = "Temperature"
-        dset.attrs['units'] = "K"
-        
-        dset = f.create_dataset('K_CIA',data=self.K_CIA)
-        dset.attrs['title'] = "CIA cross sections"
-        dset.attrs['units'] = "cm5 molecule-2"
-        
-        f.close()
         
     ##################################################################################
         
@@ -461,31 +514,29 @@ class CIA_0:
         
         import h5py
 
-        if filename[len(filename)-3:len(filename)]=='.h5':
-            f = h5py.File(filename,'r')
-        else:
-            f = h5py.File(filename+'.h5','r')
+        if not filename.endswith('.h5'):
+            filename += '.h5'
+        
+        with h5py.File(filename, 'r') as f:
+            self.NPARA = np.int32(f.get('NPARA'))
+            self.NPAIR = np.int32(f.get('NPAIR'))
+            self.NT = np.int32(f.get('NT'))
+            self.NWAVE = np.int32(f.get('NWAVE'))
+                
+            self.IPAIRG1 = np.array(f.get('IPAIRG1'))
+            self.IPAIRG2 = np.array(f.get('IPAIRG2'))
+            self.INORMALT = np.array(f.get('INORMALT'))
             
-        self.NPAIR = np.int32(f.get('NPAIR'))
-        self.NT = np.int32(f.get('NT'))
-        self.NWAVE = np.int32(f.get('NWAVE'))
+            self.WAVEN = np.array(f.get('WAVEN'))
+            self.TEMP = np.array(f.get('TEMP'))
             
-        self.IPAIRG1 = np.array(f.get('IPAIRG1'))
-        self.IPAIRG2 = np.array(f.get('IPAIRG2'))
-        self.INORMALT = np.array(f.get('INORMALT'))
-        
-        self.WAVEN = np.array(f.get('WAVEN'))
-        self.TEMP = np.array(f.get('TEMP'))
-        
-        K_CIA = np.zeros((self.NPAIR,max(self.NPARA,1),self.NT,self.NWAVE)) # NPAIR x NPARA x NT x NWAVE
-        K_CIA[:,0,:,:] = np.array(f.get('K_CIA'))
-        
-        self.K_CIA = K_CIA
-        
-        self.assess
+            K_CIA = np.zeros((self.NPAIR,max(self.NPARA,1),self.NT,self.NWAVE)) # NPAIR x NPARA x NT x NWAVE
+            K_CIA[:,:,:,:] = np.array(f.get('K_CIA'))
             
-        f.close()
-
+            self.K_CIA = K_CIA
+        
+        self.assess()
+        
 
 
 ###############################################################################################
