@@ -206,8 +206,8 @@ class Surface_0:
                 'ISPACE must be >=1 and <=1'
 
             #Determining sizes based on the number of surface locations
-            if self.NLOCATIONS<0:
-                raise ValueError('error :: NLOCATIONS must be greater than 1')
+            if self.NLOCATIONS<=0:
+                raise ValueError('error :: NLOCATIONS must be greater than 0')
 
             elif self.NLOCATIONS==1:
 
@@ -294,9 +294,12 @@ class Surface_0:
                         'ROUGHNESS must have size (NEM,NLOCATIONS)'
 
         else:
-#             assert self.LOWBC == 0 , \
-#                 'If GASGIANT=True then LOWBC=0 (i.e. No reflection)'
-           pass
+            assert self.TSURF == 0.0, \
+                "if GASGIANT=True then no emission from surface"
+            assert self.GALB == 0.0, \
+                "if GASGIANT=True then surface absorbs everything"
+            assert self.LOWBC == 0 , \
+                'If GASGIANT=True then LOWBC=0 (i.e. No reflection)'
 
     def write_hdf5(self,runname):
         """
@@ -441,11 +444,15 @@ class Surface_0:
         #Checking if Surface exists
         e = "/Surface" in f
         if e==False:
+            # If we have "no surface", planet is a gasgiant
+            # so the surface is always perfectly isothermal
+            # and absorbing.
             self.GASGIANT = True
             self.LOWBC = 0
-            self.TSURF = -100.
+            self.TSURF = 0.0
+            self.GALB = 0.0
         else:
-            
+            self.GASGIANT = False
             self.ISPACE = np.int32(f.get('Surface/ISPACE'))
             self.LOWBC = np.int32(f.get('Surface/LOWBC'))
             self.NLOCATIONS = np.int32(f.get('Surface/NLOCATIONS'))
