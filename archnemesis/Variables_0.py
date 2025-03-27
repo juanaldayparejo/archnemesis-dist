@@ -845,11 +845,12 @@ class Variables_0:
                     tropo = tmp[0]
                     etropo = tmp[1]
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
-                    strato = tmp[0]
-                    estrato = tmp[1]
-                    tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     humid = tmp[0]
                     ehumid = tmp[1]
+                    tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+                    strato = tmp[0]
+                    estrato = tmp[1]
+
                     
                     
                     x0[ix] = np.log(tropo)
