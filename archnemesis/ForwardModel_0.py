@@ -257,7 +257,7 @@ class ForwardModel_0:
                 if self.SpectroscopyX.ILBL==0:
                     self.MeasurementX.wavesetb(self.SpectroscopyX,IGEOM=0)
                 if self.SpectroscopyX.ILBL==2:
-                    self.MeasurementX.build_ils(IGEOM=IGEOM)
+                    self.MeasurementX.build_ils(IGEOM=0) # MeasurementX only ever has 1 selected geometry
                     self.MeasurementX.wavesetc(self.SpectroscopyX,IGEOM=0)
 
                 #Changing the different classes taking into account the parameterisations in the state vector
@@ -418,9 +418,9 @@ class ForwardModel_0:
                 self.ScatterX.AZI_ANG = self.MeasurementX.AZI_ANG[0,0]
 
                 if self.SpectroscopyX.ILBL==0:
-                    self.MeasurementX.wavesetb(self.SpectroscopyX,IGEOM=IGEOM)
+                    self.MeasurementX.wavesetb(self.SpectroscopyX,IGEOM=0) # MeasurementX only ever has 1 selected geometry
                 if self.SpectroscopyX.ILBL==2:
-                    self.MeasurementX.wavesetc(self.SpectroscopyX,IGEOM=IGEOM)
+                    self.MeasurementX.wavesetc(self.SpectroscopyX,IGEOM=0) # MeasurementX only ever has 1 selected geometry
 
                 #Changing the different classes taking into account the parameterisations in the state vector
                 xmap = self.subprofretg()
@@ -4329,7 +4329,7 @@ class ForwardModel_0:
         EMISSIVITY = np.zeros(Measurement.NWAVE)
         LOWBC = Surface.LOWBC
 
-        if Surface.TSURF <= 0.0:  # No surface
+        if Surface.GASGIANT or (Surface.TSURF <= 0.0):  # No surface
             RADGROUND[:,:] = planck(Measurement.ISPACE, Measurement.WAVE, Layer.TEMP[0])[:, None]
         else:
             bbsurf = planck(Measurement.ISPACE, Measurement.WAVE, Surface.TSURF)
@@ -4337,7 +4337,7 @@ class ForwardModel_0:
             for imu in range(Scatter.NMU):
                 RADGROUND[:,imu] = bbsurf * EMISSIVITY
 
-        if Surface.LOWBC > 0:
+        if (not Surface.GASGIANT) and (Surface.LOWBC > 0):
             BRDF_matrix = self.calc_brdf_matrix(WAVEC=Measurement.WAVE, Surface=Surface, Scatter=Scatter)  #(NWAVE,NMU,NMU,NF+1)
         else:
             BRDF_matrix = np.zeros((Measurement.NWAVE, Scatter.NMU, Scatter.NMU, Scatter.NF+1))

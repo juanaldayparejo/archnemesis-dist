@@ -65,6 +65,8 @@ class Measurement_0:
         For each geometry, number of individual geometries need to be calculated and averaged to reconstruct the field of view
     VCONV : 2D array, float (NCONV,NGEOM)
         Convolution spectral points (wavelengths/wavenumbers) in each spectrum
+    WOFF : float
+        Wavenumber/Wavelength offset to add to measured spectrum
     MEAS : 2D array, float (NCONV,NGEOM)
         Measured spectrum for each geometry
     ERRMEAS : 2D array, float (NCONV,NGEOM)
@@ -178,7 +180,7 @@ class Measurement_0:
         self.V_DOPPLER = V_DOPPLER
         self.NAV = NAV       #np.zeros(NGEOM)
         self.NCONV = NCONV   #np.zeros(NGEOM)
-        self.WOFF = 0
+        self.WOFF = 0.0
         self.VNORM = None    
         
         # Input the following profiles using the edit_ methods.
@@ -323,6 +325,12 @@ class Measurement_0:
         else:
             print('Spectral resolution of the measurement is account for in the k-tables')
 
+        wavelength_unit = 'um'
+        wavenumber_unit = 'cm^-1'
+        to_wavelength = (lambda x: x) if self.ISPACE==0 else (lambda x: 1E4/x)
+        to_wavenumber = (lambda x: x) if self.ISPACE==1 else (lambda x: 1E4/x)
+        wavenumber_str = lambda x: str(to_wavenumber(x))+' '+wavenumber_unit
+        wavelength_str = lambda x: str(to_wavelength(x))+' '+wavelength_unit
 
         #Defining geometries
         print('Field-of-view centered at :: ','Latitude',self.LATITUDE,'- Longitude',self.LONGITUDE)
@@ -330,7 +338,15 @@ class Measurement_0:
         for i in range(self.NGEOM):
             print('')
             print('GEOMETRY '+str(i+1))
-            print('Minimum wavelength/wavenumber :: ',self.VCONV[0,i],' - Maximum wavelength/wavenumber :: ',self.VCONV[self.NCONV[i]-1,i])
+            print('Minimum wavelength/wavenumber :: '
+                +wavelength_str(self.VCONV[0,i])
+                +'/'
+                +wavenumber_str(self.VCONV[0,i])
+                +' - Maximum wavelength/wavenumber :: '
+                +wavelength_str(self.VCONV[self.NCONV[i]-1,i])
+                +'/'
+                +wavenumber_str(self.VCONV[self.NCONV[i]-1,i])
+            )
             if self.NAV[i]>1:
                 print(self.NAV[i],' averaging points')
                 for j in range(self.NAV[i]):
@@ -487,6 +503,10 @@ class Measurement_0:
         dset = grp.create_dataset('NCONV',data=self.NCONV)
         dset.attrs['title'] = "Number of spectral bins in each geometry"
 
+        dset = grp.create_dataset('WOFF',data=self.WOFF)
+        dset.attrs['title'] = "Wavelength/Wavenumber offset to add to each measurement"
+
+
         dset = grp.create_dataset('VCONV',data=self.VCONV)
         dset.attrs['title'] = "Spectral bins"
         if self.ISPACE==0:
@@ -596,6 +616,7 @@ class Measurement_0:
 
 
             self.NCONV = np.array(f.get('Measurement/NCONV'))
+            self.WOFF = np.float64(f.get('Measurement/WOFF'))
             self.VCONV = np.array(f.get('Measurement/VCONV')) + self.WOFF
             self.MEAS = np.array(f.get('Measurement/MEAS'))
             self.ERRMEAS = np.array(f.get('Measurement/ERRMEAS'))
@@ -701,7 +722,6 @@ class Measurement_0:
         self.edit_FLON(flon)
         self.edit_WGEOM(wgeom)
         self.edit_SOL_ANG(sol_ang)
-        self.edit_TANHE(sol_ang)
         self.edit_EMISS_ANG(emiss_ang)
         self.edit_AZI_ANG(azi_ang)
 
@@ -845,6 +865,7 @@ class Measurement_0:
         lineshape = int(s[0])
 
         self.ISHAPE = lineshape
+        self.build_ils() # Construct instrument lineshape just we do for HDF5 case
 
     #################################################################################################################
 

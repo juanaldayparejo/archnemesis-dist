@@ -136,7 +136,7 @@ class Atmosphere_0:
         self.GRAV = None #np.zeros(NP) or np.zeros((NP,NLOCATIONS))    
         self.VMR = None # np.zeros((NP,NVMR)) or np.zeros((NP,NVMR,NLOCATIONS)) 
         self.DUST = None # np.zeros((NP,NDUST)) or np.zeros((NP,NDUST,NLOCATIONS)) #particles per m3
-        self.DUST_UNITS_FLAG = None # np.zeros(NDUST), -1 for legacy units, 0 for standard
+        self.DUST_UNITS_FLAG = None # np.zeros(NDUST), -1 for legacy units (g cm^-3), None for standard (number m^-3)
         self.DUST_RENORMALISATION = {} # flags for normalising clouds to specific opacity
         self.PARAH2 = None # np.zeros(NP) 
         
@@ -435,6 +435,7 @@ class Atmosphere_0:
 
             if self.NDUST>0:
                 self.DUST = np.array(f.get(name+'/DUST'))
+                self.DUST_UNITS_FLAG = None  #if reading from the HDF5 files units are assumed to be in number density (m^{-3})
                 
             parah2 = name+'/PARAH2'
             if parah2 in f:

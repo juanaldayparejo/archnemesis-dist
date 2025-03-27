@@ -10,8 +10,8 @@ def test_layer_nemesis_units():
     '''
     Test the calculation of the layers against NEMESIS (dust units are in particles per gram of atmosphere)
     '''
-    
-    os.chdir('tests/files/Jupiter_test_layer/') #Changing directory to read files
+    test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Jupiter_test_layer/')
+    os.chdir(test_dir) #Changing directory to read files
     runname = 'cirstest'
     
     #Reading the input files
@@ -159,8 +159,8 @@ def test_layerg_nemesis_units():
     '''
     Test the calculation of the layers against NEMESIS (dust units are in particles per gram of atmosphere)
     '''
-    
-    os.chdir('tests/files/Jupiter_test_layer/') #Changing directory to read files
+    test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Jupiter_test_layer/')
+    os.chdir(test_dir) #Changing directory to read files
     runname = 'cirstest'
     
     #Reading the input files
