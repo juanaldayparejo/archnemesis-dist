@@ -373,7 +373,6 @@ class Spectroscopy_0:
 
         vmax = vmin + delv * (nwave-1)
         wavelta = np.linspace(vmin,vmax,nwave)
-        #wavelta = np.round(wavelta,5)
         self.WAVE = wavelta
 
     ######################################################################################################
@@ -632,21 +631,15 @@ class Spectroscopy_0:
             #In this case the headers have not been read so we need to read them
             self.read_header()
 
-        iwavel = np.where((self.WAVE<=wavemin))
-        iwavel = iwavel[0]
-        if len(iwavel)==0:
+        iwl = np.searchsorted(self.WAVE, wavemin, side='right') - 1
+        if iwl < 0:
             iwl = 0
-        else:
-            iwl = iwavel[len(iwavel)-1]
 
-        iwaveh = np.where((self.WAVE>=wavemax))
-        iwaveh = iwaveh[0]
-        if len(iwaveh)==0:
-            iwh = self.NWAVE-1
-        else:
-            iwh = iwaveh[0]
+        iwh = np.searchsorted(self.WAVE, wavemax, side='left')
+        if iwh >= self.NWAVE:
+            iwh = self.NWAVE - 1
 
-        wave1 = self.WAVE[iwl:iwh+1]
+        wave1 = self.WAVE[iwl:iwh + 1]
         self.NWAVE = len(wave1)
         self.WAVE = wave1
 
@@ -1365,13 +1358,17 @@ def read_ltahead(filename):
         f = open(filename+'.lta','r')
 
     irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
-    nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
-    vmin = float(np.fromfile(f,dtype='float32',count=1)[0])
-    delv = float(np.fromfile(f,dtype='float32',count=1)[0])
+    nwave = np.fromfile(f,dtype='int32',count=1)[0]
+    vmin = np.fromfile(f,dtype='float32',count=1)[0]
+    delv = np.fromfile(f,dtype='float32',count=1)[0]
     npress = int(np.fromfile(f,dtype='int32',count=1)[0])
     ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
     gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
     isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+    
+    # Convert explicitly rounding to 7 decimals (float32 precision)
+    vmin = np.round(np.float64(vmin), decimals=7)
+    delv = np.round(np.float64(delv), decimals=7)
 
     presslevels = np.fromfile(f,dtype='float32',count=npress)
     if ntemp > 0:
@@ -1427,14 +1424,18 @@ def read_ktahead(filename):
 
     irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
     nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
-    vmin = float(np.fromfile(f,dtype='float32',count=1)[0])
-    delv = float(np.fromfile(f,dtype='float32',count=1)[0])
-    fwhm = float(np.fromfile(f,dtype='float32',count=1)[0])
+    vmin = np.fromfile(f,dtype='float32',count=1)[0]
+    delv = np.fromfile(f,dtype='float32',count=1)[0]
+    fwhm = np.fromfile(f,dtype='float32',count=1)[0]
     npress = int(np.fromfile(f,dtype='int32',count=1)[0])
     ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
     ng = int(np.fromfile(f,dtype='int32',count=1)[0])
     gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
     isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+
+    # Convert explicitly rounding to 7 decimals (float32 precision)
+    vmin = np.round(np.float64(vmin), decimals=7)
+    delv = np.round(np.float64(delv), decimals=7)
 
     g_ord = np.fromfile(f,dtype='float32',count=ng)
     del_g = np.fromfile(f,dtype='float32',count=ng)
@@ -1567,14 +1568,18 @@ def read_lbltable(filename,wavemin,wavemax):
     nbytes_float32 = 4
 
     #Reading header
-    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
-    nwavelta = int(np.fromfile(f,dtype='int32',count=1)[0])
-    vmin = float(np.fromfile(f,dtype='float32',count=1)[0])
-    delv = float(np.fromfile(f,dtype='float32',count=1)[0])
-    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
-    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
-    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+    irec0 = np.fromfile(f,dtype='int32',count=1)[0]
+    nwavelta = np.fromfile(f,dtype='int32',count=1)[0]
+    vmin = np.fromfile(f,dtype='float32',count=1)[0]
+    delv = np.fromfile(f,dtype='float32',count=1)[0]
+    npress = np.fromfile(f,dtype='int32',count=1)[0]
+    ntemp = np.fromfile(f,dtype='int32',count=1)[0]
+    gasID = np.fromfile(f,dtype='int32',count=1)[0]
+    isoID = np.fromfile(f,dtype='int32',count=1)[0]
+
+    # Convert explicitly rounding to 7 decimals (float32 precision)
+    vmin = np.round(np.float64(vmin), decimals=7)
+    delv = np.round(np.float64(delv), decimals=7)
 
     presslevels = np.fromfile(f,dtype='float32',count=npress)
     
@@ -1584,17 +1589,12 @@ def read_lbltable(filename,wavemin,wavemax):
         templevels = np.zeros((npress,2))
         for i in range(npress):
             templevels[i] = np.fromfile(f,dtype='float32',count=-ntemp)
-#     templevels = np.fromfile(f,dtype='float32',count=ntemp)
-
-#     ioff = 8*nbytes_int32+npress*nbytes_float32+ntemp*nbytes_float32
 
     #Calculating the wavenumbers to be read
     vmax = vmin + delv * (nwavelta-1)
     wavelta = np.linspace(vmin,vmax,nwavelta)
 
-    #wavelta = np.round(wavelta,5)
-    ins1 = np.where( (wavelta>=wavemin) & (wavelta<=wavemax) )
-    ins = ins1[0]
+    ins = np.where( (wavelta>=wavemin) & (wavelta<=wavemax) )[0]
     nwave = len(ins)
     wave = np.zeros(nwave)
     wave[:] = wavelta[ins]
@@ -1675,14 +1675,18 @@ def read_ktable(filename,wavemin,wavemax):
     #Reading header
     irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
     nwavekta = int(np.fromfile(f,dtype='int32',count=1)[0])
-    vmin = float(np.fromfile(f,dtype='float32',count=1)[0])
-    delv = float(np.fromfile(f,dtype='float32',count=1)[0])
+    vmin = np.fromfile(f,dtype='float32',count=1)[0]
+    delv = np.fromfile(f,dtype='float32',count=1)[0]
     fwhm = float(np.fromfile(f,dtype='float32',count=1)[0])
     npress = int(np.fromfile(f,dtype='int32',count=1)[0])
     ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
     ng = int(np.fromfile(f,dtype='int32',count=1)[0])
     gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
     isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+
+    # Convert explicitly rounding to 7 decimals (float32 precision)
+    vmin = np.round(np.float64(vmin), decimals=7)
+    delv = np.round(np.float64(delv), decimals=7)
 
     ioff = ioff + 10 * nbytes_int32
 
@@ -1715,8 +1719,7 @@ def read_ktable(filename,wavemin,wavemax):
         ioff = ioff + nwavekta*nbytes_float32
 
     #Calculating the wavenumbers to be read
-    ins1 = np.where( (wavetot>=wavemin) & (wavetot<=wavemax) )
-    ins = ins1[0]
+    ins = np.where( (wavetot>=wavemin) & (wavetot<=wavemax) )[0]
     nwave = len(ins)
     wave = np.zeros([nwave])
     wave[:] = wavetot[ins]

@@ -1662,13 +1662,10 @@ class Measurement_0:
         
         if Spectroscopy is not None:
 
-            #if (vkstep < 0.0 or fwhm == 0.0):
             if self.FWHM==0:
 
-                wave = np.zeros(self.NCONV[IGEOM])
-                wave[:] = self.VCONV[0:self.NCONV[IGEOM],IGEOM]
-                self.WAVE = wave
-                self.NWAVE = self.NCONV[IGEOM]
+                wavemin = self.VCONV[0,IGEOM]
+                wavemax = self.VCONV[self.NCONV[IGEOM]-1,IGEOM]
 
             elif self.FWHM<0.0:
 
@@ -1682,42 +1679,46 @@ class Measurement_0:
                     if vmaxx>wavemax:
                         wavemax= vmaxx
 
-                if (wavemin<Spectroscopy.WAVE.min() or wavemax>Spectroscopy.WAVE.max()):
-                    raise ValueError('error from wavesetc :: Channel wavelengths not covered by k-tables')
-
-                #Selecting the necessary wavenumbers
-                iwavemin = np.argmin(np.abs(Spectroscopy.WAVE,wavemin))
-                wave0min = Spectroscopy.WAVE[iwavemin]
-                iwavemax = np.argmin(np.abs(Spectroscopy.WAVE,wavemax))
-                wave0max = Spectroscopy.WAVE[iwavemax]
-
-                if wave0min>wavemin:
-                    iwavemin = iwavemin - 1
-                if wave0max<wavemax:
-                    iwavemax = iwavemax + 1
-
-                iwave = np.linspace(iwavemin,iwavemax,iwavemax-iwavemin+1,dtype='int32')
-
-                self.WAVE = Spectroscopy.WAVE[iwave]
-                self.NWAVE = len(self.WAVE)
-
             elif self.FWHM>0.0:
 
                 dv = self.FWHM * 0.5
                 wavemin = self.VCONV[0,IGEOM] - dv
                 wavemax = self.VCONV[self.NCONV[IGEOM]-1,IGEOM] + dv
 
-                if (wavemin<Spectroscopy.WAVE.min() or wavemax>Spectroscopy.WAVE.max()):
-                    raise ValueError('error from wavesetc :: Channel wavelengths not covered by k-tables')
-
-                iwave = np.where( (Spectroscopy.WAVE>=wavemin) & (Spectroscopy.WAVE<=wavemax) )
-                iwave = iwave[0]
-                self.WAVE = Spectroscopy.WAVE[iwave]
-                self.NWAVE = len(self.WAVE)
-
             else:
                 raise ValueError('error :: Measurement FWHM is not defined')
 
+            if (wavemin<Spectroscopy.WAVE.min() or wavemax>Spectroscopy.WAVE.max()):
+                raise ValueError('error from wavesetb :: Channel wavelengths not covered by k-tables')
+
+            #Correcting the wavelengths for Doppler shift
+            if self.V_DOPPLER!=0.0:
+                print('nemesis :: Correcting for Doppler shift of ',self.V_DOPPLER,'km/s')        
+            wavemin = self.invert_doppler_shift(wavemin)
+            wavemax = self.invert_doppler_shift(wavemax)
+            
+            #Sorting the wavenumbers if the ILS is flipped
+            if wavemin>=wavemax:
+                raise ValueError('error in wavesetc :: the spectral points defining the instrument lineshape must be increasing')
+
+            # Find indices just below and above wavemin and wavemax
+            index_min = np.searchsorted(Spectroscopy.WAVE, wavemin, side="left")
+            index_max = np.searchsorted(Spectroscopy.WAVE, wavemax, side="right")
+            
+            # Ensure indices are within valid bounds
+            index_min = max(index_min - 1, 0)  # Get the one just below
+            index_max = min(index_max, len(Spectroscopy.WAVE) - 1)  # Get the one just above
+
+            #Checking that the lbl-tables encompass this wavelength range
+            err = 0.01
+            if (wavemin<(1-err)*Spectroscopy.WAVE.min() or wavemax>(1+err)*Spectroscopy.WAVE.max()):
+                print('Required wavelength range :: ',wavemin,wavemax)
+                print('Wavelength range in lbl-tables :: ',Spectroscopy.WAVE.min(),Spectroscopy.WAVE.max())
+                raise ValueError('error from wavesetc :: Channel wavelengths not covered by lbl-tables')
+            
+            self.WAVE = Spectroscopy.WAVE[index_min:index_max+1]
+            self.NWAVE = len(self.WAVE)
+            
         else:
             
             wave = np.zeros(self.NCONV[IGEOM])
@@ -1915,7 +1916,6 @@ class Measurement_0:
 
             #It is assumed all geometries cover the same spectral range
             IG = 0 
-            NX = len(ModGrad[0,0,:])
             yout = np.zeros((self.NCONV[IG],self.NGEOM))
             ynor = np.zeros((self.NCONV[IG],self.NGEOM))
 
@@ -1953,7 +1953,7 @@ class Measurement_0:
                     nwave1 = nwave1 +1
                     wave1[nwave1-1] = self.VCONV[self.NCONV[IGEOM],IGEOM] + self.FWHM
                     frac = (ModSpec[self.NWAVE-1]-ModSpec[self.NWAVE-2])/(self.WAVE[self.NWAVE-1]-self.WAVE[self.NWAVE-2])
-                    y1[nwave-1] = ModSpec[Measurement.NWAVE-1] + frac * (wave1[nwave1-1]-self.WAVE[self.NWAVE-1])
+                    y1[nwave-1] = ModSpec[self.NWAVE-1] + frac * (wave1[nwave1-1]-self.WAVE[self.NWAVE-1])
                     iup=1
 
                 #Extrapolating the first wavenumber
@@ -2028,7 +2028,8 @@ class Measurement_0:
                 #Channel Integrator mode where the k-tables have been previously
                 #tabulated INCLUDING the filter profile. In which case all we
                 #need do is just transfer the outputs
-                yout[:] = ModSpec[:]
+                s = scipy.interpolate.interp1d(self.WAVE,ModSpec)
+                yout[:] = s(self.VCONV[0:self.NCONV[IGEOM],IGEOM])
 
             elif self.FWHM<0.0:
 
@@ -2145,7 +2146,7 @@ class Measurement_0:
                 grad1 = np.zeros((nwave+2,NX))
                 wave1[1:nwave+1] = self.WAVE
                 y1[1:nwave+1] = ModSpec[0:self.NWAVE]
-                grad1[1:nwave+1,:] = Modgrad[0:self.NWAVE,:]
+                grad1[1:nwave+1,:] = ModGrad[0:self.NWAVE,:]
 
                 #Extrapolating the last wavenumber
                 iup = 0
@@ -2153,8 +2154,8 @@ class Measurement_0:
                     nwave1 = nwave1 +1
                     wave1[nwave1-1] = self.VCONV[self.NCONV[IGEOM],IGEOM] + self.FWHM
                     frac = (ModSpec[self.NWAVE-1]-ModSpec[self.NWAVE-2])/(self.WAVE[self.NWAVE-1]-self.WAVE[self.NWAVE-2])
-                    y1[nwave-1] = ModSpec[Measurement.NWAVE-1] + frac * (wave1[nwave1-1]-self.WAVE[self.NWAVE-1])
-                    grad1[nwave-1,:] = ModGrad[Measurement.NWAVE-1,:] + frac * (wave1[nwave1-1]-self.WAVE[self.NWAVE-1])
+                    y1[nwave-1] = ModSpec[self.NWAVE-1] + frac * (wave1[nwave1-1]-self.WAVE[self.NWAVE-1])
+                    grad1[nwave-1,:] = ModGrad[self.NWAVE-1,:] + frac * (wave1[nwave1-1]-self.WAVE[self.NWAVE-1])
                     iup=1
 
                 #Extrapolating the first wavenumber
@@ -2245,8 +2246,11 @@ class Measurement_0:
                 #Channel Integrator mode where the k-tables have been previously
                 #tabulated INCLUDING the filter profile. In which case all we
                 #need do is just transfer the outputs
-                yout[:] = ModSpec[:]
-                gradout[:] = ModGrad[:,:]
+                s = scipy.interpolate.interp1d(self.WAVE,ModSpec)
+                yout[:] = s(self.VCONV[0:self.NCONV[IGEOM],IGEOM])
+                
+                s = scipy.interpolate.interp1d(self.WAVE,ModGrad,axis=0)
+                gradout[:,:] = s(self.VCONV[0:self.NCONV[IGEOM],IGEOM])
 
             elif self.FWHM<0.0:
 
