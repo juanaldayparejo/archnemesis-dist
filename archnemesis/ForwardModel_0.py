@@ -250,9 +250,14 @@ class ForwardModel_0:
                 flagh2p = False
 
                 #Updating the required parameters based on the current geometry
-                self.ScatterX.SOL_ANG = self.MeasurementX.SOL_ANG[0,0]
-                self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
-                self.ScatterX.AZI_ANG = self.MeasurementX.AZI_ANG[0,0]
+                if self.MeasurementX.EMISS_ANG[0,0]>=0.0:
+                    self.ScatterX.SOL_ANG = self.MeasurementX.SOL_ANG[0,0]
+                    self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
+                    self.ScatterX.AZI_ANG = self.MeasurementX.AZI_ANG[0,0]
+                else:
+                    self.ScatterX.SOL_ANG = self.MeasurementX.TANHE[0,0]
+                    self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
+                    
 
                 if self.SpectroscopyX.ILBL==0:
                     self.MeasurementX.wavesetb(self.SpectroscopyX,IGEOM=0)
@@ -2292,28 +2297,50 @@ class ForwardModel_0:
         self.MeasurementX.edit_ERRMEAS(ERRMEAS)
         
         #Selecting the geometry
-        NAV = np.ones(self.MeasurementX.NGEOM,dtype='int32')
-        FLAT = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
-        FLON = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
-        WGEOM = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
-        SOL_ANG = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
-        EMISS_ANG = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
-        AZI_ANG = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
-        
-        FLAT[0,0] = self.Measurement.FLAT[IGEOM,IAV]
-        FLON[0,0] = self.Measurement.FLON[IGEOM,IAV]
-        WGEOM[0,0] = self.Measurement.WGEOM[IGEOM,IAV]
-        AZI_ANG[0,0] = self.Measurement.AZI_ANG[IGEOM,IAV]
-        SOL_ANG[0,0] = self.Measurement.SOL_ANG[IGEOM,IAV]
-        EMISS_ANG[0,0] = self.Measurement.EMISS_ANG[IGEOM,IAV]
-        
-        self.MeasurementX.NAV = NAV
-        self.MeasurementX.edit_FLAT(FLAT)
-        self.MeasurementX.edit_FLON(FLON)
-        self.MeasurementX.edit_WGEOM(WGEOM)
-        self.MeasurementX.edit_AZI_ANG(AZI_ANG)
-        self.MeasurementX.edit_SOL_ANG(SOL_ANG)
-        self.MeasurementX.edit_EMISS_ANG(EMISS_ANG)
+        if self.Measurement.EMISS_ANG[IGEOM,IAV]>=0:
+            NAV = np.ones(self.MeasurementX.NGEOM,dtype='int32')
+            FLAT = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            FLON = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            WGEOM = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            SOL_ANG = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            EMISS_ANG = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            AZI_ANG = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            
+            FLAT[0,0] = self.Measurement.FLAT[IGEOM,IAV]
+            FLON[0,0] = self.Measurement.FLON[IGEOM,IAV]
+            WGEOM[0,0] = self.Measurement.WGEOM[IGEOM,IAV]
+            AZI_ANG[0,0] = self.Measurement.AZI_ANG[IGEOM,IAV]
+            SOL_ANG[0,0] = self.Measurement.SOL_ANG[IGEOM,IAV]
+            EMISS_ANG[0,0] = self.Measurement.EMISS_ANG[IGEOM,IAV]
+            
+            self.MeasurementX.NAV = NAV
+            self.MeasurementX.edit_FLAT(FLAT)
+            self.MeasurementX.edit_FLON(FLON)
+            self.MeasurementX.edit_WGEOM(WGEOM)
+            self.MeasurementX.edit_AZI_ANG(AZI_ANG)
+            self.MeasurementX.edit_SOL_ANG(SOL_ANG)
+            self.MeasurementX.edit_EMISS_ANG(EMISS_ANG)
+        else:
+            NAV = np.ones(self.MeasurementX.NGEOM,dtype='int32')
+            FLAT = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            FLON = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            WGEOM = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            TANHE = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            EMISS_ANG = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            AZI_ANG = np.zeros((self.MeasurementX.NGEOM,NAV[0]))
+            
+            FLAT[0,0] = self.Measurement.FLAT[IGEOM,IAV]
+            FLON[0,0] = self.Measurement.FLON[IGEOM,IAV]
+            WGEOM[0,0] = self.Measurement.WGEOM[IGEOM,IAV]
+            TANHE[0,0] = self.Measurement.TANHE[IGEOM,IAV]
+            EMISS_ANG[0,0] = self.Measurement.EMISS_ANG[IGEOM,IAV]
+            
+            self.MeasurementX.NAV = NAV
+            self.MeasurementX.edit_FLAT(FLAT)
+            self.MeasurementX.edit_FLON(FLON)
+            self.MeasurementX.edit_WGEOM(WGEOM)
+            self.MeasurementX.edit_TANHE(TANHE)
+            self.MeasurementX.edit_EMISS_ANG(EMISS_ANG)
 
         self.MeasurementX.LATITUDE = self.MeasurementX.FLAT[0,0]
         self.MeasurementX.LONGITUDE = self.MeasurementX.FLON[0,0]
