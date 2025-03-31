@@ -311,7 +311,7 @@ class Spectroscopy_0:
                 self.LOCATION = LOCATION
                 
                 #Reading the header information
-                self.read_header()                
+                self.read_header()
                 
                 f.close()
 
@@ -399,7 +399,7 @@ class Spectroscopy_0:
         self.NGAS = ngasact
         self.LOCATION = strkta
 
-        #Now reading the head of the binary files included in the .lls file
+        #Now reading the head of the binary files included in the .kta file
         nwavekta = np.zeros([ngasact],dtype='int')
         npresskta = np.zeros([ngasact],dtype='int')
         ntempkta = np.zeros([ngasact],dtype='int')
@@ -459,10 +459,10 @@ class Spectroscopy_0:
                     elif extx=='.h5':
                         ext[i] = 1
                     else:
-                        raise ValueError('error in read_hdf5 :: The extention of the look-up tables must be .kta or .h5')
+                        raise ValueError('error in read_header :: The extention of the look-up tables must be .kta or .h5')
                 
                 if len(np.unique(ext)) != 1:
-                    raise ValueError('error :: all look-up tables must be defined in the same format (with same extension)')
+                    raise ValueError('error in read_header:: all look-up tables must be defined in the same format (with same extension)')
                     
                 extx = np.unique(ext)[0]
                 
@@ -508,7 +508,7 @@ class Spectroscopy_0:
                     
                 else:
                     
-                    raise ValueError('error :: HDF5 correlated-k look-up tables have not yet been implemented')
+                    raise ValueError('error in read_header:: HDF5 correlated-k look-up tables have not yet been implemented')
 
             elif self.ILBL==2:
 
@@ -522,10 +522,10 @@ class Spectroscopy_0:
                     elif extx=='.h5':
                         ext[i] = 1
                     else:
-                        raise ValueError('error in read_hdf5 :: The extention of the look-up tables must be .lta or .h5')
+                        raise ValueError('error in read_header :: The extention of the look-up tables must be .lta or .h5')
                 
                 if len(np.unique(ext)) != 1:
-                    raise ValueError('error :: all look-up tables must be defined in the same format (with same extension)')
+                    raise ValueError('error in read_header :: all look-up tables must be defined in the same format (with same extension)')
                     
                 extx = np.unique(ext)[0]
 
@@ -548,11 +548,11 @@ class Spectroscopy_0:
                         isoIDlta[i] = isoID
 
                     if len(np.unique(nwavelta)) != 1:
-                        raise ValueError('error :: Number of wavenumbers in all .lta files must be the same')
+                        raise ValueError('error in read_header :: Number of wavenumbers in all .lta files must be the same')
                     if len(np.unique(npresslta)) != 1:
-                        raise ValueError('error :: Number of pressure levels in all .lta files must be the same')
+                        raise ValueError('error in read_header :: Number of pressure levels in all .lta files must be the same')
                     if len(np.unique(ntemplta)) != 1:
-                        raise ValueError('error :: Number of temperature levels in all .lta files must be the same')
+                        raise ValueError('error in read_header :: Number of temperature levels in all .lta files must be the same')
 
                     self.ID = gasIDlta
                     self.ISO = isoIDlta
@@ -583,7 +583,7 @@ class Spectroscopy_0:
                     for i in range(self.NGAS):
                         ilbl,wave,npress,ntemp,gasID,isoID,presslevels,templevels = read_header_lta_hdf5(self.LOCATION[i])
                         if ilbl!=2:
-                            raise ValueError('error :: ILBL in look-up tables must be the same as in Spectroscopy class')
+                            raise ValueError('error in read_header :: ILBL in look-up tables must be the same as in Spectroscopy class')
                         nwavelta[i] = len(wave)
                         npresslta[i] = npress
                         ntemplta[i] = ntemp
@@ -591,11 +591,11 @@ class Spectroscopy_0:
                         isoIDlta[i] = isoID
                         
                     if len(np.unique(nwavelta)) != 1:
-                        raise ValueError('error :: Number of wavenumbers in all look-up tables must be the same')
+                        raise ValueError('error in read_header :: Number of wavenumbers in all look-up tables must be the same')
                     if len(np.unique(npresslta)) != 1:
-                        raise ValueError('error :: Number of pressure levels in all look-up tables must be the same')
+                        raise ValueError('error in read_header :: Number of pressure levels in all look-up tables must be the same')
                     if len(np.unique(ntemplta)) != 1:
-                        raise ValueError('error :: Number of temperature levels in all look-up tables must be the same')
+                        raise ValueError('error in read_header :: Number of temperature levels in all look-up tables must be the same')
                     
                     self.ID = gasIDlta
                     self.ISO = isoIDlta
