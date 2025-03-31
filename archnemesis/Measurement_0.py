@@ -5,6 +5,10 @@ import matplotlib as matplotlib
 import os
 from numba import jit
 
+import logging
+
+
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
@@ -327,8 +331,8 @@ class Measurement_0:
 
         wavelength_unit = 'um'
         wavenumber_unit = 'cm^-1'
-        to_wavelength = (lambda x: x) if self.ISPACE==0 else (lambda x: 1E4/x)
-        to_wavenumber = (lambda x: x) if self.ISPACE==1 else (lambda x: 1E4/x)
+        to_wavelength = (lambda x: x) if self.ISPACE==1 else (lambda x: 1E4/x)
+        to_wavenumber = (lambda x: x) if self.ISPACE==0 else (lambda x: 1E4/x)
         wavenumber_str = lambda x: str(to_wavenumber(x))+' '+wavenumber_unit
         wavelength_str = lambda x: str(to_wavelength(x))+' '+wavelength_unit
 
@@ -1660,18 +1664,19 @@ class Measurement_0:
             Integer defining the geometry at which the calculation numbers will be computed
         """
         
+        
         if Spectroscopy is not None:
-
+        
             #if (vkstep < 0.0 or fwhm == 0.0):
             if self.FWHM==0:
-
+                
                 wave = np.zeros(self.NCONV[IGEOM])
                 wave[:] = self.VCONV[0:self.NCONV[IGEOM],IGEOM]
                 self.WAVE = wave
                 self.NWAVE = self.NCONV[IGEOM]
 
             elif self.FWHM<0.0:
-
+                
                 wavemin = 1.0e10
                 wavemax = 0.0
                 for i in range(self.NCONV[IGEOM]):
@@ -1702,16 +1707,25 @@ class Measurement_0:
                 self.NWAVE = len(self.WAVE)
 
             elif self.FWHM>0.0:
-
+                
                 dv = self.FWHM * 0.5
                 wavemin = self.VCONV[0,IGEOM] - dv
                 wavemax = self.VCONV[self.NCONV[IGEOM]-1,IGEOM] + dv
 
                 if (wavemin<Spectroscopy.WAVE.min() or wavemax>Spectroscopy.WAVE.max()):
-                    raise ValueError('error from wavesetc :: Channel wavelengths not covered by k-tables')
+                    Spectroscopy.summary_info()
+                    raise ValueError(f'error from wavesetc :: Channel wavelengths not covered by k-tables. k-table range [{Spectroscopy.WAVE.min()}, {Spectroscopy.WAVE.max()}], VCONV range [{wavemin}, {wavemax}]')
 
+                
                 iwave = np.where( (Spectroscopy.WAVE>=wavemin) & (Spectroscopy.WAVE<=wavemax) )
                 iwave = iwave[0]
+                
+                # Need to account for wavemin/wavemax not always lying on a k-table wavelength grid boundary
+                if Spectroscopy.WAVE[iwave[0]] > wavemin:
+                    iwave = np.concatenate((np.array([iwave[0]-1],dtype=int), iwave), axis=0)
+                if Spectroscopy.WAVE[iwave[-1]] < wavemax:
+                    iwave = np.concatenate((iwave, np.array([iwave[-1]+1],dtype=int)), axis=0)
+                    
                 self.WAVE = Spectroscopy.WAVE[iwave]
                 self.NWAVE = len(self.WAVE)
 
@@ -1942,45 +1956,38 @@ class Measurement_0:
             if self.FWHM>0.0:
 
                 nwave1 = self.NWAVE
-                wave1 = np.zeros(nwave+2)
-                y1 = np.zeros(nwave+2)
-                wave1[1:nwave+1] = self.WAVE
-                y1[1:nwave+1] = ModSpec[0:self.NWAVE]
+                
+                # make new holders
+                nwave_max = self.NWAVE+2
+                wave1 = np.zeros(nwave_max)
+                y1 = np.zeros(nwave_max)
+                wave1[1:-1] = self.WAVE
+                y1[1:-1] = ModSpec[0:self.NWAVE]
 
                 #Extrapolating the last wavenumber
                 iup = 0
-                if(self.VCONV[self.NCONV[IGEOM],IGEOM]>(self.WAVE.max()-self.FWHM/2.)):
-                    nwave1 = nwave1 +1
-                    wave1[nwave1-1] = self.VCONV[self.NCONV[IGEOM],IGEOM] + self.FWHM
+                if((self.VCONV[self.NCONV[IGEOM],IGEOM]+self.FWHM/2.0) > self.WAVE.max()):
+                    # If the last wavenumber in the measurement is outside the range taken from k/l-tables
+                    # we must extrapolate what the last k/l-table value should be
+                    wave1[-1] = self.VCONV[self.NCONV[IGEOM],IGEOM] + self.FWHM
                     frac = (ModSpec[self.NWAVE-1]-ModSpec[self.NWAVE-2])/(self.WAVE[self.NWAVE-1]-self.WAVE[self.NWAVE-2])
-                    y1[nwave-1] = ModSpec[Measurement.NWAVE-1] + frac * (wave1[nwave1-1]-self.WAVE[self.NWAVE-1])
+                    y1[-1] = ModSpec[Measurement.NWAVE-1] + frac * (wave1[-1]-self.WAVE[self.NWAVE-1])
                     iup=1
 
                 #Extrapolating the first wavenumber
                 idown = 0
-                if(self.VCONV[0,IGEOM]<(self.WAVE.min()+self.FWHM/2.)):
-                    nwave1 = nwave1 + 1
+                if((self.VCONV[0,IGEOM]-self.FWHM/2.0) < self.WAVE.min()):
+                    # If the first wavenumber in the measurement is outside the range taken from k/l-tables
+                    # we must extrapolate what the first k/l-table value should be
                     wave1[0] = self.VCONV[0,IGEOM] - self.FWHM
                     frac = (ModSpec[1] - ModSpec[2])/(self.WAVE[1]-self.WAVE[0])
                     y1[0] = ModSpec[0] + frac * (wave1[0] - self.WAVE[0])
                     idown = 1
 
                 #Re-shaping the spectrum
-                nwave = nwave1 + iup + idown
-                wave = np.zeros(nwave)
-                y = np.zeros(nwave)
-                if((idown==1) & (iup==1)):
-                    wave[:] = wave1[:]
-                    y[:] = y1[:]
-                elif((idown==1) & (iup==0)):
-                    wave[0:nwave] = wave1[0:nwave1-1]
-                    y[0:nwave] = y1[0:nwave1-1]
-                elif((idown==0) & (iup==1)):
-                    wave[0:nwave] = wave1[1:nwave1]
-                    y[0:nwave] = y1[1:nwave1]
-                else:
-                    wave[0:nwave] = wave1[1:nwave1-1]
-                    y[0:nwave] = y1[1:nwave1-1]
+                nwave = self.NWAVE + iup + idown
+                wave = wave1[1-idown:nwave_max-(1-iup)]
+                y = y1[1-idown:nwave_max-(1-iup)]
 
                 #Checking if .fwh file exists (indicating that FWHM varies with wavelength)
                 ifwhm = 0
@@ -2511,13 +2518,14 @@ class Measurement_0:
             ax2 = plt.subplot2grid((2,3),(0,1),rowspan=1,colspan=2)
             ax2.fill_between(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom]-self.ERRMEAS[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom]+self.ERRMEAS[0:self.NCONV[igeom],igeom],alpha=0.3)
             ax2.plot(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom])
-
+            ax2.set_title('Spectra linear scale')
             ax2.grid()
 
             #Plotting the spectra in log scale
             ax3 = plt.subplot2grid((2,3),(1,1),rowspan=1,colspan=2,sharex=ax2)
             ax3.fill_between(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom]-self.ERRMEAS[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom]+self.ERRMEAS[0:self.NCONV[igeom],igeom],alpha=0.3)
             ax3.plot(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom])
+            ax3.set_title('Spectra log scale')
             ax3.set_yscale('log')
 
             if np.mean(self.VCONV)>30.:

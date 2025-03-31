@@ -5333,7 +5333,10 @@ class ForwardModel_0:
             isoID = self.SpectroscopyX.ISO[icase]
             
             if not any(id_val == gasID and iso_val == isoID for id_val, iso_val in zip(self.AtmosphereX.ID, self.AtmosphereX.ISO)):
-                raise ValueError(f"error in check_gas_spec_atm :: No match found for gasID={gasID} and isoID={isoID} from Spectroscopy in Atmosphere")
+                from archnemesis.Data import gas_info
+                known_gas_ids = ', '.join([f"({gid},{isoid}) [{gas_info[str(gid)]['name']}(iso:{isoid})]" for gid, isoid in zip(self.AtmosphereX.ID,self.AtmosphereX.ISO)])
+                msg = f'Atmosphere has been defined with the following (gasID,isoID) pairs: {known_gas_ids}'
+                raise ValueError(f"error in check_gas_spec_atm :: No match found for gasID={gasID} and isoID={isoID} [{gas_info[str(gasID)]['name']}(iso:{isoID})] from Spectroscopy in Atmosphere. {msg}")
 
     def check_wave_range_aerosols(self,rel_tolerance=1.0e-6):
         """
