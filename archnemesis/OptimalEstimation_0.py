@@ -21,6 +21,73 @@ Optimal Estimation Class. It includes all parameters that are relevant for the r
 
 class OptimalEstimation_0:
 
+    @classmethod
+    def from_itr(cls, runname):
+        """
+        Read "runname.itr" file, populate OptimalEstimation object as if it was the output of "coreretOE(...)"
+        """
+        
+        # Get the number of lines in the file
+        n_lines = 0
+        with open(f'{runname}.itr', 'rb') as f:
+            n_lines = sum(1 for _ in f)
+        
+        with open(f'{runname}.itr', 'r') as f:
+            nx, ny, niter = map(int, f.readline().strip().split())
+            
+            instance = cls(
+                IRET=0, 
+                NITER=niter, 
+                NX=nx, 
+                NY=ny, 
+                PHILIMIT=None, # We don't have this information so ignore it
+                NCORES=None # we don't have this information so ignore it
+            )
+            
+            # Each iteration has 1 + 2*NX + 4*NY + NX*NY lines
+            # Therefore work out how many iterations were written to
+            # the file and select the last one
+            lines_per_iter = (1+2*nx+4*ny+nx*ny)
+            n_last_iter = (n_lines - 1)//lines_per_iter
+            n_skip_lines = (n_last_iter -1)*lines_per_iter
+            
+            for _ in range(n_skip_lines):
+                f.readline()
+            
+            # Now read in the final iteration
+            chisq, phi = map(float, f.readline().strip().split())
+            
+            xn_array = np.array((nx,))
+            xa_array = np.array((nx,))
+            y_array = np.array((yn,))
+            se_array = np.array((yn,))
+            yn_prev_array = np.array((ny,))
+            yn_array = np.array((yn,))
+            kk_array = np.array((ny,nx))
+            
+            for i in range(nx): xn_array[i] = float(f.readline().strip())
+            for i in range(nx): xa_array[i] = float(f.readline().strip())
+            for i in range(ny): y_array[i] = float(f.readline().strip())
+            for i in range(ny): se_array[i] = float(f.readline().strip())
+            for i in range(ny): yn_prev_array[i] = float(f.readline().strip())
+            for i in range(ny): yn_array[i] = float(f.readline().strip())
+            for i in range(nx):
+                for j in range(ny): kk_array[j,i] = float(f.readline().strip())
+            
+            instance.edit_XN(xn_array)
+            instance.edit_XA(xa_array)
+            instance.edit_Y(y_array)
+            instance.edit_SE(se_array)
+            instance.edit_YN(yn_array)
+            instance.edit_KK(kk_array)
+        
+        return chisq, phi, y_prev_array, instance
+            
+            
+                
+                
+
+
     def __init__(self, IRET=0, NITER=1, NX=1, NY=1, PHILIMIT=0.1, NCORES=1):
 
         """
