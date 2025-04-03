@@ -1,4 +1,5 @@
 from archnemesis import *
+from archnemesis.Data.path_data import *
 import numpy as np
 import matplotlib.pyplot as plt
 import os
