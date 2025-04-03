@@ -197,18 +197,19 @@ class CIA_0:
         
         import h5py
 
-        f = h5py.File(runname+'.h5','r')
+        with h5py.File(runname+'.h5','r') as f:
 
-        #Checking if Spectroscopy exists
-        e = "/CIA" in f
-        if e==False:
-            raise ValueError('error :: CIA is not defined in HDF5 file')
-        else:
-            self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
-            self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
-            self.INORMAL = np.int32(f.get('CIA/INORMAL'))
+            #Checking if Spectroscopy exists
+            e = "/CIA" in f
+            if e==False:
+                raise ValueError('error :: CIA is not defined in HDF5 file')
+            else:
+                self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
+                self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
+                self.INORMAL = np.int32(f.get('CIA/INORMAL'))
     
-        f.close()
+        # Resolve archnemesis path if it has been indirected
+        self.CIADATA = archnemesis_resolve_path(self.CIADATA)
         
         #Reading the CIA table from the name specified
         self.read_ciatable(self.CIADATA+self.CIATABLE)
@@ -241,7 +242,10 @@ class CIA_0:
         #Write the directory where CIA tables are stored
         dt = h5py.special_dtype(vlen=str)
         CIADATA = ['']*1
-        CIADATA[0] = self.CIADATA
+        
+        # Indirect the archnemesis path so it works on other systems
+        CIADATA[0] = archnemesis_indirect_path(self.CIADATA)
+        
         dset = grp.create_dataset('CIADATA',data=CIADATA,dtype=dt)
         dset.attrs['title'] = "Path to directory where CIA table is stored"
         

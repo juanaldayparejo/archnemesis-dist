@@ -105,7 +105,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Atmosphere class and read file
     ##############################################################
 
-    Atmosphere = Atmosphere_0()
+    Atmosphere = Atmosphere_0(runname=runname)
 
     #Read gaseous atmosphere
     Atmosphere.read_hdf5(runname)
@@ -144,7 +144,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     f.close()
     
     if e==True:
-        CIA = CIA_0()
+        CIA = CIA_0(runname=runname)
         CIA.read_hdf5(runname)
     else:
         CIA = None
@@ -160,7 +160,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Measurement class and read file
     ###############################################################
 
-    Measurement = Measurement_0()
+    Measurement = Measurement_0(runname=runname)
     Measurement.read_hdf5(runname,calc_MeasurementVector=calc_SE)
     
     #Initialise Spectroscopy class and read file
@@ -172,7 +172,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     f.close()
 
     if e is True:
-        Spectroscopy = Spectroscopy_0()
+        Spectroscopy = Spectroscopy_0(RUNNAME=runname)
         Spectroscopy.read_hdf5(runname)
     else:
         Spectroscopy = None

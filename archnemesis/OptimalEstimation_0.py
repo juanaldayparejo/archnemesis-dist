@@ -915,11 +915,14 @@ class OptimalEstimation_0:
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
         fig,ax1 = plt.subplots(1,1,figsize=(10,3))
+        ax1.set_title('Jacobian Matrix')
         im = ax1.imshow(np.transpose(self.KK),aspect='auto',origin='lower',cmap='jet')
         divider = make_axes_locatable(ax1)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         cbar = plt.colorbar(im, cax=cax)
         cbar.set_label('Gradients (dR/dx)')
+        ax1.set_ylabel('state vector element #')
+        ax1.set_xlabel('measurement vector element #')
         ax1.grid()
         plt.tight_layout()
         plt.show()
@@ -935,12 +938,18 @@ class OptimalEstimation_0:
         fig = plt.figure(figsize=(10,4))
         ax1 = plt.subplot2grid((1,3),(0,0),colspan=1,rowspan=2)
         ax2 = plt.subplot2grid((1,3),(0,2),colspan=1,rowspan=1)
-        ax1.plot(range(self.NY),self.Y,c='black',label='Measured spectra')
-        ax1.plot(range(self.NY),self.YN,c='tab:red',label='Modelled spectra')
-        ax2.plot(range(self.NY),self.Y-self.YN,c='tab:red')
+        
+        ax1.plot(range(self.NY),self.Y,c='black',label='Measured spectra', alpha=0.6)
+        ax1.plot(range(self.NY),self.YN,c='tab:red',label='Modelled spectra', alpha=0.6)
         ax1.set_xlabel('Measurement vector element #')
         ax1.set_ylabel('Radiance')
         ax1.grid()
+        ax1.legend()
+        
+        ax2.plot(range(self.NY),self.Y-self.YN,c='tab:red', alpha=0.6)
+        ax2.set_xlabel('Measurement vector element #')
+        ax2.set_ylabel('Residual Radiance')
+        
         plt.tight_layout()
         plt.show()
 
@@ -1096,8 +1105,8 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
         #  alambda to stop the new trial vector xn1 being too far from the
         #  last 'best-fit' value xn
 
-        IBRAKE = 0
-        while IBRAKE==0: #We continue in this while loop until we do not find problems with the state vector
+        check_marquardt_brake = True
+        while check_marquardt_brake: #We continue in this while loop until we do not find problems with the state vector
     
             for j in range(OptimalEstimation.NX):
                 XN1[j] = OptimalEstimation.XN[j] + (X_OUT[j]-OptimalEstimation.XN[j])/(1.0+alambda)
@@ -1107,17 +1116,17 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
                     if((XN1[j]>85.) or (XN1[j]<-85.)):
                         print('nemesis :: log(number gone out of range) --- increasing brake')
                         alambda = alambda * 10.
-                        IBRAKE = 0
+                        check_marquardt_brake = True
                         if alambda>1.e30:
                             raise ValueError('error in nemesis :: Death spiral in braking parameters - stopping')
                         break
                     else:
-                        IBRAKE = 1
+                        check_marquardt_brake = False
                 else:
-                    IBRAKE = 1
+                    check_marquardt_brake = False
                     pass
                         
-            if IBRAKE==0:
+            if check_marquardt_brake==True: # [JD] If I am reading this correctly, anything in the loop after this line is skipped.
                 continue
                         
             #Check to see if any VMRs or other parameters have gone negative.
@@ -1141,7 +1150,7 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
             #if(len(np.where(Atmosphere1.VMR<0.0))>0):
             #    print('nemesisSO :: VMR has gone negative --- increasing brake')
             #    alambda = alambda * 10.
-            #    IBRAKE = 0
+            #    check_marquardt_brake = True
             #    continue
             
             #iwhere = np.where(Atmosphere1.T<0.0)
@@ -1149,7 +1158,7 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
             if(len(iwhere[0])>0):
                 print('nemesis :: Temperature has gone negative --- increasing brake')
                 alambda = alambda * 10.
-                IBRAKE = 0
+                check_marquardt_brake = True
                 continue
 
 
