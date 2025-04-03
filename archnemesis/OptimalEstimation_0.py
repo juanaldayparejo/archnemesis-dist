@@ -998,7 +998,13 @@ class OptimalEstimation_0:
 
         fig,ax1 = plt.subplots(1,1,figsize=(10,3))
         ax1.set_title('Jacobian Matrix')
-        im = ax1.imshow(np.transpose(self.KK),aspect='auto',origin='lower',cmap='jet')
+        # Center limits around zero
+        min = np.nanmin(self.KK)
+        max = np.nanmax(self.KK)
+        min = min(abs(min),abs(max))
+        max = max(abs(min),abs(max))
+        
+        im = ax1.imshow(np.transpose(self.KK),aspect='auto',origin='lower',cmap='jet', vmin=min, vmax=max)
         divider = make_axes_locatable(ax1)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         cbar = plt.colorbar(im, cax=cax)
@@ -1018,8 +1024,15 @@ class OptimalEstimation_0:
 
         #fig,ax1 = plt.subplots(1,1,figsize=(10,3))
         fig = plt.figure(figsize=(10,4))
-        ax1 = plt.subplot2grid((1,3),(0,0),colspan=1,rowspan=2)
-        ax2 = plt.subplot2grid((1,3),(0,2),colspan=1,rowspan=1)
+        ax1 = plt.subplot2grid((2,3),(0,0),rowspan=1,colspan=2)
+        ax1.set_title('Measured and modelled spectra')
+        ax2 = plt.subplot2grid((2,3),(1,0),rowspan=1,colspan=2)
+        ax2.set_title('Spectra residual')
+
+        ax3 = plt.subplot2grid((2,3),(0,2),rowspan=1,colspan=1)
+        ax3.set_title('apriori and retrieved state vector')
+        ax4 = plt.subplot2grid((2,3),(1,2),rowspan=1,colspan=1)
+        ax4.set_title('state vector residual')
         
         ax1.plot(range(self.NY),self.Y,c='black',label='Measured spectra', alpha=0.6)
         ax1.plot(range(self.NY),self.YN,c='tab:red',label='Modelled spectra', alpha=0.6)
@@ -1031,6 +1044,19 @@ class OptimalEstimation_0:
         ax2.plot(range(self.NY),self.Y-self.YN,c='tab:red', alpha=0.6)
         ax2.set_xlabel('Measurement vector element #')
         ax2.set_ylabel('Residual Radiance')
+        ax2.grid()
+
+        ax3.plot(range(self.NX),self.XA,c='black',label='Apriori state vector', alpha=0.6)
+        ax3.plot(range(self.NX),self.XN,c='tab:red',label='Retrieved state vector', alpha=0.6)
+        ax3.set_xlabel('State vector element #')
+        ax3.set_ylabel('State vector element value')
+        ax3.grid()
+        ax3.legend()
+
+        ax4.plot(range(self.NX),self.XA-self.XN,c='tab:red', alpha=0.6)
+        ax4.set_xlabel('State vector element #')
+        ax4.set_ylabel('Residual value of state vector element')
+        ax4.grid()
         
         plt.tight_layout()
         plt.show()
