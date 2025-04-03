@@ -36,7 +36,7 @@ class OptimalEstimation_0:
         with open(f'{runname}.itr', 'rb') as f:
             n_lines = sum(1 for _ in f)
         
-        _lgr.info(f'{nlines=}')
+        _lgr.info(f'{n_lines=}')
         
         with open(f'{runname}.itr', 'r') as f:
             nx, ny, niter = map(int, f.readline().strip().split())
