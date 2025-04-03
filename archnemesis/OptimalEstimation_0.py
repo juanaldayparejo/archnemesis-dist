@@ -5,6 +5,10 @@ import matplotlib as matplotlib
 from copy import *
 import pickle
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.INFO)
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
@@ -26,11 +30,13 @@ class OptimalEstimation_0:
         """
         Read "runname.itr" file, populate OptimalEstimation object as if it was the output of "coreretOE(...)"
         """
-        
+        _lgr.info(f'Creating {cls.__name__} instance from {runname}.itr file')
         # Get the number of lines in the file
         n_lines = 0
         with open(f'{runname}.itr', 'rb') as f:
             n_lines = sum(1 for _ in f)
+        
+        _lgr.info(f'{nlines=}')
         
         with open(f'{runname}.itr', 'r') as f:
             nx, ny, niter = map(int, f.readline().strip().split())
@@ -51,14 +57,14 @@ class OptimalEstimation_0:
             n_last_iter = (n_lines - 1)//lines_per_iter
             n_skip_lines = (n_last_iter -1)*lines_per_iter
             
-            print(f'{lines_per_iter=} {n_last_iter=} {n_skip_lines=}')
+            _lgr.info(f'{lines_per_iter=} {n_last_iter=} {n_skip_lines=}')
             
             for _ in range(n_skip_lines):
                 f.readline()
             
             # Now read in the final iteration
             chisq, phi = map(float, f.readline().strip().split())
-            print(f'{chisq=} {phi=}')
+            _lgr.info(f'{chisq=} {phi=}')
             
             xn_array = np.zeros((nx,))
             xa_array = np.zeros((nx,))
@@ -999,10 +1005,10 @@ class OptimalEstimation_0:
         fig,ax1 = plt.subplots(1,1,figsize=(10,3))
         ax1.set_title('Jacobian Matrix')
         # Center limits around zero
-        min = np.nanmin(self.KK)
-        max = np.nanmax(self.KK)
-        min = min(abs(min),abs(max))
-        max = max(abs(min),abs(max))
+        vmin = np.nanmin(self.KK)
+        vmax = np.nanmax(self.KK)
+        vmin = min(abs(vmin),abs(vmax))
+        vmax = max(abs(vmin),abs(vmax))
         
         im = ax1.imshow(np.transpose(self.KK),aspect='auto',origin='lower',cmap='jet', vmin=min, vmax=max)
         divider = make_axes_locatable(ax1)
