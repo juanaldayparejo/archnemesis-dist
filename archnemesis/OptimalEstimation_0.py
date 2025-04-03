@@ -55,11 +55,12 @@ class OptimalEstimation_0:
             # Each iteration has 1 + 2*NX + 4*NY + NX*NY lines
             # Therefore work out how many iterations were written to
             # the file and select the last one
-            lines_per_iter = (1+2*nx+4*ny+nx*ny)
-            n_last_iter = (n_lines - 1)//lines_per_iter
-            n_skip_lines = (n_last_iter -1)*lines_per_iter
+            lines_per_record = (1+2*nx+4*ny+nx*ny)
+            n_records_in_file = (n_lines - 1)//lines_per_record
+            n_skip_lines = (n_record_in_file -1)*lines_per_record
             
-            _lgr.info(f'{lines_per_iter=} {n_last_iter=} {n_skip_lines=}')
+            _lgr.info(f'{lines_per_record=} {n_records_in_file=} {n_skip_lines=}')
+            _lgr.info('We want the final state of the iterations, so we want to read the final record in the file.')
             
             for _ in range(n_skip_lines):
                 f.readline()
