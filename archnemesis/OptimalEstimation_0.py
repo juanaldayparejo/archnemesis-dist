@@ -34,7 +34,7 @@ class OptimalEstimation_0:
         
         with open(f'{runname}.itr', 'r') as f:
             nx, ny, niter = map(int, f.readline().strip().split())
-            
+            print(f'{nx=} {ny=} {niter=}')
             instance = cls(
                 IRET=0, 
                 NITER=niter, 
@@ -56,6 +56,7 @@ class OptimalEstimation_0:
             
             # Now read in the final iteration
             chisq, phi = map(float, f.readline().strip().split())
+            print(f'{chisq=} {phi=}')
             
             xn_array = np.array((nx,))
             xa_array = np.array((nx,))
