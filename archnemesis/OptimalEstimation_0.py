@@ -40,7 +40,9 @@ class OptimalEstimation_0:
         
         with open(f'{runname}.itr', 'r') as f:
             nx, ny, niter = map(int, f.readline().strip().split())
-            print(f'{nx=} {ny=} {niter=}')
+            
+            _lgr.info(f'{nx=} {ny=} {niter=}')
+            
             instance = cls(
                 IRET=0, 
                 NITER=niter, 
@@ -1007,10 +1009,9 @@ class OptimalEstimation_0:
         # Center limits around zero
         vmin = np.nanmin(self.KK)
         vmax = np.nanmax(self.KK)
-        vmin = min(abs(vmin),abs(vmax))
-        vmax = max(abs(vmin),abs(vmax))
+        centered_limit = max(abs(vmin),abs(vmax))
         
-        im = ax1.imshow(np.transpose(self.KK),aspect='auto',origin='lower',cmap='jet', vmin=vmin, vmax=vmax)
+        im = ax1.imshow(np.transpose(self.KK),aspect='auto',origin='lower',cmap='jet', vmin=-centered_limit, vmax=centered_limit)
         divider = make_axes_locatable(ax1)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         cbar = plt.colorbar(im, cax=cax)
