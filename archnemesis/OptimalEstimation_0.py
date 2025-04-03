@@ -1010,7 +1010,7 @@ class OptimalEstimation_0:
         vmin = min(abs(vmin),abs(vmax))
         vmax = max(abs(vmin),abs(vmax))
         
-        im = ax1.imshow(np.transpose(self.KK),aspect='auto',origin='lower',cmap='jet', vmin=min, vmax=max)
+        im = ax1.imshow(np.transpose(self.KK),aspect='auto',origin='lower',cmap='jet', vmin=vmin, vmax=vmax)
         divider = make_axes_locatable(ax1)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         cbar = plt.colorbar(im, cax=cax)
