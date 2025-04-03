@@ -61,7 +61,7 @@ class OptimalEstimation_0:
             xn_array = np.zeros((nx,))
             xa_array = np.zeros((nx,))
             y_array = np.zeros((ny,))
-            se_array = np.zeros((ny,))
+            se_array = np.zeros((ny,ny)) # only stored the diagonal elements in *.itr file
             yn_prev_array = np.zeros((ny,))
             yn_array = np.zeros((ny,))
             kk_array = np.zeros((ny,nx))
@@ -69,7 +69,7 @@ class OptimalEstimation_0:
             for i in range(nx): xn_array[i] = float(f.readline().strip())
             for i in range(nx): xa_array[i] = float(f.readline().strip())
             for i in range(ny): y_array[i] = float(f.readline().strip())
-            for i in range(ny): se_array[i] = float(f.readline().strip())
+            for i in range(ny): se_array[i,i] = float(f.readline().strip())
             for i in range(ny): yn_prev_array[i] = float(f.readline().strip())
             for i in range(ny): yn_array[i] = float(f.readline().strip())
             for i in range(nx):
