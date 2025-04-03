@@ -386,37 +386,36 @@ class OptimalEstimation_0:
 
         import h5py
 
-        f = h5py.File(runname+'.h5','r')
+        with h5py.File(runname+'.h5','r') as f:
 
-        #Checking if Surface exists
-        e = "/Retrieval" in f
-        if e==False:
-            raise ValueError('error :: Retrieval is not defined in HDF5 file')
-        else:
+            #Checking if Surface exists
+            e = "/Retrieval" in f
+            if e==False:
+                raise ValueError('error :: Retrieval is not defined in HDF5 file')
+            else:
 
-            self.NITER = np.int32(f.get('Retrieval/NITER'))
-            self.IRET = np.int32(f.get('Retrieval/IRET'))
-            self.PHILIMIT = np.float64(f.get('Retrieval/PHILIMIT'))
+                self.NITER = np.int32(f.get('Retrieval/NITER'))
+                self.IRET = np.int32(f.get('Retrieval/IRET'))
+                self.PHILIMIT = np.float64(f.get('Retrieval/PHILIMIT'))
 
-            #Checking if Retrieval already exists
-            if ('/Retrieval/Output' in f)==True:
+                #Checking if Retrieval already exists
+                if ('/Retrieval/Output' in f)==True:
 
-                self.NX = np.int32(f.get('Retrieval/Output/OptimalEstimation/NX'))
-                self.NY = np.int32(f.get('Retrieval/Output/OptimalEstimation/NY'))
+                    self.NX = np.int32(f.get('Retrieval/Output/OptimalEstimation/NX'))
+                    self.NY = np.int32(f.get('Retrieval/Output/OptimalEstimation/NY'))
 
-                self.XN = np.array(f.get('Retrieval/Output/OptimalEstimation/XN'))
-                self.XA = np.array(f.get('Retrieval/Output/OptimalEstimation/XA'))
-                self.ST = np.array(f.get('Retrieval/Output/OptimalEstimation/SX'))
-                self.SA = np.array(f.get('Retrieval/Output/OptimalEstimation/SA'))
-                self.KK = np.array(f.get('Retrieval/Output/OptimalEstimation/KK'))
-                self.AA = np.array(f.get('Retrieval/Output/OptimalEstimation/AA'))
-                self.DD = np.array(f.get('Retrieval/Output/OptimalEstimation/DD'))
+                    self.XN = np.array(f.get('Retrieval/Output/OptimalEstimation/XN'))
+                    self.XA = np.array(f.get('Retrieval/Output/OptimalEstimation/XA'))
+                    self.ST = np.array(f.get('Retrieval/Output/OptimalEstimation/SX'))
+                    self.SA = np.array(f.get('Retrieval/Output/OptimalEstimation/SA'))
+                    self.KK = np.array(f.get('Retrieval/Output/OptimalEstimation/KK'))
+                    self.AA = np.array(f.get('Retrieval/Output/OptimalEstimation/AA'))
+                    self.DD = np.array(f.get('Retrieval/Output/OptimalEstimation/DD'))
 
-                self.YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
-                self.Y = np.array(f.get('Retrieval/Output/OptimalEstimation/Y'))
-                self.SE = np.array(f.get('Retrieval/Output/OptimalEstimation/SE'))
+                    self.YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
+                    self.Y = np.array(f.get('Retrieval/Output/OptimalEstimation/Y'))
+                    self.SE = np.array(f.get('Retrieval/Output/OptimalEstimation/SE'))
 
-        f.close()
 
     def edit_KK(self, KK_array):
         """
