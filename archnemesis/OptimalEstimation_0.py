@@ -59,10 +59,10 @@ class OptimalEstimation_0:
             
             xn_array = np.array((nx,))
             xa_array = np.array((nx,))
-            y_array = np.array((yn,))
-            se_array = np.array((yn,))
+            y_array = np.array((ny,))
+            se_array = np.array((ny,))
             yn_prev_array = np.array((ny,))
-            yn_array = np.array((yn,))
+            yn_array = np.array((ny,))
             kk_array = np.array((ny,nx))
             
             for i in range(nx): xn_array[i] = float(f.readline().strip())
