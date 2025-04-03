@@ -247,6 +247,7 @@ class ForwardModel_0:
                 self.SurfaceX = deepcopy(self.Surface)
                 self.LayerX = deepcopy(self.Layer)
                 self.CIAX = deepcopy(self.CIA)
+                self.TelluricX = deepcopy(self.Telluric)
                 flagh2p = False
 
                 #Updating the required parameters based on the current geometry
@@ -1521,6 +1522,18 @@ class ForwardModel_0:
                 self.AtmosphereX = model111(self.AtmosphereX,idust0,so2_deep,so2_top,offset)
                 
                 ix = ix + self.Variables.NXVAR[ivar]
+                
+            elif self.Variables.VARIDENT[ivar,2]==202:
+#           Model 202. Scaling factor of telluric atmospheric profile
+#           ***************************************************************
+
+                scafac = self.Variables.XN[ix]
+                varid1 = self.Variables.VARIDENT[ivar,0] ; varid2 = self.Variables.VARIDENT[ivar,1]
+                if self.TelluricX is not None:
+                    self.TelluricX = model202(self.TelluricX,varid1,varid2,scafac)
+
+                ix = ix + self.Variables.NXVAR[ivar]
+                
 
             elif self.Variables.VARIDENT[ivar,0]==228:
 #           Model 228. Retrieval of instrument line shape for ACS-MIR and wavelength calibration
@@ -1582,15 +1595,15 @@ class ForwardModel_0:
                 ix = ix + self.Variables.NXVAR[ivar]
 
             elif self.Variables.VARIDENT[ivar,0]==231:
-#           Model 231. Continuum addition to transmission spectra using a varying scaling factor (given a polynomial of degree N)
+#           Model 231. Multiplication of computed spectrum a polynomial function (given a polynomial of degree N)
 #           ***************************************************************
 
-                #The computed transmission spectra is multiplied by R = R0 * POL
+                #The computed spectrum is multiplied by R = R0 * POL
                 #Where POL is given by POL = A0 + A1*(WAVE-WAVE0) + A2*(WAVE-WAVE0)**2. + ...
 
                 #The effect of this model takes place after the computation of the spectra in CIRSrad!
-                if int(self.Variables.VARPARAM[ivar,0])!=self.MeasurementX.NGEOM:
-                    raise ValueError('error using Model 231 :: The number of levels for the addition of continuum must be the same as NGEOM')
+                if int(self.Variables.VARPARAM[ivar,1])>self.MeasurementX.NGEOM-1:
+                    raise ValueError('error using Model 231 :: the selected geometry must be <=NGEOM-1')
 
                 ipar = -1
                 ix = ix + self.Variables.NXVAR[ivar]
@@ -1837,7 +1850,7 @@ class ForwardModel_0:
 
     ###############################################################################################
 
-    def subspecret(self,SPECMOD,dSPECMOD):
+    def subspecret(self,SPECMOD,dSPECMOD,IGEOM=None):
 
         """
         FUNCTION NAME : subspecret()
@@ -1856,7 +1869,7 @@ class ForwardModel_0:
 
         OPTIONAL INPUTS:
 
-            MakePlot :: If True, a summary plot is made
+            IGEOM :: If not None, it indicates the index of the geometry in the Measurement class the parameterisation applies to
 
         OUTPUTS :
 
@@ -1876,7 +1889,7 @@ class ForwardModel_0:
         for ivar in range(self.Variables.NVAR):
 
             if self.Variables.VARIDENT[ivar,0]==231:
-#           Model 231. Scaling of spectra using a varying scaling factor (following a polynomial of degree N)
+#           Model 231. Scaling of spectrum using a varying scaling factor (following a polynomial of degree N)
 #           ****************************************************************************************************
 
                 NGEOM = int(self.Variables.VARPARAM[ivar,0])
