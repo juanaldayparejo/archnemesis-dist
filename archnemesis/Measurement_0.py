@@ -148,8 +148,7 @@ class Measurement_0:
     Measurement_0.select_TANHE_SO()
     Measurement_0.crop_wave()
     
-    Measurement_0.wavesetc()
-    Measurement_0.wavesetb()
+    Measurement_0.calc_wave_range()
     
     Measurement_0.lblconv()
     Measurement_0.lblconvg()
@@ -203,10 +202,6 @@ class Measurement_0:
         self.NFIL = None  #np.zeros(NCONV)
         self.VFIL = None  #np.zeros(NFIL,NCONV)
         self.AFIL = None  #np.zeros(NFIL,NCONV)
-
-        self.NWAVE = None
-        self.WAVE = None #np.zeros(NWAVE)
-
 
     #################################################################################################################
 
@@ -1560,180 +1555,95 @@ class Measurement_0:
         elif self.FWHM<0.0:
             dv = 0.0 #This is not used in this case since the lineshape is already defined
             
-
-
     #################################################################################################################
 
-    def wavesetc(self,Spectroscopy,IGEOM=0):
+    def calc_wave_range(self,IGEOM=None,apply_doppler=True):
         """
-        Subroutine to calculate which 'calculation' wavelengths are needed to 
-        cover the required 'convolution wavelengths' (In case of line-by-line calculation).
+        Subroutine to calculate which 'calculation' wavelength range needed to 
+        calculate the spectrum at the required 'convolution wavelengths'.
 
         Parameters
         ----------
-        Spectroscopy : class 
-            Spectroscopy class indicating the grid of calculation wavelengths
         IGEOM : int, optional
-            Integer defining the geometry at which the calculation numbers will be computed
+            Integer defining a specific geometry within the Measurement class
+        apply_doppler : log, optional
+            Flag indicating whether the Doppler shift must be accounted for
         """
 
-        if Spectroscopy is not None:
+        if self.FWHM>0.0:
 
-            if self.FWHM>0.0:
-
-                if self.ISHAPE==0:
-                    dv = 0.5*self.FWHM
-                elif self.ISHAPE==1:
-                    dv = self.FWHM
-                elif self.ISHAPE==2:
-                    dv = 3.* 0.5 * self.FWHM / np.sqrt(np.log(2.0))
-                else:
-                    dv = 3.*self.FWHM
-
-                wavemin = self.VCONV[0,IGEOM] - dv
-                wavemax = self.VCONV[self.NCONV[IGEOM]-1,IGEOM] + dv
-
-            elif self.FWHM<0.0:
-
-                wavemin = 1.0e10
-                wavemax = 0.0
-                for i in range(self.NCONV[IGEOM]):
-                    vminx = self.VFIL[0,i]
-                    vmaxx = self.VFIL[self.NFIL[i]-1,i]
-                    if vminx<wavemin:
-                        wavemin = vminx
-                    if vmaxx>wavemax:
-                        wavemax= vmaxx
-
-            elif self.FWHM==0.0:
-            
-                wavemin = self.VCONV[0,IGEOM]
-                wavemax = self.VCONV[self.NCONV[IGEOM]-1,IGEOM]
-
-            #Correcting the wavelengths for Doppler shift
-            if self.V_DOPPLER!=0.0:
-                print('nemesis :: Correcting for Doppler shift of ',self.V_DOPPLER,'km/s')        
-            wavemin = self.invert_doppler_shift(wavemin)
-            wavemax = self.invert_doppler_shift(wavemax)
-            
-            #Sorting the wavenumbers if the ILS is flipped
-            if wavemin>=wavemax:
-                raise ValueError('error in wavesetc :: the spectral points defining the instrument lineshape must be increasing')
-
-            # Find indices just below and above wavemin and wavemax
-            index_min = np.searchsorted(Spectroscopy.WAVE, wavemin, side="left")
-            index_max = np.searchsorted(Spectroscopy.WAVE, wavemax, side="right")
-            
-            # Ensure indices are within valid bounds
-            index_min = max(index_min - 1, 0)  # Get the one just below
-            index_max = min(index_max, len(Spectroscopy.WAVE) - 1)  # Get the one just above
-
-            #Checking that the lbl-tables encompass this wavelength range
-            err = 0.01
-            if (wavemin<(1-err)*Spectroscopy.WAVE.min() or wavemax>(1+err)*Spectroscopy.WAVE.max()):
-                print('Required wavelength range :: ',wavemin,wavemax)
-                print('Wavelength range in lbl-tables :: ',Spectroscopy.WAVE.min(),Spectroscopy.WAVE.max())
-                raise ValueError('error from wavesetc :: Channel wavelengths not covered by lbl-tables')
-            
-            self.WAVE = Spectroscopy.WAVE[index_min:index_max+1]
-            self.NWAVE = len(self.WAVE)
-                        
-        else:
-            
-            self.NWAVE = self.NCONV[IGEOM]
-            self.WAVE = np.zeros(self.NWAVE)
-            self.WAVE[:] = self.VCONV[0:self.NCONV[IGEOM],IGEOM]
-
-    #################################################################################################################
-
-    def wavesetb(self,Spectroscopy,IGEOM=0):
-    
-        """
-        Subroutine to calculate which 'calculation' wavelengths are needed to 
-        cover the required 'convolution wavelengths' (In case of correlated-k calculation).
-
-        Parameters
-        ----------
-        Spectroscopy : class
-            Spectroscopy class indicating the grid of calculation wavelengths
-        IGEOM : int, optional
-            Integer defining the geometry at which the calculation numbers will be computed
-        """
-        
-        if Spectroscopy is not None:
-
-            if self.FWHM==0:
-
-                wavemin = self.VCONV[0,IGEOM]
-                wavemax = self.VCONV[self.NCONV[IGEOM]-1,IGEOM]
-
-            elif self.FWHM<0.0:
-
-                wavemin = 1.0e10
-                wavemax = 0.0
-                for i in range(self.NCONV[IGEOM]):
-                    vminx = self.VFIL[0,i]
-                    vmaxx = self.VFIL[self.NFIL[i]-1,i]
-                    if vminx<wavemin:
-                        wavemin = vminx
-                    if vmaxx>wavemax:
-                        wavemax= vmaxx
-
-            elif self.FWHM>0.0:
-
-                dv = self.FWHM * 0.5
-                wavemin = self.VCONV[0,IGEOM] - dv
-                wavemax = self.VCONV[self.NCONV[IGEOM]-1,IGEOM] + dv
-
+            if self.ISHAPE==0:
+                dv = 0.5*self.FWHM
+            elif self.ISHAPE==1:
+                dv = self.FWHM
+            elif self.ISHAPE==2:
+                dv = 3.* 0.5 * self.FWHM / np.sqrt(np.log(2.0))
             else:
-                raise ValueError('error :: Measurement FWHM is not defined')
+                dv = 3.*self.FWHM
 
-            if (wavemin<Spectroscopy.WAVE.min() or wavemax>Spectroscopy.WAVE.max()):
-                raise ValueError('error from wavesetb :: Channel wavelengths not covered by k-tables')
+            if IGEOM is not None:
+                wavemin = self.VCONV[0,IGEOM] - dv
+                wavemax = self.VCONV[self.NCONV[IGEOM]-1,IGEOM] + dv
+            else:
+                #Finding the minimum and maximum wave for all geometries
+                wavemin = 1.0e10
+                wavemax = 0.
+                for igeom in range(self.NGEOM):
+                    if ((self.VCONV[0,igeom] - dv)<wavemin):
+                        wavemin = self.VCONV[0,igeom] - dv
+                    if ((self.VCONV[self.NCONV[igeom]-1,igeom] + dv)>wavemax):
+                        wavemax = self.VCONV[self.NCONV[igeom]-1,igeom] + dv
+                        
+        elif self.FWHM<0.0:
 
-            #Correcting the wavelengths for Doppler shift
+            wavemin = 1.0e10
+            wavemax = 0.0
+            for i in range(self.NCONV[0]):  #In this case all geometries are assumed to have the same spectral array
+                vminx = self.VFIL[0,i]
+                vmaxx = self.VFIL[self.NFIL[i]-1,i]
+                if vminx<wavemin:
+                    wavemin = vminx
+                if vmaxx>wavemax:
+                    wavemax= vmaxx
+
+        elif self.FWHM==0.0:
+        
+            if IGEOM is not None:
+                wavemin = self.VCONV[0,IGEOM]
+                wavemax = self.VCONV[self.NCONV[IGEOM]-1,IGEOM]
+            else:
+                #Finding the minimum and maximum wave for all geometries
+                wavemin = 1.0e10
+                wavemax = 0.
+                for igeom in range(self.NGEOM):
+                    if ((self.VCONV[0,igeom])<wavemin):
+                        wavemin = self.VCONV[0,igeom]
+                    if ((self.VCONV[self.NCONV[igeom]-1,igeom])>wavemax):
+                        wavemax = self.VCONV[self.NCONV[igeom]-1,igeom]
+
+        #Correcting the wavelengths for Doppler shift
+        if apply_doppler is True:
             if self.V_DOPPLER!=0.0:
                 print('nemesis :: Correcting for Doppler shift of ',self.V_DOPPLER,'km/s')        
             wavemin = self.invert_doppler_shift(wavemin)
             wavemax = self.invert_doppler_shift(wavemax)
-            
-            #Sorting the wavenumbers if the ILS is flipped
-            if wavemin>=wavemax:
-                raise ValueError('error in wavesetc :: the spectral points defining the instrument lineshape must be increasing')
+        
+        #Sorting the wavenumbers if the ILS is flipped
+        if wavemin>=wavemax:
+            raise ValueError('error in wavesetc :: the spectral points defining the instrument lineshape must be increasing')
 
-            # Find indices just below and above wavemin and wavemax
-            index_min = np.searchsorted(Spectroscopy.WAVE, wavemin, side="left")
-            index_max = np.searchsorted(Spectroscopy.WAVE, wavemax, side="right")
-            
-            # Ensure indices are within valid bounds
-            index_min = max(index_min - 1, 0)  # Get the one just below
-            index_max = min(index_max, len(Spectroscopy.WAVE) - 1)  # Get the one just above
-
-            #Checking that the lbl-tables encompass this wavelength range
-            err = 0.01
-            if (wavemin<(1-err)*Spectroscopy.WAVE.min() or wavemax>(1+err)*Spectroscopy.WAVE.max()):
-                print('Required wavelength range :: ',wavemin,wavemax)
-                print('Wavelength range in lbl-tables :: ',Spectroscopy.WAVE.min(),Spectroscopy.WAVE.max())
-                raise ValueError('error from wavesetc :: Channel wavelengths not covered by lbl-tables')
-            
-            self.WAVE = Spectroscopy.WAVE[index_min:index_max+1]
-            self.NWAVE = len(self.WAVE)
-            
-        else:
-            
-            wave = np.zeros(self.NCONV[IGEOM])
-            wave[:] = self.VCONV[0:self.NCONV[IGEOM],IGEOM]
-            self.WAVE = wave
-            self.NWAVE = self.NCONV[IGEOM]
+        return wavemin,wavemax
 
     #################################################################################################################
 
-    def lblconv(self,ModSpec,IGEOM='All'):
+    def lblconv(self,Wave,ModSpec,IGEOM='All'):
         """
         Subroutine to convolve the Modelled spectrum with the Instrument Line Shape 
 
         Parameters
         ----------
+        Wave : 1D or 2D array (NWAVE)
+            Calculation wavelengths or wavenumbers
         ModSpec : 1D or 2D array (NWAVE,NGEOM)
             Modelled spectrum
 
@@ -1750,33 +1660,31 @@ class Measurement_0:
         """
         
         #Accounting for the Doppler shift that was previously introduced
-        wavecorr = self.correct_doppler_shift(self.WAVE)
+        wavecorr = self.correct_doppler_shift(Wave)
 
         if self.FWHM>0.0:    #Convolution with ISHAPE
             if IGEOM=='All':
                 IG = 0
                 if ModSpec.ndim!=2:
                     raise ValueError('error in lblconvg :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
-                SPECONV = lblconv_ngeom(self.NWAVE,wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
-                #SPECONV = lblconv_fil_ngeom(self.NWAVE,wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+                SPECONV = lblconv_ngeom(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
             else:
                 if ModSpec.ndim!=1:
                     raise ValueError('error in lblconvg :: ModSpec must have 1 dimensions (NWAVE)')
                 IG = IGEOM
-                SPECONV = lblconv(self.NWAVE,wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
-                #SPECONV = lblconv_fil(self.NWAVE,wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+                SPECONV = lblconv(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
             
         elif self.FWHM<0.0:  #Convolution with VFIL,AFIL
             if IGEOM=='All':
                 if ModSpec.ndim!=2:
                     raise ValueError('error in lblconvg :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
                 IG = 0
-                SPECONV = lblconv_fil_ngeom(self.NWAVE,wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+                SPECONV = lblconv_fil_ngeom(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
             else:
                 if ModSpec.ndim!=1:
                     raise ValueError('error in lblconvg :: ModSpec must have 1 dimensions (NWAVE)')
                 IG = IGEOM
-                SPECONV = lblconv_fil(self.NWAVE,wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+                SPECONV = lblconv_fil(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
 
         elif self.FWHM==0.0:  #No convolution
             if IGEOM=='All':
@@ -1793,13 +1701,15 @@ class Measurement_0:
 
     #################################################################################################################
 
-    def lblconvg(self,ModSpec,ModGrad,IGEOM='All'):
+    def lblconvg(self,Wave,ModSpec,ModGrad,IGEOM='All'):
     
         """
         Subroutine to convolve the Modelled spectrum and the gradients with the Instrument Line Shape 
 
         Parameters
         ----------
+        Wave : 1D array (NWAVE)
+            Calculation wavelengths or wavenumbers
         ModSpec : 1D or 2D array (NWAVE,NGEOM)
             Modelled spectrum
         ModGrad: 2D or 3D array (NWAVE,NGEOM,NX)
@@ -1820,7 +1730,8 @@ class Measurement_0:
         """
 
         #Accounting for the Doppler shift that was previously introduced
-        wavecorr = self.correct_doppler_shift(self.WAVE)
+        NWAVE = len(Wave)
+        wavecorr = self.correct_doppler_shift(Wave)
 
         if self.FWHM>0.0:   #Convolution with ISHAPE
 
@@ -1830,16 +1741,14 @@ class Measurement_0:
                     raise ValueError('error in lblconvg :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
                 if ModGrad.ndim!=3:
                     raise ValueError('error in lblconvg :: ModGrad must have 3 dimensions (NWAVE,NGEOM,NX)')
-                SPECONV,dSPECONV = lblconvg_ngeom(self.NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
-                #SPECONV,dSPECONV = lblconvg_fil_ngeom(self.NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+                SPECONV,dSPECONV = lblconvg_ngeom(NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
             else:
                 if ModSpec.ndim!=1:
                     raise ValueError('error in lblconvg :: ModSpec must have 1 dimensions (NWAVE)')
                 if ModGrad.ndim!=2:
                     raise ValueError('error in lblconvg :: ModGrad must have 2 dimensions (NWAVE,NX)')
                 IG = IGEOM
-                SPECONV,dSPECONV = lblconvg(self.NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
-                #SPECONV,dSPECONV = lblconvg_fil(self.NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+                SPECONV,dSPECONV = lblconvg(NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
             
         elif self.FWHM<0.0:  #Convolution with VFIL, AFIL
 
@@ -1849,7 +1758,7 @@ class Measurement_0:
                 if ModGrad.ndim!=3:
                     raise ValueError('error in lblconvg :: ModGrad must have 3 dimensions (NWAVE,NGEOM,NX)')
                 IG = 0
-                SPECONV,dSPECONV = lblconvg_fil_ngeom(self.NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+                SPECONV,dSPECONV = lblconvg_fil_ngeom(NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
 
             else:
                 if ModSpec.ndim!=1:
@@ -1857,7 +1766,7 @@ class Measurement_0:
                 if ModGrad.ndim!=2:
                     raise ValueError('error in lblconvg :: ModGrad must have 2 dimensions (NWAVE,NX)')
                 IG = IGEOM
-                SPECONV,dSPECONV = lblconvg_fil(self.NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+                SPECONV,dSPECONV = lblconvg_fil(NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
 
         elif self.FWHM==0.0:
             
@@ -1882,13 +1791,15 @@ class Measurement_0:
 
     #################################################################################################################
     
-    def conv(self,ModSpec,IGEOM='All',FWHMEXIST=''):
+    def conv(self,Wave,ModSpec,IGEOM='All',FWHMEXIST=''):
     
         """
         Subroutine to convolve the Modelled spectrum with the Instrument Line Shape 
 
         Parameters
         ----------
+        Wave : 1D array (NWAVE)
+            Calculation wavelengths or wavenumbers
         ModSpec : 1D or 2D array (NWAVE,NGEOM)
             Modelled spectrum
 
@@ -1911,6 +1822,7 @@ class Measurement_0:
         from scipy import interpolate
 
         nstep = 20
+        NWAVE = len(Wave)
 
         if IGEOM=='All':
 
@@ -1921,7 +1833,7 @@ class Measurement_0:
 
             if self.FWHM>0.0:
 
-                raise ValueError('error in convg :: IGEOM=All with FWHM>0 has not yet been implemented')
+                raise ValueError('error in conv :: IGEOM=All with FWHM>0 has not yet been implemented')
 
             elif self.FWHM==0.0:
 
@@ -1932,7 +1844,7 @@ class Measurement_0:
 
             elif self.FWHM<0.0:
 
-                raise ValueError('error in convg :: IGEOM=All with FWHM<0 has not yet been implemented')
+                raise ValueError('error in conv :: IGEOM=All with FWHM<0 has not yet been implemented')
 
         else:
 
@@ -1941,28 +1853,28 @@ class Measurement_0:
 
             if self.FWHM>0.0:
 
-                nwave1 = self.NWAVE
+                nwave1 = NWAVE
                 wave1 = np.zeros(nwave+2)
                 y1 = np.zeros(nwave+2)
-                wave1[1:nwave+1] = self.WAVE
-                y1[1:nwave+1] = ModSpec[0:self.NWAVE]
+                wave1[1:nwave+1] = Wave
+                y1[1:nwave+1] = ModSpec[0:NWAVE]
 
                 #Extrapolating the last wavenumber
                 iup = 0
-                if(self.VCONV[self.NCONV[IGEOM],IGEOM]>(self.WAVE.max()-self.FWHM/2.)):
+                if(self.VCONV[self.NCONV[IGEOM],IGEOM]>(Wave.max()-self.FWHM/2.)):
                     nwave1 = nwave1 +1
                     wave1[nwave1-1] = self.VCONV[self.NCONV[IGEOM],IGEOM] + self.FWHM
-                    frac = (ModSpec[self.NWAVE-1]-ModSpec[self.NWAVE-2])/(self.WAVE[self.NWAVE-1]-self.WAVE[self.NWAVE-2])
-                    y1[nwave-1] = ModSpec[self.NWAVE-1] + frac * (wave1[nwave1-1]-self.WAVE[self.NWAVE-1])
+                    frac = (ModSpec[NWAVE-1]-ModSpec[NWAVE-2])/(Wave[NWAVE-1]-Wave[NWAVE-2])
+                    y1[nwave-1] = ModSpec[NWAVE-1] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
                     iup=1
 
                 #Extrapolating the first wavenumber
                 idown = 0
-                if(self.VCONV[0,IGEOM]<(self.WAVE.min()+self.FWHM/2.)):
+                if(self.VCONV[0,IGEOM]<(Wave.min()+self.FWHM/2.)):
                     nwave1 = nwave1 + 1
                     wave1[0] = self.VCONV[0,IGEOM] - self.FWHM
-                    frac = (ModSpec[1] - ModSpec[2])/(self.WAVE[1]-self.WAVE[0])
-                    y1[0] = ModSpec[0] + frac * (wave1[0] - self.WAVE[0])
+                    frac = (ModSpec[1] - ModSpec[2])/(Wave[1]-Wave[0])
+                    y1[0] = ModSpec[0] + frac * (wave1[0] - Wave[0])
                     idown = 1
 
                 #Re-shaping the spectrum
@@ -2028,7 +1940,7 @@ class Measurement_0:
                 #Channel Integrator mode where the k-tables have been previously
                 #tabulated INCLUDING the filter profile. In which case all we
                 #need do is just transfer the outputs
-                s = scipy.interpolate.interp1d(self.WAVE,ModSpec)
+                s = scipy.interpolate.interp1d(Wave,ModSpec)
                 yout[:] = s(self.VCONV[0:self.NCONV[IGEOM],IGEOM])
 
             elif self.FWHM<0.0:
@@ -2043,9 +1955,9 @@ class Measurement_0:
                     v1 = self.VFIL[0,ICONV]
                     v2 = self.VFIL[self.NFIL[ICONV]-1,ICONV]
                     #Find relevant points in tabulated files
-                    iwavelox = np.where( (self.WAVE<v1) )
+                    iwavelox = np.where( (Wave<v1) )
                     iwavelox = iwavelox[0]
-                    iwavehix = np.where( (self.WAVE>v2) )
+                    iwavehix = np.where( (Wave>v2) )
                     iwavehix = iwavehix[0]
                     inwave = np.linspace(iwavelox[len(iwavelox)-1],iwavehix[0],iwavehix[0]-iwavelox[len(iwavelox)-1]+1,dtype='int32')
                     
@@ -2058,7 +1970,7 @@ class Measurement_0:
 
                     for i in range(np1):
                         #Interpolating (linear) for finding the lineshape at the calculation wavenumbers
-                        f1 = np.interp(self.WAVE[inwave[i]],xp,yp)
+                        f1 = np.interp(Wave[inwave[i]],xp,yp)
                         if f1>0.0:
                             yout[ICONV] = yout[ICONV] + f1*ModSpec[inwave[i]]
                             ynor[ICONV] = ynor[ICONV] + f1
@@ -2069,7 +1981,7 @@ class Measurement_0:
 
     #################################################################################################################
 
-    def convg(self,ModSpec,ModGrad,IGEOM='All',FWHMEXIST=''):
+    def convg(self,Wave,ModSpec,ModGrad,IGEOM='All',FWHMEXIST=''):
     
         """
         Subroutine to convolve the Modelled spectrum and the gradients with the Instrument Line Shape 
@@ -2102,6 +2014,7 @@ class Measurement_0:
         from scipy import interpolate
 
         nstep = 20
+        NWAVE = len(Wave)
 
         if IGEOM=='All':
 
@@ -2140,32 +2053,32 @@ class Measurement_0:
 
             if self.FWHM>0.0:
 
-                nwave1 = self.NWAVE
+                nwave1 = NWAVE
                 wave1 = np.zeros(nwave+2)
                 y1 = np.zeros(nwave+2)
                 grad1 = np.zeros((nwave+2,NX))
-                wave1[1:nwave+1] = self.WAVE
-                y1[1:nwave+1] = ModSpec[0:self.NWAVE]
-                grad1[1:nwave+1,:] = ModGrad[0:self.NWAVE,:]
+                wave1[1:nwave+1] = Wave
+                y1[1:nwave+1] = ModSpec[0:NWAVE]
+                grad1[1:nwave+1,:] = ModGrad[0:NWAVE,:]
 
                 #Extrapolating the last wavenumber
                 iup = 0
-                if(self.VCONV[self.NCONV[IGEOM],IGEOM]>(self.WAVE.max()-self.FWHM/2.)):
+                if(self.VCONV[self.NCONV[IGEOM],IGEOM]>(Wave.max()-self.FWHM/2.)):
                     nwave1 = nwave1 +1
                     wave1[nwave1-1] = self.VCONV[self.NCONV[IGEOM],IGEOM] + self.FWHM
-                    frac = (ModSpec[self.NWAVE-1]-ModSpec[self.NWAVE-2])/(self.WAVE[self.NWAVE-1]-self.WAVE[self.NWAVE-2])
-                    y1[nwave-1] = ModSpec[self.NWAVE-1] + frac * (wave1[nwave1-1]-self.WAVE[self.NWAVE-1])
-                    grad1[nwave-1,:] = ModGrad[self.NWAVE-1,:] + frac * (wave1[nwave1-1]-self.WAVE[self.NWAVE-1])
+                    frac = (ModSpec[NWAVE-1]-ModSpec[NWAVE-2])/(Wave[NWAVE-1]-Wave[NWAVE-2])
+                    y1[nwave-1] = ModSpec[NWAVE-1] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
+                    grad1[nwave-1,:] = ModGrad[NWAVE-1,:] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
                     iup=1
 
                 #Extrapolating the first wavenumber
                 idown = 0
-                if(self.VCONV[0,IGEOM]<(self.WAVE.min()+self.FWHM/2.)):
+                if(self.VCONV[0,IGEOM]<(Wave.min()+self.FWHM/2.)):
                     nwave1 = nwave1 + 1
                     wave1[0] = self.VCONV[0,IGEOM] - self.FWHM
-                    frac = (ModSpec[1] - ModSpec[2])/(self.WAVE[1]-self.WAVE[0])
-                    y1[0] = ModSpec[0] + frac * (wave1[0] - self.WAVE[0])
-                    grad1[0,:] = ModGrad[0,:] + frac * (wave1[0] - self.WAVE[0])
+                    frac = (ModSpec[1] - ModSpec[2])/(Wave[1]-Wave[0])
+                    y1[0] = ModSpec[0] + frac * (wave1[0] - Wave[0])
+                    grad1[0,:] = ModGrad[0,:] + frac * (wave1[0] - Wave[0])
                     idown = 1
 
                 #Re-shaping the spectrum
@@ -2246,10 +2159,10 @@ class Measurement_0:
                 #Channel Integrator mode where the k-tables have been previously
                 #tabulated INCLUDING the filter profile. In which case all we
                 #need do is just transfer the outputs
-                s = scipy.interpolate.interp1d(self.WAVE,ModSpec)
+                s = scipy.interpolate.interp1d(Wave,ModSpec)
                 yout[:] = s(self.VCONV[0:self.NCONV[IGEOM],IGEOM])
                 
-                s = scipy.interpolate.interp1d(self.WAVE,ModGrad,axis=0)
+                s = scipy.interpolate.interp1d(Wave,ModGrad,axis=0)
                 gradout[:,:] = s(self.VCONV[0:self.NCONV[IGEOM],IGEOM])
 
             elif self.FWHM<0.0:
@@ -2264,9 +2177,9 @@ class Measurement_0:
                     v1 = self.VFIL[0,ICONV]
                     v2 = self.VFIL[self.NFIL[ICONV]-1,ICONV]
                     #Find relevant points in tabulated files
-                    iwavelox = np.where( (self.WAVE<v1) )
+                    iwavelox = np.where( (Wave<v1) )
                     iwavelox = iwavelox[0]
-                    iwavehix = np.where( (self.WAVE>v2) )
+                    iwavehix = np.where( (Wave>v2) )
                     iwavehix = iwavehix[0]
                     inwave = np.linspace(iwavelox[len(iwavelox)-1],iwavehix[0],iwavehix[0]-iwavelox[len(iwavelox)-1]+1,dtype='int32')
                     
@@ -2279,7 +2192,7 @@ class Measurement_0:
 
                     for i in range(np1):
                         #Interpolating (linear) for finding the lineshape at the calculation wavenumbers
-                        f1 = np.interp(self.WAVE[inwave[i]],xp,yp)
+                        f1 = np.interp(Wave[inwave[i]],xp,yp)
                         if f1>0.0:
                             yout[ICONV] = yout[ICONV] + f1*ModSpec[inwave[i]]
                             ynor[ICONV] = ynor[ICONV] + f1
