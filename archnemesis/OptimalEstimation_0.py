@@ -1172,7 +1172,7 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
             for i in range(OptimalEstimation.NY):fitr.write(f'{YN1[i]:09.4E}\n')#'%10.5f \n' % (YN1[i]))
             for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.YN[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.YN[i]))
             for i in range(OptimalEstimation.NX):
-                for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.kk[j,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.KK[j,i]))
+                for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.KK[j,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.KK[j,i]))
 
 
         #Calculating next state vector
@@ -1298,7 +1298,7 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
         for i in range(OptimalEstimation.NY):fitr.write(f'{YN1[i]:09.4E}\n')#'%10.5f \n' % (YN1[i]))
         for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.YN[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.YN[i]))
         for i in range(OptimalEstimation.NX):
-            for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.kk[j,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.KK[j,i]))
+            for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.KK[j,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.KK[j,i]))
 
     #Calculating output parameters
     ######################################################
