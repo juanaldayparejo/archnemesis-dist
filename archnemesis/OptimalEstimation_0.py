@@ -305,6 +305,15 @@ class OptimalEstimation_0:
                 
                 dset = f.create_dataset('Retrieval/Output/OptimalEstimation/SY',data=self.SE)
                 dset.attrs['title'] = "Measurement vector covariance matrix"
+                
+                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/KK',data=self.KK)
+                dset.attrs['title'] = "Jacobian matrix"
+                
+                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/AA',data=self.AA)
+                dset.attrs['title'] = "Averaging kernel"
+                
+                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/DD',data=self.DD)
+                dset.attrs['title'] = "Gain matrix"
 
 
 
@@ -391,6 +400,9 @@ class OptimalEstimation_0:
                 self.XA = np.array(f.get('Retrieval/Output/OptimalEstimation/XA'))
                 self.ST = np.array(f.get('Retrieval/Output/OptimalEstimation/SX'))
                 self.SA = np.array(f.get('Retrieval/Output/OptimalEstimation/SA'))
+                self.KK = np.array(f.get('Retrieval/Output/OptimalEstimation/KK'))
+                self.AA = np.array(f.get('Retrieval/Output/OptimalEstimation/AA'))
+                self.DD = np.array(f.get('Retrieval/Output/OptimalEstimation/DD'))
 
                 self.YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
                 self.Y = np.array(f.get('Retrieval/Output/OptimalEstimation/Y'))
