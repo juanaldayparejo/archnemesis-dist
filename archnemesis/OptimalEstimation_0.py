@@ -81,7 +81,7 @@ class OptimalEstimation_0:
             instance.edit_YN(yn_array)
             instance.edit_KK(kk_array)
         
-        return chisq, phi, y_prev_array, instance
+        return chisq, phi, yn_prev_array, instance
             
             
                 
