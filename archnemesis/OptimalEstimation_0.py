@@ -51,6 +51,8 @@ class OptimalEstimation_0:
             n_last_iter = (n_lines - 1)//lines_per_iter
             n_skip_lines = (n_last_iter -1)*lines_per_iter
             
+            print(f'{lines_per_iter=} {n_last_iter=} {n_skip_lines=}')
+            
             for _ in range(n_skip_lines):
                 f.readline()
             
@@ -1147,20 +1149,18 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
 
         print('nemesis :: Iteration '+str(it)+'/'+str(OptimalEstimation.NITER))
 
-        if write_itr==True:
-            
         #Writing into .itr file
         ####################################
-
-            fitr.write('%10.5f %10.5f \n' % (OptimalEstimation.CHISQ,OptimalEstimation.PHI))
-            for i in range(OptimalEstimation.NX):fitr.write('%10.5f \n' % (XN1[i]))
-            for i in range(OptimalEstimation.NX):fitr.write('%10.5f \n' % (OptimalEstimation.XA[i]))
-            for i in range(OptimalEstimation.NY):fitr.write('%10.5f \n' % (OptimalEstimation.Y[i]))
-            for i in range(OptimalEstimation.NY):fitr.write('%10.5f \n' % (OptimalEstimation.SE[i,i]))
-            for i in range(OptimalEstimation.NY):fitr.write('%10.5f \n' % (YN1[i]))
-            for i in range(OptimalEstimation.NY):fitr.write('%10.5f \n' % (OptimalEstimation.YN[i]))
+        if write_itr==True:
+            fitr.write(f'{OptimalEstimation.CHISQ:09.4E} {OptimalEstimation.PHI:09.4E}\n')
+            for i in range(OptimalEstimation.NX):fitr.write(f'{XN1[i]:09.4E}\n')#'%10.5f \n' % (XN1[i]))
+            for i in range(OptimalEstimation.NX):fitr.write(f'{OptimalEstimation.XA[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.XA[i]))
+            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.Y[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.Y[i]))
+            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.SE[i,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.SE[i,i]))
+            for i in range(OptimalEstimation.NY):fitr.write(f'{YN1[i]:09.4E}\n')#'%10.5f \n' % (YN1[i]))
+            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.YN[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.YN[i]))
             for i in range(OptimalEstimation.NX):
-                for j in range(OptimalEstimation.NY):fitr.write('%10.5f \n' % (OptimalEstimation.KK[j,i]))
+                for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.kk[j,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.KK[j,i]))
 
 
         #Calculating next state vector
@@ -1275,6 +1275,18 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
             #Leave xn and kk alone and try again with more braking
             alambda = alambda*10.0  #increase Marquardt brake
 
+    #Writing into .itr file for final iteration
+    ####################################
+    if write_itr==True:
+        fitr.write(f'{OptimalEstimation.CHISQ:09.4E} {OptimalEstimation.PHI:09.4E}\n')
+        for i in range(OptimalEstimation.NX):fitr.write(f'{XN1[i]:09.4E}\n')#'%10.5f \n' % (XN1[i]))
+        for i in range(OptimalEstimation.NX):fitr.write(f'{OptimalEstimation.XA[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.XA[i]))
+        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.Y[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.Y[i]))
+        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.SE[i,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.SE[i,i]))
+        for i in range(OptimalEstimation.NY):fitr.write(f'{YN1[i]:09.4E}\n')#'%10.5f \n' % (YN1[i]))
+        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.YN[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.YN[i]))
+        for i in range(OptimalEstimation.NX):
+            for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.kk[j,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.KK[j,i]))
 
     #Calculating output parameters
     ######################################################
