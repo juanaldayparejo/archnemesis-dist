@@ -337,7 +337,7 @@ class Variables_0:
             elif imod == 230:
                 nxvar[i] = 7*int(ipar)
             elif imod == 231:
-                nxvar[i] = int(ipar+1)
+                nxvar[i] = int(ipar)*int(ipar2+1)
             elif imod == 2310:
                 nxvar[i] = int(ipar)*int(ipar2+1)*int(ipar3)
             elif imod == 232:
@@ -1086,6 +1086,7 @@ class Variables_0:
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     x0[ix] = float(tmp[0])
                     sx[ix,ix] = (float(tmp[1]))**2.
+                    inum[ix] = 1
 
                     ix = ix + 1
 
@@ -1233,21 +1234,26 @@ class Variables_0:
                 elif varident[i,2] == 231:
 #               ******** multiplication of calculated spectrum by polynomial function (following polynomial of degree N)
 
-                    #The computed spectrum is multiplied by R = R0 * POL
+                    #The computed spectra is multiplied by R = R0 * POL
                     #Where the polynomial function POL depends on the wavelength given by:
                     # POL = A0 + A1*(WAVE-WAVE0) + A2*(WAVE-WAVE0)**2. + ...
-                    ndegree = (np.fromfile(f,sep=' ',count=1,dtype='int')[0])
-                    igeom = (np.fromfile(f,sep=' ',count=1,dtype='int')[0])
-                    varparam[i,0] = ndegree
-                    varparam[i,1] = igeom
-                    for ic in range(ndegree+1):
-                        tmp = f.readline().split()
-                        r0 = float(tmp[0])
-                        err0 = float(tmp[1])
-                        x0[ix] = r0
-                        sx[ix,ix] = (err0)**2.
-                        inum[ix] = 0
-                        ix = ix + 1
+
+                    s = f.readline().split()
+                    f1 = open(s[0],'r')
+                    tmp = np.fromfile(f1,sep=' ',count=2,dtype='int')
+                    nlevel = int(tmp[0])
+                    ndegree = int(tmp[1])
+                    varparam[i,0] = nlevel
+                    varparam[i,1] = ndegree
+                    for ilevel in range(nlevel):
+                        tmp = f1.readline().split()
+                        for ic in range(ndegree+1):
+                            r0 = float(tmp[2*ic])
+                            err0 = float(tmp[2*ic+1])
+                            x0[ix] = r0
+                            sx[ix,ix] = (err0)**2.
+                            inum[ix] = 0
+                            ix = ix + 1
 
                 elif varident[i,2] == 2310:
 #               ******** Continuum addition to transmission spectra using a varying scaling factor (following polynomial of degree N)
