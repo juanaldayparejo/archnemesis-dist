@@ -233,7 +233,6 @@ class ForwardModel_0:
 
             #Initialise array for averaging spectra (if required by NAV>1)
             SPEC = np.zeros(self.SpectroscopyX.NWAVE)
-            dSPEC = np.zeros((self.SpectroscopyX.NWAVE,self.Variables.NX))
             WGEOMTOT = 0.0
             for IAV in range(self.Measurement.NAV[IGEOM]):
 
@@ -284,8 +283,6 @@ class ForwardModel_0:
                 else:
                     SPEC[:] = SPEC1[:,0]
 
-            #Applying any changes to the spectra required by the state vector
-            SPEC,dSPEC = self.subspecret(SPEC,dSPEC)
             
             #Applying the Telluric transmission if it exists
             if self.TelluricX is not None:
@@ -307,7 +304,6 @@ class ForwardModel_0:
             
             #Convolving the spectra with the Instrument line shape
             if self.SpectroscopyX.ILBL==0: #k-tables
-
                 if os.path.exists(self.runname+'.fwh')==True:
                     FWHMEXIST=self.runname
                 else:
@@ -316,7 +312,6 @@ class ForwardModel_0:
                 SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST='')
 
             elif self.SpectroscopyX.ILBL==2: #LBL-tables
-
                 SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
 
             SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
@@ -324,6 +319,10 @@ class ForwardModel_0:
             #Normalising measurement to a given wavelength if required
             if self.Measurement.IFORM == 5:
                 SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
+
+        #Applying any changes to the computed spectra required by the state vector
+        dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX))
+        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
 
         return SPECONV
 
@@ -408,6 +407,7 @@ class ForwardModel_0:
                 self.SurfaceX = deepcopy(self.Surface)
                 self.LayerX = deepcopy(self.Layer)
                 self.CIAX = deepcopy(self.CIA)
+                self.TelluricX = deepcopy(self.Telluric)
                 flagh2p = False
 
                 #Updating the required parameters based on the current geometry
@@ -435,8 +435,10 @@ class ForwardModel_0:
                     if np.mean(xmap[:,i,:])!=0.0:
                         incpar.append(i)
 
-                dSPEC2 = map2pro(dSPEC3,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.PathX.NLAYIN,self.PathX.LAYINC,self.LayerX.DTE,self.LayerX.DAM,self.LayerX.DCO,INCPAR=incpar)
-                #(NWAVE,NVMR+2+NDUST,NPRO,NPATH)
+                if len(incpar)>0:
+                    dSPEC2 = map2pro(dSPEC3,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.PathX.NLAYIN,self.PathX.LAYINC,self.LayerX.DTE,self.LayerX.DAM,self.LayerX.DCO,INCPAR=incpar)
+                else:
+                    dSPEC2 = np.zeros((self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR+2+self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH))
                 del dSPEC3
 
                 #Mapping the gradients from Profile properties to elements in state vector
@@ -458,12 +460,9 @@ class ForwardModel_0:
                     SPEC[:] = SPEC1[:,0]
                     dSPEC[:,:] = dSPEC1[:,0,:]
 
-            #Applying any changes to the spectra required by the state vector
-            SPEC,dSPEC = self.subspecret(SPEC,dSPEC)
-
             #Applying the Telluric transmission if it exists
             if self.TelluricX is not None:
-                
+                                         
                 #Looking for the calculation wavelengths
                 wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
                 self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
@@ -495,6 +494,9 @@ class ForwardModel_0:
 
             SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
             dSPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM,:] = dSPECONV1[0:self.Measurement.NCONV[IGEOM],:]
+
+        #Applying any changes to the spectra required by the state vector
+        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
 
         return SPECONV,dSPECONV
 
@@ -588,15 +590,15 @@ class ForwardModel_0:
 
                 SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
 
-        #Applying any changes to the spectra required by the state vector
-        SPECMOD,dSPECMOD = self.subspecret(SPECMOD,dSPECMOD)
-
         #Convolving the spectrum with the instrument line shape
         print('Convolving spectra and gradients with instrument line shape')
         if self.SpectroscopyX.ILBL==0:
             SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
         elif self.SpectroscopyX.ILBL==2:
             SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+
+        #Applying any changes to the spectra required by the state vector
+        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
 
         #Fitting the polynomial baseline with python
         #basem = self.MeasurementX.MEAS / SPECONV
@@ -741,10 +743,6 @@ class ForwardModel_0:
                 SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
                 dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]*(1.-fhl) + dSPECOUT[:,ibaseh,:]*(1.-fhh)
 
-
-        #Applying any changes to the spectra required by the state vector
-        SPECMOD,dSPECMOD = self.subspecret(SPECMOD,dSPECMOD)
-
         #Convolving the spectrum with the instrument line shape
         print('Convolving spectra and gradients with instrument line shape')
         if self.SpectroscopyX.ILBL==0:
@@ -755,7 +753,8 @@ class ForwardModel_0:
         #Calculating the gradients of any parameterisations involving the convolution
         dSPECONV = self.subspeconv(SPECMOD,dSPECONV)
         
-
+        #Applying any changes to the spectra required by the state vector
+        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
         
         #Fitting the polynomial baseline with python
         #basem = self.MeasurementX.MEAS / SPECONV
@@ -851,7 +850,7 @@ class ForwardModel_0:
 
         #Applying any changes to the spectra required by the state vector
         dSPECOUT = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM,self.Variables.NX])
-        SPECOUT,dSPECOUT = self.subspecret(SPECOUT,dSPECOUT)
+        SPECOUT,dSPECOUT = self.subspecret(SPECOUT,dSPECOUT,IGEOM=None)
 
         #Convolving the spectrum with the instrument line shape
         print('Convolving spectra and gradients with instrument line shape')
@@ -968,7 +967,7 @@ class ForwardModel_0:
         #Applying any changes to the spectra required by the state vector
         self.MeasurementX = copy(self.Measurement)
         dSPECMOD = np.zeros((self.Spectroscopy.NWAVE,self.Measurement.NGEOM,self.Variables.NX))
-        SPECPSF,dSPEC = self.subspecret(SPECMOD,dSPECMOD)
+        SPECPSF,dSPEC = self.subspecret(SPECMOD,dSPECMOD,IGEOM=None)
         
         #Convolving the spectrum with the instrument line shape
         print('nemesisMAPfm :: Convolving spectra and gradients with instrument line shape')
@@ -1025,7 +1024,12 @@ class ForwardModel_0:
                 SPECMOD = self.nemesisSOfm()
             else:
                 SPECMOD = self.nemesisfm()
-            YNtot[:, ifm] = np.resize(np.transpose(SPECMOD), (self.Measurement.NY,))
+            
+            #Re-shaping calculated spectrum into the shape of the measurement vector
+            ik = 0
+            for igeom in range(self.Measurement.NGEOM):
+                YNtot[ik:ik+self.Measurement.NCONV[igeom],ifm] = SPECMOD[0:self.Measurement.NCONV[igeom],igeom]
+                ik += self.Measurement.NCONV[igeom]
         finally:
             sys.stdout.close()  # Close the devnull
             sys.stdout = original_stdout  # Restore the original stdout
@@ -1124,9 +1128,14 @@ class ForwardModel_0:
                 SPECMOD,dSPECMOD = self.nemesisSOfmg()
             else:
                 SPECMOD,dSPECMOD = self.nemesisfmg()
-            YN = np.resize(np.transpose(SPECMOD),[self.Measurement.NY])
-            for ix in range(self.Variables.NX):
-                KK[:,ix] = np.resize(np.transpose(dSPECMOD[:,:,ix]),[self.Measurement.NY])
+                
+            #Re-shaping the arrays to create the measurement vector and Jacobian matrix
+            YN = np.zeros(self.Measurement.NY)
+            ik = 0
+            for igeom in range(self.Measurement.NGEOM):
+                YN[ik:ik+self.Measurement.NCONV[igeom]] = SPECMOD[0:self.Measurement.NCONV[igeom],igeom]
+                KK[ik:ik+self.Measurement.NCONV[igeom],:] = dSPECMOD[0:self.Measurement.NCONV[igeom],igeom,:]
+                ik += self.Measurement.NCONV[igeom]
 
             iYN = 1 #Indicates that some of the gradients and the measurement vector have already been caculated
 
@@ -1163,9 +1172,6 @@ class ForwardModel_0:
             chunks = [(i * base_chunk_size + min(i, remainder),
                        (i + 1) * base_chunk_size + min(i + 1, remainder),
                        xnx, ixrun, nemesisSO, YNtot, nfm) for i in range(NCores)]
-
-#             with Pool(NCores) as pool:
-#                 results = pool.map(self.chunked_execution, chunks)
 
             results = Parallel(n_jobs=NCores)(
                 delayed(self.chunked_execution)(chunk) for chunk in chunks
@@ -1597,14 +1603,6 @@ class ForwardModel_0:
             elif self.Variables.VARIDENT[ivar,0]==231:
 #           Model 231. Multiplication of computed spectrum a polynomial function (given a polynomial of degree N)
 #           ***************************************************************
-
-                #The computed spectrum is multiplied by R = R0 * POL
-                #Where POL is given by POL = A0 + A1*(WAVE-WAVE0) + A2*(WAVE-WAVE0)**2. + ...
-
-                #The effect of this model takes place after the computation of the spectra in CIRSrad!
-                if int(self.Variables.VARPARAM[ivar,1])>self.MeasurementX.NGEOM-1:
-                    raise ValueError('error using Model 231 :: the selected geometry must be <=NGEOM-1')
-
                 ipar = -1
                 ix = ix + self.Variables.NXVAR[ivar]
 
@@ -1850,7 +1848,7 @@ class ForwardModel_0:
 
     ###############################################################################################
 
-    def subspecret(self,SPECMOD,dSPECMOD,IGEOM=None):
+    def subspecret(self,SPECMOD,dSPECMOD):
 
         """
         FUNCTION NAME : subspecret()
@@ -1864,13 +1862,11 @@ class ForwardModel_0:
 
             Measurement :: Python class defining the observation
             Variables :: Python class defining the parameterisations and state vector
-            SPECMOD(NWAVE,NGEOM) :: Modelled spectrum in each geometry (not yet convolved with ILS)
-            dSPECMOD(NWAVE,NGEOM,NX) :: Modelled gradients in each geometry (not yet convolved with ILS)
+            SPECMOD(NCONV,NGEOM) :: Modelled spectrum in each geometry (convolved with ILS)
+            dSPECMOD(NCONV,NGEOM,NX) :: Modelled gradients in each geometry (convolved with ILS)
 
-        OPTIONAL INPUTS:
-
-            IGEOM :: If not None, it indicates the index of the geometry in the Measurement class the parameterisation applies to
-
+        OPTIONAL INPUTS: None
+        
         OUTPUTS :
 
             SPECMOD :: Updated modelled spectrum
@@ -1878,7 +1874,7 @@ class ForwardModel_0:
 
         CALLING SEQUENCE:
 
-            SPECMOD = subspecret(Measurement,Variables,SPECMOD)
+            SPECMOD,dSPECMOD = subspecret(SPECMOD,dSPECMOD)
 
         MODIFICATION HISTORY : Juan Alday (15/03/2021)
 
@@ -1895,38 +1891,34 @@ class ForwardModel_0:
                 NGEOM = int(self.Variables.VARPARAM[ivar,0])
                 NDEGREE = int(self.Variables.VARPARAM[ivar,1])
 
-                if self.MeasurementX.NGEOM>1:
+                for i in range(self.Measurement.NGEOM):
+
+                    #Getting the coefficients
+                    T = np.zeros(NDEGREE+1)
+                    for j in range(NDEGREE+1):
+                        T[j] = self.Variables.XN[ix+j]
+
+                    WAVE0 = self.Measurement.VCONV[0,i]
+                    spec = np.zeros(self.Measurement.NCONV[i])
+                    spec[:] = SPECMOD[0:self.Measurement.NCONV[i],i]
+
+                    #Changing the state vector based on this parameterisation
+                    POL = np.zeros(self.Measurement.NCONV[i])
+                    for j in range(NDEGREE+1):
+                        POL[:] = POL[:] + T[j]*(self.Measurement.VCONV[0:self.Measurement.NCONV[i],i]-WAVE0)**j
+
+                    SPECMOD[0:self.Measurement.NCONV[i],i] = SPECMOD[0:self.Measurement.NCONV[i],i] * POL[:]
+
+                    #Changing the rest of the gradients based on the impact of this parameterisation
+                    for ixn in range(self.Variables.NX):
+                        dSPECMOD[0:self.Measurement.NCONV[i],i,ixn] = dSPECMOD[0:self.Measurement.NCONV[i],i,ixn] * POL[:]
+
+                    #Defining the analytical gradients for this parameterisation
+                    for j in range(NDEGREE+1):
+                        dSPECMOD[0:self.Measurement.NCONV[i],i,ix+j] = spec[:] * (self.Measurement.VCONV[0:self.Measurement.NCONV[i],i]-WAVE0)**j
+
+                    ix = ix + (NDEGREE+1)
                     
-                    
-                    for i in range(self.MeasurementX.NGEOM):
-
-                        #Getting the coefficients
-                        T = np.zeros(NDEGREE+1)
-                        for j in range(NDEGREE+1):
-                            T[j] = self.Variables.XN[ix+j]
-
-                        WAVE0 = self.MeasurementX.VCONV[0,0]
-                        spec = np.zeros(self.SpectroscopyX.NWAVE)
-                        spec[:] = SPECMOD[:,i]
-
-                        #Changing the state vector based on this parameterisation
-                        POL = np.zeros(self.SpectroscopyX.NWAVE)
-                        for j in range(NDEGREE+1):
-                            POL[:] = POL[:] + T[j]*(self.SpectroscopyX.WAVE[:]-WAVE0)**j
-
-                        SPECMOD[:,i] = SPECMOD[:,i] * POL[:]
-
-                        #Changing the rest of the gradients based on the impact of this parameterisation
-                        for ixn in range(self.Variables.NX):
-                            dSPECMOD[:,i,ixn] = dSPECMOD[:,i,ixn] * POL[:]
-
-                        #Defining the analytical gradients for this parameterisation
-                        for j in range(NDEGREE+1):
-                            dSPECMOD[:,i,ix+j] = spec[:] * (self.SpectroscopyX.WAVE[:]-WAVE0)**j
-
-                        ix = ix + (NDEGREE+1)
-                    
-
             elif self.Variables.VARIDENT[ivar,0]==2310:
 #           Model 2310. Scaling of spectra using a varying scaling factor (following a polynomial of degree N)
 #                       in multiple spectral windows
