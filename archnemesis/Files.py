@@ -431,11 +431,11 @@ def read_input_files(runname):
             Surface :: Python class defining the surface
             CIA :: Python class defining the Collision-Induced-Absorption cross-sections
             Layer :: Python class defining the layering scheme to be applied in the calculations
+            Retrieval :: Python class defining the initial Optimal Esimation setup for the input data
 
         CALLING SEQUENCE:
         
-            Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables = read_input_files(runname)
- 
+            Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = read_input_files(runname)
         MODIFICATION HISTORY : Juan Alday (29/04/2019)
     """
 
