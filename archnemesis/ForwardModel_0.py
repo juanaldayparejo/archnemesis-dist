@@ -1072,6 +1072,7 @@ class ForwardModel_0:
         #Constructing state vector after perturbation of each of the elements and storing in matrix
 
         self.Variables.calc_DSTEP() #Calculating the step size for the perturbation of each element
+        """
         nxn = self.Variables.NX+1
         xnx = np.zeros([self.Variables.NX,nxn])
         for i in range(self.Variables.NX+1):
@@ -1083,6 +1084,13 @@ class ForwardModel_0:
                 xnx[i-1,i] = self.Variables.XN[i-1] + self.Variables.DSTEP[i-1]
                 if self.Variables.XN[i-1]==0.0:
                     xnx[i-1,i] = 0.05
+        """
+        # The above seems to be identical to this
+        xnx[:,0] = self.Variables.XN
+        xnx[:,1:] = np.repeat(self.Variables.XN[:,None], self.Variables.XN, axis=-1) + np.diag(self.Variables.DSTEP)
+        zeros_mask = xnx[:,1:] == 0
+        xnx[zeros_mask] = 0.05
+        
 
 
         #################################################################################
@@ -1092,7 +1100,8 @@ class ForwardModel_0:
         #self.Variables.NUM[:] = 1     #Uncomment for trying numerical differentiation
         if self.Scatter.ISCAT!=0:
             self.Variables.NUM[:] = 1  #If scattering is present, gradients are calculated numerically
-
+        
+        
         ian1 = np.where(self.Variables.NUM==0)  #Gradients calculated using CIRSradg
         ian1 = ian1[0]
 
@@ -1117,7 +1126,7 @@ class ForwardModel_0:
         # Calculating all the required forward models for numerical differentiation
         #################################################################################
 
-        inum1 = np.where( (self.Variables.NUM==1) & (self.Variables.FIX==0) )
+        inum1 = np.where( (self.Variables.NUM==1) & (self.Variables.FIX==0) ) # only do numerical differentiation for elements of state vector that can vary (i.e. FIX==0, 'not fixed')
         inum = inum1[0]
 
         if iYN==0:
@@ -1192,7 +1201,7 @@ class ForwardModel_0:
     ###############################################################################################
 
     def subprofretg(self):
-
+        # NOTE: the output `xmap` is never actually used anywhere.
         """
         FUNCTION NAME : subprogretg()
 
@@ -1262,6 +1271,25 @@ class ForwardModel_0:
 
         #Initialising xmap
         if self.AtmosphereX.NLOCATIONS==1:
+            # `xmap` is functional derivatives of state vector w.r.t profiles for each location
+            # let:
+            #   k = index of state_vector
+            #   l = index of profile
+            #   j = index of point in the l^th profile (all profiles are on the same height/pressure grid
+            #   i = index of the location
+            # then
+            #   xmap[k,l,j,i] = d[profile_j]/d[state_vector_k] for the l^th profile at the i^th location
+            
+            # `xmap` shape is defined as follows:
+            # shape = (
+            #   number of values in the state vector, 
+            #   number of volume mixing ratios in atmosphere 
+            #       + number of aerosol profiles in atmosphere
+            #       + 1 for para h2 fraction profile in atmosphere
+            #       + 1 for fractional cloud cover profile in atmosphere,
+            #   number of points in atmosphere profiles (i.e. number of height levels, at which pressure, temperature, etc. is defined),
+            #   number of locations
+            # )
             xmap = np.zeros((self.Variables.NX,self.AtmosphereX.NVMR+2+self.AtmosphereX.NDUST,self.AtmosphereX.NP))
         else:
             #raise ValueError('error in subprofretg :: subprofretg has not been upgraded yet to deal with multiple locations')
@@ -1347,8 +1375,8 @@ class ForwardModel_0:
                 xprof[:] = self.Variables.XN[ix:ix+self.Variables.NXVAR[ivar]]
                 jtmp = ipar - (self.AtmosphereX.NVMR+1)
                 if self.Variables.VARPARAM[ivar,0]\
-                and ipar > self.AtmosphereX.NVMR\
-                and jtmp < self.AtmosphereX.NDUST: # Fortran true so flip aerosol model
+                    and ipar > self.AtmosphereX.NVMR\
+                    and jtmp < self.AtmosphereX.NDUST: # Fortran true so flip aerosol model
                     
                     self.AtmosphereX,xmap1 = model0(self.AtmosphereX,ipar,xprof)
                 else:
@@ -1365,9 +1393,10 @@ class ForwardModel_0:
                 xprof = np.zeros(self.Variables.NXVAR[ivar])
                 xprof[:] = self.Variables.XN[ix:ix+self.Variables.NXVAR[ivar]]
                 jtmp = ipar - (self.AtmosphereX.NVMR+1)
-                if self.Variables.VARPARAM[ivar,0]\
-                and ipar > self.AtmosphereX.NVMR\
-                and jtmp < self.AtmosphereX.NDUST: # Fortran true so flip aerosol model
+                if (self.Variables.VARPARAM[ivar,0] != 0
+                        and ipar > self.AtmosphereX.NVMR
+                        and jtmp < self.AtmosphereX.NDUST
+                    ): # Fortran true so flip aerosol model
                     self.AtmosphereX,xmap1 = modelm1(self.AtmosphereX,ipar,xprof)
                 else:
                     self.AtmosphereX,xmap1 = model0(self.AtmosphereX,ipar,xprof)

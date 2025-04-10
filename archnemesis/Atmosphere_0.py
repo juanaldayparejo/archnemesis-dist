@@ -1557,7 +1557,7 @@ class Atmosphere_0:
             label1 = gas_info[str(self.ID[i])]['name']
             if self.ISO[i]!=0:
                 label1 = label1+' ('+str(self.ISO[i])+')'
-            ax3.semilogx(vmr[:,i],h/1.0e3,label=label1)
+            ax3.semilogx(vmr[:,i],h/1.0e3, label=label1)
         ax1.set_xlabel('Pressure (atm)')
         ax1.set_ylabel('Altitude (km)')
         ax2.set_xlabel('Temperature (K)')
@@ -1592,10 +1592,11 @@ class Atmosphere_0:
             fig,ax1 = plt.subplots(1,1,figsize=(3,4))
 
             for i in range(self.NDUST):
-                ax1.plot(self.DUST[:,i],self.H/1.0e3)
+                ax1.plot(self.DUST[:,i],self.H/1.0e3, label=f'aerosol species {i}')
             ax1.grid()
             ax1.set_xlabel('Aerosol density (particles m$^{-3}$)')
             ax1.set_ylabel('Altitude (km)')
+            legend = ax1.legend(loc='upper right', bbox_to_anchor=(1.0, 1.0))
             plt.tight_layout()
             if SavePlot is not None:
                 fig.savefig(SavePlot)

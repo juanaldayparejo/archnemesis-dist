@@ -16,6 +16,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
+
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.WARN)
+
 ###############################################################################################
 
 def modelm1(atm,ipar,xprof,MakePlot=False):
@@ -579,6 +584,7 @@ def model32(atm,ipar,pref,fsh,tau,MakePlot=False):
         MODIFICATION HISTORY : Juan Alday (29/05/2024)
         
     """
+    _lgr.debug(f'{ipar=} {pref=} {tau=}')
 
     from scipy.integrate import simpson
     from archnemesis.Data.gas_data import const
@@ -713,6 +719,7 @@ def model32(atm,ipar,pref,fsh,tau,MakePlot=False):
 
     #Now updating the atmosphere class with the new profile
     atm.DUST[:,icont] = xprof[:]
+    _lgr.debug(f'{xprof=}')
     
     if MakePlot==True:
         
@@ -732,7 +739,7 @@ def model32(atm,ipar,pref,fsh,tau,MakePlot=False):
 
 
 ###############################################################################################
-def model45(atm, ipar, tropo, humid, strato, MakePlot=False):
+def model45(atm, ipar, tropo, humid, strato, MakePlot=True):
 
     """
         FUNCTION NAME : model45()
@@ -776,6 +783,9 @@ def model45(atm, ipar, tropo, humid, strato, MakePlot=False):
         MODIFICATION HISTORY : Joe Penn (09/10/2024)
         
     """
+    
+    _lgr.debug(f'{ipar=} {tropo=} {humid=} {strato=}')
+    
     SCH40 = 10.6815
     SCH41 = -1163.83
     # psvp is in bar
@@ -804,6 +814,8 @@ def model45(atm, ipar, tropo, humid, strato, MakePlot=False):
             xnewgrad[i] = 1.0
 
         xnew[i] = pch4[i] / pbar[i]
+    
+    _lgr.debug(f'{xnew=}')
     atm.VMR[:, ipar] = xnew
         
         
@@ -856,6 +868,8 @@ def model47(atm, ipar, tau, pref, fwhm, MakePlot=False):
         MODIFICATION HISTORY : Joe Penn (08/10/2024)
         
     """
+    _lgr.debug(f'{ipar=} {tau=} {pref=} {fwhm=}')
+    
     from archnemesis.Data.gas_data import const
 
     # First, check that the profile is for aerosols
@@ -940,6 +954,7 @@ def model47(atm, ipar, tau, pref, fwhm, MakePlot=False):
 
     # Update the atmosphere class with the new profile
     atm.DUST[:, icont] = X1[:]
+    _lgr.debug(f'{X1=}')
 
     if MakePlot:
         fig, ax1 = plt.subplots(1, 1, figsize=(3, 4))
@@ -2088,6 +2103,10 @@ def model444(Scatter,idust,iscat,xprof,haze_params):
         MODIFICATION HISTORY : Joe Penn (11/9/2024)
 
     """   
+    _lgr.debug(f'{idust=} {iscat=} {xprof=} {type(xprof)=}')
+    for item in ('WAVE', 'NREAL', 'WAVE_REF', 'WAVE_NORM'):
+        _lgr.debug(f'haze_params[{item},{idust}] = {type(haze_params[item,idust])} {haze_params[item,idust]}')
+    
     a = np.exp(xprof[0])
     b = np.exp(xprof[1])
     if iscat == 1:

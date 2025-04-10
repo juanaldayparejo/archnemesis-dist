@@ -1368,7 +1368,6 @@ class Variables_0:
                     vref, nreal_ref = haze_f.readline().split('!')[0].split()
                     v_od_norm = haze_f.readline().split('!')[0]
 
-                    stopread = False
                     for j in range(int(nwave)):
                         line = haze_f.readline().split()
                         v, xai, xa_erri = line[:3]

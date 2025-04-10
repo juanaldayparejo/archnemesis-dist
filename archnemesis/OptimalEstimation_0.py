@@ -640,8 +640,9 @@ class OptimalEstimation_0:
 
         x_out = np.zeros(self.NX)
 
-        for i in range(self.NX):
-            x_out[i] = self.XA[i] + mp1[i,0] - mp2[i,0]
+        #for i in range(self.NX):
+        #    x_out[i] = self.XA[i] + mp1[i,0] - mp2[i,0]
+        x_out = self.XA + mp1[:self.NX,0] - mp2[:self.NX,0]
         
         return x_out
 
@@ -1076,7 +1077,7 @@ class OptimalEstimation_0:
 ###############################################################################################
 
 def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,\
-                 NITER=10,PHILIMIT=0.1,NCores=1,nemesisSO=False,write_itr=True):
+                 NITER=10,PHILIMIT=0.1,NCores=1,nemesisSO=False,write_itr=True, return_forward_model=False):
 
 
     """
@@ -1110,6 +1111,8 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
 
             nemesisSO :: If True, the retrieval uses the function jacobian_nemesisSO(), adapated specifically
                          for solar occultation observations, rather than the more general jacobian_nemesis() function.
+            
+            return_forward_model :: if True will return the ForwardModel as well as the OptimalEstimation.
 
         OUTPUTS :
 
@@ -1351,6 +1354,9 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
     #Writing the contribution of each gas to .gcn file
     #if nemesisSO==True:
     #    calc_gascn(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer)
-
-    return OptimalEstimation
+    
+    if return_forward_model:
+        return OptimalEstimation, ForwardModel
+    else:
+        return OptimalEstimation
 
