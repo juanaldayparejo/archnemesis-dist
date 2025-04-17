@@ -411,9 +411,13 @@ class ForwardModel_0:
                 flagh2p = False
 
                 #Updating the required parameters based on the current geometry
-                self.ScatterX.SOL_ANG = self.MeasurementX.SOL_ANG[0,0]
-                self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
-                self.ScatterX.AZI_ANG = self.MeasurementX.AZI_ANG[0,0]
+                if self.MeasurementX.EMISS_ANG[0,0]>=0.0:
+                    self.ScatterX.SOL_ANG = self.MeasurementX.SOL_ANG[0,0]
+                    self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
+                    self.ScatterX.AZI_ANG = self.MeasurementX.AZI_ANG[0,0]
+                else:
+                    self.ScatterX.SOL_ANG = self.MeasurementX.TANHE[0,0]
+                    self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
 
                 #Changing the different classes taking into account the parameterisations in the state vector
                 xmap = self.subprofretg()
@@ -569,7 +573,6 @@ class ForwardModel_0:
 
         #Interpolating the spectra to the correct altitudes defined in Measurement
         SPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM])
-        dSPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM,self.Variables.NX])
         for i in range(self.MeasurementX.NGEOM):
 
             #Find altitudes above and below the actual tangent height
@@ -596,6 +599,7 @@ class ForwardModel_0:
             SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
         elif self.SpectroscopyX.ILBL==2:
             SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+            dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
 
         #Applying any changes to the spectra required by the state vector
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
@@ -751,7 +755,7 @@ class ForwardModel_0:
             SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
 
         #Calculating the gradients of any parameterisations involving the convolution
-        dSPECONV = self.subspeconv(SPECMOD,dSPECONV)
+        dSPECONV = self.subspeconv(self.SpectroscopyX.WAVE,SPECMOD,dSPECONV)
         
         #Applying any changes to the spectra required by the state vector
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)

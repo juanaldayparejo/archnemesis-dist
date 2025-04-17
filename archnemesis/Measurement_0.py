@@ -1666,30 +1666,30 @@ class Measurement_0:
             if IGEOM=='All':
                 IG = 0
                 if ModSpec.ndim!=2:
-                    raise ValueError('error in lblconvg :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
+                    raise ValueError('error in lblconv :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
                 SPECONV = lblconv_ngeom(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
             else:
                 if ModSpec.ndim!=1:
-                    raise ValueError('error in lblconvg :: ModSpec must have 1 dimensions (NWAVE)')
+                    raise ValueError('error in lblconv :: ModSpec must have 1 dimensions (NWAVE)')
                 IG = IGEOM
                 SPECONV = lblconv(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
             
         elif self.FWHM<0.0:  #Convolution with VFIL,AFIL
             if IGEOM=='All':
                 if ModSpec.ndim!=2:
-                    raise ValueError('error in lblconvg :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
+                    raise ValueError('error in lblconv :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
                 IG = 0
                 SPECONV = lblconv_fil_ngeom(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
             else:
                 if ModSpec.ndim!=1:
-                    raise ValueError('error in lblconvg :: ModSpec must have 1 dimensions (NWAVE)')
+                    raise ValueError('error in lblconv :: ModSpec must have 1 dimensions (NWAVE)')
                 IG = IGEOM
                 SPECONV = lblconv_fil(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
 
         elif self.FWHM==0.0:  #No convolution
             if IGEOM=='All':
                 if ModSpec.ndim!=2:
-                    raise ValueError('error in lblconvg :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
+                    raise ValueError('error in lblconv :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
                 SPECONV = np.zeros(self.VCONV.shape)
                 for IG in range(self.NGEOM):
                     SPECONV[:,IG] = np.interp(self.VCONV[:,IG],wavecorr,ModSpec[:,IG])
