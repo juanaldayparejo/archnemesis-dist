@@ -845,13 +845,26 @@ class Spectroscopy_0:
                     kfile = f['K']
                     wave = f['WAVE']
                     
-                    #Calculating the wavelengths to read
-                    iin = np.where( (wave>=self.WAVE.min()) & (wave<=self.WAVE.max()) )[0]
+                    #Creating new array to make sure it matches the resolution of self.WAVE
+                    vmin = np.round(np.float64(wave[0]), decimals=7)
+                    delv = np.round(np.float64(wave[1] - wave[0]), decimals=7)
+                    nwave = len(wave)
+                    vmax = delv*(nwave-1) + vmin
+                    wave = np.linspace(vmin,vmax,nwave)
                     
-                    klo1[:,igas] = kfile[iin,ip,it1,0]
-                    klo2[:,igas] = kfile[iin,ip,it1+1,0]
-                    khi1[:,igas] = kfile[iin,ip+1,it2,0]
-                    khi2[:,igas] = kfile[iin,ip+1,it2+1,0]
+                    #Calculating the wavelengths to read
+                    iwl = np.searchsorted(np.array(wave), np.min(self.WAVE), side='right') - 1
+                    if iwl < 0:
+                        iwl = 0
+
+                    iwh = np.searchsorted(np.array(wave), np.max(self.WAVE), side='left')
+                    if iwh >= nwave:
+                        iwh = nwave - 1
+                    
+                    klo1[:,igas] = kfile[iwl:iwh+1,ip,it1,0]
+                    klo2[:,igas] = kfile[iwl:iwh+1,ip,it1+1,0]
+                    khi1[:,igas] = kfile[iwl:iwh+1,ip+1,it2,0]
+                    khi2[:,igas] = kfile[iwl:iwh+1,ip+1,it2+1,0]
                     
                     f.close()
 
@@ -999,13 +1012,26 @@ class Spectroscopy_0:
                     kfile = f['K']
                     wave = f['WAVE']
                     
-                    #Calculating the wavelengths to read
-                    iin = np.where( (wave>=self.WAVE.min()) & (wave<=self.WAVE.max()) )[0]
+                    #Creating new array to make sure it matches the resolution of self.WAVE
+                    vmin = np.round(np.float64(wave[0]), decimals=7)
+                    delv = np.round(np.float64(wave[1] - wave[0]), decimals=7)
+                    nwave = len(wave)
+                    vmax = delv*(nwave-1) + vmin
+                    wave = np.linspace(vmin,vmax,nwave)
                     
-                    klo1[:,igas] = kfile[iin,ip,it1,0]
-                    klo2[:,igas] = kfile[iin,ip,it1+1,0]
-                    khi1[:,igas] = kfile[iin,ip+1,it2,0]
-                    khi2[:,igas] = kfile[iin,ip+1,it2+1,0]
+                    #Calculating the wavelengths to read
+                    iwl = np.searchsorted(np.array(wave), np.min(self.WAVE), side='right') - 1
+                    if iwl < 0:
+                        iwl = 0
+
+                    iwh = np.searchsorted(np.array(wave), np.max(self.WAVE), side='left')
+                    if iwh >= nwave:
+                        iwh = nwave - 1
+                    
+                    klo1[:,igas] = kfile[iwl:iwh+1,ip,it1,0]
+                    klo2[:,igas] = kfile[iwl:iwh+1,ip,it1+1,0]
+                    khi1[:,igas] = kfile[iwl:iwh+1,ip+1,it2,0]
+                    khi2[:,igas] = kfile[iwl:iwh+1,ip+1,it2+1,0]
                     
                     f.close()
             
