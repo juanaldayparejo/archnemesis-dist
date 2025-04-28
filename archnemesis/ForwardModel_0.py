@@ -250,6 +250,7 @@ class ForwardModel_0:
                 flagh2p = False
 
                 #Updating the required parameters based on the current geometry
+                # [JD] Should these not vary based on Geometry and loop over averaging points?
                 self.ScatterX.SOL_ANG = self.MeasurementX.SOL_ANG[0,0]
                 self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
                 self.ScatterX.AZI_ANG = self.MeasurementX.AZI_ANG[0,0]
@@ -1072,9 +1073,10 @@ class ForwardModel_0:
         #Constructing state vector after perturbation of each of the elements and storing in matrix
 
         self.Variables.calc_DSTEP() #Calculating the step size for the perturbation of each element
+        
+        #nxn = self.Variables.NX+1
+        xnx = np.zeros([self.Variables.NX,self.Variables.NX+1], dtype=float)
         """
-        nxn = self.Variables.NX+1
-        xnx = np.zeros([self.Variables.NX,nxn])
         for i in range(self.Variables.NX+1):
             if i==0:   #First element is the normal state vector
                 xnx[0:self.Variables.NX,i] = self.Variables.XN[0:self.Variables.NX]
@@ -1087,9 +1089,9 @@ class ForwardModel_0:
         """
         # The above seems to be identical to this
         xnx[:,0] = self.Variables.XN
-        xnx[:,1:] = np.repeat(self.Variables.XN[:,None], self.Variables.XN, axis=-1) + np.diag(self.Variables.DSTEP)
+        xnx[:,1:] = np.repeat(self.Variables.XN[:,None], self.Variables.NX, axis=1) + np.diag(self.Variables.DSTEP)
         zeros_mask = xnx[:,1:] == 0
-        xnx[zeros_mask] = 0.05
+        xnx[:,1:][zeros_mask] = 0.05
         
 
 
@@ -1201,7 +1203,7 @@ class ForwardModel_0:
     ###############################################################################################
 
     def subprofretg(self):
-        # NOTE: the output `xmap` is never actually used anywhere.
+        # NOTE: the output `xmap` is only used wht the "gradient" versions of nemesis calcs (the "*fmg" methods).
         """
         FUNCTION NAME : subprogretg()
 

@@ -526,7 +526,7 @@ class CIA_0:
             filename += '.h5'
         
         with h5py.File(filename, 'r') as f:
-            self.NPARA = np.int32(f.get('NPARA'))
+            self.NPARA = np.int32(f.get('NPARA', 1))
             self.NPAIR = np.int32(f.get('NPAIR'))
             self.NT = np.int32(f.get('NT'))
             self.NWAVE = np.int32(f.get('NWAVE'))

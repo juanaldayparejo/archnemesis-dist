@@ -306,32 +306,27 @@ def read_retparam_hdf5(runname):
 
     import h5py
 
-    f = h5py.File(runname+'.h5','r')
+    with h5py.File(runname+'.h5','r') as f:
 
-    #Checking if Surface exists
-    e = "/Retrieval" in f
-    if e==False:
-        f.close()
-        raise ValueError('error :: Retrieval is not defined in HDF5 file')
-    else:
-
-        #Checking if Retrieval already exists
-        if ('/Retrieval/Output/Parameters' in f)==True:
-
-            NVAR = np.int32(f.get('Retrieval/Output/Parameters/NVAR'))
-            NXVAR = np.array(f.get('Retrieval/Output/Parameters/NXVAR'))
-            VARIDENT = np.array(f.get('Retrieval/Output/Parameters/VARIDENT'))
-            VARPARAM = np.array(f.get('Retrieval/Output/Parameters/VARPARAM'))
-            RETPARAM = np.array(f.get('Retrieval/Output/Parameters/RETPARAM'))
-            RETERRPARAM = np.array(f.get('Retrieval/Output/Parameters/RETERRPARAM'))
-            APRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRPARAM'))
-            APRERRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRERRPARAM'))
-
-        else:
-            
-            f.close()
+        #Checking if Retrieval exists
+        if "/Retrieval" not in f:
+            raise ValueError('error :: Retrieval is not defined in HDF5 file')
+            return None
+        
+        if '/Retrieval/Output/Parameters' not in f:
             raise ValueError('error :: Retrieval/Output/Parameters is not defined in HDF5 file')
-    
+            return None
+
+
+        NVAR = np.int32(f.get('Retrieval/Output/Parameters/NVAR'))
+        NXVAR = np.array(f.get('Retrieval/Output/Parameters/NXVAR'))
+        VARIDENT = np.array(f.get('Retrieval/Output/Parameters/VARIDENT'))
+        VARPARAM = np.array(f.get('Retrieval/Output/Parameters/VARPARAM'))
+        RETPARAM = np.array(f.get('Retrieval/Output/Parameters/RETPARAM'))
+        RETERRPARAM = np.array(f.get('Retrieval/Output/Parameters/RETERRPARAM'))
+        APRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRPARAM'))
+        APRERRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRERRPARAM'))
+
 
     return NVAR,NXVAR,VARIDENT,VARPARAM,APRPARAM,APRERRPARAM,RETPARAM,RETERRPARAM
 
@@ -364,9 +359,16 @@ def read_bestfit_hdf5(runname):
     import h5py
 
     #Reading the best fit
-    f = h5py.File(runname+'.h5','r')
-    YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
-    f.close()
+    with h5py.File(runname+'.h5','r') as f:
+        if "/Retrieval" not in f:
+            raise ValueError('error :: Retrieval is not defined in HDF5 file')
+            return None
+        
+        if '/Retrieval/Output/OptimalEstimation/YN' not in f:
+            raise ValueError('error :: Retrieval/Output/OptimalEstimation/YN is not defined in HDF5 file')
+            return None
+        
+        YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
  
     #Writing the measurement vector in same format as in Measurement
     Measurement = Measurement_0()
