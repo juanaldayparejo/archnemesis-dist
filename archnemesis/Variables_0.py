@@ -328,6 +328,8 @@ class Variables_0:
                 nxvar[i] = 1
             elif imod==111:
                 nxvar[i] = 3
+            elif imod==202:
+                nxvar[i] = 1
             elif imod == 228:
                 nxvar[i] = 8
             elif imod == 229:
@@ -672,7 +674,7 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 2:
-#               **** model 3 - Simple scaling factor of reference profile *******
+#               **** model 2 - Simple scaling factor of reference profile *******
 #               Read in scaling factor
 
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
@@ -1029,7 +1031,7 @@ class Variables_0:
                     sx[ix,ix] = err**2.
                     
                     ix = ix + 1
-                    
+
                 else:
                     raise ValueError('error in read_apr() :: Variable ID not included in this function')
 
@@ -1077,6 +1079,15 @@ class Variables_0:
                     sx[ix,ix] = (so2_top_err/so2_top)**2.
                     lx[ix] = 1
                     inum[ix] = 1
+                    ix = ix + 1
+
+                elif varident[i,2] == 202:
+#               ********* simple scaling of telluric atmospheric profile ************************
+                    tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+                    x0[ix] = float(tmp[0])
+                    sx[ix,ix] = (float(tmp[1]))**2.
+                    inum[ix] = 1
+
                     ix = ix + 1
 
                 elif varident[i,2] == 228:
@@ -1221,9 +1232,9 @@ class Variables_0:
                             ix = ix + 1
 
                 elif varident[i,2] == 231:
-#               ******** Continuum addition to transmission spectra using a varying scaling factor (following polynomial of degree N)
+#               ******** multiplication of calculated spectrum by polynomial function (following polynomial of degree N)
 
-                    #The computed spectra is multiplied by R = R0 * (T0 + POL)
+                    #The computed spectra is multiplied by R = R0 * POL
                     #Where the polynomial function POL depends on the wavelength given by:
                     # POL = A0 + A1*(WAVE-WAVE0) + A2*(WAVE-WAVE0)**2. + ...
 
@@ -1235,7 +1246,6 @@ class Variables_0:
                     varparam[i,0] = nlevel
                     varparam[i,1] = ndegree
                     for ilevel in range(nlevel):
-                        #tmp = np.fromfile(f1,sep=' ',count=2*(ndegree+1),dtype='float')
                         tmp = f1.readline().split()
                         for ic in range(ndegree+1):
                             r0 = float(tmp[2*ic])

@@ -175,7 +175,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
         Spectroscopy = Spectroscopy_0(RUNNAME=runname)
         Spectroscopy.read_hdf5(runname)
     else:
-        Spectroscopy = None
+        raise ValueError('error :: Spectroscopy needs to be defined in HDF5 file')
 
     #Initialise Telluric class and read file
     ###############################################################
@@ -190,63 +190,6 @@ def read_input_files_hdf5(runname,calc_SE=True):
         Telluric.read_hdf5(runname)
     else:
         Telluric = None
-
-
-    #Reading spectroscopic look-up tables
-    ################################################################
-
-    if Telluric is not None:
-        
-        v_doppler = Measurement.V_DOPPLER  #Saving the Doppler velocity since it is not applied to the Telluric spectrum
-        Measurement.V_DOPPLER = 0.0
-        
-        #Calculating the 'calculation wavelengths'
-        if Telluric.Spectroscopy.ILBL==0:
-            Measurement.wavesetb(Telluric.Spectroscopy,IGEOM=0)
-        elif Telluric.Spectroscopy.ILBL==2:
-            Measurement.wavesetc(Telluric.Spectroscopy,IGEOM=0)
-        else:
-            raise ValueError('error :: ILBL has to be either 0 or 2')
-
-        #Now, reading k-tables or lbl-tables for the spectral range of interest
-        Telluric.Spectroscopy.read_tables(wavemin=Measurement.WAVE.min(),wavemax=Measurement.WAVE.max())
-        
-        Measurement.V_DOPPLER = v_doppler
-
-    if Spectroscopy is not None:
-
-        #Calculating the 'calculation wavelengths'
-        if Spectroscopy.ILBL==0:
-            Measurement.wavesetb(Spectroscopy,IGEOM=0)
-        elif Spectroscopy.ILBL==2:
-            Measurement.wavesetc(Spectroscopy,IGEOM=0)
-        else:
-            raise ValueError('error :: ILBL has to be either 0 or 2')
-
-        #Now, reading k-tables or lbl-tables for the spectral range of interest
-        Spectroscopy.read_tables(wavemin=Measurement.WAVE.min(),wavemax=Measurement.WAVE.max())
-        
-    else:
-        
-        Measurement.wavesetc(Spectroscopy,IGEOM=0)
-        
-        #Creating dummy Spectroscopy file if it does not exist
-        Spectroscopy = Spectroscopy_0()
-        Spectroscopy.NWAVE = Measurement.NWAVE
-        Spectroscopy.WAVE = Measurement.WAVE
-        Spectroscopy.NG = 1
-        Spectroscopy.ILBL = 0
-        Spectroscopy.G_ORD = np.array([1.])
-        Spectroscopy.NGAS = 1
-        Spectroscopy.ID = np.array([Atmosphere.ID[0]],dtype='int32')
-        Spectroscopy.ISO = np.array([Atmosphere.ISO[0]],dtype='int32')
-        Spectroscopy.NP = 2
-        Spectroscopy.NT = 2
-        Spectroscopy.PRESS = np.array([Atmosphere.P.min()/101325.,Atmosphere.P.max()/101325.])
-        Spectroscopy.TEMP = np.array([Atmosphere.T.min(),Atmosphere.T.max()])
-        Spectroscopy.K = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Spectroscopy.NP,Spectroscopy.NT,Spectroscopy.NGAS])
-        Spectroscopy.DELG = np.array([1])
-    
 
     #Reading Stellar class
     ################################################################
@@ -537,18 +480,6 @@ def read_input_files(runname):
     #Reading .fil if FWHM<0.0
     elif Measurement.FWHM<0.0:
         Measurement.read_fil()
-
-    #Calculating the 'calculation wavelengths'
-    if Spec.ILBL==0:
-        Measurement.wavesetb(Spec,IGEOM=0)
-    elif Spec.ILBL==2:
-        Measurement.wavesetc(Spec,IGEOM=0)
-    else:
-        raise ValueError('error :: ILBL has to be either 0 or 2')
-
-    #Now, reading k-tables or lbl-tables for the spectral range of interest
-    Spec.read_tables(wavemin=Measurement.WAVE.min(),wavemax=Measurement.WAVE.max())
-
 
     #Reading stellar spectrum if required by Measurement units
     if( (Measurement.IFORM==1) or (Measurement.IFORM==2) or (Measurement.IFORM==3) or (Measurement.IFORM==4)):

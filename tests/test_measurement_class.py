@@ -44,8 +44,7 @@ def test_lblconv():
         Measurement.edit_VCONV(vconvx)
 
         Measurement.build_ils()  #Calculating the ILS
-        Measurement.WAVE = vwave
-        yconv_an = Measurement.lblconv(y,IGEOM=0)
+        yconv_an = Measurement.lblconv(vwave,y,IGEOM=0)
         
         #Performing the convolution with numpy
         ##########################################################################

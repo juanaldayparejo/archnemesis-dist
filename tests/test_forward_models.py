@@ -14,7 +14,6 @@ def test_thermal_emission_cirs():
     
     #Reading the input files
     Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
-    os.chdir(curr) #Changing directory back to the original
     
     #Calculating forward model with CIRSrad
     ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
@@ -24,6 +23,7 @@ def test_thermal_emission_cirs():
     #Calculating forward model with CIRSradg
     SPECONV_cirsradg,_ = ForwardModel.nemesisfmg()
     calculation_cirsradg = SPECONV_cirsradg[:,0]
+    os.chdir(curr) #Changing directory back to the original
     
     expected_nemesis = np.array([4.8584261e-09, 7.3546157e-09, 1.1448862e-08, 1.6160637e-08, 2.1053524e-08,
                                 2.5728575e-08, 2.9602468e-08, 3.2811268e-08, 4.3521572e-08, 5.5772129e-08,
@@ -181,12 +181,12 @@ def test_multiple_scattering_cirs():
     
     #Reading the input files
     Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
-    os.chdir(curr) #Changing directory back to the original
     
     #Calculating forward model with CIRSrad
     ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
     SPECONV_cirsrad = ForwardModel.nemesisfm()
     calculation_cirsrad = SPECONV_cirsrad[:,0]
+    os.chdir(curr)
     
     
     expected_nemesis = np.array([9.46826995e-07, 9.82491478e-07, 9.94409090e-07, 1.00018504e-06,

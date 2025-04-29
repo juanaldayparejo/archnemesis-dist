@@ -1592,7 +1592,7 @@ class Atmosphere_0:
             fig,ax1 = plt.subplots(1,1,figsize=(3,4))
 
             for i in range(self.NDUST):
-                ax1.plot(self.DUST[:,i],self.H/1.0e3, label=f'aerosol species {i}')
+                ax1.plot(dust[:,i],h/1.0e3, label=f'aerosol species {i}')
             ax1.grid()
             ax1.set_xlabel('Aerosol density (particles m$^{-3}$)')
             ax1.set_ylabel('Altitude (km)')

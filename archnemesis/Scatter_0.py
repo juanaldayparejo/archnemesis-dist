@@ -1058,7 +1058,7 @@ class Scatter_0:
         """
         
         #Defining angles
-        Theta = np.linspace(0.,180.,361)
+        Theta = np.linspace(0.,180.,721)
         
         #Calculating phase function
         phase = self.calc_phase(Theta,self.WAVE)
@@ -1094,6 +1094,7 @@ class Scatter_0:
         ax1.plot(Theta,phase[iwave,:,idust],label='Original')
         ax1.plot(Theta,phase_reconstructed,label='Reconstructed')
         ax1.set_facecolor('lightgray')
+        ax1.set_yscale('log')
         
         ax1.grid()
         ax1.set_xlabel(r'Scattering angle ($^\circ$)')

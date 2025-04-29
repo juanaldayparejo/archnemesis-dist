@@ -1207,7 +1207,6 @@ def model51(atm, ipar, scale, scale_gas, scale_iso):
 
     return atm,xmap
 
-
 #################################################################################################################################
 
 def model110(atm, idust0, z_offset):
@@ -1542,7 +1541,73 @@ def model111(atm, idust0, so2_deep, so2_top, z_offset):
     return atm
 
 
+###############################################################################################
 
+
+def model202(telluric,varid1,varid2,scf):
+    
+    """
+        FUNCTION NAME : model202()
+        
+        DESCRIPTION :
+        
+            Function defining the model parameterisation 202 in NEMESIS.
+            In this model, the telluric atmospheric profile is multiplied by a constant 
+            scaling factor
+        
+        INPUTS :
+        
+            telluric :: Python class defining the telluric atmosphere
+
+            varid1,varid2 :: The first two values of the Variable ID. They follow the 
+                             same convention as in Model parameterisation 2
+
+            scf :: Scaling factor
+        
+        OPTIONAL INPUTS:
+
+            MakePlot :: If True, a summary plot is generated
+        
+        OUTPUTS :
+        
+            telluric :: Updated Telluric class
+        
+        CALLING SEQUENCE:
+        
+            telluric = model52(telluric,varid1,varid2,scf)
+        
+        MODIFICATION HISTORY : Juan Alday (29/03/2025)
+        
+    """
+    
+    x1 = np.zeros(telluric.Atmosphere.NP)
+    xref = np.zeros(telluric.Atmosphere.NP)
+    
+    if(varid1==0): #Temperature
+        
+        xref[:] = telluric.Atmosphere.T[:]
+        x1[:] = telluric.Atmosphere.T[:] * scf
+        telluric.Atmosphere.T[:] = x1[:]
+        
+    elif(varid1>0): #Gaseous abundance
+        
+        jvmr = -1
+        for j in range(telluric.Atmosphere.NVMR):
+            if((telluric.Atmosphere.ID[j]==varid1) & (telluric.Atmosphere.ISO[j]==varid2)):
+                jvmr = j
+        if jvmr==-1:
+            print('Required ID :: ',varid1,varid2)
+            print('Avaiable ID and ISO :: ',telluric.Atmosphere.ID,telluric.Atmosphere.ISO)
+            raise ValueError('error in model 202 :: The required gas is not found in Telluric atmosphere')
+        
+        xref[:] = telluric.Atmosphere.VMR[:,jvmr]
+        x1[:] = telluric.Atmosphere.VMR[:,jvmr] * scf
+        telluric.Atmosphere.VMR[:,jvmr] = x1[:]
+        
+    else:
+        raise ValueError('error in model 202 :: The retrieved parameter has to be either temperature or a gaseous abundance')
+        
+    return telluric
 
 
 ###############################################################################################

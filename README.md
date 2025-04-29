@@ -61,6 +61,13 @@ If archNEMESIS has been significant in your research, we suggest citing the foll
 
 ## Revision history
 
+- [1.0.1](https://doi.org/10.5281/zenodo.15123560) (2 April, 2025)
+   - Fixed minor bugs throughout the code.
+   - Implementation of Oren-Nayar surface reflectance model.
+   - Implementation of different surface reflectance models in multiple scattering calculations.
+   - Included new automatic tests.
+   - Included new model parameterisations.
+
 - [1.0.0](https://doi.org/10.5281/zenodo.14746548) (27 January, 2025)
     - First release for publication at Journal of Open Research Software.
 
