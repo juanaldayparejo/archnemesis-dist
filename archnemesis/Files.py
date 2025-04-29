@@ -125,7 +125,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     # there for gas giants that are different for the defaults
     # when constructing via Surface_0()
     Surface.read_hdf5(runname)
-    if np.mean(Surface.TSURF)<0.0:
+    if np.mean(Surface.TSURF)<=0.0:
         Surface.GASGIANT=True   #If T is negative then we omit the surface
 
 
