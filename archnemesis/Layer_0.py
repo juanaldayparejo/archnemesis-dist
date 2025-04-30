@@ -332,10 +332,6 @@ class Layer_0:
             Input profile temperatures (K) 
         @param ID: 1D array (NVMR)
             Gas identifiers.
-        @param AMFORM: int
-            Flag indicating how the molecular weight should be calculated
-            AMFORM = 0: MOLWT is explicitly defined
-            AMFORM > 0: MOLWT is calculated internally based on IDs and VMRs 
         @param VMR: 2D array (NP,NVMR)
             VMR[i,j] is Volume Mixing Ratio of gas j at vertical point i
             the column j corresponds to the gas with RADTRANS ID ID[j].

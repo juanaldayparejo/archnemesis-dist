@@ -7,6 +7,9 @@ from numba import jit
 from multiprocessing import Pool
 from joblib import Parallel, delayed
 import sys
+
+from archnemesis.enums import AtmosphericProfileFormatEnum
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
@@ -1276,14 +1279,6 @@ class ForwardModel_0:
                 ptan = np.exp(self.Variables.XN[self.Variables.JPRE]) * 101325.
                 self.AtmosphereX.adjust_hydrostatP(htan,ptan)
 
-                
-        #Adjust VMRs to add up to 1 if AMFORM=1 and re-calculate molecular weight in atmosphere
-#         if self.AtmosphereX.AMFORM==1:
-#             self.AtmosphereX.adjust_VMR()
-#             self.AtmosphereX.calc_molwt()
-#         elif self.AtmosphereX.AMFORM==2:
-#             self.AtmosphereX.calc_molwt()
-
         #Calculate atmospheric density
         rho = self.AtmosphereX.calc_rho() #kg/m3
 
@@ -1760,8 +1755,7 @@ class ForwardModel_0:
 
         #Now check if any gas in the retrieval saturates
 
-        #Adjust VMRs to add up to 1 if AMFORM=1
-        if self.AtmosphereX.AMFORM==1:
+        if self.AtmosphereX.AMFORM==AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE:
             #Find the gases whose vmr is retrieved so that we do not adjust them
             ISCALE = np.ones(self.AtmosphereX.NVMR,dtype='int32')
             for ivar in range(self.Variables.NVAR):

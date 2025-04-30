@@ -1,4 +1,5 @@
 from archnemesis import *
+from archnemesis.enums import WaveUnit
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -63,7 +64,7 @@ class Stellar_0:
         self.SOLEXIST = SOLEXIST
         self.DIST = DIST
         self.RADIUS = RADIUS
-        self.ISPACE = ISPACE
+        self.ISPACE = WaveUnit(ISPACE) if ISPACE is not None and not isinstance(ISPACE, WaveUnit) else ISPACE
         self.NWAVE = NWAVE
 
         # Input the following profiles using the edit_ methods.
@@ -79,15 +80,13 @@ class Stellar_0:
         Assess whether the different variables have the correct dimensions and types
         """
 
-        if self.SOLEXIST==True:
+        if self.SOLEXIST is True:
 
             #Checking some common parameters to all cases
-            assert np.issubdtype(type(self.ISPACE), np.integer) == True , \
-                'ISPACE must be int'
-            assert self.ISPACE >= 0 , \
-                'ISPACE must be >=0 and <=1'
-            assert self.ISPACE <= 1 , \
-                'ISPACE must be >=0 and <=1'
+            assert isinstance(self.ISPACE, (int, np.integer, WaveUnit)), \
+                'ISPACE must be int or WaveUnit'
+            assert self.ISPACE in WaveUnit, \
+                f'ISPACE must be one of {tuple(WaveUnit)}'
 
             #Checking some common parameters to all cases
             assert np.issubdtype(type(self.DIST), np.float64) == True , \
@@ -166,7 +165,7 @@ class Stellar_0:
                 s = fsol.readline().split()
         
             s = fsol.readline().split()
-            ispace = int(s[0])
+            ispace = WaveUnit(int(s[0]))
             s = fsol.readline().split()
             solrad = float(s[0])
             vsol = np.zeros(nvsol)
@@ -194,16 +193,16 @@ class Stellar_0:
         if ('/Stellar' in f)==True:
             del f['Stellar']   #Deleting the Stellar information that was previously written in the file
 
-        if self.SOLEXIST==True:
+        if self.SOLEXIST is True:
 
             grp = f.create_group("Stellar")
 
             #Writing the spectral units
-            dset = grp.create_dataset('ISPACE',data=self.ISPACE)
+            dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
             dset.attrs['title'] = "Spectral units"
-            if self.ISPACE==0:
+            if self.ISPACE == WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
-            elif self.ISPACE==1:
+            elif self.ISPACE == WaveUnit.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um'
 
             #Writing the Planet-Star distance
@@ -223,17 +222,17 @@ class Stellar_0:
             #Writing the spectral array
             dset = grp.create_dataset('WAVE',data=self.WAVE)
             dset.attrs['title'] = "Spectral array"
-            if self.ISPACE==0:
+            if self.ISPACE == WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
-            elif self.ISPACE==1:
+            elif self.ISPACE == WaveUnit.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um' 
 
             #Writing the solar spectrum
             dset = grp.create_dataset('SOLSPEC',data=self.SOLSPEC)
             dset.attrs['title'] = "Stellar power spectrum"
-            if self.ISPACE==0:
+            if self.ISPACE == WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'W (cm-1)-1'
-            elif self.ISPACE==1:
+            elif self.ISPACE == WaveUnit.Wavelength_um:
                 dset.attrs['units'] = 'W um-1'     
 
         f.close()
@@ -247,11 +246,11 @@ class Stellar_0:
 
         #Checking if Surface exists
         e = "/Stellar" in f
-        if e==False:
+        if e is False:
             self.SOLEXIST = False
         else:
             self.SOLEXIST = True
-            self.ISPACE = np.int32(f.get('Stellar/ISPACE'))
+            self.ISPACE = WaveUnit(np.int32(f.get('Stellar/ISPACE')))
             self.DIST = np.float64(f.get('Stellar/DIST'))
             self.RADIUS = np.float64(f.get('Stellar/RADIUS'))
             self.NWAVE = np.int32(f.get('Stellar/NWAVE'))
@@ -292,7 +291,7 @@ class Stellar_0:
             solname = s[0]
 
             s = f.readline().split()
-            ispace = int(s[0])
+            ispace = WaveUnit(int(s[0]))
             s = f.readline().split()
             solrad = float(s[0])
             vsol = np.zeros(nvsol)
@@ -324,7 +323,7 @@ class Stellar_0:
                 s = fsol.readline().split()
         
             s = fsol.readline().split()
-            ispace = int(s[0])
+            ispace = WaveUnit(int(s[0]))
             s = fsol.readline().split()
             solrad = float(s[0])
             vsol = np.zeros(nvsol)
@@ -342,7 +341,7 @@ class Stellar_0:
         self.edit_WAVE(vsol)
         self.edit_SOLSPEC(rad)
 
-        if MakePlot==True:
+        if MakePlot is True:
             fig,ax1=plt.subplots(1,1,figsize=(8,3))
             ax1.plot(vsol,rad)
             #ax1.set_yscale('log')
@@ -376,7 +375,7 @@ class Stellar_0:
 
         header = '-1'
         f.write(header+' \n')
-        f.write('\t %i \n' % (self.ISPACE))
+        f.write('\t %i \n' % (int(self.ISPACE)))
         f.write('\t %7.3e \n' % (self.RADIUS))
         for i in range(self.NWAVE):
             f.write('\t %7.6f \t %7.5e \n' % (self.WAVE[i],self.SOLSPEC[i]))
@@ -427,17 +426,17 @@ class Stellar_0:
             raise ValueError('error :: SOLSPEC Must be defined in Stellar class to write Stellar power to file')
 
 
-        if header==None:
-            if self.ISPACE==0:
+        if header is None:
+            if self.ISPACE == WaveUnit.Wavenumber_cm:
                 header = '# Stellar power in W (cm-1)-1'
-            elif self.ISPACE==1:
+            elif self.ISPACE == WaveUnit.Wavelength_um:
                 header = '# Stellar power in W um-1' 
         else:
             if header[0]!='#':
                 header = '#'+header
         
         f.write(header+' \n')
-        f.write('\t %i \n' % (self.ISPACE))
+        f.write('\t %i \n' % (int(self.ISPACE)))
         f.write('\t %7.3e \n' % (self.RADIUS))
         for i in range(self.NWAVE):
             f.write('\t %7.6f \t %7.5e \n' % (self.WAVE[i],self.SOLSPEC[i]))

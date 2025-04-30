@@ -10,6 +10,8 @@ Telluric Class.
 from archnemesis import *
 import numpy as np
 
+from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum
+
 class Telluric_0:
     """
     Class to define the telluric atmosphere and observing geometry from the Earth. 
@@ -323,10 +325,10 @@ class Telluric_0:
         ##############################################################################################
         
         Atmosphere = Atmosphere_0()
-        Atmosphere.IPLANET = 3
+        Atmosphere.IPLANET  : PlanetEnum = PlanetEnum.Earth
         Atmosphere.LATITUDE = latitude
         Atmosphere.LONGITUDE = longitude
-        Atmosphere.AMFORM = 0
+        Atmosphere.AMFORM : AtmosphericProfileFormatEnum = AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED
         Atmosphere.NVMR = 8
         Atmosphere.ID = np.array([1,2,3,4,5,6,7,22],dtype='int32')
         Atmosphere.ISO = np.zeros(Atmosphere.NVMR,dtype='int32')

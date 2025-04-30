@@ -1,14 +1,96 @@
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 import numpy as np
+
+from archnemesis.enums import ZenithAngleOrigin, PathType, PathCalc, PathObserverLocation
+
 """
 Object to calculate the atmospheric paths
 """
+
+
+'''
+class ZenithAngleOrigin(IntEnum):
+	"""
+	Defines values for 'IPZEN'
+	
+	Used in 'AtmCalc_0.py'
+	"""
+	BOTTOM = 0 # Zenith angle is defined at the bottom of the bottom layer
+	ALTITUDE_ZERO = 1 # Zenith angle is defined at 0km atltitude
+	TOP = 2 # Zenith angle is defined at the top of the top layer
+
+
+class PathType(IntEnum):
+	"""
+	Defines path type used when calculating radiative transfer.
+	
+	Used in 'AtmCalc_0.py'
+	"""
+    NORMAL = 0 # Normal path, through the atmosphere and hitting the surface
+	LIMB = 0 # Limb path, through the atmosphere but not hitting the surface
+	NADIR = 1 # Nadir path, through the atmosphere and hitting the surface
+
+
+class PathCalc(IntFlag):
+	"""
+	Defines path calculation type used when calculating radiative transfer.
+	
+	Used as elements of 'IMOD' in 'AtmCalc_0.py', 'Path_0.py', 'ForwardModel_0.py'
+	"""
+	WEIGHTING_FUNCTION = auto()
+	NET_FLUX = auto()
+	UPWARD_FLUX = auto()
+	OUTWARD_FLUX = auto()
+	DOWNWARD_FLUX = auto()
+	CURTIS_GODSON = auto()
+	THERMAL_EMISSION = auto()
+	HEMISPHERE = auto()
+	SCATTER = auto()
+	NEAR_LIMB = auto()
+	SINGLE_SCATTERING_PLANE_PARALLEL = auto()
+	SINGLE_SCATTERING_SPHERICAL = auto()
+	ABSORBTION = auto()
+	PLANK_FUNCTION_AT_BIN_CENTRE = auto()
+	BROADENING = auto()
+
+class PathObserverLocation(IntEnum):
+	"""
+	Defines path observer location used when calculating radiative transfer.
+	"""
+	SPACE = 0 # looking downwards from space
+	SURFACE = 1 # looking upwards from the surface
+'''
+
+
 class AtmCalc_0:
-    def __init__(self,Layer,LIMB=False,NADIR=False,BOTLAY=0,ANGLE=0.0,EMISS_ANG=0.0,SOL_ANG=0.0,AZI_ANG=0.0,IPZEN=0,
-                WF=False,NETFLUX=False,OUTFLUX=False,BOTFLUX=False,UPFLUX=False,CG=False,
-                THERM=False,HEMISPHERE=False,NEARLIMB=False,SINGLE=False,SPHSINGLE=False,SCATTER=False,
-                BROAD=False,ABSORB=False,BINBB=True):
+    def __init__(
+            self,
+            Layer,
+            LIMB=False,
+            NADIR=False,
+            BOTLAY=0,
+            ANGLE=0.0,
+            EMISS_ANG=0.0,
+            SOL_ANG=0.0,
+            AZI_ANG=0.0,
+            IPZEN=0,
+            WF=False,
+            NETFLUX=False,
+            OUTFLUX=False,
+            BOTFLUX=False,
+            UPFLUX=False,
+            CG=False,
+            THERM=False,
+            HEMISPHERE=False,
+            NEARLIMB=False,
+            SINGLE=False,
+            SPHSINGLE=False,
+            SCATTER=False,
+            BROAD=False,
+            ABSORB=False,
+            BINBB=True
+        ):
         """
         After splitting the atmosphere in different layers and storing them in the Layer class,
         the atmospheric paths are calculated.

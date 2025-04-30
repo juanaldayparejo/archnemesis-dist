@@ -1,4 +1,10 @@
 from archnemesis import *
+from archnemesis.enums import (
+    WaveUnit,
+    ScatteringCalculationMode,
+    RayleighScatteringMode,  
+    AerosolPhaseFunctionCalculationMode
+)
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -20,7 +26,14 @@ JIT-optimised Rayleigh Scattering routines
 
 class Scatter_0:
 
-    def __init__(self, ISPACE=0, ISCAT=1, IRAY=0, IMIE=0, NMU=5, NF=2, NPHI=101, NDUST=1, SOL_ANG=0.0, EMISS_ANG=0.0, AZI_ANG=0.0, NTHETA=None, THETA=None):
+    def __init__(self, 
+        ISPACE=WaveUnit.Wavenumber_cm,
+        ISCAT=ScatteringCalculationMode.MULTIPLE_SCATTERING,
+        IRAY=RayleighScatteringMode.NOT_INCLUDED,
+        IMIE=AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN,
+        NMU=5, NF=2, NPHI=101, NDUST=1,
+        SOL_ANG=0.0, EMISS_ANG=0.0, AZI_ANG=0.0,
+        NTHETA=None, THETA=None):
 
         """
         Inputs
@@ -134,14 +147,14 @@ class Scatter_0:
         self.NMU = NMU
         self.NF = NF
         self.NPHI = NPHI
-        self.ISPACE = ISPACE
-        self.ISCAT = ISCAT
+        self.ISPACE = WaveUnit(ISPACE) if not isinstance(ISPACE, WaveUnit) else ISPACE
+        self.ISCAT = ScatteringCalculationMode(ISCAT)
+        self.IRAY = RayleighScatteringMode(IRAY)
+        self.IMIE = AerosolPhaseFunctionCalculationMode(IMIE)
         self.SOL_ANG = SOL_ANG
         self.EMISS_ANG = EMISS_ANG
         self.AZI_ANG = AZI_ANG
         self.NDUST = NDUST
-        self.IRAY = IRAY
-        self.IMIE = IMIE
         
         # Input the following profiles using the edit_ methods.
         self.NWAVE = None
@@ -194,33 +207,15 @@ class Scatter_0:
         """
 
         #Checking some common parameters to all cases
-        assert np.issubdtype(type(self.ISPACE), np.integer) == True , \
-            'ISPACE must be int'
-        assert self.ISPACE >= 0 , \
-            'ISPACE must be >=0 and <=1'
-        assert self.ISPACE <= 1 , \
-            'ISPACE must be >=0 and <=1'
-
-        assert np.issubdtype(type(self.ISCAT), np.integer) == True , \
-            'ISCAT must be int'
-        assert self.ISCAT >= 0 , \
-            'ISCAT must be >=0.'
-        assert self.ISCAT <= 3 , \
-            'ISCAT must be >=0 and <=3. In the future more options will be available'
-
-        assert np.issubdtype(type(self.IRAY), np.integer) == True , \
-            'IRAY must be int'
-        assert self.IRAY >= 0 , \
-            'IRAY must be >=0 and <=2'
-        assert self.IRAY <= 4 , \
-            'IRAY must be >=0 and <=4. In the future more options will be available'
-        
-        assert np.issubdtype(type(self.IMIE), np.integer) == True , \
-            'IMIE must be int'
-        assert self.IMIE >= 0 , \
-            'IMIE must be >=0 and <=2'
-        assert self.IMIE <= 2 , \
-            'IMIE must be >=0 and <=2'
+        assert isinstance(self.ISPACE, WaveUnit), 'ISPACE must be WaveUnit enum'
+        assert self.ISPACE in (WaveUnit.Wavenumber_cm, WaveUnit.Wavelength_um), \
+            'ISPACE must be Wavenumber_cm or Wavelength_um'
+        assert isinstance(self.ISCAT, ScatteringCalculationMode), \
+            'ISCAT must be ScatteringCalculationMode enum'
+        assert isinstance(self.IRAY, RayleighScatteringMode), \
+            'IRAY must be RayleighScatteringMode enum'
+        assert isinstance(self.IMIE, AerosolPhaseFunctionCalculationMode), \
+            'IMIE must be AerosolPhaseFunctionCalculationMode enum'
 
         assert np.issubdtype(type(self.NMU), np.integer) == True , \
             'NMU must be int'
@@ -257,7 +252,7 @@ class Scatter_0:
             
             if self.ISCAT>0:  #Scattering is turned on
 
-                if self.IMIE==0:  #Henyey-Greenstein phase function
+                if self.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:  #Henyey-Greenstein phase function
 
                     assert self.G1.shape == (self.NWAVE,self.NDUST) , \
                         'G1 must have size (NWAVE,NDUST)'
@@ -268,7 +263,7 @@ class Scatter_0:
                     assert self.F.shape == (self.NWAVE,self.NDUST) , \
                         'F must have size (NWAVE,NDUST)'
                     
-                elif self.IMIE==1:  #Explicit phase function 
+                elif self.IMIE == AerosolPhaseFunctionCalculationMode.MIE_THEORY:  #Explicit phase function 
 
                     assert np.issubdtype(type(self.NTHETA), np.integer) == True , \
                         'NTHETA must be int'
@@ -276,7 +271,7 @@ class Scatter_0:
                     assert self.PHASE.shape == (self.NWAVE,self.NTHETA,self.NDUST) , \
                         'PHASE must have size (NWAVE,NTHETA,NDUST)'
                     
-                elif self.IMIE==2:  #Phase function from Legrende polynomials 
+                elif self.IMIE == AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:  #Phase function from Legrende polynomials 
 
                     assert np.issubdtype(type(self.NLPOL), np.integer) == True , \
                         'NLPOL must be int'
@@ -304,53 +299,27 @@ class Scatter_0:
         grp = f.create_group("Scatter")
 
         #Writing the spectral units
-        dset = grp.create_dataset('ISPACE',data=self.ISPACE)
+        dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
         dset.attrs['title'] = "Spectral units"
-        if self.ISPACE==0:
+        if self.ISPACE==WaveUnit.Wavenumber_cm:
             dset.attrs['units'] = 'Wavenumber / cm-1'
-        elif self.ISPACE==1:
+        elif self.ISPACE==WaveUnit.Wavelength_um:
             dset.attrs['units'] = 'Wavelength / um'
 
         #Writing the scattering calculation type
-        dset = grp.create_dataset('ISCAT',data=self.ISCAT)
+        dset = grp.create_dataset('ISCAT', data=int(self.ISCAT))
         dset.attrs['title'] = "Scattering calculation type"
-        if self.ISCAT==0:
-            dset.attrs['type'] = 'No scattering'
-        elif self.ISCAT==1:
-            dset.attrs['type'] = 'Multiple scattering'
-        elif self.ISCAT==2:
-            dset.attrs['type'] = 'Internal scattered radiation field calculation (required for limb-viewing observations)'
-        elif self.ISCAT==3:
-            dset.attrs['type'] = 'Single scattering in plane-parallel atmosphere'
-        elif self.ISCAT==4:
-            dset.attrs['type'] = 'Single scattering in spherical atmosphere'
-        elif self.ISCAT==5:
-            dset.attrs['type'] = 'Internal flux calculation'
-
+        dset.attrs['type'] = self.ISCAT.name.replace('_', ' ').title()
 
         #Writing the Rayleigh scattering type
-        dset = grp.create_dataset('IRAY',data=self.IRAY)
+        dset = grp.create_dataset('IRAY',data=int(self.IRAY))
         dset.attrs['title'] = "Rayleigh scattering type"
-        if self.IRAY==0:
-            dset.attrs['type'] = 'Rayleigh scattering optical depth not included'
-        elif self.IRAY==1:
-            dset.attrs['type'] = 'Rayleigh optical depth suitable for gas giant atmosphere'
-        elif self.IRAY==2:
-            dset.attrs['type'] = 'Rayleigh optical depth suitable for a CO2-dominated atmosphere'
-        elif self.IRAY==3:
-            dset.attrs['type'] = 'Rayleigh optical depth suitable for a N2-O2 atmosphere'
-        elif self.IRAY==4:
-            dset.attrs['type'] = 'New Raighleigh optical depth for gas giant atmospheres'
+        dset.attrs['type'] = self.IRAY.name.replace('_', ' ').title()
 
         #Writing the aerosol scattering type
-        dset = grp.create_dataset('IMIE',data=self.IMIE)
+        dset = grp.create_dataset('IMIE',data=int(self.IMIE))
         dset.attrs['title'] = "Aerosol scattering phase function type"
-        if self.IMIE==0:
-            dset.attrs['type'] = 'Phase function defined as double Henyey-Greenstein function'
-        elif self.IMIE==1:
-            dset.attrs['type'] = 'Explicit phase function'
-        elif self.IMIE==2:
-            dset.attrs['type'] = 'Phase function from Legendre polynomials'
+        dset.attrs['type'] = self.IMIE.name.replace('_', ' ').title()
         
         #Writing some of the scattering calculation parameters
         dset = grp.create_dataset('NMU',data=self.NMU)
@@ -372,9 +341,9 @@ class Scatter_0:
 
             dset = grp.create_dataset('WAVE',data=self.WAVE)
             dset.attrs['title'] = "Spectral array"
-            if self.ISPACE==0:
+            if self.ISPACE==WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
-            elif self.ISPACE==1:
+            elif self.ISPACE==WaveUnit.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um'
 
             dset = grp.create_dataset('KEXT',data=self.KEXT)
@@ -388,7 +357,7 @@ class Scatter_0:
 
             if self.ISCAT>0:
 
-                if self.IMIE==0:  #H-G phase function
+                if self.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:  #H-G phase function
 
                     dset = grp.create_dataset('G1',data=self.G1)
                     dset.attrs['title'] = "Assymmetry parameter of first Henyey-Greenstein function"
@@ -402,7 +371,7 @@ class Scatter_0:
                     dset.attrs['title'] = "Relative contribution from first Henyey-Greenstein function (from 0 to 1)"
                     dset.attrs['units'] = ""
 
-                elif self.IMIE==1:  #Explicit phase function
+                elif self.IMIE == AerosolPhaseFunctionCalculationMode.MIE_THEORY:  #Explicit phase function
 
                     dset = grp.create_dataset('NTHETA',data=self.NTHETA)
                     dset.attrs['title'] = "Number of angles to define phase function"
@@ -415,7 +384,7 @@ class Scatter_0:
                     dset.attrs['title'] = "Phase function of each aerosol population"
                     dset.attrs['units'] = ""
 
-                elif self.IMIE==2:  #Phase function from Legendre polynomials
+                elif self.IMIE == AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:  #Phase function from Legendre polynomials
 
                     dset = grp.create_dataset('NLPOL',data=self.NLPOL)
                     dset.attrs['title'] = "Number of Legendre coefficients to define phase function"
@@ -444,10 +413,10 @@ class Scatter_0:
         else:
 
             self.NDUST = np.int32(f.get('Scatter/NDUST'))
-            self.ISPACE = np.int32(f.get('Scatter/ISPACE'))
-            self.ISCAT = np.int32(f.get('Scatter/ISCAT'))
-            self.IRAY = np.int32(f.get('Scatter/IRAY'))
-            self.IMIE = np.int32(f.get('Scatter/IMIE'))
+            self.ISPACE = WaveUnit(np.int32(f.get('Scatter/ISPACE')))
+            self.ISCAT = ScatteringCalculationMode(np.int32(f.get('Scatter/ISCAT')))
+            self.IRAY = RayleighScatteringMode(np.int32(f.get('Scatter/IRAY')))
+            self.IMIE = AerosolPhaseFunctionCalculationMode(np.int32(f.get('Scatter/IMIE')))
             self.NMU = np.int32(f.get('Scatter/NMU'))
             self.NF = np.int32(f.get('Scatter/NF'))
             self.NPHI = np.int32(f.get('Scatter/NPHI'))
@@ -463,15 +432,15 @@ class Scatter_0:
 
                 if self.ISCAT>0:
 
-                    if self.IMIE==0:  #H-G phase function
+                    if self.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:  #H-G phase function
                         self.G1 = np.array(f.get('Scatter/G1'))
                         self.G2 = np.array(f.get('Scatter/G2'))
                         self.F = np.array(f.get('Scatter/F'))
-                    elif self.IMIE==1:  #Explicit phase function
+                    elif self.IMIE == AerosolPhaseFunctionCalculationMode.MIE_THEORY:  #Explicit phase function
                         self.NTHETA = np.int32(f.get('Scatter/NTHETA'))
                         self.THETA = np.array(f.get('Scatter/THETA'))
                         self.PHASE = np.array(f.get('Scatter/PHASE'))
-                    elif self.IMIE==2:  #Phase function from Legendre polynomials
+                    elif self.IMIE == AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:  #Phase function from Legendre polynomials
                         self.NLPOL = np.int32(f.get('Scatter/NLPOL'))
                         self.WLPOL = np.array(f.get('Scatter/WLPOL'))
 
@@ -495,13 +464,13 @@ class Scatter_0:
         self.KABS = np.zeros((self.NWAVE,self.NDUST))
         self.SGLALB = np.zeros((self.NWAVE,self.NDUST))
         
-        if self.IMIE==0:
+        if self.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:
             self.G1 = np.zeros((self.NWAVE,self.NDUST))
             self.G2 = np.zeros((self.NWAVE,self.NDUST))
             self.F = np.zeros((self.NWAVE,self.NDUST))
-        elif self.IMIE==1:
+        elif self.IMIE == AerosolPhaseFunctionCalculationMode.MIE_THEORY:
             self.PHASE = np.zeros((self.NWAVE,self.NTHETA,self.NDUST))
-        elif self.IMIE==2:
+        elif self.IMIE == AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:
             self.NLPOL = NLPOL
             self.WLPOL = np.zeros((self.NWAVE,self.NLPOL,self.NDUST))
             
@@ -766,17 +735,17 @@ class Scatter_0:
 
         phase2 = np.zeros((nwave,ntheta,self.NDUST))
         
-        if self.IMIE==0:
+        if self.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:
             
             #Calculating the phase function at the wavelengths defined in the Scatter class
             phase1 = self.calc_hgphase(Thetax)
 
-        elif self.IMIE==1:
+        elif self.IMIE == AerosolPhaseFunctionCalculationMode.MIE_THEORY:
 
             #Interpolate the phase function to the Scattering angle at the wavelengths defined in the Scatter class
             phase1 = self.interp_phase(Thetax)
 
-        elif self.IMIE==2:
+        elif self.IMIE == AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:
 
             #Calculating the phase function at the wavelengths defined in the Scatter class
             #using the Legendre polynomials
@@ -851,9 +820,9 @@ class Scatter_0:
             f.close()
             #Getting the spectral unit
             if s[0]=='wavenumber':
-                self.ISPACE = 0
-            elif s[1]=='wavelength':
-                self.ISPACE = 1
+                self.ISPACE = WaveUnit.Wavenumber_cm
+            elif s[0]=='wavelength':
+                self.ISPACE = WaveUnit.Wavelength_um
 
             #Calculating the wave array
             vmin = float(s[1])
@@ -929,9 +898,9 @@ class Scatter_0:
         f = open('PHASE'+str(IDUST+1)+'.DAT','w')
         
         #First buffer
-        if self.ISPACE==0:
+        if self.ISPACE==WaveUnit.Wavenumber_cm:
             wavetype='wavenumber'
-        elif self.ISPACE==1:
+        elif self.ISPACE==WaveUnit.Wavelength_um:
             wavetype='wavelength'
 
         str1 = "{:<512}".format(' %s  %8.2f  %8.2f  %8.4f  %4i  %4i' % (wavetype,self.WAVE.min(),self.WAVE.max(),self.WAVE[1]-self.WAVE[0],self.NWAVE,self.NTHETA))
@@ -1251,9 +1220,9 @@ class Scatter_0:
         from numpy.polynomial import legendre as L
         
         #Interpolating the refractive indices to the calculation wavelengths
-        if self.ISPACE==0:
+        if self.ISPACE==WaveUnit.Wavenumber_cm:
             wavel = 1./self.WAVE * 1.0e4
-        elif self.ISPACE==1:
+        elif self.ISPACE==WaveUnit.Wavelength_um:
             wavel = self.WAVE
             
         iord = np.argsort(wavel)
