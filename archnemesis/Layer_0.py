@@ -3,13 +3,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
+from archnemesis.enums import (
+    LayerType,
+    LayerIntegrationScheme,
+    InterpolationMethod,
+)
 
 AVOGAD = 6.02214076e23
 """
 Object to store layering scheme settings and averaged properties of each layer.
 """
 class Layer_0:
-    def __init__(self, RADIUS=None, LAYHT=0, LAYTYP=1, LAYINT=1, NLAY=20, NINT=101,
+    def __init__(self, RADIUS=None, LAYHT=0, LAYTYP=LayerType.EQUAL_LOG_PRESSURE, LAYINT=LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE, NLAY=20, NINT=101,
                 LAYANG=0.0, H_base=None, P_base=None):
         """
         After creating a Layer object, call the method
@@ -24,25 +29,25 @@ class Layer_0:
             terrestrial planets, or at 1 bar pressure level for gas giants.
         @param LAYHT: real
             Height of the base of the lowest layer. Default 0.0.
-        @param LAYTYP: int
-            Integer specifying how to split up the layers. Default 1.
-            0 = by equal changes in pressure
-            1 = by equal changes in log pressure
-            2 = by equal changes in height
-            3 = by equal changes in path length at LAYANG
-            4 = layer base pressure levels specified by P_base
-            5 = layer base height levels specified by H_base
-            Note 4 and 5 force NLAY = len(P_base) or len(H_base).
-        @param LAYINT: int
+        @param LAYTYP: LayerType (enum)
+            Integer specifying how to split up the layers. Default LayerType.EQUAL_LOG_PRESSURE.
+            LayerType.EQUAL_PRESSURE = by equal changes in pressure
+            LayerType.EQUAL_LOG_PRESSURE = by equal changes in log pressure
+            LayerType.EQUAL_HEIGHT = by equal changes in height
+            LayerType.EQUAL_PATH_LENGTH = by equal changes in path length at LAYANG
+            LayerType.BASE_PRESSURE = layer base pressure levels specified by P_base
+            LayerType.BASE_HEIGHT = layer base height levels specified by H_base
+            Note BASE_PRESSURE and BASE_HEIGHT force NLAY = len(P_base) or len(H_base).
+        @param LAYINT: LayerIntegrationScheme (enum)
             Layer integration scheme
-            0 = use properties at mid path
-            1 = use absorber amount weighted average values
+            LayerIntegrationScheme.MID_PATH = use properties at mid path
+            LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE = use absorber amount weighted average values
         @param LAYANG: real
             Angle from zenith at which to split the layers (Default is 0.0)
         @param NLAY: int
             Number of layers to split the atmosphere into. Default 20.
         @param NINT: int
-            Number of integration points to be used if LAYINT=1.
+            Number of integration points to be used if LAYINT=LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE.
         @param H_base: 1D array
             Heights of the layer bases defined by user. Default None.
         @param P_base: 1D array
@@ -167,28 +172,28 @@ class Layer_0:
             'NLAY must be >0'
         
         #Checking some common parameters to all cases
-        assert np.issubdtype(type(self.LAYTYP), np.integer) == True , \
-            'LAYTYP must be int'
-        assert self.LAYTYP >= 0 , \
-            'LAYTYP must be >=0'
-        assert self.LAYTYP <= 5 , \
-            'LAYTYP must be <=5'
+        assert isinstance(self.LAYTYP, (int, LayerType)), \
+            'LAYTYP must be int or LayerType'
+        assert self.LAYTYP >= LayerType.EQUAL_PRESSURE , \
+            'LAYTYP must be >= LayerType.EQUAL_PRESSURE'
+        assert self.LAYTYP <= LayerType.BASE_HEIGHT , \
+            'LAYTYP must be <= LayerType.BASE_HEIGHT'
         
         #Checking some common parameters to all cases
-        assert np.issubdtype(type(self.LAYINT), np.integer) == True , \
-            'LAYINT must be int'
-        assert self.LAYINT >= 0 , \
-            'LAYINT must be >=0 and <=1'
-        assert self.LAYINT <= 1 , \
-            'LAYINT must be <=1 and <=1'
+        assert isinstance(self.LAYINT, (int, LayerIntegrationScheme)), \
+            'LAYINT must be int or LayerIntegrationScheme'
+        assert self.LAYINT >= LayerIntegrationScheme.MID_PATH , \
+            'LAYINT must be >= LayerIntegrationScheme.MID_PATH'
+        assert self.LAYINT <= LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE , \
+            'LAYINT must be <= LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE'
         
-        if self.LAYTYP==4:
+        if self.LAYTYP==LayerType.BASE_PRESSURE:
             assert len(self.P_base) == self.NLAY , \
-                'P_base must have size (NLAY) if LAYTYP=4'
+                'P_base must have size (NLAY) if LAYTYP=LayerType.BASE_PRESSURE'
         
-        if self.LAYTYP==5:
+        if self.LAYTYP==LayerType.BASE_HEIGHT:
             assert len(self.H_base) == self.NLAY , \
-                'H_base must have size (NLAY) if LAYTYP=5'
+                'H_base must have size (NLAY) if LAYTYP=LayerType.BASE_HEIGHT'
 
 
     ####################################################################################################
@@ -200,22 +205,22 @@ class Layer_0:
         
         print('Number of layers :: ',self.NLAY)
 
-        if self.LAYTYP==0:
+        if self.LAYTYP==LayerType.EQUAL_PRESSURE:
             print('Layers calculated by equal changes in pressure')
-        elif self.LAYTYP==1:
+        elif self.LAYTYP==LayerType.EQUAL_LOG_PRESSURE:
             print('Layers calculated by equal changes in log pressure')
-        elif self.LAYTYP==2:
+        elif self.LAYTYP==LayerType.EQUAL_HEIGHT:
             print('Layers calculated by equal changes in altitude')
-        elif self.LAYTYP==3:
+        elif self.LAYTYP==LayerType.EQUAL_PATH_LENGTH:
             print('Layers calculated by equal changes in line-of-sight path intervals')
-        elif self.LAYTYP==4:
+        elif self.LAYTYP==LayerType.BASE_PRESSURE:
             print('Layers calculated by specified base pressures')
-        elif self.LAYTYP==5:
+        elif self.LAYTYP==LayerType.BASE_HEIGHT:
             print('Layers calculated by specified base altitudes')
 
-        if self.LAYINT==0:
+        if self.LAYINT==LayerIntegrationScheme.MID_PATH:
             print('Layer properties calculated at the middle of the layer')
-        elif self.LAYINT==1:
+        elif self.LAYINT==LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE:
             print('Layer properties calculated through mass weighted averages')
             
         if self.BASEH is not None:
@@ -244,27 +249,27 @@ class Layer_0:
         grp = f.create_group("Layer")
 
         #Writing the layering type
-        dset = grp.create_dataset('LAYTYP',data=self.LAYTYP)
+        dset = grp.create_dataset('LAYTYP',data=int(self.LAYTYP))
         dset.attrs['title'] = "Layer splitting calculation type"
-        if self.LAYTYP==0:
+        if self.LAYTYP==LayerType.EQUAL_PRESSURE:
             dset.attrs['type'] = 'Split layers by equal changes in pressure'
-        elif self.LAYTYP==1:
+        elif self.LAYTYP==LayerType.EQUAL_LOG_PRESSURE:
             dset.attrs['type'] = 'Split layers by equal changes in log-pressure'
-        elif self.LAYTYP==2:
+        elif self.LAYTYP==LayerType.EQUAL_HEIGHT:
             dset.attrs['type'] = 'Split layers by equal changes in height'
-        elif self.LAYTYP==3: 
+        elif self.LAYTYP==LayerType.EQUAL_PATH_LENGTH: 
             dset.attrs['type'] = 'Split layers by equal changes in path length (at LAYANG)'
-        elif self.LAYTYP==4:
+        elif self.LAYTYP==LayerType.BASE_PRESSURE:
             dset.attrs['type'] = 'Split layers by defining base pressure of each layer'
-        elif self.LAYTYP==5:
+        elif self.LAYTYP==LayerType.BASE_HEIGHT:
             dset.attrs['type'] = 'Split layers by defining base altitude of each layer'
 
         #Writing the layering integration type
-        dset = grp.create_dataset('LAYINT',data=self.LAYINT)
+        dset = grp.create_dataset('LAYINT',data=int(self.LAYINT))
         dset.attrs['title'] = "Layer integration calculation type"
-        if self.LAYINT==0:
+        if self.LAYINT==LayerIntegrationScheme.MID_PATH:
             dset.attrs['type'] = 'Layer properties calculated at mid-point between layer boundaries'
-        if self.LAYINT==1:
+        if self.LAYINT==LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE:
             dset.attrs['type'] = 'Layer properties calculated by weighting in terms of atmospheric mass (i.e. Curtis-Godson path)'
     
         #Writing the number of layers
@@ -277,12 +282,12 @@ class Layer_0:
         dset.attrs['units'] = "m"
 
         #Writing the base properties of the layers in special cases
-        if self.LAYTYP==4:
+        if self.LAYTYP==LayerType.BASE_PRESSURE:
             dset = grp.create_dataset('P_base',data=self.P_base)
             dset.attrs['title'] = "Pressure at the base of each layer"
             dset.attrs['units'] = "Pressure / Pa"
         
-        if self.LAYTYP==5:
+        if self.LAYTYP==LayerType.BASE_HEIGHT:
             dset = grp.create_dataset('H_base',data=self.H_base)
             dset.attrs['title'] = "Altitude at the base of each layer"
             dset.attrs['units'] = "Altitude / m"
@@ -305,12 +310,12 @@ class Layer_0:
         else:
 
             self.NLAY = np.int32(f.get('Layer/NLAY'))
-            self.LAYTYP = np.int32(f.get('Layer/LAYTYP'))
-            self.LAYINT = np.int32(f.get('Layer/LAYINT'))
+            self.LAYTYP = LayerType(np.int32(f.get('Layer/LAYTYP')))
+            self.LAYINT = LayerIntegrationScheme(np.int32(f.get('Layer/LAYINT')))
             self.LAYHT = np.float64(f.get('Layer/LAYHT'))
-            if self.LAYTYP==4:
+            if self.LAYTYP==LayerType.BASE_PRESSURE:
                 self.P_base = np.array(f.get('Layer/P_base'))
-            if self.LAYTYP==5:
+            if self.LAYTYP==LayerType.BASE_HEIGHT:
                 self.H_base = np.array(f.get('Layer/H_base'))
 
         f.close()
@@ -558,7 +563,7 @@ class Layer_0:
 # USEFUL FUNCTIONS FOR THE LAYERING CLASS
 #########################################################################################
 
-def interp(X_data, Y_data, X, ITYPE=1):
+def interp(X_data, Y_data, X, ITYPE=InterpolationMethod.LINEAR):
     """
     Routine for 1D interpolation using the SciPy library.
 
@@ -570,24 +575,23 @@ def interp(X_data, Y_data, X, ITYPE=1):
 
     @param X: real
 
-    @param ITYPE: int
-        1=linear interpolation
-        2=quadratic spline interpolation
-        3=cubic spline interpolation
+    @param ITYPE: InterpolationMethod (enum)
+        InterpolationMethod.LINEAR=linear interpolation
+        InterpolationMethod.QUADRATIC_SPLINE=quadratic spline interpolation
+        InterpolationMethod.CUBIC_SPLINE=cubic spline interpolation
     """
     
     from scipy.interpolate import interp1d
     
-    if ITYPE == 1:
+    if ITYPE == InterpolationMethod.LINEAR:
         f = interp1d(X_data, Y_data, kind='linear', fill_value='extrapolate')
         Y = f(X)
 
-    elif ITYPE == 2:
+    elif ITYPE == InterpolationMethod.QUADRATIC_SPLINE:
         f = interp1d(X_data, Y_data, kind='quadratic', fill_value='extrapolate')
         Y = f(X)
 
-    elif ITYPE == 3:
-        interp = interp1d
+    elif ITYPE == InterpolationMethod.CUBIC_SPLINE:
         f = interp1d(X_data, Y_data, kind='cubic', fill_value='extrapolate')
         Y = f(X)
 
@@ -688,7 +692,7 @@ def interpg(X_data, Y_data, X):
 #########################################################################################
 
 def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
-                  LAYANG=0.0, LAYINT=0, LAYHT=0.0, NINT=101, DUST_UNITS=None, XMOLWT=None):
+                  LAYANG=0.0, LAYINT=LayerIntegrationScheme.MID_PATH, LAYHT=0.0, NINT=101, DUST_UNITS=None, XMOLWT=None):
     """
     Calculates average layer properties.
     Takes an atmosphere profile and a layering shceme specified by
@@ -721,14 +725,14 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
         Pressures of the layer bases.
     @param LAYANG: real
         Zenith angle in degrees defined at LAYHT.
-    @param LAYINT: int
+    @param LAYINT: LayerIntegrationScheme (enum)
         Layer integration scheme
-        0 = use properties at mid path
-        1 = use absorber amount weighted average values
+        LayerIntegrationScheme.MID_PATH = use properties at mid path
+        LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE = use absorber amount weighted average values
     @param LAYHT: real
         Height of the base of the lowest layer. Default 0.0.
     @param NINT: int
-        Number of integration points to be used if LAYINT=1.
+        Number of integration points to be used if LAYINT=LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE.
     @param XMOLWT: 1D array
         Molecular weight vertical profile in kg mol-1 (only required if DUST_UNITS is activated)
 
@@ -830,7 +834,7 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
         PARAH2 = np.zeros(NPRO)
 
     # Calculate average properties depending on intergration type
-    if LAYINT == 0:
+    if LAYINT == LayerIntegrationScheme.MID_PATH:
         # use layer properties at half path length in each layer
         S = np.zeros(NLAY)
         S[:-1] = (BASES[1:] + BASES[:-1])/2
@@ -878,7 +882,7 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
             else:
                 CONT = DD * DELS
 
-    elif LAYINT == 1:
+    elif LAYINT == LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE:
         # Curtis-Godson equivalent path for a gas with constant mixing ratio
         for I in range(NLAY):
             S0 = BASES[I]
@@ -956,7 +960,7 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
 #########################################################################################
 
 def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
-                  LAYANG=0.0, LAYINT=0, LAYHT=0.0, NINT=101, DUST_UNITS=None, XMOLWT=None):
+                  LAYANG=0.0, LAYINT=LayerIntegrationScheme.MID_PATH, LAYHT=0.0, NINT=101, DUST_UNITS=None, XMOLWT=None):
     """
     Calculates average layer properties.
     Takes an atmosphere profile and a layering shceme specified by
@@ -989,14 +993,14 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
         Pressures of the layer bases.
     @param LAYANG: real
         Zenith angle in degrees defined at LAYHT.
-    @param LAYINT: int
+    @param LAYINT: LayerIntegrationScheme (enum)
         Layer integration scheme
-        0 = use properties at mid path
-        1 = use absorber amount weighted average values
+        LayerIntegrationScheme.MID_PATH = use properties at mid path
+        LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE = use absorber amount weighted average values
     @param LAYHT: real
         Height of the base of the lowest layer. Default 0.0.
     @param NINT: int
-        Number of integration points to be used if LAYINT=1.
+        Number of integration points to be used if LAYINT=LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE.
     @param XMOLWT: 1D array
         Molecular weight vertical profile in kg mol-1 (only required if DUST_UNITS is activated)
 
@@ -1121,7 +1125,7 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
     w[2:-1:2] = 2.
 
     # Calculate average properties depending on intergration type
-    if LAYINT == 0:
+    if LAYINT == LayerIntegrationScheme.MID_PATH:
         # use layer properties at half path length in each layer
         S = np.zeros(NLAY)
         S[:-1] = (BASES[1:] + BASES[:-1])/2
@@ -1202,7 +1206,7 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
                 DCO[ilay,JJ[ilay]] = DCO[ilay,JJ[ilay]] + (1.0-F[ilay]) * TOTAM * MOLWT /AVOGAD
                 DCO[ilay,JJ[ilay]+1] = DCO[ilay,JJ[ilay]+1] + (F[ilay]) * TOTAM * MOLWT /AVOGAD
             
-    elif LAYINT == 1:
+    elif LAYINT == LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE:
         
         # Curtis-Godson equivalent path for a gas with constant mixing ratio
         for I in range(NLAY):
@@ -1318,7 +1322,7 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
 #########################################################################################
 
 def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
-        LAYTYP=1, H_base=None, P_base=None):
+        LAYTYP=LayerType.EQUAL_LOG_PRESSURE, H_base=None, P_base=None):
     """
     Splits an atmosphere into NLAY layers.
     Takes a set of altitudes H with corresponding pressures P and returns
@@ -1337,20 +1341,20 @@ def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
         (At pressure P[i] the altitude is H[i].)
     @param LAYANG: real
         Zenith angle in degrees defined at LAYHT.
-        Default 0.0 (nadir geometry). Only needed for layer type 3.
+        Default 0.0 (nadir geometry). Only needed for layer type LayerType.EQUAL_PATH_LENGTH.
     @param LAYHT: real
         Height of the base of the lowest layer. Default 0.0.
     @param NLAY: int
         Number of layers to split the atmosphere into. Default 20.
-    @param LAYTYP: int
-        Integer specifying how to split up the layers. Default 1.
-        0 = by equal changes in pressure
-        1 = by equal changes in log pressure
-        2 = by equal changes in height
-        3 = by equal changes in path length at LAYANG
-        4 = layer base pressure levels specified by P_base
-        5 = layer base height levels specified by H_base
-        Note 4 and 5 force NLAY = len(P_base) or len(H_base).
+    @param LAYTYP: LayerType (enum)
+        Integer specifying how to split up the layers. Default LayerType.EQUAL_LOG_PRESSURE.
+        LayerType.EQUAL_PRESSURE = by equal changes in pressure
+        LayerType.EQUAL_LOG_PRESSURE = by equal changes in log pressure
+        LayerType.EQUAL_HEIGHT = by equal changes in height
+        LayerType.EQUAL_PATH_LENGTH = by equal changes in path length at LAYANG
+        LayerType.BASE_PRESSURE = layer base pressure levels specified by P_base
+        LayerType.BASE_HEIGHT = layer base height levels specified by H_base
+        Note BASE_PRESSURE and BASE_HEIGHT force NLAY = len(P_base) or len(H_base).
     @param H_base: 1D array
         Heights of the layer bases defined by user. Default None.
     @param P_base: 1D array
@@ -1368,26 +1372,21 @@ def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
         print('Warning from layer_split() :: LAYHT < H(0). Resetting LAYHT')
         LAYHT = H[0]
 
-    #assert (LAYHT>=H[0]) and (LAYHT<H[-1]) , \
-    #    'Lowest layer base height LAYHT not contained in atmospheric profile'
-    #assert not (H_base and P_base), \
-    #    'Cannot input both layer base heights and base pressures'
-
-    if LAYTYP == 0: # split by equal pressure intervals
+    if LAYTYP == LayerType.EQUAL_PRESSURE: # split by equal pressure intervals
         PBOT = interp(H,P,LAYHT)  # pressure at base of lowest layer
         BASEP = np.linspace(PBOT,P[-1],NLAY+1)[:-1]
         BASEH = interp(P[::-1],H[::-1],BASEP)
 
-    elif LAYTYP == 1: # split by equal log pressure intervals
+    elif LAYTYP == LayerType.EQUAL_LOG_PRESSURE: # split by equal log pressure intervals
         PBOT = interp(H,P,LAYHT)  # pressure at base of lowest layer
         BASEP = np.logspace(np.log10(PBOT),np.log10(P[-1]),NLAY+1)[:-1]
         BASEH = interp(P[::-1],H[::-1],BASEP)
 
-    elif LAYTYP == 2: # split by equal height intervals
+    elif LAYTYP == LayerType.EQUAL_HEIGHT: # split by equal height intervals
         BASEH = np.linspace(LAYHT, H[-1], NLAY+1)[:-1]
         BASEP = interp(H,P,BASEH)
 
-    elif LAYTYP == 3: # split by equal line-of-sight path intervals
+    elif LAYTYP == LayerType.EQUAL_PATH_LENGTH: # split by equal line-of-sight path intervals
         assert LAYANG<=90 and LAYANG>=0,\
             'Zennith angle should be in [0,90]'
         sin = np.sin(LAYANG*np.pi/180)      # sin(zenith angle)
@@ -1400,8 +1399,7 @@ def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
         logBASEP = interp(H,np.log(P),BASEH)
         BASEP = np.exp(logBASEP)
 
-    elif LAYTYP == 4: # split by specifying input base pressures
-        #assert P_base, 'Need input layer base pressures'
+    elif LAYTYP == LayerType.BASE_PRESSURE: # split by specifying input base pressures
         if np.isnan(P_base) is True:
             raise ValueError('error in layer_split() :: need input layer base pressures')
         assert  (P_base[-1] >= P[-1]) and (P_base[0] <= P[0]), \
@@ -1410,7 +1408,7 @@ def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
         NLAY = len(BASEP)
         BASEH = interp(P[::-1],H[::-1],BASEP)
 
-    elif LAYTYP == 5: # split by specifying input base heights
+    elif LAYTYP == LayerType.BASE_HEIGHT: # split by specifying input base heights
         BASEH = H_base
         logBASEP = interp(H,np.log(P),BASEH)
         BASEP = np.exp(logBASEP)

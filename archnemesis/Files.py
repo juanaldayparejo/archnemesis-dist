@@ -13,7 +13,8 @@ from copy import copy
 
 from archnemesis.enums import (
     PlanetEnum, AtmosphericProfileFormatEnum, InstrumentLineshape, WaveUnit, SpectraUnit,
-    SpectralCalculationMode, LowerBoundaryCondition, ScatteringCalculationMode, AerosolPhaseFunctionCalculationMode
+    SpectralCalculationMode, LowerBoundaryCondition, ScatteringCalculationMode, AerosolPhaseFunctionCalculationMode,
+    ParaH2Ratio, RayleighScatteringMode
 )
 
 
@@ -409,15 +410,15 @@ def read_input_files(runname):
 
     Layer = Layer_0(Atm.RADIUS)
     Scatter,Stellar,Surface,Layer = read_set(runname,Layer=Layer)
-    if Layer.LAYTYP==4:  # TODO: Create enum for LAYTYP
+    if Layer.LAYTYP==LayerType.BASE_PRESSURE:
         nlay, pbase = read_play()
         Layer.NLAY = nlay
         Layer.P_base = pbase*101325 
-    if Layer.LAYTYP==5:
+    if Layer.LAYTYP==LayerType.BASE_HEIGHT:
         nlay,hbase = read_hlay()
         Layer.NLAY = nlay
         Layer.H_base = hbase*1.0e3    #Base height of each layer (m)
-    if Layer.LAYTYP==6:
+    if Layer.LAYTYP not in (LayerType.EQUAL_PRESSURE, LayerType.EQUAL_LOG_PRESSURE, LayerType.EQUAL_HEIGHT, LayerType.EQUAL_PATH_LENGTH, LayerType.BASE_PRESSURE, LayerType.BASE_HEIGHT):
         raise ValueError('error in read_input_files :: Need to read the press.lay file but not implemented yet')
     
     Layer.DUST_UNITS_FLAG = Atm.DUST_UNITS_FLAG
@@ -460,7 +461,7 @@ def read_input_files(runname):
     elif Spec.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
         Spec.read_lls(runname)
     else:
-        raise ValueError('error :: ILBL has to be either 0 or 2')
+        raise ValueError('error :: ILBL has to be either SpectralCalculationMode.K_TABLES or SpectralCalculationMode.LINE_BY_LINE_TABLES')
 
     #Reading extinction and scattering cross sections
     #############################################################################
@@ -1317,7 +1318,7 @@ def read_set(runname,Layer=None,Surface=None,Stellar=None,Scatter=None):
     if Surface==None:
         Surface = Surface_0()
 
-    Surface.LOWBC = lowbc
+    Surface.LOWBC = LowerBoundaryCondition(lowbc)
     Surface.GALB = galb
     Surface.TSURF = tsurf
 
@@ -1326,8 +1327,8 @@ def read_set(runname,Layer=None,Surface=None,Stellar=None,Scatter=None):
         Layer = Layer_0()
     
     Layer.LAYHT = layht*1.0e3
-    Layer.LAYTYP = laytp
-    Layer.LAYINT = layint
+    Layer.LAYTYP = LayerType(laytp)
+    Layer.LAYINT = LayerIntegrationScheme(layint)
     Layer.NLAY = nlayer
 
     return Scatter,Stellar,Surface,Layer
