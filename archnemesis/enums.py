@@ -233,119 +233,113 @@ class RetrievalStrategy(IntEnum):
     Nested_Sampling = 1
 
 class ScatteringCalculationMode(IntEnum):
-	"""
-	Defines values for 'ISCAT'
-	
-	Used in 'Scatter_0.py'
-	"""
-	THERMAL_EMISSION = 0 # Thermal emission only (i.e. no scattering)
-	MULTIPLE_SCATTERING = 1 # Multiple scattering
-	INTERNAL_RADIATION_FIELD = 2 # Internal radiation field
-	SINGLE_SCATTERING_PLANE_PARALLEL = 3 # Single scattering in a plane parallel atmosphere
-	SINGLE_SCATTERING_SPHERICAL = 4 # Single scattering in a spherical atmosphere
+    """
+    Defines values for 'ISCAT'
+    
+    Used in 'Scatter_0.py'
+    """
+    THERMAL_EMISSION = 0 # Thermal emission only (i.e. no scattering)
+    MULTIPLE_SCATTERING = 1 # Multiple scattering
+    INTERNAL_RADIATION_FIELD = 2 # Internal radiation field
+    SINGLE_SCATTERING_PLANE_PARALLEL = 3 # Single scattering in a plane parallel atmosphere
+    SINGLE_SCATTERING_SPHERICAL = 4 # Single scattering in a spherical atmosphere
 
 class RayleighScatteringMode(IntEnum):
-	"""
-	Defines values for 'IRAY'
-	
-	Used in 'Scatter_0.py'
-	"""
-	NOT_INCLUDED = 0 # Rayleigh scattering optical depth not included
-	GAS_GIANT_ATM = 1 # Rayleigh scattering for gas giant atmospheres
-	C02_DOMINATED_ATM = 2 # Rayleigh scattering for CO2 dominated atmospheres
-	N2_O2_DOMINATED_ATM = 3 # Rayleigh scattering for N2-O2 dominated atmospheres
-	JOVIAN_AIR = 4 # Rayleigh scattering for Jovian air (adaptive from Larry Sromovsky)
+    """
+    Defines values for 'IRAY'
+    
+    Used in 'Scatter_0.py'
+    """
+    NOT_INCLUDED = 0 # Rayleigh scattering optical depth not included
+    GAS_GIANT_ATM = 1 # Rayleigh scattering for gas giant atmospheres
+    C02_DOMINATED_ATM = 2 # Rayleigh scattering for CO2 dominated atmospheres
+    N2_O2_DOMINATED_ATM = 3 # Rayleigh scattering for N2-O2 dominated atmospheres
+    JOVIAN_AIR = 4 # Rayleigh scattering for Jovian air (adaptive from Larry Sromovsky)
 
 class AerosolPhaseFunctionCalculationMode(IntEnum):
-	"""
-	Defines values for 'IMIE'
-	
-	Used in 'Scatter_0.py'
-	"""
-	HENYEY_GREENSTEIN = 0 # Henyey-Greenstein parameters
-	MIE_THEORY = 1 # Mie theory
-	LEGENDRE_POLYNOMIALS = 2 # Legendre polynomials
+    """
+    Defines values for 'IMIE'
+    
+    Used in 'Scatter_0.py'
+    """
+    HENYEY_GREENSTEIN = 0 # Henyey-Greenstein parameters
+    MIE_THEORY = 1 # Mie theory
+    LEGENDRE_POLYNOMIALS = 2 # Legendre polynomials
 
 class ZenithAngleOrigin(IntEnum):
-	"""
-	Defines values for 'IPZEN'
-	
-	Used in 'AtmCalc_0.py'
-	"""
-	BOTTOM = 0 # Zenith angle is defined at the bottom of the bottom layer
-	ALTITUDE_ZERO = 1 # Zenith angle is defined at 0km atltitude
-	TOP = 2 # Zenith angle is defined at the top of the top layer
+    """
+    Defines values for 'IPZEN'
+
+    Used in 'AtmCalc_0.py'
+    """
+    BOTTOM = 0 # Zenith angle is defined at the bottom of the bottom layer
+    ALTITUDE_ZERO = 1 # Zenith angle is defined at 0km atltitude
+    TOP = 2 # Zenith angle is defined at the top of the top layer
 
 
-class PathType(IntEnum):
-	"""
-	Defines path type used when calculating radiative transfer.
-	
-	Used in 'AtmCalc_0.py'
-	"""
-	LIMB = 0 # Limb path, through the atmosphere but not hitting the surface
-	NADIR = 1 # Nadir path, through the atmosphere and hitting the surface
+class PathObserverPointing(IntEnum):
+    """
+    Defines location of the PathObserver, used when calculating radiative transfer.
+
+    Used in 'AtmCalc_0.py'
+    """
+    LIMB = 0 # Limb path, path observer is looking at the limb of the planet
+    NADIR = 1 # Nadir path, path observer is on the planet looking upwards
+    DISK = 2 # Disk path, path observer is looking at the disk of the planet
 
 
 class PathCalc(IntFlag):
-	"""
-	Defines path calculation type used when calculating radiative transfer.
-	
-	Used as elements of 'IMOD' in 'AtmCalc_0.py', 'Path_0.py', 'ForwardModel_0.py'
-	"""
-	WEIGHTING_FUNCTION = auto()
-	NET_FLUX = auto()
-	UPWARD_FLUX = auto()
-	OUTWARD_FLUX = auto()
-	DOWNWARD_FLUX = auto()
-	CURTIS_GODSON = auto()
-	THERMAL_EMISSION = auto()
-	HEMISPHERE = auto()
-	SCATTER = auto()
-	NEAR_LIMB = auto()
-	SINGLE_SCATTERING_PLANE_PARALLEL = auto()
-	SINGLE_SCATTERING_SPHERICAL = auto()
-	ABSORBTION = auto()
-	PLANK_FUNCTION_AT_BIN_CENTRE = auto()
-	BROADENING = auto()
+    """
+    Defines path calculation type used when calculating radiative transfer.
+    
+    Used as elements of 'IMOD' in 'AtmCalc_0.py', 'Path_0.py', 'ForwardModel_0.py'
+    """
+    WEIGHTING_FUNCTION = auto()
+    NET_FLUX = auto()
+    UPWARD_FLUX = auto()
+    OUTWARD_FLUX = auto()
+    DOWNWARD_FLUX = auto()
+    CURTIS_GODSON = auto()
+    THERMAL_EMISSION = auto()
+    HEMISPHERE = auto()
+    SCATTER = auto()
+    NEAR_LIMB = auto()
+    SINGLE_SCATTERING_PLANE_PARALLEL = auto()
+    SINGLE_SCATTERING_SPHERICAL = auto()
+    ABSORBTION = auto()
+    PLANK_FUNCTION_AT_BIN_CENTRE = auto()
+    BROADENING = auto()
 
-class PathObserverLocation(IntEnum):
-	"""
-	Defines path observer location used when calculating radiative transfer.
-	"""
-	SPACE = 0 # looking downwards from space
-	SURFACE = 1 # looking upwards from the surface
-	
 
 class LayerType(IntEnum):
-	"""
-	Defines layer type used when calculating radiative transfer.
-	
-	Used in 'Layer_0.py'
-	"""
-	EQUAL_PRESSURE = 0
-	EQUAL_LOG_PRESSURE = 1
-	EQUAL_HEIGHT = 2
-	EQUAL_PATH_LENGTH = 3
-	BASE_PRESSURE = 4
-	BASE_HEIGHT = 5
+    """
+    Defines layer type used when calculating radiative transfer.
+    
+    Used in 'Layer_0.py'
+    """
+    EQUAL_PRESSURE = 0
+    EQUAL_LOG_PRESSURE = 1
+    EQUAL_HEIGHT = 2
+    EQUAL_PATH_LENGTH = 3
+    BASE_PRESSURE = 4
+    BASE_HEIGHT = 5
 
 class LayerIntegrationScheme(IntEnum):
-	"""
-	Defines layer integration scheme used when calculating radiative transfer.
-	
-	Used in 'Layer_0.py'
-	"""
-	MID_PATH = 0
-	ABSORBER_WEIGHTED_AVERAGE = 1
+    """
+    Defines layer integration scheme used when calculating radiative transfer.
+    
+    Used in 'Layer_0.py'
+    """
+    MID_PATH = 0
+    ABSORBER_WEIGHTED_AVERAGE = 1
 
 class InterpolationMethod(IntEnum):
-	"""
-	Defines interpolation method used by SCIPY routines.
-	
-	Used in 'Layer_0.py'
-	"""
-	LINEAR = 0
-	QUADRATIC_SPLINE = 1
-	CUBIC_SPLINE = 2
+    """
+    Defines interpolation method used by SCIPY routines.
+    
+    Used in 'Layer_0.py'
+    """
+    LINEAR = 0
+    QUADRATIC_SPLINE = 1
+    CUBIC_SPLINE = 2
 

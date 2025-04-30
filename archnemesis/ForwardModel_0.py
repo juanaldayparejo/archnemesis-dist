@@ -8,7 +8,7 @@ from multiprocessing import Pool
 from joblib import Parallel, delayed
 import sys
 
-from archnemesis.enums import AtmosphericProfileFormatEnum
+from archnemesis.enums import AtmosphericProfileFormatEnum, PathCalc
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -3221,9 +3221,9 @@ class ForwardModel_0:
         #		27	(Atm) Downwards flux (bottom) calculation (scattering)
         #		28	(Atm) Single scattering approximation (spherical)
 
-        IMODM = np.unique(self.PathX.IMOD)
+        IMODM : PathCalc = np.unique(self.PathX.IMOD)
 
-        if IMODM==0:  #Pure transmission
+        if IMODM == PathCalc(0):  #Pure transmission
 
             #Calculating the line-of-sight opacities
             TAUTOT_LAYINC = self.LayerX.TAUTOT[:,:,self.PathX.LAYINC[:,:]] * self.PathX.SCALE[:,:]  #(NWAVE,NG,NLAYIN,NPATH)
@@ -3245,7 +3245,7 @@ class ForwardModel_0:
                     for ig in range(self.SpectroscopyX.NG):
                         SPECOUT[:,ig,ipath] = SPECOUT[:,ig,ipath] * xfac
 
-        elif IMODM==1: #Absorption (useful for small transmissions)
+        elif IMODM == PathCalc.ABSORBTION: #Absorbtion (useful for small transmissions)
 
             #Calculating the line-of-sight opacities
             TAUTOT_LAYINC = self.LayerX.TAUTOT[:,:,self.PathX.LAYINC[:,:]] * self.PathX.SCALE[:,:]  #(NWAVE,NG,NLAYIN,NPATH)
@@ -3256,7 +3256,7 @@ class ForwardModel_0:
             #Absorption spectrum (useful for small transmissions)
             SPECOUT = 1.0 - np.exp(-(TAUTOT_PATH)) #(NWAVE,NG,NPATH)
 
-        elif IMODM==3: #Thermal emission from planet
+        elif IMODM == PathCalc.THERMAL_EMISSION: #Thermal emission from planet
 
             print('CIRSrad :: Performing thermal emission calculation')
 
@@ -3312,7 +3312,7 @@ class ForwardModel_0:
                 SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
             
 
-        elif IMODM==15: #Multiple scattering calculation
+        elif IMODM == PathCalc.SCATTER: #Multiple scattering calculation
 
             print('CIRSrad :: Performing multiple scattering calculation')
             print('CIRSrad :: NF = ',self.ScatterX.NF,'; NMU = ',self.ScatterX.NMU,'; NPHI = ',self.ScatterX.NPHI)
@@ -3339,7 +3339,7 @@ class ForwardModel_0:
             SPECOUT = self.scloud11wave(self.SpectroscopyX.WAVE,self.ScatterX,self.SurfaceX,self.LayerX,self.MeasurementX,self.PathX, solar)
 
 
-        elif IMODM==16: #Single scattering calculation
+        elif IMODM == PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL: #Single scattering calculation
 
             print('CIRSrad :: Performing single scattering calculation')
 
@@ -3423,7 +3423,7 @@ class ForwardModel_0:
                 SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
                 
 
-        elif IMODM==27: #Downwards flux (bottom) calculation (scattering)
+        elif IMODM == (PathCalc.DOWNWARDS_FLUX | PathCalc.SCATTER): #Downwards flux (bottom) calculation (scattering)
  
             print('CIRSrad :: Downwards flux calculation at the bottom of the atmosphere')
 
@@ -3464,7 +3464,7 @@ class ForwardModel_0:
                 SPECOUT[:,:,ipath] = fdown[:,:,0]*xfac
 
         else:
-            raise ValueError('error in CIRSrad :: Calculation type not included in CIRSrad')
+            raise NotImplementedError('error in CIRSrad :: Calculation type not included in CIRSrad')
 
         #Now integrate over g-ordinates
         SPECOUT = np.tensordot(SPECOUT, self.SpectroscopyX.DELG, axes=([1],[0])) #NWAVE,NPATH
@@ -3602,7 +3602,7 @@ class ForwardModel_0:
         ########################################################################################################
 
         print('CIRSradg :: Calculating GAS opacity')
-        if Spectroscopy.ILBL==2:  #LBL-table
+        if Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
 
             TAUGAS = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Layer.NLAY,Spectroscopy.NGAS])  #Vertical opacity of each gas in each layer
             dTAUGAS = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Atmosphere.NVMR+2+Scatter.NDUST,Layer.NLAY])
@@ -3625,7 +3625,7 @@ class ForwardModel_0:
             #Combining the gaseous opacity in each layer
             TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
 
-        elif Spectroscopy.ILBL==0:    #K-table
+        elif Spectroscopy.ILBL == SpectralCalculationMode.K_TABLES:    #K-table
 
             dTAUGAS = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Atmosphere.NVMR+2+Scatter.NDUST,Layer.NLAY])
 
@@ -3653,7 +3653,7 @@ class ForwardModel_0:
             dTAUGAS[:,:,Atmosphere.NVMR,:] = dk_layer[:,:,:,Spectroscopy.NGAS] #dTAU/dT
 
         else:
-            raise ValueError('error in CIRSrad :: ILBL must be either 0 or 2')
+            raise NotImplementedError('error in CIRSrad :: ILBL must be either 0 or 2')
 
         #Combining the different kinds of opacity in each layer
         ########################################################################################################
