@@ -173,23 +173,22 @@ class AtmCalc_0:
         #Checking the geometry of the observation 
         ###########################################
 
-        match self.path_observer_pointing:
-            case PathObserverPointing.DISK:
-                self.path_observer_height = np.inf
-                
-            case PathObserverPointing.LIMB:
-                self.path_observer_height = np.inf
-                self.ANGLE = 90.
+        if self.path_observer_pointing == PathObserverPointing.DISK:
+            self.path_observer_height = np.inf
             
-            case PathObserverPointing.NADIR:
-                if self.EMISS_ANG > 90.:
-                    self.ANGLE = 180.0 - self.ANGLE
-                    self.path_observer_height = 0.0
-                else:
-                    self.path_observer_height = np.inf
-            
-            case _:
-                raise ValueError(f'error in AtmCalc_0 :: path observer pointing "{_}" not recognised')
+        elif self.path_observer_pointing == PathObserverPointing.LIMB:
+            self.path_observer_height = np.inf
+            self.ANGLE = 90.
+        
+        elif self.path_observer_pointing == PathObserverPointing.NADIR:
+            if self.EMISS_ANG > 90.:
+                self.ANGLE = 180.0 - self.ANGLE
+                self.path_observer_height = 0.0
+            else:
+                self.path_observer_height = np.inf
+        
+        else:
+            raise ValueError(f'error in AtmCalc_0 :: path observer pointing "{self.path_observer_pointing}" not recognised')
         
         assert self.path_observer_height in (0.0, np.inf), f'error in AtmCalc_0 :: path observer height must be 0 or np.inf. Other values such as {self.path_observer_height} are not implemented yet'
 
