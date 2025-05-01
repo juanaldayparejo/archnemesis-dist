@@ -260,7 +260,7 @@ class Atmosphere_0:
         from archnemesis.Data.gas_data import gas_info
         from archnemesis.Data.planet_data import planet_info
 
-        data = planet_info[str(self.IPLANET)]
+        data = planet_info[str(int(self.IPLANET))]
         print('Planet :: '+data['name'])
         print('Number of profiles :: ',self.NLOCATIONS)
         print('Latitude of profiles :: ',self.LATITUDE)
@@ -332,7 +332,7 @@ class Atmosphere_0:
 
         dset = grp.create_dataset('IPLANET',data=self.IPLANET)
         dset.attrs['title'] = "Planet ID"
-        dset.attrs['type'] = planet_info[str(self.IPLANET)]["name"]
+        dset.attrs['type'] = planet_info[str(int(self.IPLANET))]["name"]
 
         dset = grp.create_dataset('AMFORM',data=self.AMFORM)
         dset.attrs['title'] = "Type of Molecular Weight calculation"
@@ -685,7 +685,7 @@ class Atmosphere_0:
         from archnemesis.Data.planet_data import planet_info
 
         #Getting the information about the planet
-        data = planet_info[str(self.IPLANET)]
+        data = planet_info[str(int(self.IPLANET))]
         xradius = data["radius"] * 1.0e5   #cm
         xellip=1.0/(1.0-data["flatten"])
 
@@ -712,7 +712,7 @@ class Atmosphere_0:
 
         #Reading data and calculating some parameters
         Grav = const["G"]
-        data = planet_info[str(self.IPLANET)]
+        data = planet_info[str(int(self.IPLANET))]
         xgm = data["mass"] * Grav * 1.0e24 * 1.0e6
         xomega = 2.*np.pi / (data["rotation"]*24.*3600.)
         xellip=1.0/(1.0-data["flatten"])
