@@ -125,7 +125,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Surface class and read file
     ###############################################################
 
-    isurf = planet_info[str(Atmosphere.IPLANET)]["isurf"]
+    isurf = planet_info[str(int(Atmosphere.IPLANET))]["isurf"]
     Surface = Surface_0()
     # Always read the Surface entry in HDF5 file as defaults are set
     # there for gas giants that are different for the defaults
@@ -437,7 +437,7 @@ def read_input_files(runname):
     #Reading surface files if planet has surface
     #############################################################################
 
-    isurf = planet_info[str(Atm.IPLANET)]["isurf"]
+    isurf = planet_info[str(int(Atm.IPLANET))]["isurf"]
     if isurf==True:
         if np.mean(Surface.TSURF)>0.0:
             Surface.GASGIANT=False
