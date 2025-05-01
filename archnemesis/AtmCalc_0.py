@@ -1,5 +1,6 @@
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
+import sys
 import numpy as np
 
 from archnemesis.enums import ZenithAngleOrigin, PathObserverPointing, PathCalc
@@ -427,7 +428,7 @@ class AtmCalc_0:
         
         # [JD] From what I can tell this loop only uses static values, there is
         # no need to loop over the number of paths to create IMOD
-        assert len(~PathCalc(0)) <= 32, f'error in AtmCalc_0.py file :: enums.PathCalc must have less than 32 flags to fit into a np.int32, it has {len(~PathCalc(0))}. Either increase the size of the integer type holding them, or reduce the number of flags.'
+        assert len(PathCalc) <= 32, f'error in AtmCalc_0.py file :: enums.PathCalc must have less than 32 flags to fit into a np.int32, it has {len(~PathCalc(0))}. Either increase the size of the integer type holding them, or reduce the number of flags.'
         IMOD = np.full((self.NPATH,), fill_value=self.path_calc, dtype=np.int32)
         
         for j in range(self.NPATH):
