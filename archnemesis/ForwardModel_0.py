@@ -8,7 +8,16 @@ from multiprocessing import Pool
 from joblib import Parallel, delayed
 import sys
 
-from archnemesis.enums import AtmosphericProfileFormatEnum, PathCalc
+from archnemesis.enums import (
+    AtmosphericProfileFormatEnum,
+    PathCalc,
+    SpectralCalculationMode,
+    ScatteringCalculationMode,
+    SpectraUnit,
+    LowerBoundaryCondition,
+    WaveUnit,
+    PathObserverPointing,
+)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -1755,7 +1764,7 @@ class ForwardModel_0:
 
         #Now check if any gas in the retrieval saturates
 
-        if self.AtmosphereX.AMFORM==AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE:
+        if self.AtmosphereX.AMFORM == AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE:
             #Find the gases whose vmr is retrieved so that we do not adjust them
             ISCALE = np.ones(self.AtmosphereX.NVMR,dtype='int32')
             for ivar in range(self.Variables.NVAR):
@@ -2277,8 +2286,8 @@ class ForwardModel_0:
 
         self.MeasurementX.NGEOM = 1
         self.MeasurementX.FWHM = self.Measurement.FWHM
-        self.MeasurementX.IFORM = self.Measurement.IFORM
-        self.MeasurementX.ISPACE = self.Measurement.ISPACE
+        self.MeasurementX.IFORM = SpectraUnit(self.Measurement.IFORM)
+        self.MeasurementX.ISPACE = WaveUnit(self.Measurement.ISPACE)
 
         #Selecting the measurement and spectral points
         NCONV = np.zeros(self.MeasurementX.NGEOM,dtype='int32')
@@ -2504,47 +2513,37 @@ class ForwardModel_0:
         broad = False
         absorb = False
         binbb = True
-
-        if Scatter.EMISS_ANG>=0.0:
-            limb=False
-            nadir=True
-            angle=Scatter.EMISS_ANG
-            botlay=0
+        path_calc = PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE
+        path_observer_pointing = PathObserverPointing.DISK
+        
+        if Scatter.EMISS_ANG >= 0.0:
+            path_observer_pointing = PathObserverPointing.NADIR
+            angle = Scatter.EMISS_ANG
+            botlay = 0
         else:
-            nadir=False
-            limb=True
-            angle=90.0
-            botlay=0
+            path_observer_pointing = PathObserverPointing.LIMB
+            angle = 90.0
+            botlay = 0
 
-        if Scatter.ISCAT==0:   #No scattering
-            if Measurement.IFORM==4:  #Atmospheric transmission multiplied by solar flux (no thermal emission then)
-                therm=False
+        if Scatter.ISCAT == ScatteringCalculationMode.THERMAL_EMISSION:
+            if Measurement.IFORM == SpectraUnit.Atmospheric_transmission:
+                pass
             else:
-                therm=True
-            scatter=False
-        elif Scatter.ISCAT==1: #Multiple scattering
-            therm=False
-            scatter=True
-        elif Scatter.ISCAT==2: #Internal scattered radiation field
-            therm=False
-            scatter=True
-            nearlimb=True
-        elif Scatter.ISCAT==3: #Single scattering in plane-parallel atmosphere
-            therm=False
-            single=True
-        elif Scatter.ISCAT==4: #Single scattering in spherical atmosphere
-            therm=False
-            sphsingle=True
-        elif Scatter.ISCAT==5: #Internal net flux calculation
-            angle=0.0
-            therm=False
-            scatter=True
-            netflux=True
-        elif Scatter.ISCAT==6: #Downward bottom flux calculation
-            angle=0.0
-            therm=False
-            scatter=True
-            botflux=True
+                path_calc |= PathCalc.THERMAL_EMISSION
+        elif Scatter.ISCAT == ScatteringCalculationMode.MULTIPLE_SCATTERING:
+            path_calc |= PathCalc.MULTIPLE_SCATTERING
+        elif Scatter.ISCAT == ScatteringCalculationMode.INTERNAL_RADIATION_FIELD:
+            path_calc |= PathCalc.MULTIPLE_SCATTERING | PathCalc.NEAR_LIMB
+        elif Scatter.ISCAT == ScatteringCalculationMode.SINGLE_SCATTERING_PLANE_PARALLEL:
+            path_calc |= PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL
+        elif Scatter.ISCAT == ScatteringCalculationMode.SINGLE_SCATTERING_SPHERICAL:
+            path_calc |= PathCalc.SINGLE_SCATTERING_SPHERICAL
+        elif Scatter.ISCAT == ScatteringCalculationMode.INTERNAL_NET_FJLUX:
+            angle = 0.0
+            path_calc |= PathCalc.MULTIPLE_SCATTERING | PathCalc.NET_FLUX
+        elif Scatter.ISCAT == ScatteringCalculationMode.DOWNWARD_BOTTOM_FLUX:
+            angle = 0.0
+            path_calc |= PathCalc.MULTIPLE_SCATTERING | PathCalc.DOWNWARD_FLUX
         else:
             raise ValueError('error in calc_path :: selected ISCAT has not been implemented yet')
 
@@ -2559,11 +2558,17 @@ class ForwardModel_0:
         #Based on the atmospheric layering, we calculate each atmospheric path (at each tangent height)
         NCALC = 1    #Number of calculations (geometries) to be performed
         AtmCalc_List = []
-        iAtmCalc = AtmCalc_0(Layer,LIMB=limb,NADIR=nadir,BOTLAY=botlay,ANGLE=angle,IPZEN=ipzen,\
-                         EMISS_ANG=Scatter.EMISS_ANG,SOL_ANG=Scatter.SOL_ANG,AZI_ANG=Scatter.AZI_ANG,\
-                         THERM=therm,WF=wf,NETFLUX=netflux,OUTFLUX=outflux,BOTFLUX=botflux,UPFLUX=upflux,\
-                         CG=cg,HEMISPHERE=hemisphere,NEARLIMB=nearlimb,SINGLE=single,SPHSINGLE=sphsingle,\
-                         SCATTER=scatter,BROAD=broad,ABSORB=absorb,BINBB=binbb)
+        iAtmCalc = AtmCalc_0(
+            Layer,
+            path_observer_pointing=path_observer_pointing,
+            IPZEN=ZenithAngleOrigin.BOTTOM,
+            BOTLAY=botlay,
+            ANGLE=angle,
+            EMISS_ANG=Scatter.EMISS_ANG,
+            SOL_ANG=Scatter.SOL_ANG,
+            AZI_ANG=Scatter.AZI_ANG,
+            path_calc=path_calc,
+        )
         AtmCalc_List.append(iAtmCalc)
 
         #We initialise the total Path class, indicating that the calculations can be combined
@@ -2629,56 +2634,34 @@ class ForwardModel_0:
 
         #Setting the flags for the Path and calculation types
         ##############################################################################
-
-        limb = False
-        nadir = False
-        ipzen = 0
-        therm = False
-        wf = False
-        netflux = False
-        outflux = False
-        botflux = False
-        upflux = False
-        cg = False
-        hemisphere = False
-        nearlimb = False
-        single = False
-        sphsingle = False
-        scatter = False
-        broad = False
-        absorb = False
-        binbb = True
+        
+        path_calc = PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE
+        path_observer_pointing = PathObserverPointing.DISK
 
         if Scatter.EMISS_ANG>=0.0:
-            limb=False
-            nadir=True
+            path_observer_pointing = PathObserverPointing.NADIR
             angle=Scatter.EMISS_ANG
             botlay=0
         else:
-            nadir=False
-            limb=True
+            path_observer_pointing = PathObserverPointing.LIMB
             angle=90.0
             botlay=0
-
-        if Scatter.ISCAT==0:   #No scattering
-            if Measurement.IFORM==4:  #Atmospheric transmission multiplied by solar flux (no thermal emission then)
-                therm=False
+        
+        if Scatter.ISCAT == ScatteringCalculationMode.THERMAL_EMISSION:
+            if Measurement.IFORM == SpectraUnit.Atmospheric_transmission:
+                pass
             else:
-                therm=True
-            scatter=False
-        elif Scatter.ISCAT==1: #Multiple scattering
-            therm=False
-            scatter=True
-        elif Scatter.ISCAT==2: #Internal scattered radiation field
-            therm=False
-            scatter=True
-            nearlimb=True
-        elif Scatter.ISCAT==3: #Single scattering in plane-parallel atmosphere
-            therm=False
-            single=True
-        elif Scatter.ISCAT==4: #Single scattering in spherical atmosphere
-            therm=False
-            sphsingle=True
+                path_calc |= PathCalc.THERMAL_EMISSION
+        elif Scatter.ISCAT == ScatteringCalculationMode.MULTIPLE_SCATTERING:
+            path_calc |= PathCalc.MULTIPLE_SCATTERING
+        elif Scatter.ISCAT == ScatteringCalculationMode.INTERNAL_RADIATION_FIELD:
+            path_calc |= PathCalc.MULTIPLE_SCATTERING | PathCalc.NEAR_LIMB
+        elif Scatter.ISCAT == ScatteringCalculationMode.SINGLE_SCATTERING_PLANE_PARALLEL:
+            path_calc |= PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL
+        elif Scatter.ISCAT == ScatteringCalculationMode.SINGLE_SCATTERING_SPHERICAL:
+            path_calc |= PathCalc.SINGLE_SCATTERING_SPHERICAL
+        else:
+            raise ValueError('error in calc_pathg :: selected ISCAT has not been implemented yet')
 
 
         #Performing the calculation of the atmospheric path
@@ -2687,11 +2670,17 @@ class ForwardModel_0:
         #Based on the atmospheric layering, we calculate each atmospheric path (at each tangent height)
         NCALC = 1    #Number of calculations (geometries) to be performed
         AtmCalc_List = []
-        iAtmCalc = AtmCalc_0(Layer,LIMB=limb,NADIR=nadir,BOTLAY=botlay,ANGLE=angle,IPZEN=ipzen,\
-                         EMISS_ANG=Scatter.EMISS_ANG,SOL_ANG=Scatter.SOL_ANG,AZI_ANG=Scatter.AZI_ANG,\
-                         THERM=therm,WF=wf,NETFLUX=netflux,OUTFLUX=outflux,BOTFLUX=botflux,UPFLUX=upflux,\
-                         CG=cg,HEMISPHERE=hemisphere,NEARLIMB=nearlimb,SINGLE=single,SPHSINGLE=sphsingle,\
-                         SCATTER=scatter,BROAD=broad,ABSORB=absorb,BINBB=binbb)
+        iAtmCalc = AtmCalc_0(
+            Layer,
+            path_observer_pointing = path_observer_pointing,
+            BOTLAY=botlay,
+            ANGLE=angle,
+            IPZEN=ZenithAngleOrigin.BOTTOM,
+            EMISS_ANG=Scatter.EMISS_ANG,
+            SOL_ANG=Scatter.SOL_ANG,
+            AZI_ANG=Scatter.AZI_ANG,
+            path_calc=path_calc,
+        )
         AtmCalc_List.append(iAtmCalc)
 
         #We initialise the total Path class, indicating that the calculations can be combined
@@ -2780,7 +2769,14 @@ class ForwardModel_0:
         NCALC = len(ITANHE)    #Number of calculations (geometries) to be performed
         AtmCalc_List = []
         for ICALC in range(NCALC):
-            iAtmCalc = AtmCalc_0(Layer,LIMB=True,BOTLAY=ITANHE[ICALC],ANGLE=90.0,IPZEN=0,THERM=False)
+            iAtmCalc = AtmCalc_0(
+                Layer,
+                path_observer_pointing=PathObserverPointing.LIMB,
+                BOTLAY=ITANHE[ICALC],
+                ANGLE=90.0,
+                IPZEN=ZenithAngleOrigin.BOTTOM,
+                path_calc=PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE,
+            )
             AtmCalc_List.append(iAtmCalc)
 
         #We initialise the total Path class, indicating that the calculations can be combined
@@ -2872,7 +2868,14 @@ class ForwardModel_0:
         NCALC = len(ITANHE)    #Number of calculations (geometries) to be performed
         AtmCalc_List = []
         for ICALC in range(NCALC):
-            iAtmCalc = AtmCalc_0(Layer,LIMB=True,BOTLAY=ITANHE[ICALC],ANGLE=90.0,IPZEN=0,THERM=False)
+            iAtmCalc = AtmCalc_0(
+                Layer,
+                path_observer_pointing = PathObserverPointing.LIMB,
+                BOTLAY=ITANHE[ICALC],
+                ANGLE=90.0,
+                IPZEN=ZenithAngleOrigin.BOTTOM,
+                path_calc = PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE,
+            )
             AtmCalc_List.append(iAtmCalc)
 
         #We initialise the total Path class, indicating that the calculations can be combined
@@ -2936,7 +2939,7 @@ class ForwardModel_0:
             raise ValueError('error in calc_path_C :: All geometries must be either upward-looking or downward-loong in this version (i.e. EMISS_ANG>90 or EMISS_ANG<90)')  
         
         #Checking that multiple scattering is turned on
-        if Scatter.ISCAT!=1:
+        if Scatter.ISCAT != ScatteringCalculationMode.MULTIPLE_SCATTERING:
             raise ValueError('error in calc_path_C :: This version of the code is meant to use multiple scattering (ISCAT=1)')
 
         #Checking that there is only 1 NAV per geometry
@@ -2971,36 +2974,14 @@ class ForwardModel_0:
         #Setting the flags for the Path and calculation types
         ##############################################################################
 
-        limb = False
-        nadir = False
-        ipzen = 0
-        therm = False
-        wf = False
-        netflux = False
-        outflux = False
-        botflux = False
-        upflux = False
-        cg = False
-        hemisphere = False
-        nearlimb = False
-        single = False
-        sphsingle = False
-        scatter = False
-        broad = False
-        absorb = False
-        binbb = True
-
+        
+        path_observer_pointing = PathObserverPointing.DISK
+        path_calc = PathCalc.MULTIPLE_SCATTERING | PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE
         #Nadir observation
         if Scatter.EMISS_ANG>=0.0:
-            limb=False
-            nadir=True
+            path_observer_pointing = PathObserverPointing.NADIR
             angle=Scatter.EMISS_ANG
-            botlay=0
 
-        #Multiple scattering
-        if Scatter.ISCAT==1:
-            therm=False
-            scatter=True
 
         #Performing the calculation of the atmospheric path
         ##############################################################################
@@ -3008,12 +2989,19 @@ class ForwardModel_0:
         #Based on the atmospheric layering, we calculate each atmospheric path (at each tangent height)
         NCALC = Measurement.NGEOM    #Number of calculations (geometries) to be performed
         AtmCalc_List = []
+        
         for iGEOM in range(Measurement.NGEOM):
-            iAtmCalc = AtmCalc_0(Layer,LIMB=limb,NADIR=True,BOTLAY=0,ANGLE=0.,IPZEN=0,\
-                            EMISS_ANG=Measurement.EMISS_ANG[iGEOM,0],SOL_ANG=Measurement.SOL_ANG[iGEOM,0],AZI_ANG=Measurement.AZI_ANG[iGEOM,0],\
-                            THERM=therm,WF=wf,NETFLUX=netflux,OUTFLUX=outflux,BOTFLUX=botflux,UPFLUX=upflux,\
-                            CG=cg,HEMISPHERE=hemisphere,NEARLIMB=nearlimb,SINGLE=single,SPHSINGLE=sphsingle,\
-                            SCATTER=scatter,BROAD=broad,ABSORB=absorb,BINBB=binbb)
+            iAtmCalc = AtmCalc_0(
+                Layer,
+                path_observer_pointing=path_observer_pointing,
+                BOTLAY=0,
+                ANGLE=0.,
+                IPZEN=ZenithAngleOrigin.BOTTOM,
+                EMISS_ANG=Measurement.EMISS_ANG[iGEOM, 0],
+                SOL_ANG=Measurement.SOL_ANG[iGEOM, 0],
+                AZI_ANG=Measurement.AZI_ANG[iGEOM, 0],
+                path_calc=path_calc,
+            )
             AtmCalc_List.append(iAtmCalc)
             
         #We initialise the total Path class, indicating that the calculations can be combined
@@ -3221,9 +3209,18 @@ class ForwardModel_0:
         #		27	(Atm) Downwards flux (bottom) calculation (scattering)
         #		28	(Atm) Single scattering approximation (spherical)
 
-        IMODM : PathCalc = np.unique(self.PathX.IMOD)
+        IMODM  = np.unique(self.PathX.IMOD)
+        assert IMODM.size==1, 'CIRSrad :: IMODM should be a single value, multiple path calculation types not supported yet'
 
-        if IMODM == PathCalc(0):  #Pure transmission
+        IMODM = PathCalc(IMODM[0])  #Convert to enum
+        
+        print(f'CIRSrad :: IMODM = {IMODM!r}')
+        
+        if not (PathCalc.ABSORBTION 
+                | PathCalc.THERMAL_EMISSION 
+                | PathCalc.MULTIPLE_SCATTERING
+                | PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL
+            ) & IMODM:  #Pure transmission
 
             #Calculating the line-of-sight opacities
             TAUTOT_LAYINC = self.LayerX.TAUTOT[:,:,self.PathX.LAYINC[:,:]] * self.PathX.SCALE[:,:]  #(NWAVE,NG,NLAYIN,NPATH)
@@ -3245,7 +3242,7 @@ class ForwardModel_0:
                     for ig in range(self.SpectroscopyX.NG):
                         SPECOUT[:,ig,ipath] = SPECOUT[:,ig,ipath] * xfac
 
-        elif IMODM == PathCalc.ABSORBTION: #Absorbtion (useful for small transmissions)
+        elif PathCalc.ABSORBTION in IMODM: #Absorbtion (useful for small transmissions)
 
             #Calculating the line-of-sight opacities
             TAUTOT_LAYINC = self.LayerX.TAUTOT[:,:,self.PathX.LAYINC[:,:]] * self.PathX.SCALE[:,:]  #(NWAVE,NG,NLAYIN,NPATH)
@@ -3256,7 +3253,7 @@ class ForwardModel_0:
             #Absorption spectrum (useful for small transmissions)
             SPECOUT = 1.0 - np.exp(-(TAUTOT_PATH)) #(NWAVE,NG,NPATH)
 
-        elif IMODM == PathCalc.THERMAL_EMISSION: #Thermal emission from planet
+        elif PathCalc.THERMAL_EMISSION in IMODM: #Thermal emission from planet
 
             print('CIRSrad :: Performing thermal emission calculation')
 
@@ -3312,7 +3309,7 @@ class ForwardModel_0:
                 SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
             
 
-        elif IMODM == PathCalc.SCATTER: #Multiple scattering calculation
+        elif PathCalc.MULTIPLE_SCATTERING in IMODM: #Multiple scattering calculation
 
             print('CIRSrad :: Performing multiple scattering calculation')
             print('CIRSrad :: NF = ',self.ScatterX.NF,'; NMU = ',self.ScatterX.NMU,'; NPHI = ',self.ScatterX.NPHI)
@@ -3339,7 +3336,7 @@ class ForwardModel_0:
             SPECOUT = self.scloud11wave(self.SpectroscopyX.WAVE,self.ScatterX,self.SurfaceX,self.LayerX,self.MeasurementX,self.PathX, solar)
 
 
-        elif IMODM == PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL: #Single scattering calculation
+        elif PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL in IMODM: #Single scattering calculation
 
             print('CIRSrad :: Performing single scattering calculation')
 
@@ -3423,8 +3420,8 @@ class ForwardModel_0:
                 SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
                 
 
-        elif IMODM == (PathCalc.DOWNWARDS_FLUX | PathCalc.SCATTER): #Downwards flux (bottom) calculation (scattering)
- 
+        elif (PathCalc.DOWNWARD_FLUX | PathCalc.MULTIPLE_SCATTERING) in IMODM: #Downwards flux (bottom) calculation (scattering)
+
             print('CIRSrad :: Downwards flux calculation at the bottom of the atmosphere')
 
             #The codes below calculates the downwards flux
@@ -3464,7 +3461,7 @@ class ForwardModel_0:
                 SPECOUT[:,:,ipath] = fdown[:,:,0]*xfac
 
         else:
-            raise NotImplementedError('error in CIRSrad :: Calculation type not included in CIRSrad')
+            raise NotImplementedError(f'error in CIRSrad :: Calculation type "{IMODM}" not included in CIRSrad')
 
         #Now integrate over g-ordinates
         SPECOUT = np.tensordot(SPECOUT, self.SpectroscopyX.DELG, axes=([1],[0])) #NWAVE,NPATH
@@ -3702,15 +3699,21 @@ class ForwardModel_0:
         #		27	(Atm) Downwards flux (bottom) calculation (scattering)
         #		28	(Atm) Single scattering approximation (spherical)
 
-
+        
         IMODM = np.unique(Path.IMOD)
+        assert IMODM.size == 1, 'CIRSradg :: More than one calculation type in the same path. This is not supported yet'
+
+        IMODM = PathCalc(IMODM[0]) #Convert to PathCalc enum
+
+        print(f'CIRSradg :: IMODM = {IMODM!r}')
 
         SPECOUT = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Path.NPATH])
         dSPECOUT = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Atmosphere.NVMR+2+Scatter.NDUST,Path.NLAYIN.max(),Path.NPATH])
         dTSURF = np.zeros((Spectroscopy.NWAVE,Spectroscopy.NG,Path.NPATH))
 
-
-        if IMODM==0:
+        if not (PathCalc.ABSORBTION 
+                | PathCalc.THERMAL_EMISSION 
+            ) & IMODM:  #Pure transmission spectrum
 
             print('CIRSradg :: Calculating TRANSMISSION')
             #Calculating the total opacity over the path
@@ -3739,8 +3742,8 @@ class ForwardModel_0:
             del TAUTOT_PATH
 
 
-        elif IMODM==1:
-
+        elif PathCalc.ABSORBTION in IMODM: #Absorption spectrum (useful for small transmissions)
+            print('CIRSradg :: Calculating ABSORPTION')
             #Calculating the total opacity over the path
             TAUTOT_PATH = np.sum(TAUTOT_LAYINC,2) #(NWAVE,NG,NPATH)
 
@@ -3748,8 +3751,8 @@ class ForwardModel_0:
             SPECOUT = 1.0 - np.exp(-(TAUTOT_PATH)) #(NWAVE,NG,NPATH)
 
 
-        elif IMODM==3: #Thermal emission from planet
-
+        elif PathCalc.THERMAL_EMISSION in IMODM: #Thermal emission from planet
+            print('CIRSradg :: Calculating THERMAL_EMISSION')
             #Defining the units of the output spectrum
             xfac = np.ones(Spectroscopy.NWAVE)
             if Measurement.IFORM==1:
@@ -3777,6 +3780,7 @@ class ForwardModel_0:
                 SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
                 dTSURF[:,:,ipath] = (dTSURF[:,:,ipath].T * xfac).T
                 dSPECOUT[:,:,:,:,ipath] = np.transpose(np.transpose(dSPECOUT[:,:,:,:,ipath],axes=[1,2,3,0])*xfac,axes=[3,0,1,2])
+        
 
         #Now integrate over g-ordinates
         print('CIRSradg :: Integrading over g-ordinates')
