@@ -130,8 +130,8 @@ class Atmosphere_0:
         self.NP = NP
         self.NVMR = NVMR
         self.NDUST = NDUST
-        self.IPLANET : PlanetEnum = IPLANET
-        self.AMFORM : AtmosphericProfileFormatEnum = AMFORM
+        #self.IPLANET : PlanetEnum = IPLANET
+        #self.AMFORM : AtmosphericProfileFormatEnum = AMFORM
         self.NLOCATIONS = NLOCATIONS
         self.Fortran = Fortran
 
@@ -153,7 +153,32 @@ class Atmosphere_0:
         self.PARAH2 = None # np.zeros(NP) 
         
         self.SVP = {} # Flags for limiting gas profiles to saturated profiles (from .vpf file)
+        
+        
+        # private attributes
+        self._iplanet = None
+        self._amform = None
+        
+        # set properties
+        self.IPLANET = IPLANET
+        self.AMFORM = AMFORM
     ##################################################################################
+
+    @property
+    def IPLANET(self) -> PlanetEnum:
+        return self._iplanet
+    
+    @IPLANET.setter
+    def IPLANET(self, value):
+        self._iplanet = PlanetEnum(value)
+    
+    @property
+    def AMFORM(self) -> AtmosphericProfileFormatEnum:
+        return self._amform
+    
+    @AMFORM.setter
+    def AMFORM(self, value):
+        self._amform = AtmosphericProfileFormatEnum(value)
 
     def assess(self):
         """

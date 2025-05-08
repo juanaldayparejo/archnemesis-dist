@@ -9,7 +9,7 @@ def retrieval_nemesis(
         runname,
         legacy_files=False,
         NCores=1,
-        retrieval_method = RetrievalStrategy.Optimal_Estimation,
+        retrieval_method : RetrievalStrategy = RetrievalStrategy.Optimal_Estimation,
         nemesisSO=False,
         NS_prefix='chains/'
     ):

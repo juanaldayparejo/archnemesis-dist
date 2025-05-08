@@ -224,6 +224,7 @@ class LowerBoundaryCondition(IntEnum):
     THERMAL = 0 # Thermal emission only (i.e. no reflection)
     LAMBERTIAN = 1 # Lambertian surface
     HAPKE = 2 # Hapke surface
+    OREN_NAYAR = 3 # Oren-Nayar surface
 
 class RetrievalStrategy(IntEnum):
     """
@@ -317,7 +318,7 @@ class LayerType(IntEnum):
     """
     Defines layer type used when calculating radiative transfer.
     
-    Used in 'Layer_0.py'
+    Used as 'LAYTYP' in 'Layer_0.py'
     """
     EQUAL_PRESSURE = 0
     EQUAL_LOG_PRESSURE = 1
@@ -330,7 +331,7 @@ class LayerIntegrationScheme(IntEnum):
     """
     Defines layer integration scheme used when calculating radiative transfer.
     
-    Used in 'Layer_0.py'
+    Used as 'LAYINT' in 'Layer_0.py'
     """
     MID_PATH = 0
     ABSORBER_WEIGHTED_AVERAGE = 1

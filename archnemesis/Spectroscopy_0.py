@@ -93,12 +93,12 @@ class Spectroscopy_0:
 
         # Input parameters with validation
         self.RUNNAME = RUNNAME
-        self.ILBL = SpectralCalculationMode(ILBL) if not isinstance(ILBL, SpectralCalculationMode) else ILBL
+        #self.ILBL = SpectralCalculationMode(ILBL) if not isinstance(ILBL, SpectralCalculationMode) else ILBL
         self.NGAS = NGAS
         self.ONLINE = ONLINE
 
         # Attributes with proper typing
-        self.ISPACE: Optional[WaveUnit] = None
+        #self.ISPACE: Optional[WaveUnit] = None
         self.ID: Optional[np.ndarray] = None  # Array of Gas enum values (NGAS)
         self.ISO = None       #(NGAS)
         self.LOCATION = None  #(NGAS)
@@ -114,6 +114,33 @@ class Spectroscopy_0:
         self.FWHM = None
         
         self.K = None #(NWAVE,NG,NP,NT,NGAS)
+        
+        # private attributes
+        self._ilbl = None
+        self._ispace = None
+        
+        # set property values
+        self.ILBL = ILBL
+        self.ISPACE = WaveUnit.Wavenumber_cm  # Default value
+    
+    @property
+    def ILBL(self) -> SpectralCalculationMode:
+        return self._ilbl
+    
+    @ILBL.setter
+    def ILBL(self, value):
+        self._ilbl = SpectralCalculationMode(value)
+    
+    @property
+    def ISPACE(self) -> WaveUnit:
+        return self._ispace
+    
+    @ISPACE.setter
+    def ISPACE(self, value):
+        self._ispace = WaveUnit(value)
+    
+    
+    
 
     ######################################################################################################
 

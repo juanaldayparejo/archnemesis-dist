@@ -105,7 +105,7 @@ class CIA_0:
 
         #Input parameters
         self.runname = runname
-        self.INORMAL : ParaH2Ratio = INORMAL
+        #self.INORMAL : ParaH2Ratio = INORMAL
         self.NPAIR = NPAIR
         self.NPARA = NPARA
         self.IPAIRG1 : list[Gas] = IPAIRG1
@@ -126,7 +126,20 @@ class CIA_0:
         self.WAVEN = None # np.zeros(NWAVE)
         self.TEMP = None # np.zeros(NT)
         self.K_CIA = None #np.zeros(NPAIR,NPARA,NT,NWAVE)
-
+        
+        # private attributes
+        self._inormal = None
+        
+        # set properties
+        self.INORMAL = INORMAL
+    
+    @property
+    def INORMAL(self) -> ParaH2Ratio:
+        return self._inormal
+    
+    @INORMAL.setter
+    def INORMAL(self, value):
+        self._inormal = ParaH2Ratio(value)
         
     ##################################################################################
 

@@ -147,10 +147,10 @@ class Scatter_0:
         self.NMU = NMU
         self.NF = NF
         self.NPHI = NPHI
-        self.ISPACE = WaveUnit(ISPACE) if not isinstance(ISPACE, WaveUnit) else ISPACE
-        self.ISCAT = ScatteringCalculationMode(ISCAT)
-        self.IRAY = RayleighScatteringMode(IRAY)
-        self.IMIE = AerosolPhaseFunctionCalculationMode(IMIE)
+        #self.ISPACE = WaveUnit(ISPACE) if not isinstance(ISPACE, WaveUnit) else ISPACE
+        #self.ISCAT = ScatteringCalculationMode(ISCAT)
+        #self.IRAY = RayleighScatteringMode(IRAY)
+        #self.IMIE = AerosolPhaseFunctionCalculationMode(IMIE)
         self.SOL_ANG = SOL_ANG
         self.EMISS_ANG = EMISS_ANG
         self.AZI_ANG = AZI_ANG
@@ -197,7 +197,52 @@ class Scatter_0:
         self.REFIND_IM = None #np.zeros(NWAVER)
 
         self.calc_GAUSS_LOBATTO()
-
+        
+        # private attributes 
+        self._ispace = None
+        self._iscat = None
+        self._iray = None
+        self._imie = None
+        
+        # set property values
+        self.ISPACE = ISPACE
+        self.ISCAT = ISCAT
+        self.IRAY = IRAY
+        self.IMIE = IMIE
+    
+    @property
+    def ISPACE(self):
+        return self._ispace
+    
+    @ISPACE.setter
+    def ISPACE(self, value):
+        self._ispace = WaveUnit(value)
+    
+    @property
+    def ISCAT(self):
+        return self._iscat
+    
+    @ISCAT.setter
+    def ISCAT(self, value):
+        self._iscat = ScatteringCalculationMode(value)
+    
+    @property
+    def IRAY(self):
+        return self._iray
+    
+    @IRAY.setter
+    def IRAY(self, value):
+        self._iray = RayleighScatteringMode(value)
+    
+    @property
+    def IMIE(self):
+        return self._imie
+    
+    @IMIE.setter
+    def IMIE(self, value):
+        self._imie = AerosolPhaseFunctionCalculationMode(value)
+    
+    
 
     ###########################################################################################################################
 

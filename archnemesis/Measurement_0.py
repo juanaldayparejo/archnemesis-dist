@@ -174,9 +174,9 @@ class Measurement_0:
         self.runname = runname
         self.NGEOM = NGEOM
         self.FWHM = FWHM
-        self.ISPACE = ISPACE
-        self.ISHAPE = ISHAPE
-        self.IFORM = IFORM
+        #self.ISPACE = ISPACE
+        #self.ISHAPE = ISHAPE
+        #self.IFORM = IFORM
         self.LATITUDE = LATITUDE        
         self.LONGITUDE = LONGITUDE
         self.V_DOPPLER = V_DOPPLER
@@ -205,6 +205,40 @@ class Measurement_0:
         self.NFIL = None  #np.zeros(NCONV)
         self.VFIL = None  #np.zeros(NFIL,NCONV)
         self.AFIL = None  #np.zeros(NFIL,NCONV)
+        
+        # private attributes
+        self._ishape = None
+        self._ispace = None
+        self._iform = None
+        
+        # properties
+        self.ISHAPE = ISHAPE
+        self.ISPACE = ISPACE
+        self.IFORM = IFORM
+    
+    @property
+    def ISHAPE(self) -> InstrumentLineshape:
+        return self._ishape
+    
+    @ISHAPE.setter
+    def ISHAPE(self, value):
+        self._ishape = InstrumentLineshape(value)
+    
+    @property
+    def ISPACE(self) -> WaveUnit:
+        return self._ispace
+    
+    @ISPACE.setter
+    def ISPACE(self, value):
+        self._ispace = WaveUnit(value)
+    
+    @property
+    def IFORM(self) -> SpectraUnit:
+        return self._iform
+    
+    @IFORM.setter
+    def IFORM(self, value):
+        self._iform = SpectraUnit(value)
 
     #################################################################################################################
 

@@ -117,9 +117,9 @@ class Layer_0:
 
         """
         self.RADIUS = RADIUS
-        self.LAYTYP = LAYTYP
+        #self.LAYTYP = LAYTYP
         self.NLAY = NLAY
-        self.LAYINT = LAYINT
+        #self.LAYINT = LAYINT
         self.NINT = NINT
         self.LAYHT = LAYHT
         self.H_base = H_base
@@ -157,6 +157,29 @@ class Layer_0:
         #Units of the dust
         self.DUST_UNITS_FLAG = None   #If None, dust units are expected to be particles m-3. If -1 they are expected to be particles per gram of atmosphere
 
+        # private attributes
+        self._laytyp = None
+        self._layint = None
+        
+        # set properties
+        self.LAYTYP = LAYTYP
+        self.LAYINT = LAYINT
+    
+    @property
+    def LAYTYP(self) -> LayerType:
+        return self._laytyp
+    
+    @LAYTYP.setter
+    def LAYTYP(self, value):
+        self._laytyp = LayerType(value)
+    
+    @property
+    def LAYINT(self) -> LayerIntegrationScheme:
+        return self._layint
+    
+    @LAYINT.setter
+    def LAYINT(self, value):
+        self._layint = LayerIntegrationScheme(value)
 
     ####################################################################################################
 

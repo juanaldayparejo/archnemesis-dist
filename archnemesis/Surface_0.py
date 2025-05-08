@@ -160,8 +160,8 @@ class Surface_0:
         #Input parameters
         self.NLOCATIONS = NLOCATIONS
         self.GASGIANT = GASGIANT
-        self.ISPACE = WaveUnit(ISPACE) if not isinstance(ISPACE, WaveUnit) else ISPACE
-        self.LOWBC = LowerBoundaryCondition(LOWBC) if not isinstance(LOWBC, LowerBoundaryCondition) else LOWBC
+        #self.ISPACE = WaveUnit(ISPACE) if not isinstance(ISPACE, WaveUnit) else ISPACE
+        #self.LOWBC = LowerBoundaryCondition(LOWBC) if not isinstance(LOWBC, LowerBoundaryCondition) else LOWBC
         self.GALB = GALB
         self.NEM = NEM
 
@@ -183,6 +183,33 @@ class Surface_0:
         self.G1 = None #(NEM) or (NEM,NLOCATIONS)
         self.G2 = None #(NEM) or (NEM,NLOCATIONS)
         self.F = None #(NEM) or (NEM,NLOCATIONS)
+
+        # private attributes
+        self._ispace = None
+        self._lowbc = None
+        
+        # set property values
+        self.ISPACE = ISPACE if ISPACE is not None else WaveUnit.Wavenumber_cm
+        self.LOWBC = LOWBC if LOWBC is not None else LowerBoundaryCondition.THERMAL
+    
+    
+    @property
+    def ISPACE(self) -> WaveUnit:
+        return self._ispace
+    
+    @ISPACE.setter
+    def ISPACE(self, value):
+        self._ispace = WaveUnit(value)
+    
+    @property
+    def LOWBC(self) -> LowerBoundaryCondition:
+        return self._lowbc
+    
+    @LOWBC.setter
+    def LOWBC(self, value):
+        self._lowbc = LowerBoundaryCondition(value)
+        
+
 
     def assess(self):
         """
@@ -324,7 +351,7 @@ class Surface_0:
                 dset.attrs['type'] = 'Isotropic thermal emission and Lambert reflection'
             elif self.LOWBC==LowerBoundaryCondition.HAPKE:
                 dset.attrs['type'] = 'Isotropic thermal emission and Hapke reflection'
-            elif self.LOWBC==3:
+            elif self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
                 dset.attrs['type'] = 'Isotropic thermal emission and Oren-Nayar reflection'
 
             #Writing the spectral units
@@ -415,7 +442,7 @@ class Surface_0:
                 dset.attrs['title'] = "Parameter defining the relative contribution of G1 and G2 of the double Henyey-Greenstein phase function"
                 dset.attrs['units'] = ''
 
-            elif self.LOWBC==3:
+            elif self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
 
                 dset = grp.create_dataset('ALBEDO',data=self.ALBEDO)
                 dset.attrs['title'] = "Surface albedo"
@@ -480,7 +507,7 @@ class Surface_0:
                 self.G2 = np.array(f.get('Surface/G2'))
                 self.F = np.array(f.get('Surface/F'))
                 
-            if self.LOWBC==3:
+            if self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
                 self.ALBEDO = np.array(f.get('Surface/ALBEDO'))
                 self.ROUGHNESS = np.array(f.get('Surface/ROUGHNESS'))
 

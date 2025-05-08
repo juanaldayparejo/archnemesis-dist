@@ -64,7 +64,7 @@ class Stellar_0:
         self.SOLEXIST = SOLEXIST
         self.DIST = DIST
         self.RADIUS = RADIUS
-        self.ISPACE = WaveUnit(ISPACE) if ISPACE is not None and not isinstance(ISPACE, WaveUnit) else ISPACE
+        #self.ISPACE = WaveUnit(ISPACE) if ISPACE is not None and not isinstance(ISPACE, WaveUnit) else ISPACE
         self.NWAVE = NWAVE
 
         # Input the following profiles using the edit_ methods.
@@ -73,6 +73,21 @@ class Stellar_0:
         self.SOLFLUX = None #np.zeros(NWAVE)
 
         self.STELLARDATA = archnemesis_path()+'archnemesis/Data/stellar/'
+        
+        # private attributes
+        self._ispace = None
+        
+        # set property values
+        self.ISPACE = ISPACE if ISPACE is not None else WaveUnit.Wavenumber_cm
+    
+    
+    @property
+    def ISPACE(self) -> WaveUnit:
+        return self._ispace
+    
+    @ISPACE.setter
+    def ISPACE(self, value):
+        self._ispace = WaveUnit(value)
 
 
     def assess(self):
