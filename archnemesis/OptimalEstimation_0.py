@@ -5,6 +5,9 @@ import matplotlib as matplotlib
 from copy import *
 import pickle
 
+
+from archnemesis.enums import WaveUnit, SpectraUnit
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
@@ -623,23 +626,23 @@ class OptimalEstimation_0:
             str3 = 'Latitude, Longitude'
             f.write("\t %5.7f \t %5.7f \t %s \n" % (Measurement.LATITUDE,Measurement.LONGITUDE,str3)) 
 
-            if Measurement.ISPACE==0: #Wavenumber space (cm-1)
-                if Measurement.IFORM==0:
+            if Measurement.ISPACE==WaveUnit.Wavenumber_cm: #Wavenumber space (cm-1)
+                if Measurement.IFORM==SpectraUnit.Radiance: #0
                     str4='Radiances expressed as nW cm-2 sr-1 (cm-1)-1'       
                     xfac=1.0e9
-                elif Measurement.IFORM==1:
+                elif Measurement.IFORM==SpectraUnit.FluxRatio: #1
                     str4='F_plan/F_star Ratio of planet'
                     xfac = 1.0
-                elif Measurement.IFORM==2:
+                elif Measurement.IFORM==SpectraUnit.A_Ratio: #2
                     str4='Transit depth: 100*Planet_area/Stellar_area'
                     xfac = 1.0
-                elif Measurement.IFORM==3:
+                elif Measurement.IFORM==SpectraUnit.Integrated_spectral_power: #3
                     str4='Spectral Radiation of planet: W (cm-1)-1'
                     xfac=1.0e18
-                elif Measurement.IFORM==4:
+                elif Measurement.IFORM==SpectraUnit.Atmospheric_transmission: #4
                     str4='Solar flux: W cm-2 (cm-1)-1'
                     xfac=1.0
-                elif Measurement.IFORM==5:
+                elif Measurement.IFORM==SpectraUnit.Normalised_radiance: #5
                     str4='Transmission'
                     xfac=1.0
                 else:
@@ -647,24 +650,24 @@ class OptimalEstimation_0:
                     str4='Radiances expressed as nW cm-2 sr-1 cm' 
                     xfac=1.0e9
 
-            elif Measurement.ISPACE==1: #Wavelength space (um)
+            elif Measurement.ISPACE==WaveUnit.Wavelength_um: #Wavelength space (um)
 
-                if Measurement.IFORM==0:
+                if Measurement.IFORM==SpectraUnit.Radiance: #0
                     str4='Radiances expressed as uW cm-2 sr-1 um-1'       
                     xfac=1.0e6
-                elif Measurement.IFORM==1:
+                elif Measurement.IFORM==SpectraUnit.FluxRatio: #1
                     str4='F_plan/F_star Ratio of planet'
                     xfac = 1.0
-                elif Measurement.IFORM==2:
+                elif Measurement.IFORM==SpectraUnit.A_Ratio: #2
                     str4='Transit depth: 100*Planet_area/Stellar_area'
                     xfac = 1.0
-                elif Measurement.IFORM==3:
+                elif Measurement.IFORM==SpectraUnit.Integrated_spectral_power: #3
                     str4='Spectral Radiation of planet: W um-1'
                     xfac=1.0e18
-                elif Measurement.IFORM==4:
+                elif Measurement.IFORM==SpectraUnit.Atmospheric_transmission: #4
                     str4='Solar flux: W cm-2 um-1'
                     xfac=1.0
-                elif Measurement.IFORM==5:
+                elif Measurement.IFORM==SpectraUnit.Normalised_radiance: #5
                     str4='Transmission'
                     xfac=1.0
                 else:
@@ -689,15 +692,15 @@ class OptimalEstimation_0:
                         xerr1=-1.0
                         relerr1=-1.0
 
-                    if Measurement.IFORM==0:
+                    if Measurement.IFORM==SpectraUnit.Radiance: #0
                         strspec = "\t %4i %14.8f %15.8e %15.8e %7.2f %15.8e %9.5f \n"
-                    elif Measurement.IFORM==1:
+                    elif Measurement.IFORM==SpectraUnit.FluxRatio: #1
                         strspec = "\t %4i %10.4f %15.8e %15.8e %7.2f %15.8e %9.5f \n"
-                    elif Measurement.IFORM==2:
+                    elif Measurement.IFORM==SpectraUnit.A_Ratio: #2
                         strspec = "\t %4i %9.4f %12.6e %12.6e %6.2f %12.6e %6.2f \n"
-                    elif Measurement.IFORM==3:
+                    elif Measurement.IFORM==SpectraUnit.Integrated_spectral_power: #3
                         strspec = "\t %4i %10.4f %15.8e %15.8e %7.2f %15.8e %9.5f \n"
-                    else:
+                    elif Measurement.IFORM in (SpectraUnit.Atmospheric_transmission, SpectraUnit.Normalised_radiance): #4, 5
                         strspec = "\t %4i %14.8f %15.8e %15.8e %7.2f %15.8e %9.5f \n"
 
                     f.write(strspec % (i+1,Measurement.VCONV[iconv,igeom],self.Y[i]*xfac,err1*xfac,xerr1,self.YN[i]*xfac,relerr))

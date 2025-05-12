@@ -2,7 +2,8 @@ from scipy.interpolate import interp1d
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from numba import jit,njit
+from numba import jit, njit
+from archnemesis.enums import WaveUnit, LowerBoundaryCondition
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -14,12 +15,15 @@ Created on Tue Jul 22 17:27:12 2021
 
 @author: juanalday
 
-State Vector Class.
+[JD] We might want to rework this class to be a bit more general e.g. "LowerBoundary" so
+     that it more accurately specifies what it does. That way it makes a bit more sense to use
+     it for gas giants. Really, we should make an interface 'LowerBoundaryCondition' and then
+     have subclasses for each of the different types of lower boundary conditions.
 """
 
 class Surface_0:
 
-    def __init__(self, GASGIANT=False, ISPACE=0, LOWBC=1, GALB=-1.0, NEM=2, NLOCATIONS=1):
+    def __init__(self, GASGIANT=False, ISPACE=WaveUnit.Wavenumber_cm, LOWBC=LowerBoundaryCondition.LAMBERTIAN, GALB=-1.0, NEM=2, NLOCATIONS=1):
 
         """
         Inputs
@@ -156,8 +160,8 @@ class Surface_0:
         #Input parameters
         self.NLOCATIONS = NLOCATIONS
         self.GASGIANT = GASGIANT
-        self.ISPACE = ISPACE
-        self.LOWBC = LOWBC
+        #self.ISPACE = WaveUnit(ISPACE) if not isinstance(ISPACE, WaveUnit) else ISPACE
+        #self.LOWBC = LowerBoundaryCondition(LOWBC) if not isinstance(LOWBC, LowerBoundaryCondition) else LOWBC
         self.GALB = GALB
         self.NEM = NEM
 
@@ -180,6 +184,33 @@ class Surface_0:
         self.G2 = None #(NEM) or (NEM,NLOCATIONS)
         self.F = None #(NEM) or (NEM,NLOCATIONS)
 
+        # private attributes
+        self._ispace = None
+        self._lowbc = None
+        
+        # set property values
+        self.ISPACE = ISPACE if ISPACE is not None else WaveUnit.Wavenumber_cm
+        self.LOWBC = LOWBC if LOWBC is not None else LowerBoundaryCondition.THERMAL
+    
+    
+    @property
+    def ISPACE(self) -> WaveUnit:
+        return self._ispace
+    
+    @ISPACE.setter
+    def ISPACE(self, value):
+        self._ispace = WaveUnit(value)
+    
+    @property
+    def LOWBC(self) -> LowerBoundaryCondition:
+        return self._lowbc
+    
+    @LOWBC.setter
+    def LOWBC(self, value):
+        self._lowbc = LowerBoundaryCondition(value)
+        
+
+
     def assess(self):
         """
         Assess whether the different variables have the correct dimensions and types
@@ -188,22 +219,13 @@ class Surface_0:
         if self.GASGIANT==False:
 
             #Checking some common parameters to all cases
-            assert np.issubdtype(type(self.LOWBC), np.integer) == True , \
-                'LOWBC must be int'
-            assert self.LOWBC >= 0 , \
-                'LOWBC must be >=0'
-            assert self.LOWBC <= 3 , \
-                'LOWBC must be >=0 and <=3'
+            assert isinstance(self.LOWBC, (int, np.integer, LowerBoundaryCondition)), 'LOWBC must be int or LowerBoundaryCondition'
+            assert self.LOWBC in LowerBoundaryCondition, f'LOWBC must be one of {tuple(LowerBoundaryCondition)}'
             
-            assert len(self.VEM) == self.NEM , \
-                'VEM must have size (NEM)'
+            assert len(self.VEM) == self.NEM , 'VEM must have size (NEM)'
             
-            assert np.issubdtype(type(self.ISPACE), np.integer) == True , \
-                'ISPACE must be int'
-            assert self.ISPACE >= 0 , \
-                'ISPACE must be >=0 and <=1'
-            assert self.ISPACE <= 1 , \
-                'ISPACE must be >=1 and <=1'
+            assert isinstance(self.ISPACE, (int, np.integer, WaveUnit)), 'ISPACE must be int or WaveUnit'
+            assert self.ISPACE in WaveUnit, f'ISPACE must be one of {tuple(WaveUnit)}'
 
             #Determining sizes based on the number of surface locations
             if self.NLOCATIONS<=0:
@@ -224,7 +246,7 @@ class Surface_0:
                     'EMISSIVITY must have size (NEM)'
 
                 #Special case for Hapke reflection
-                if self.LOWBC==2:
+                if self.LOWBC==LowerBoundaryCondition.HAPKE:
                     assert len(self.SGLALB) == self.NEM , \
                         'SGLALB must have size (NEM)'
                     assert len(self.ROUGHNESS) == self.NEM , \
@@ -264,7 +286,7 @@ class Surface_0:
                     'EMISSIVITY must have size (NEM,NLOCATIONS)'
                 
                 #Special case for Hapke reflection
-                if self.LOWBC==2:
+                if self.LOWBC==LowerBoundaryCondition.HAPKE:
                     assert self.SGLALB.shape == (self.NEM,self.NLOCATIONS) , \
                         'SGLALB must have size (NEM,NLOCATIONS)'
                     assert self.BS0.shape == (self.NEM,self.NLOCATIONS) , \
@@ -298,7 +320,7 @@ class Surface_0:
                 "if GASGIANT=True then no emission from surface"
             assert self.GALB == 0.0, \
                 "if GASGIANT=True then surface absorbs everything"
-            assert self.LOWBC == 0 , \
+            assert self.LOWBC == LowerBoundaryCondition.THERMAL , \
                 'If GASGIANT=True then LOWBC=0 (i.e. No reflection)'
 
     def write_hdf5(self,runname):
@@ -321,31 +343,31 @@ class Surface_0:
             grp = f.create_group("Surface")
 
             #Writing the lower boundary condition
-            dset = grp.create_dataset('LOWBC',data=self.LOWBC)
+            dset = grp.create_dataset('LOWBC',data=int(self.LOWBC))
             dset.attrs['title'] = "Lower Boundary Condition"
-            if self.LOWBC==0:
+            if self.LOWBC==LowerBoundaryCondition.THERMAL:
                 dset.attrs['type'] = 'Isotropic thermal emission (no reflection)'
-            elif self.LOWBC==1:
+            elif self.LOWBC==LowerBoundaryCondition.LAMBERTIAN:
                 dset.attrs['type'] = 'Isotropic thermal emission and Lambert reflection'
-            elif self.LOWBC==2:
+            elif self.LOWBC==LowerBoundaryCondition.HAPKE:
                 dset.attrs['type'] = 'Isotropic thermal emission and Hapke reflection'
-            elif self.LOWBC==3:
+            elif self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
                 dset.attrs['type'] = 'Isotropic thermal emission and Oren-Nayar reflection'
 
             #Writing the spectral units
-            dset = grp.create_dataset('ISPACE',data=self.ISPACE)
+            dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
             dset.attrs['title'] = "Spectral units"
-            if self.ISPACE==0:
+            if self.ISPACE==WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
-            elif self.ISPACE==1:
+            elif self.ISPACE==WaveUnit.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um'
 
             #Writing the spectral array
             dset = grp.create_dataset('VEM',data=self.VEM)
             dset.attrs['title'] = "Spectral array"
-            if self.ISPACE==0:
+            if self.ISPACE==WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
-            elif self.ISPACE==1:
+            elif self.ISPACE==WaveUnit.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um'
 
             #Writing the number of locations
@@ -378,7 +400,7 @@ class Surface_0:
             dset.attrs['units'] = ''
 
             #Writing Hapke parameters if they are required
-            if self.LOWBC==2:
+            if self.LOWBC==LowerBoundaryCondition.HAPKE:
 
                 dset = grp.create_dataset('SGLALB',data=self.SGLALB)
                 dset.attrs['title'] = "Single scattering albedo"
@@ -420,7 +442,7 @@ class Surface_0:
                 dset.attrs['title'] = "Parameter defining the relative contribution of G1 and G2 of the double Henyey-Greenstein phase function"
                 dset.attrs['units'] = ''
 
-            elif self.LOWBC==3:
+            elif self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
 
                 dset = grp.create_dataset('ALBEDO',data=self.ALBEDO)
                 dset.attrs['title'] = "Surface albedo"
@@ -448,13 +470,13 @@ class Surface_0:
             # so the surface is always perfectly isothermal
             # and absorbing.
             self.GASGIANT = True
-            self.LOWBC = 0
+            self.LOWBC = LowerBoundaryCondition.THERMAL
             self.TSURF = 0.0
             self.GALB = 0.0
         else:
             self.GASGIANT = False
-            self.ISPACE = np.int32(f.get('Surface/ISPACE'))
-            self.LOWBC = np.int32(f.get('Surface/LOWBC'))
+            self.ISPACE = WaveUnit(np.int32(f.get('Surface/ISPACE')))
+            self.LOWBC = LowerBoundaryCondition(np.int32(f.get('Surface/LOWBC')))
             self.NLOCATIONS = np.int32(f.get('Surface/NLOCATIONS'))
 
             self.VEM = np.array(f.get('Surface/VEM'))
@@ -470,10 +492,10 @@ class Surface_0:
 
             self.EMISSIVITY = np.array(f.get('Surface/EMISSIVITY'))
 
-            if self.LOWBC==1:
+            if self.LOWBC==LowerBoundaryCondition.LAMBERTIAN:
                 self.GALB = np.array(f.get('Surface/GALB'))
 
-            if self.LOWBC==2:
+            if self.LOWBC==LowerBoundaryCondition.HAPKE:
                 self.SGLALB = np.array(f.get('Surface/SGLALB'))
                 self.BS0 = np.array(f.get('Surface/BS0'))
                 self.hs = np.array(f.get('Surface/hs'))
@@ -485,7 +507,7 @@ class Surface_0:
                 self.G2 = np.array(f.get('Surface/G2'))
                 self.F = np.array(f.get('Surface/F'))
                 
-            if self.LOWBC==3:
+            if self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
                 self.ALBEDO = np.array(f.get('Surface/ALBEDO'))
                 self.ROUGHNESS = np.array(f.get('Surface/ROUGHNESS'))
 
@@ -704,7 +726,7 @@ class Surface_0:
         
         self.edit_EMISSIVITY(self.EMISSIVITY[:,iLOCATION])
         
-        if self.LOWBC==2: #Hapke case
+        if self.LOWBC==LowerBoundaryCondition.HAPKE: #Hapke case
             
             self.edit_SGLALB(self.SGLALB[:,iLOCATION])
             self.edit_BS0(self.BS0[:,iLOCATION])
@@ -880,7 +902,7 @@ class Surface_0:
         NTHETA = len(EMISS_ANG)
         
         BRDF = np.zeros((NWAVE,NTHETA))
-        if self.LOWBC==1: #Lambertian reflection
+        if self.LOWBC==LowerBoundaryCondition.LAMBERTIAN: #Lambertian reflection
             
             ALBEDO = self.calc_albedo()                 #Calculating albedo based on flags in class
             galbx = np.interp(WAVE,self.VEM,ALBEDO)  #Interpolating albedo to desired spectral array
@@ -888,7 +910,7 @@ class Surface_0:
             # Broadcasting to avoid loop
             BRDF[:,:] = (galbx[:, None] / np.pi)  # Shape (NWAVE, 1) broadcasted to (NWAVE, NTHETA)
             
-        elif self.LOWBC==2: #Hapke reflection
+        elif self.LOWBC==LowerBoundaryCondition.HAPKE: #Hapke reflection
             
             #Interpolating Hapke parameters to the desired spectral array
             SGLALB = np.interp(WAVE,self.VEM,self.SGLALB)
@@ -1485,6 +1507,7 @@ def calc_Hapke_r0(gamma):
     return r0
 
 ##################################################################################################################
+
 
 #@njit(fastmath=True)
 @conditional_jit(nopython=True)

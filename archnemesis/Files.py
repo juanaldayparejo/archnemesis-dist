@@ -11,6 +11,12 @@
 from archnemesis import *
 from copy import copy
 
+from archnemesis.enums import (
+    PlanetEnum, AtmosphericProfileFormatEnum, InstrumentLineshape, WaveUnit, SpectraUnit,
+    SpectralCalculationMode, LowerBoundaryCondition, ScatteringCalculationMode, AerosolPhaseFunctionCalculationMode,
+    ParaH2Ratio, RayleighScatteringMode
+)
+
 
 ###############################################################################################
 ###############################################################################################
@@ -119,7 +125,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Surface class and read file
     ###############################################################
 
-    isurf = planet_info[str(Atmosphere.IPLANET)]["isurf"]
+    isurf = planet_info[str(int(Atmosphere.IPLANET))]["isurf"]
     Surface = Surface_0()
     # Always read the Surface entry in HDF5 file as defaults are set
     # there for gas giants that are different for the defaults
@@ -404,15 +410,15 @@ def read_input_files(runname):
 
     Layer = Layer_0(Atm.RADIUS)
     Scatter,Stellar,Surface,Layer = read_set(runname,Layer=Layer)
-    if Layer.LAYTYP==4:
+    if Layer.LAYTYP==LayerType.BASE_PRESSURE:
         nlay, pbase = read_play()
         Layer.NLAY = nlay
         Layer.P_base = pbase*101325 
-    if Layer.LAYTYP==5:
+    if Layer.LAYTYP==LayerType.BASE_HEIGHT:
         nlay,hbase = read_hlay()
         Layer.NLAY = nlay
         Layer.H_base = hbase*1.0e3    #Base height of each layer (m)
-    if Layer.LAYTYP==6:
+    if Layer.LAYTYP not in (LayerType.EQUAL_PRESSURE, LayerType.EQUAL_LOG_PRESSURE, LayerType.EQUAL_HEIGHT, LayerType.EQUAL_PATH_LENGTH, LayerType.BASE_PRESSURE, LayerType.BASE_HEIGHT):
         raise ValueError('error in read_input_files :: Need to read the press.lay file but not implemented yet')
     
     Layer.DUST_UNITS_FLAG = Atm.DUST_UNITS_FLAG
@@ -431,12 +437,12 @@ def read_input_files(runname):
     #Reading surface files if planet has surface
     #############################################################################
 
-    isurf = planet_info[str(Atm.IPLANET)]["isurf"]
-    if isurf==1:
+    isurf = planet_info[str(int(Atm.IPLANET))]["isurf"]
+    if isurf==True:
         if np.mean(Surface.TSURF)>0.0:
             Surface.GASGIANT=False
             Surface.read_sur(runname) #Emissivity (and albedo for Lambert surface)
-            if Surface.LOWBC==2: #Hapke surface
+            if Surface.LOWBC==LowerBoundaryCondition.HAPKE: #Hapke surface
                 Surface.read_hap(runname)
         else:
             Surface.GASGIANT=True
@@ -444,18 +450,18 @@ def read_input_files(runname):
         Surface.GASGIANT=True
     
     if Surface.GASGIANT:
-        Surface.LOWBC = 0
+        Surface.LOWBC = LowerBoundaryCondition.THERMAL
         Surface.TSURF = 0.0
         Surface.GALB = 0.0
 
     #Reading Spectroscopy parameters from .lls or .kls files
     ##############################################################
-    if Spec.ILBL==0:
+    if Spec.ILBL==SpectralCalculationMode.K_TABLES:
         Spec.read_kls(runname)
-    elif Spec.ILBL==2:
+    elif Spec.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
         Spec.read_lls(runname)
     else:
-        raise ValueError('error :: ILBL has to be either 0 or 2')
+        raise ValueError('error :: ILBL has to be either SpectralCalculationMode.K_TABLES or SpectralCalculationMode.LINE_BY_LINE_TABLES')
 
     #Reading extinction and scattering cross sections
     #############################################################################
@@ -473,14 +479,14 @@ def read_input_files(runname):
     Measurement.read_spx()
 
     #Reading .sha file if FWHM>0.0
-    if Measurement.FWHM>0.0:
+    if Measurement.FWHM > 0.0:
         Measurement.read_sha()
     #Reading .fil if FWHM<0.0
-    elif Measurement.FWHM<0.0:
+    elif Measurement.FWHM < 0.0:
         Measurement.read_fil()
 
     #Reading stellar spectrum if required by Measurement units
-    if( (Measurement.IFORM==1) or (Measurement.IFORM==2) or (Measurement.IFORM==3) or (Measurement.IFORM==4)):
+    if Measurement.IFORM in (SpectraUnit.FluxRatio, SpectraUnit.A_Ratio, SpectraUnit.Integrated_spectral_power, SpectraUnit.Atmospheric_transmission):
         Stellar.read_sol(runname)
 
     #Initialise CIA class and read files (.cia)
@@ -498,17 +504,17 @@ def read_input_files(runname):
     inormal,iray,ih2o,ich4,io3,inh3,iptf,imie,iuv = read_fla(runname)
 
     if CIA is not None:
-        CIA.INORMAL = inormal
+        CIA.INORMAL = ParaH2Ratio(inormal)
 
-    Scatter.IRAY = iray
-    Scatter.IMIE = imie
+    Scatter.IRAY = RayleighScatteringMode(iray)
+    Scatter.IMIE = AerosolPhaseFunctionCalculationMode(imie)
 
-    if Scatter.ISCAT>0:
-        if Scatter.IMIE==0:
+    if Scatter.ISCAT!=ScatteringCalculationMode.THERMAL_EMISSION:
+        if Scatter.IMIE==AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:
             Scatter.read_hgphase()
-        elif Scatter.IMIE==1:
+        elif Scatter.IMIE==AerosolPhaseFunctionCalculationMode.MIE_THEORY:
             Scatter.read_phase()
-        elif Scatter.IMIE==2:
+        elif Scatter.IMIE==AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:
             Scatter.read_lpphase()
         else:
             raise ValueError('error :: IMIE must be an integer from 0 to 2')
@@ -1156,26 +1162,25 @@ def read_inp(runname,Measurement=None,Scatter=None,Spectroscopy=None):
     nlines = file_lines(runname+'.inp')
     if nlines < 7:
         raise RuntimeError(f"Not enough lines when reading {runname}.inp")
-    elif nlines==7:
-        iiform=0
-    elif nlines==8:
-        iiform=1
+    elif nlines == 7:
+        iiform = 0
+    elif nlines == 8:
+        iiform = 1
     elif nlines > 8:
-        iiform=2
+        iiform = 2
 
     #Opening file
     f = open(runname+'.inp','r')
     tmp = f.readline().split()
-    ispace = int(tmp[0])
-    iscat = int(tmp[1])
-    ilbl = int(tmp[2])
+    ispace = WaveUnit(int(tmp[0]))
+    iscat = ScatteringCalculationMode(int(tmp[1]))
+    ilbl = SpectralCalculationMode(int(tmp[2]))
 
-    
-    if Measurement==None:
+    if Measurement is None:
         Measurement = Measurement_0()
-    Measurement.ISPACE=ispace
+    Measurement.ISPACE = ispace
 
-    if Scatter==None:
+    if Scatter is None:
         Scatter = Scatter_0()
     Scatter.ISPACE = ispace
     Scatter.ISCAT = iscat
@@ -1183,7 +1188,7 @@ def read_inp(runname,Measurement=None,Scatter=None,Spectroscopy=None):
     if Spectroscopy==None:
         Spectroscopy = Spectroscopy_0(RUNNAME=runname)
     Spectroscopy.ILBL = ilbl
-    
+
     tmp = f.readline().split()
     WOFF = float(tmp[0])
     fmerrname = str(f.readline().split())
@@ -1191,28 +1196,28 @@ def read_inp(runname,Measurement=None,Scatter=None,Spectroscopy=None):
     NITER = int(tmp[0])
     tmp = f.readline().split()
     PHILIMIT = float(tmp[0])
-    
+
     tmp = f.readline().split()
     NSPEC = int(tmp[0])
     IOFF = int(tmp[1])
-    
+
     tmp = f.readline().split()
     LIN = int(tmp[0])
 
-    if iiform==1:
+    if iiform == 1:
         tmp = f.readline().split()
-        iform = int(tmp[0])
-        Measurement.IFORM=iform
+        iform = SpectraUnit(int(tmp[0]))
+        Measurement.IFORM = iform
     elif iiform == 2:
         tmp = f.readline().split()
-        iform = int(tmp[0])
-        Measurement.IFORM=iform
+        iform = SpectraUnit(int(tmp[0]))
+        Measurement.IFORM = iform
         tmp = f.readline().split()
-        Measurement.V_DOPPLER=float(tmp[0])
+        Measurement.V_DOPPLER = float(tmp[0])
     else:
-        Measurement.IFORM=0
-    
-    return  Measurement,Scatter,Spectroscopy,WOFF,fmerrname,NITER,PHILIMIT,NSPEC,IOFF,LIN
+        Measurement.IFORM = SpectraUnit.Radiance
+
+    return Measurement, Scatter, Spectroscopy, WOFF, fmerrname, NITER, PHILIMIT, NSPEC, IOFF, LIN
 
 ###############################################################################################
 
@@ -1301,10 +1306,10 @@ def read_set(runname,Layer=None,Surface=None,Stellar=None,Scatter=None):
     if Stellar==None:
         Stellar = Stellar_0()
         Stellar.DIST = dist
-        if isol==1:
+        if isol==True:
             Stellar.SOLEXIST = True
             Stellar.read_sol(runname)
-        elif isol==0:
+        elif isol==False:
             Stellar.SOLEXIST = False
         else:
             raise ValueError('error reading .set file :: SOLEXIST must be either True or False')
@@ -1313,7 +1318,7 @@ def read_set(runname,Layer=None,Surface=None,Stellar=None,Scatter=None):
     if Surface==None:
         Surface = Surface_0()
 
-    Surface.LOWBC = lowbc
+    Surface.LOWBC = LowerBoundaryCondition(lowbc)
     Surface.GALB = galb
     Surface.TSURF = tsurf
 
@@ -1322,8 +1327,8 @@ def read_set(runname,Layer=None,Surface=None,Stellar=None,Scatter=None):
         Layer = Layer_0()
     
     Layer.LAYHT = layht*1.0e3
-    Layer.LAYTYP = laytp
-    Layer.LAYINT = layint
+    Layer.LAYTYP = LayerType(laytp)
+    Layer.LAYINT = LayerIntegrationScheme(layint)
     Layer.NLAY = nlayer
 
     return Scatter,Stellar,Surface,Layer
@@ -1373,9 +1378,9 @@ def read_fla(runname):
     #Opening file
     f = open(runname+'.fla','r')
     s = f.readline().split()
-    inormal = int(s[0])
+    inormal = ParaH2Ratio(int(s[0]))
     s = f.readline().split()
-    iray = int(s[0])
+    iray = RayleighScatteringMode(int(s[0]))
     s = f.readline().split()
     ih2o = int(s[0])
     s = f.readline().split()
@@ -1387,7 +1392,7 @@ def read_fla(runname):
     s = f.readline().split()
     iptf = int(s[0])
     s = f.readline().split()
-    imie = int(s[0])
+    imie = AerosolPhaseFunctionCalculationMode(int(s[0]))
     s = f.readline().split()
     iuv = int(s[0])
    
@@ -1436,14 +1441,14 @@ def write_fla(runname,inormal,iray,ih2o,ich4,io3,inh3,iptf,imie,iuv):
     """
 
     f = open(runname+'.fla','w')
-    f.write('%i \t %s \n' % (inormal,'!INORMAL'))
-    f.write('%i \t %s \n' % (iray,'!IRAY'))
+    f.write('%i \t %s \n' % (int(inormal),'!INORMAL'))
+    f.write('%i \t %s \n' % (int(iray),'!IRAY'))
     f.write('%i \t %s \n' % (ih2o,'!IH2O'))
     f.write('%i \t %s \n' % (ich4,'!ICH4'))
     f.write('%i \t %s \n' % (io3,'!IO3'))
     f.write('%i \t %s \n' % (inh3,'!INH3'))
     f.write('%i \t %s \n' % (iptf,'!IPTF'))
-    f.write('%i\t %s \n' % (imie,'!IMIE'))
+    f.write('%i\t %s \n' % (int(imie),'!IMIE'))
     f.write('%i\t %s \n' % (iuv,'!IUV'))
     f.close()
 
@@ -1556,15 +1561,15 @@ def write_inp(runname,ispace,iscat,ilbl,woff,niter,philimit,nspec,ioff,lin,IFORM
 
     #Opening file
     f = open(runname+'.inp','w')
-    f.write('%i \t %i \t %i \n' % (ispace,iscat,ilbl))
+    f.write('%i \t %i \t %i \n' % (int(ispace), int(iscat), int(ilbl)))
     f.write('%10.5f \n' % (woff))
     f.write(runname+'.err \n')
     f.write('%i \n' % (niter))
     f.write('%10.5f \n' % (philimit))
-    f.write('%i \t %i \n' % (nspec,ioff))
+    f.write('%i \t %i \n' % (nspec, ioff))
     f.write('%i \n' % (lin))
-    if IFORM!=-1:
-        f.write('%i \n' % (IFORM))
+    if IFORM != -1:
+        f.write('%i \n' % (int(IFORM)))
     f.close()
 
 ###############################################################################################

@@ -1,4 +1,5 @@
 from archnemesis import *
+from archnemesis.enums import InstrumentLineshape, WaveUnit, SpectraUnit
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as matplotlib
@@ -165,15 +166,17 @@ class Measurement_0:
     
     """
 
-    def __init__(self, runname='', NGEOM=1, FWHM=0.0, ISHAPE=2, IFORM=0, ISPACE=0, LATITUDE=0.0, LONGITUDE=0.0, V_DOPPLER=0.0, NCONV=[1], NAV=[1]):
+    def __init__(self, runname='', NGEOM=1, FWHM=0.0, ISHAPE=InstrumentLineshape.Gaussian, 
+                 IFORM=SpectraUnit.Radiance, ISPACE=WaveUnit.Wavenumber_cm, 
+                 LATITUDE=0.0, LONGITUDE=0.0, V_DOPPLER=0.0, NCONV=[1], NAV=[1]):
 
         #Input parameters
         self.runname = runname
         self.NGEOM = NGEOM
         self.FWHM = FWHM
-        self.ISPACE = ISPACE
-        self.ISHAPE = ISHAPE
-        self.IFORM = IFORM
+        #self.ISPACE = ISPACE
+        #self.ISHAPE = ISHAPE
+        #self.IFORM = IFORM
         self.LATITUDE = LATITUDE        
         self.LONGITUDE = LONGITUDE
         self.V_DOPPLER = V_DOPPLER
@@ -202,6 +205,40 @@ class Measurement_0:
         self.NFIL = None  #np.zeros(NCONV)
         self.VFIL = None  #np.zeros(NFIL,NCONV)
         self.AFIL = None  #np.zeros(NFIL,NCONV)
+        
+        # private attributes
+        self._ishape = None
+        self._ispace = None
+        self._iform = None
+        
+        # properties
+        self.ISHAPE = ISHAPE
+        self.ISPACE = ISPACE
+        self.IFORM = IFORM
+    
+    @property
+    def ISHAPE(self) -> InstrumentLineshape:
+        return self._ishape
+    
+    @ISHAPE.setter
+    def ISHAPE(self, value):
+        self._ishape = InstrumentLineshape(value)
+    
+    @property
+    def ISPACE(self) -> WaveUnit:
+        return self._ispace
+    
+    @ISPACE.setter
+    def ISPACE(self, value):
+        self._ispace = WaveUnit(value)
+    
+    @property
+    def IFORM(self) -> SpectraUnit:
+        return self._iform
+    
+    @IFORM.setter
+    def IFORM(self, value):
+        self._iform = SpectraUnit(value)
 
     #################################################################################################################
 
@@ -211,100 +248,47 @@ class Measurement_0:
         """
 
         #Checking some common parameters to all cases
-        assert np.issubdtype(type(self.NGEOM), np.integer) == True , \
-            'NGEOM must be int'
-        assert self.NGEOM > 0 , \
-            'NGEOM must be >0'
+        assert isinstance(self.NGEOM, (int, np.integer)), 'NGEOM must be int'
+        assert self.NGEOM > 0, 'NGEOM must be >0'
         
-        assert np.issubdtype(type(self.IFORM), np.integer) == True , \
-            'IFORM must be int'
-        assert self.IFORM >= 0 , \
-            'IFORM must be >=0 and <=5'
-        assert self.IFORM <= 5 , \
-            'IFORM must be >=0 and <=5'
+        assert isinstance(self.IFORM, (int, np.integer, SpectraUnit)), 'IFORM must be int'
+        assert self.IFORM >= SpectraUnit.Radiance, 'IFORM must be >=0 and <=5'
+        assert self.IFORM <= SpectraUnit.Normalised_radiance, 'IFORM must be >=0 and <=5'
             
-        if self.IFORM == 5:
-            assert isinstance(self.VNORM, float) == True , \
-                'VNORM must be float if IFORM=5'
-            
+        if self.IFORM == SpectraUnit.Normalised_radiance:
+            assert isinstance(self.VNORM, float), 'VNORM must be float if IFORM=5'
             for i in range(self.NGEOM):
-                assert self.VNORM >= self.VCONV[0:self.NCONV[i]].min() , \
-                    'VNORM must be >= min(VCONV)'
-                assert self.VNORM <= self.VCONV[0:self.NCONV[i]].max() , \
-                    'VNORM must be <= max(VCONV)'
+                assert self.VNORM >= self.VCONV[0:self.NCONV[i]].min(), 'VNORM must be >= min(VCONV)'
+                assert self.VNORM <= self.VCONV[0:self.NCONV[i]].max(), 'VNORM must be <= max(VCONV)'
 
-        assert np.issubdtype(type(self.ISPACE), np.integer) == True , \
-            'ISPACE must be int'
-        assert self.ISPACE >= 0 , \
-            'ISPACE must be >=0 and <=1'
-        assert self.ISPACE <= 1 , \
-            'ISPACE must be >=0 and <=1'
+        assert isinstance(self.ISPACE, (int, np.integer, WaveUnit)), 'ISPACE must be int'
+        assert self.ISPACE >= WaveUnit.Wavenumber_cm, 'ISPACE must be >=0 and <=1'
+        assert self.ISPACE <= WaveUnit.Wavelength_um, 'ISPACE must be >=0 and <=1'
         
-        assert np.issubdtype(type(self.FWHM), float) == True , \
-            'FWHM must be float'
-            
-        assert np.issubdtype(type(self.V_DOPPLER), float) == True , \
-            'V_DOPPLER must be float'
-        
-        assert len(self.NCONV) == self.NGEOM , \
-            'NCONV must have size (NGEOM)'
-        
-        assert self.VCONV.shape == (self.NCONV.max(),self.NGEOM) , \
-            'VCONV must have size (NCONV,NGEOM)'
-        
-        assert self.MEAS.shape == (self.NCONV.max(),self.NGEOM) , \
-            'MEAS must have size (NCONV,NGEOM)'
-        
-        assert self.ERRMEAS.shape == (self.NCONV.max(),self.NGEOM) , \
-            'ERRMEAS must have size (NCONV,NGEOM)'
-        
-        assert len(self.NAV) == self.NGEOM , \
-            'NAV must have size (NGEOM)'
-        
-        assert self.FLAT.shape == (self.NGEOM,self.NAV.max()) , \
-            'FLAT must have size (NGEOM,NAV)'
-        
-        assert self.FLON.shape == (self.NGEOM,self.NAV.max()) , \
-            'FLON must have size (NGEOM,NAV)'
-        
-        assert self.WGEOM.shape == (self.NGEOM,self.NAV.max()) , \
-            'WGEOM must have size (NGEOM,NAV)'
-        
-        assert self.EMISS_ANG.shape == (self.NGEOM,self.NAV.max()) , \
-            'EMISS_ANG must have size (NGEOM,NAV)'
+        assert isinstance(self.FWHM, float), 'FWHM must be float'
+        assert isinstance(self.V_DOPPLER, float), 'V_DOPPLER must be float'
+        assert len(self.NCONV) == self.NGEOM, 'NCONV must have size (NGEOM)'
+        assert self.VCONV.shape == (self.NCONV.max(),self.NGEOM), 'VCONV must have size (NCONV,NGEOM)'
+        assert self.MEAS.shape == (self.NCONV.max(),self.NGEOM), 'MEAS must have size (NCONV,NGEOM)'
+        assert self.ERRMEAS.shape == (self.NCONV.max(),self.NGEOM), 'ERRMEAS must have size (NCONV,NGEOM)'
+        assert len(self.NAV) == self.NGEOM, 'NAV must have size (NGEOM)'
+        assert self.FLAT.shape == (self.NGEOM,self.NAV.max()), 'FLAT must have size (NGEOM,NAV)'
+        assert self.FLON.shape == (self.NGEOM,self.NAV.max()), 'FLON must have size (NGEOM,NAV)'
+        assert self.WGEOM.shape == (self.NGEOM,self.NAV.max()), 'WGEOM must have size (NGEOM,NAV)'
+        assert self.EMISS_ANG.shape == (self.NGEOM,self.NAV.max()), 'EMISS_ANG must have size (NGEOM,NAV)'
 
         #Checking if there are any limb-viewing geometries
         if self.EMISS_ANG.min()<0.0:
-            assert self.TANHE.shape == (self.NGEOM,self.NAV.max()) , \
-                'TANHE must have size (NGEOM,NAV)'
+            assert self.TANHE.shape == (self.NGEOM,self.NAV.max()), 'TANHE must have size (NGEOM,NAV)'
             
         #Checking if there are any nadir-viewing / upward looking geometries
         if self.EMISS_ANG.max() >= 0.0:
-            assert self.SOL_ANG.shape == (self.NGEOM,self.NAV.max()) , \
-                'SOL_ANG must have size (NGEOM,NAV)'
-            assert self.AZI_ANG.shape == (self.NGEOM,self.NAV.max()) , \
-                'AZI_ANG must have size (NGEOM,NAV)'
-
+            assert self.SOL_ANG.shape == (self.NGEOM,self.NAV.max()), 'SOL_ANG must have size (NGEOM,NAV)'
+            assert self.AZI_ANG.shape == (self.NGEOM,self.NAV.max()), 'AZI_ANG must have size (NGEOM,NAV)'
 
         if self.FWHM > 0.0: #Analytical instrument lineshape
+            assert isinstance(self.ISHAPE, (int, np.integer, InstrumentLineshape)), 'ISHAPE must be int'
 
-            assert np.issubdtype(type(self.ISHAPE), np.integer) == True , \
-                'ISHAPE must be int'
-            
-        elif self.FWHM < 0.0: #Explicit instrument lineshape in each wavelength
-
-            assert len(np.unique(self.NCONV)) == 1 , \
-                'All geometries must have same number of spectral bins if FWHM<0'
-
-            assert len(self.NFIL) == self.NCONV[0] , \
-                'NFIL must have size (NCONV)'
-            
-            assert self.VFIL.shape == (self.NFIL.max(),self.NCONV[0]) , \
-                'VFIL must have size (NFIL,NCONV)'
-            
-            assert self.AFIL.shape == (self.NFIL.max(),self.NCONV[0]) , \
-                'AFIL must have size (NFIL.max,NCONV)'
-            
     #################################################################################################################
             
     def summary_info(self):
@@ -313,17 +297,17 @@ class Measurement_0:
         """      
 
         #Defining spectral resolution
-        if self.FWHM>0.0:
+        if self.FWHM > 0.0:
             print('Spectral resolution of the measurement (FWHM) :: ',self.FWHM)
-        elif self.FWHM<0.0:
+        elif self.FWHM < 0.0:
             print('Instrument line shape defined in .fil file')
         else:
             print('Spectral resolution of the measurement is account for in the k-tables')
 
         wavelength_unit = 'um'
         wavenumber_unit = 'cm^-1'
-        to_wavelength = (lambda x: x) if self.ISPACE==0 else (lambda x: 1E4/x)
-        to_wavenumber = (lambda x: x) if self.ISPACE==1 else (lambda x: 1E4/x)
+        to_wavelength = (lambda x: x) if self.ISPACE==WaveUnit.Wavelength_um else (lambda x: 1E4/x)
+        to_wavenumber = (lambda x: x) if self.ISPACE==WaveUnit.Wavenumber_cm else (lambda x: 1E4/x)
         wavenumber_str = lambda x: str(to_wavenumber(x))+' '+wavenumber_unit
         wavelength_str = lambda x: str(to_wavelength(x))+' '+wavelength_unit
 
@@ -403,53 +387,53 @@ class Measurement_0:
         dset.attrs['units'] = 'km s-1'
 
         #Writing the spectral units
-        dset = grp.create_dataset('ISPACE',data=self.ISPACE)
+        dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
         dset.attrs['title'] = "Spectral units"
-        if self.ISPACE==0:
+        if self.ISPACE==WaveUnit.Wavenumber_cm:
             dset.attrs['units'] = 'Wavenumber / cm-1'
-        elif self.ISPACE==1:
+        elif self.ISPACE==WaveUnit.Wavelength_um:
             dset.attrs['units'] = 'Wavelength / um'
 
         #Writing the measurement units
-        dset = grp.create_dataset('IFORM',data=self.IFORM)
+        dset = grp.create_dataset('IFORM',data=int(self.IFORM))
         dset.attrs['title'] = "Measurement units"
         
-        if self.ISPACE==0:  #Wavenumber space
-            if self.IFORM==0:
+        if self.ISPACE==WaveUnit.Wavenumber_cm:  #Wavenumber space
+            if self.IFORM==SpectraUnit.Radiance:
                 lunit = 'Radiance / W cm-2 sr-1 (cm-1)-1'
-            elif self.IFORM==1:
+            elif self.IFORM==SpectraUnit.FluxRatio:
                 lunit = 'Secondary transit depth (Fplanet/Fstar) / Dimensionless'
-            elif self.IFORM==2:
+            elif self.IFORM==SpectraUnit.A_Ratio:
                 lunit = 'Primary transit depth (100*Aplanet/Astar) / Dimensionless'
-            elif self.IFORM==3:
+            elif self.IFORM==SpectraUnit.Integrated_spectral_power:
                 lunit = 'Integrated spectral power of planet / W (cm-1)-1'
-            elif self.IFORM==4:
+            elif self.IFORM==SpectraUnit.Atmospheric_transmission:
                 lunit = 'Atmospheric transmission multiplied by solar flux / W cm-2 (cm-1)-1'
-            elif self.IFORM==5:
+            elif self.IFORM==SpectraUnit.Normalised_radiance:
                 lunit = 'Spectra normalised to VNORM'
 
-        elif self.ISPACE==1:  #Wavelength space
-            if self.IFORM==0:
+        elif self.ISPACE==WaveUnit.Wavelength_um:  #Wavelength space
+            if self.IFORM==SpectraUnit.Radiance:
                 lunit = 'Radiance / W cm-2 sr-1 um-1'
-            elif self.IFORM==1:
+            elif self.IFORM==SpectraUnit.FluxRatio:
                 lunit = 'Secondary transit depth (Fplanet/Fstar) / Dimensionless'
-            elif self.IFORM==2:
+            elif self.IFORM==SpectraUnit.A_Ratio:
                 lunit = 'Primary transit depth (100*Aplanet/Astar) / Dimensionless'
-            elif self.IFORM==3:
+            elif self.IFORM==SpectraUnit.Integrated_spectral_power:
                 lunit = 'Integrated spectral power of planet / W um-1'
-            elif self.IFORM==4:
+            elif self.IFORM==SpectraUnit.Atmospheric_transmission:
                 lunit = 'Atmospheric transmission multiplied by solar flux / W cm-2 um-1'
-            elif self.IFORM==5:
+            elif self.IFORM==SpectraUnit.Normalised_radiance:
                 lunit = 'Spectra normalised to VNORM'
 
         dset.attrs['units'] = lunit
         
-        if self.IFORM==5:
+        if self.IFORM==SpectraUnit.Normalised_radiance:
             dset = grp.create_dataset('VNORM',data=self.VNORM)
-            if self.ISPACE==0:
+            if self.ISPACE==WaveUnit.Wavenumber_cm:
                 dset.attrs['title'] = "Wavenumber for normalisation"
                 dset.attrs['units'] = 'cm-1'
-            elif self.ISPACE==0:
+            elif self.ISPACE==WaveUnit.Wavelength_um:
                 dset.attrs['title'] = "Wavelength for normalisation"
                 dset.attrs['units'] = 'um'
 
@@ -504,9 +488,9 @@ class Measurement_0:
 
         dset = grp.create_dataset('VCONV',data=self.VCONV)
         dset.attrs['title'] = "Spectral bins"
-        if self.ISPACE==0:
+        if self.ISPACE==WaveUnit.Wavenumber_cm:
             dset.attrs['units'] = 'Wavenumber / cm-1'
-        elif self.ISPACE==1:
+        elif self.ISPACE==WaveUnit.Wavelength_um:
             dset.attrs['units'] = 'Wavelength / um'
 
         dset = grp.create_dataset('MEAS',data=self.MEAS)
@@ -517,43 +501,43 @@ class Measurement_0:
         dset.attrs['title'] = "Uncertainty in the measured spectrum in each geometry"
         dset.attrs['units'] = lunit
 
-        if self.FWHM>0.0:
-            dset = grp.create_dataset('ISHAPE',data=self.ISHAPE)
+        if self.FWHM > 0.0:
+            dset = grp.create_dataset('ISHAPE',data=int(self.ISHAPE))
             dset.attrs['title'] = "Instrument lineshape"
-            if self.ISHAPE==0:
+            if self.ISHAPE==InstrumentLineshape.Square:
                 lils = 'Square function'
-            elif self.ISHAPE==1:
+            elif self.ISHAPE==InstrumentLineshape.Triangular:
                 lils = 'Triangular function'
-            elif self.ISHAPE==2:
+            elif self.ISHAPE==InstrumentLineshape.Gaussian:
                 lils = 'Gaussian function'
-            elif self.ISHAPE==3:
+            elif self.ISHAPE==InstrumentLineshape.Hamming:
                 lils = 'Hamming function'
-            elif self.ISHAPE==4:
+            elif self.ISHAPE==InstrumentLineshape.Hanning:
                 lils = 'Hanning function'
             dset.attrs['type'] = lils
 
         dset = grp.create_dataset('FWHM',data=self.FWHM)
         dset.attrs['title'] = "FWHM of instrument lineshape"
-        if self.FWHM>0.0:
-            if self.ISPACE==0:
+        if self.FWHM > 0.0:
+            if self.ISPACE==WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
-            elif self.ISPACE==1:
+            elif self.ISPACE==WaveUnit.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um'
             dset.attrs['type'] = 'Analytical lineshape ('+lils+')'
-        elif self.FWHM==0:
+        elif self.FWHM==0.0:
             dset.attrs['type'] = 'Convolution already performed in k-tables'
-        elif self.FWHM<0.0:
+        elif self.FWHM < 0.0:
             dset.attrs['type'] = 'Explicit definition of instrument lineshape in each spectral bin'
 
-        if self.FWHM<0.0:
+        if self.FWHM < 0.0:
             dset = grp.create_dataset('NFIL',data=self.NFIL)
             dset.attrs['title'] = "Number of points required to define the ILS in each spectral bin"
 
-            if self.ISPACE==0:
+            if self.ISPACE==WaveUnit.Wavenumber_cm:
                 dset = grp.create_dataset('VFIL',data=self.VFIL)
                 dset.attrs['title'] = "Wavenumber of the points required to define the ILS in each spectral bin"
                 dset.attrs['unit'] = "Wavenumber / cm-1"
-            elif self.ISPACE==1:
+            elif self.ISPACE==WaveUnit.Wavelength_um:
                 dset = grp.create_dataset('VFIL',data=self.VFIL)
                 dset.attrs['title'] = "Wavelength of the points required to define the ILS in each spectral bin"
                 dset.attrs['unit'] = "Wavelength / um"
@@ -582,8 +566,8 @@ class Measurement_0:
         else:
 
             self.NGEOM = np.int32(f.get('Measurement/NGEOM'))
-            self.ISPACE = np.int32(f.get('Measurement/ISPACE'))
-            self.IFORM = np.int32(f.get('Measurement/IFORM'))
+            self.ISPACE = WaveUnit(np.int32(f.get('Measurement/ISPACE')))
+            self.IFORM = SpectraUnit(np.int32(f.get('Measurement/IFORM')))
             self.LATITUDE = np.float64(f.get('Measurement/LATITUDE'))
             self.LONGITUDE = np.float64(f.get('Measurement/LONGITUDE'))
             self.NAV = np.array(f.get('Measurement/NAV'))
@@ -592,7 +576,7 @@ class Measurement_0:
             self.WGEOM = np.array(f.get('Measurement/WGEOM'))
             self.EMISS_ANG = np.array(f.get('Measurement/EMISS_ANG'))
             
-            if self.IFORM==5:
+            if self.IFORM==SpectraUnit.Normalised_radiance:
                 if 'Measurement/VNORM' in f:
                     self.VNORM = np.float64(f.get('Measurement/VNORM'))
             
@@ -617,9 +601,9 @@ class Measurement_0:
             self.ERRMEAS = np.array(f.get('Measurement/ERRMEAS'))
 
             self.FWHM = np.float64(f.get('Measurement/FWHM'))
-            if self.FWHM>0.0:
-                self.ISHAPE = np.int32(f.get('Measurement/ISHAPE'))
-            elif self.FWHM<0.0:
+            if self.FWHM > 0.0:
+                self.ISHAPE = InstrumentLineshape(np.int32(f.get('Measurement/ISHAPE')))
+            elif self.FWHM < 0.0:
                 self.NFIL = np.array(f.get('Measurement/NFIL'))
                 self.VFIL = np.array(f.get('Measurement/VFIL'))
                 self.AFIL = np.array(f.get('Measurement/AFIL'))
@@ -847,20 +831,14 @@ class Measurement_0:
         """
         Read the .sha file to see what the Instrument Lineshape.
         This file is only read if FWHM>0.
-            (0) Square lineshape
-            (1) Triangular
-            (2) Gaussian
-            (3) Hamming
-            (4) Hanning 
         """
 
         #Opening file
         f = open(self.runname+'.sha','r')
         s = f.readline().split()
         lineshape = int(s[0])
-
-        self.ISHAPE = lineshape
-        self.build_ils() # Construct instrument lineshape just we do for HDF5 case
+        self.ISHAPE = InstrumentLineshape(lineshape)
+        self.build_ils()
 
     #################################################################################################################
 
@@ -871,11 +849,11 @@ class Measurement_0:
         (Only valid if FWHM>0.0)
         """
 
-        if self.FWHM<0.0:
+        if self.FWHM < 0.0:
             raise ValueError('error in write_sha() :: The .sha file is only used if FWHM>0')
 
         f = open(self.runname+'.sha','w')
-        f.write("%i \n" %  (self.ISHAPE))
+        f.write("%i \n" %  (int(self.ISHAPE)))
         f.close()
 
     #################################################################################################################
@@ -1512,11 +1490,11 @@ class Measurement_0:
         if self.FWHM>0.0:
 
             #Calculating the limits defining the ILS
-            if self.ISHAPE==0:   #Square lineshape
+            if self.ISHAPE==InstrumentLineshape.Square:   #Square lineshape
                 dv = 0.5*self.FWHM
-            elif self.ISHAPE==1: #Triangular
+            elif self.ISHAPE==InstrumentLineshape.Triangular: #Triangular
                 dv = self.FWHM
-            elif self.ISHAPE==2: #Gaussian
+            elif self.ISHAPE==InstrumentLineshape.Gaussian: #Gaussian
                 dv = 3.* 0.5 * self.FWHM / np.sqrt(np.log(2.0))
             else: 
                 raise ValueError('error in build_ils :: ishape not included yet in function')
@@ -1527,11 +1505,11 @@ class Measurement_0:
             ils = np.zeros(nwave)
             
             #Defining the ILS
-            if self.ISHAPE==0:   #Square lineshape
+            if self.ISHAPE==InstrumentLineshape.Square:   #Square lineshape
                 ils[:] = 1.0    
-            elif self.ISHAPE==1: #Triangular
+            elif self.ISHAPE==InstrumentLineshape.Triangular: #Triangular
                 ils[:] = 1.0 - np.abs(vwave)/self.FWHM
-            elif self.ISHAPE==2: #Gaussian
+            elif self.ISHAPE==InstrumentLineshape.Gaussian: #Gaussian
                 sig = 0.5 * self.FWHM / np.sqrt(np.log(2.0))
                 ils[:] = np.exp(-((vwave)/sig)**2)
                 
@@ -1572,11 +1550,11 @@ class Measurement_0:
 
         if self.FWHM>0.0:
 
-            if self.ISHAPE==0:
+            if self.ISHAPE==InstrumentLineshape.Square:
                 dv = 0.5*self.FWHM
-            elif self.ISHAPE==1:
+            elif self.ISHAPE==InstrumentLineshape.Triangular:
                 dv = self.FWHM
-            elif self.ISHAPE==2:
+            elif self.ISHAPE==InstrumentLineshape.Gaussian:
                 dv = 3.* 0.5 * self.FWHM / np.sqrt(np.log(2.0))
             else:
                 dv = 3.*self.FWHM
@@ -2221,10 +2199,10 @@ class Measurement_0:
         
         c = 299792458.0   #Speed of light (m/s)
         
-        if self.ISPACE==0:
+        if self.ISPACE==WaveUnit.Wavenumber_cm:
             #Wavenumber (cm-1)
             wave_shift = self.V_DOPPLER*1.0e3 / c * wave
-        elif self.ISPACE==1:
+        elif self.ISPACE==WaveUnit.Wavelength_um:
             #Wavelength (um)
             wave_shift = -self.V_DOPPLER*1.0e3 / c * wave
         
@@ -2248,10 +2226,10 @@ class Measurement_0:
         
         c = 299792458.0   #Speed of light (m/s)
         
-        if self.ISPACE==0:
+        if self.ISPACE==WaveUnit.Wavenumber_cm:
             #Wavenumber (cm-1)
             wave_0 = wave / (1.0-self.V_DOPPLER*1.0e3 / c)
-        elif self.ISPACE==1:
+        elif self.ISPACE==WaveUnit.Wavelength_um:
             #Wavelength (um)
             wave_0 = wave / (1.0+self.V_DOPPLER*1.0e3 / c)
         
@@ -2275,10 +2253,10 @@ class Measurement_0:
         
         c = 299792458.0   #Speed of light (m/s)
         
-        if self.ISPACE==0:
+        if self.ISPACE==WaveUnit.Wavenumber_cm:
             #Wavenumber (cm-1)
             wave = wave_0 * (1.0-self.V_DOPPLER*1.0e3 / c)
-        elif self.ISPACE==1:
+        elif self.ISPACE==WaveUnit.Wavelength_um:
             #Wavelength (um)
             wave = wave_0 * (1.0+self.V_DOPPLER*1.0e3 / c)
         
@@ -2293,11 +2271,11 @@ class Measurement_0:
 
         fig,ax1 = plt.subplots(1,1,figsize=(10,4))
 
-        if self.ISPACE==0:
+        if self.ISPACE==WaveUnit.Wavenumber_cm:
             xlabel=r'Wavenumber (cm$^{-1}$)'
             xsymbol = r'$\nu$'
             xunit = r'cm$^{-1}$'
-        elif self.ISPACE==1:
+        elif self.ISPACE==WaveUnit.Wavelength_um:
             xlabel=r'Wavelength ($\mu$m)'
             xsymbol = r'$\lambda$'
             xunit = r'$\mu$m'
@@ -2660,13 +2638,13 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
     for j in range(nconv):
         yfwhm = fwhm
         vcen = vconv[j]
-        if ishape==0:
+        if ishape==InstrumentLineshape.Square:
             v1 = vcen-0.5*yfwhm
             v2 = v1 + yfwhm
-        elif ishape==1:
+        elif ishape==InstrumentLineshape.Triangular:
             v1 = vcen-yfwhm
             v2 = vcen+yfwhm
-        elif ishape==2:
+        elif ishape==InstrumentLineshape.Gaussian:
             sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
             v1 = vcen - 3.*sig
             v2 = vcen + 3.*sig
@@ -2682,17 +2660,16 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
         np1 = len(inwave)
         for i in range(np1):
             f1=0.0
-            if ishape==0:
+            if ishape==InstrumentLineshape.Square:
                 #Square instrument lineshape
                 f1=1.0
-            elif ishape==1:
+            elif ishape==InstrumentLineshape.Triangular:
                 #Triangular instrument shape
                 f1=1.0 - abs(vwave[inwave[i]] - vcen)/yfwhm
-            elif ishape==2:
+            elif ishape==InstrumentLineshape.Gaussian:
                 #Gaussian instrument shape
                 f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
             else:
-                #raise ValueError('lblconv :: ishape not included yet in function')
                 dummy = 1
 
             if f1>0.0:
@@ -2757,13 +2734,13 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
             for j in range(nconv):
                 yfwhm = fwhm
                 vcen = vconv[j]
-                if ishape==0:
+                if ishape==InstrumentLineshape.Square:
                     v1 = vcen-0.5*yfwhm
                     v2 = v1 + yfwhm
-                elif ishape==1:
+                elif ishape==InstrumentLineshape.Triangular:
                     v1 = vcen-yfwhm
                     v2 = vcen+yfwhm
-                elif ishape==2:
+                elif ishape==InstrumentLineshape.Gaussian:
                     sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
                     v1 = vcen - 3.*sig
                     v2 = vcen + 3.*sig
@@ -2778,17 +2755,15 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
                 np1 = len(inwave)
                 for i in range(np1):
                     f1=0.0
-                    if ishape==0:
+                    if ishape==InstrumentLineshape.Square:
                         #Square instrument lineshape
                         f1=1.0
-                    elif ishape==1:
+                    elif ishape==InstrumentLineshape.Triangular:
                         #Triangular instrument shape
                         f1=1.0 - abs(vwave[inwave[i]] - vcen)/yfwhm
-                    elif ishape==2:
+                    elif ishape==InstrumentLineshape.Gaussian:
                         #Gaussian instrument shape
                         f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
-                    #else:
-                    #    raise ValueError('lblconv :: ishape not included yet in function')
 
                     if f1>0.0:
                         yout[j,:] = yout[j,:] + f1*y[inwave[i],:]
@@ -2982,11 +2957,6 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
         nx = dydx.shape[2]
         ngeom = dydx.shape[1]
 
-        #if dydx.shape[0]!=nconv:
-        #    raise ValueError('error in lblconvg :: Number of elements in dydx must be nconv')
-        #if y.shape[0]!=nconv:
-        #    raise ValueError('error in lblconvg :: Number of elements in y must be nconv')
-
         yout = np.zeros((nconv,ngeom))
         ynor = np.zeros((nconv,ngeom))
         gradout = np.zeros((nconv,ngeom,nx))
@@ -2998,13 +2968,13 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
         for j in range(nconv):
             yfwhm = fwhm
             vcen = vconv[j]
-            if ishape==0:
+            if ishape==InstrumentLineshape.Square:
                 v1 = vcen-0.5*yfwhm
                 v2 = v1 + yfwhm
-            elif ishape==1:
+            elif ishape==InstrumentLineshape.Triangular:
                 v1 = vcen-yfwhm
                 v2 = vcen+yfwhm
-            elif ishape==2:
+            elif ishape==InstrumentLineshape.Gaussian:
                 sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
                 v1 = vcen - 3.*sig
                 v2 = vcen + 3.*sig
@@ -3019,17 +2989,15 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
             np1 = len(inwave)
             for i in range(np1):
                 f1=0.0
-                if ishape==0:
+                if ishape==InstrumentLineshape.Square:
                     #Square instrument lineshape
                     f1=1.0
-                elif ishape==1:
+                elif ishape==InstrumentLineshape.Triangular:
                     #Triangular instrument shape
                     f1=1.0 - abs(vwave[inwave[i]] - vcen)/yfwhm
-                elif ishape==2:
+                elif ishape==InstrumentLineshape.Gaussian:
                     #Gaussian instrument shape
                     f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
-                #else:
-                #    raise ValueError('lblconv :: ishape not included yet in function')
 
                 if f1>0.0:
                     yout[j,:] = yout[j,:] + f1*y[inwave[i],:]
@@ -3039,10 +3007,6 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
 
             yout[j,:] = yout[j,:]/ynor[j,:]
             gradout[j,:,:] = gradout[j,:,:]/gradnorm[j,:,:]
-
-    #else:
-
-    #    raise ValueError('error in lblconvg :: Dimensions in y and/or dydx are not correct')
 
     return yout,gradout
 
@@ -3093,11 +3057,6 @@ def lblconvg(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
         #It is assumed all geometries cover the same spectral range
         nx = dydx.shape[1]
 
-        #if dydx.shape[0]!=nconv:
-        #    raise ValueError('error in lblconvg :: Number of elements in dydx must be nconv')
-        #if y.shape[0]!=nconv:
-        #    raise ValueError('error in lblconvg :: Number of elements in y must be nconv')
-
         yout = np.zeros((nconv))
         ynor = np.zeros((nconv))
         gradout = np.zeros((nconv,nx))
@@ -3109,13 +3068,13 @@ def lblconvg(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
         for j in range(nconv):
             yfwhm = fwhm
             vcen = vconv[j]
-            if ishape==0:
+            if ishape==InstrumentLineshape.Square:
                 v1 = vcen-0.5*yfwhm
                 v2 = v1 + yfwhm
-            elif ishape==1:
+            elif ishape==InstrumentLineshape.Triangular:
                 v1 = vcen-yfwhm
                 v2 = vcen+yfwhm
-            elif ishape==2:
+            elif ishape==InstrumentLineshape.Gaussian:
                 sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
                 v1 = vcen - 3.*sig
                 v2 = vcen + 3.*sig
@@ -3130,17 +3089,15 @@ def lblconvg(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
             np1 = len(inwave)
             for i in range(np1):
                 f1=0.0
-                if ishape==0:
+                if ishape==InstrumentLineshape.Square:
                     #Square instrument lineshape
                     f1=1.0
-                elif ishape==1:
+                elif ishape==InstrumentLineshape.Triangular:
                     #Triangular instrument shape
                     f1=1.0 - abs(vwave[inwave[i]] - vcen)/yfwhm
-                elif ishape==2:
+                elif ishape==InstrumentLineshape.Gaussian:
                     #Gaussian instrument shape
                     f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
-                #else:
-                #    raise ValueError('lblconv :: ishape not included yet in function')
 
                 if f1>0.0:
                     yout[j] = yout[j] + f1*y[inwave[i]]
@@ -3199,11 +3156,6 @@ def lblconvg_fil_ngeom(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil):
         #It is assumed all geometries cover the same spectral range
         nx = dydx.shape[2]
         ngeom = dydx.shape[1]
-
-        #if dydx.shape[0]!=nconv:
-        #    raise ValueError('error in lblconvg :: Number of elements in dydx must be nconv')
-        #if y.shape[0]!=nconv:
-        #    raise ValueError('error in lblconvg :: Number of elements in y must be nconv')
 
         yout = np.zeros((nconv,ngeom))
         ynor = np.zeros((nconv,ngeom))
@@ -3283,11 +3235,6 @@ def lblconvg_fil(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil):
     
         #It is assumed all geometries cover the same spectral range
         nx = dydx.shape[1]
-
-        #if dydx.shape[0]!=nconv:
-        #    raise ValueError('error in lblconvg :: Number of elements in dydx must be nconv')
-        #if y.shape[0]!=nconv:
-        #    raise ValueError('error in lblconvg :: Number of elements in y must be nconv')
 
         yout = np.zeros((nconv))
         ynor = np.zeros((nconv))

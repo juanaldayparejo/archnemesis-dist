@@ -10,6 +10,8 @@ Telluric Class.
 from archnemesis import *
 import numpy as np
 
+from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnit, SpectralCalculationMode
+
 class Telluric_0:
     """
     Class to define the telluric atmosphere and observing geometry from the Earth. 
@@ -323,10 +325,10 @@ class Telluric_0:
         ##############################################################################################
         
         Atmosphere = Atmosphere_0()
-        Atmosphere.IPLANET = 3
+        Atmosphere.IPLANET  : PlanetEnum = PlanetEnum.Earth
         Atmosphere.LATITUDE = latitude
         Atmosphere.LONGITUDE = longitude
-        Atmosphere.AMFORM = 0
+        Atmosphere.AMFORM : AtmosphericProfileFormatEnum = AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED
         Atmosphere.NVMR = 8
         Atmosphere.ID = np.array([1,2,3,4,5,6,7,22],dtype='int32')
         Atmosphere.ISO = np.zeros(Atmosphere.NVMR,dtype='int32')
@@ -409,7 +411,7 @@ class Telluric_0:
         Scatter.SOL_ANG = 0.
         Scatter.AZI_ANG = 0.
         Measurement = Measurement_0()
-        Measurement.IFORM = 0
+        Measurement.IFORM = SpectraUnit.Radiance
         
         #Calculating the path
         FM = ForwardModel_0()
@@ -422,7 +424,7 @@ class Telluric_0:
         
         #Calculating the optical depth along the line-of-sight
         ########################################################################################################
-        if self.Spectroscopy.ILBL==2:  #LBL-table
+        if self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
 
             #Calculating the cross sections for each gas in each layer
             k = self.Spectroscopy.calc_klbl(len(tlay),play/101325.,tlay,WAVECALC=self.Spectroscopy.WAVE)
@@ -443,7 +445,7 @@ class Telluric_0:
             #Removing necessary data to save memory
             del k
 
-        elif self.Spectroscopy.ILBL==0:    #K-table
+        elif self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:    #K-table
             
             #Calculating the k-coefficients for each gas in each layer
             k_gas = self.Spectroscopy.calc_k(len(tlay),play/101325.,tlay,WAVECALC=self.Spectroscopy.WAVE) # (NWAVE,NG,NLAY,NGAS)

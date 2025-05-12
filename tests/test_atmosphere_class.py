@@ -1,6 +1,8 @@
 import pytest  
 import archnemesis as ans
 import numpy as np
+
+from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum
   
 def test_gravity():  
     '''
@@ -9,7 +11,7 @@ def test_gravity():
     
     #Declaring class
     Atmosphere = ans.Atmosphere_0()
-    Atmosphere.IPLANET=3   #Earth - The test can fail if the parameters for Earth in the dictionary are changed
+    Atmosphere.IPLANET = PlanetEnum.Earth   #Earth - The test can fail if the parameters for Earth in the dictionary are changed
     Atmosphere.NP = 3
     Atmosphere.H = np.linspace(0.,30000.,Atmosphere.NP)
     Atmosphere.LATITUDE=0.
@@ -32,7 +34,7 @@ def test_molwt():
     Atmosphere.NVMR = 5
     Atmosphere.ID = np.array([1,2,3,4,5])
     Atmosphere.ISO = np.array([0,0,0,0,0])
-    Atmosphere.AMFORM = 2   #Calculate molecular weight automatically
+    Atmosphere.AMFORM = AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR   #Calculate molecular weight automatically
     
     vmr = np.zeros((Atmosphere.NP,Atmosphere.NVMR))
     vmr[0,:] = np.array([0.1,0.5,0.1,0.1,0.2])
@@ -53,8 +55,8 @@ def test_hydrostath():
     
     Atmosphere = ans.Atmosphere_0()
 
-    Atmosphere.IPLANET = 3
-    Atmosphere.AMFORM = 2
+    Atmosphere.IPLANET = PlanetEnum.Earth
+    Atmosphere.AMFORM = AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR
     Atmosphere.NP = 3
     Atmosphere.NVMR = 8
     Atmosphere.LATITUDE = 30.
@@ -91,8 +93,8 @@ def test_hydrostatp():
     
     Atmosphere = ans.Atmosphere_0()
 
-    Atmosphere.IPLANET = 3
-    Atmosphere.AMFORM = 2
+    Atmosphere.IPLANET = PlanetEnum.Earth
+    Atmosphere.AMFORM = AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR
     Atmosphere.NP = 3
     Atmosphere.NVMR = 8
     Atmosphere.LATITUDE = 30.

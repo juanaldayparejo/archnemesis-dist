@@ -12,11 +12,23 @@ from archnemesis import *
 import numpy as np
 from scipy.special import legendre
 
+from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum
+
 class Atmosphere_0:
     """
     Clear atmosphere. Simplest possible profile.
     """
-    def __init__(self, runname='', Fortran = False, NP=10, NVMR=6, NDUST=0, NLOCATIONS=1, IPLANET=-1, AMFORM=1):
+    def __init__(
+            self, 
+            runname='', 
+            Fortran = False, 
+            NP=10, 
+            NVMR=6, 
+            NDUST=0, 
+            NLOCATIONS=1, 
+            IPLANET=PlanetEnum.UNDEFINED, 
+            AMFORM=AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE
+        ):
         """
         Set up an atmosphere profile with NP points and NVMR gases.
         Use the class methods to edit Height, Pressure, Temperature and
@@ -118,8 +130,8 @@ class Atmosphere_0:
         self.NP = NP
         self.NVMR = NVMR
         self.NDUST = NDUST
-        self.IPLANET = IPLANET
-        self.AMFORM = AMFORM
+        #self.IPLANET : PlanetEnum = IPLANET
+        #self.AMFORM : AtmosphericProfileFormatEnum = AMFORM
         self.NLOCATIONS = NLOCATIONS
         self.Fortran = Fortran
 
@@ -141,7 +153,32 @@ class Atmosphere_0:
         self.PARAH2 = None # np.zeros(NP) 
         
         self.SVP = {} # Flags for limiting gas profiles to saturated profiles (from .vpf file)
+        
+        
+        # private attributes
+        self._iplanet = None
+        self._amform = None
+        
+        # set properties
+        self.IPLANET = IPLANET
+        self.AMFORM = AMFORM
     ##################################################################################
+
+    @property
+    def IPLANET(self) -> PlanetEnum:
+        return self._iplanet
+    
+    @IPLANET.setter
+    def IPLANET(self, value):
+        self._iplanet = PlanetEnum(value)
+    
+    @property
+    def AMFORM(self) -> AtmosphericProfileFormatEnum:
+        return self._amform
+    
+    @AMFORM.setter
+    def AMFORM(self, value):
+        self._amform = AtmosphericProfileFormatEnum(value)
 
     def assess(self):
         """
@@ -164,18 +201,12 @@ class Atmosphere_0:
         assert self.NLOCATIONS > 0 , \
             'NLOCATIONS must be >0'
         
-        assert np.issubdtype(type(self.AMFORM), np.integer) == True , \
-            'AMFORM must be int'
-        assert self.AMFORM >= 0 , \
-            'AMFORM must be >=0 and <=2'
-        assert self.AMFORM <= 2 , \
-            'AMFORM must be >=0 and <=2'
+        assert self.AMFORM in AtmosphericProfileFormatEnum, \
+            f"AMFORM must be one of {tuple(AtmosphericProfileFormatEnum)}"
         
-        assert np.issubdtype(type(self.IPLANET), np.integer) == True , \
-            'IPLANET must be int'
-        assert self.IPLANET > 0 , \
-            'IPLANET must be >0'
-
+        assert self.IPLANET in PlanetEnum, \
+            f"IPLANET must be one of {tuple(PlanetEnum)}"
+        
         assert len(self.ID) == self.NVMR , \
             'ID must have size (NVMR)'
         assert len(self.ISO) == self.NVMR , \
@@ -197,13 +228,9 @@ class Atmosphere_0:
             assert len(self.T) == self.NP , \
                 'T must have size (NP)'
 
-            if self.AMFORM==0:            
-                if self.MOLWT is not None:
-                    exists = True
-                else:
-                    exists = False           
-                assert exists == True , \
-                    'MOLWT must be define if AMFORM=0'
+            if self.AMFORM==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:                       
+                assert self.MOLWT is not None , \
+                    f'MOLWT must be defined if AMFORM={AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED}'
             
             assert self.VMR.shape == (self.NP,self.NVMR) , \
                 'VMR must have size (NP,NVMR)'
@@ -233,12 +260,8 @@ class Atmosphere_0:
             assert self.T.shape == (self.NP,self.NLOCATIONS) , \
                 'T must have size (NP,NLOCATIONS)'
             
-            if self.AMFORM==0:
-                if self.MOLWT is not None:
-                    exists = True
-                else:
-                    exists = False           
-                assert exists == True , \
+            if self.AMFORM==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:          
+                assert self.MOLWT is not None , \
                     'MOLWT must be define if AMFORM=0'
                 
             assert self.VMR.shape == (self.NP,self.NVMR,self.NLOCATIONS) , \
@@ -262,7 +285,7 @@ class Atmosphere_0:
         from archnemesis.Data.gas_data import gas_info
         from archnemesis.Data.planet_data import planet_info
 
-        data = planet_info[str(self.IPLANET)]
+        data = planet_info[str(int(self.IPLANET))]
         print('Planet :: '+data['name'])
         print('Number of profiles :: ',self.NLOCATIONS)
         print('Latitude of profiles :: ',self.LATITUDE)
@@ -334,18 +357,18 @@ class Atmosphere_0:
 
         dset = grp.create_dataset('IPLANET',data=self.IPLANET)
         dset.attrs['title'] = "Planet ID"
-        dset.attrs['type'] = planet_info[str(self.IPLANET)]["name"]
+        dset.attrs['type'] = planet_info[str(int(self.IPLANET))]["name"]
 
         dset = grp.create_dataset('AMFORM',data=self.AMFORM)
         dset.attrs['title'] = "Type of Molecular Weight calculation"
-        if self.AMFORM==0:
+        if self.AMFORM==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:
             dset.attrs['type'] = "Explicit definition of the molecular weight MOLWT"
             dset = grp.create_dataset('MOLWT',data=self.MOLWT)
             dset.attrs['title'] = "Molecular weight"
             dset.attrs['units'] = "kg mol-1"
-        elif self.AMFORM==1:
+        elif self.AMFORM==AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE:
             dset.attrs['type'] = "Internal calculation of molecular weight with scaling of VMRs to 1"
-        elif self.AMFORM==2:
+        elif self.AMFORM==AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR:
             dset.attrs['type'] = "Internal calculation of molecular weight without scaling of VMRs"
 
         dset = grp.create_dataset('ID',data=self.ID)
@@ -415,8 +438,8 @@ class Atmosphere_0:
             self.NLOCATIONS = np.int32(f.get(name+'/NLOCATIONS'))
             self.NVMR = np.int32(f.get(name+'/NVMR'))
             self.NDUST = np.int32(f.get(name+'/NDUST'))
-            self.AMFORM = np.int32(f.get(name+'/AMFORM'))
-            self.IPLANET = np.int32(f.get(name+'/IPLANET'))
+            self.AMFORM : AtmosphericProfileFormatEnum = AtmosphericProfileFormatEnum(np.int32(f.get(name+'/AMFORM')))
+            self.IPLANET : PlanetEnum = PlanetEnum(np.int32(f.get(name+'/IPLANET')))
 
             if self.NLOCATIONS==1:
                 self.LATITUDE = np.float64(f.get(name+'/LATITUDE'))
@@ -441,9 +464,12 @@ class Atmosphere_0:
             if parah2 in f:
                 self.PARAH2 = np.array(f.get(name+'/PARAH2'))
 
-            if self.AMFORM==0:
+            if self.AMFORM==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:
                 self.MOLWT = np.array(f.get(name+'/MOLWT'))
-            if ( (self.AMFORM==1) or (self.AMFORM==2) ):
+            if self.AMFORM in (
+                    AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE, 
+                    AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR
+                ):
                 self.calc_molwt()
 
             self.calc_grav()   
@@ -684,7 +710,7 @@ class Atmosphere_0:
         from archnemesis.Data.planet_data import planet_info
 
         #Getting the information about the planet
-        data = planet_info[str(self.IPLANET)]
+        data = planet_info[str(int(self.IPLANET))]
         xradius = data["radius"] * 1.0e5   #cm
         xellip=1.0/(1.0-data["flatten"])
 
@@ -711,7 +737,7 @@ class Atmosphere_0:
 
         #Reading data and calculating some parameters
         Grav = const["G"]
-        data = planet_info[str(self.IPLANET)]
+        data = planet_info[str(int(self.IPLANET))]
         xgm = data["mass"] * Grav * 1.0e24 * 1.0e6
         xomega = 2.*np.pi / (data["rotation"]*24.*3600.)
         xellip=1.0/(1.0-data["flatten"])
@@ -1182,7 +1208,10 @@ class Atmosphere_0:
         if self.NDUST>0:
             self.edit_DUST(self.DUST[:,:,iLOCATION])
         
-        if self.AMFORM!=0:
+        if self.AMFORM in (
+                AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE, 
+                AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR
+            ):
             self.calc_molwt()
             
         self.calc_grav()
@@ -1219,16 +1248,16 @@ class Atmosphere_0:
          
         #Reading first and second lines
         tmp = np.fromfile(f,sep=' ',count=1,dtype='int')
-        amform = int(tmp[0])
+        amform : AtmosphericProfileFormatEnum = AtmosphericProfileFormatEnum(int(tmp[0]))
         tmp = np.fromfile(f,sep=' ',count=1,dtype='int')
 
         #Reading third line
         tmp = f.readline().split()
-        nplanet = int(tmp[0])
+        nplanet : PlanetEnum = PlanetEnum(int(tmp[0]))
         xlat = float(tmp[1])
         npro = int(tmp[2])
         ngas = int(tmp[3])
-        if amform==0:
+        if amform==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:
             molwt = float(tmp[4])
 
         #Reading gases
@@ -1258,22 +1287,27 @@ class Atmosphere_0:
         self.NVMR = ngas
         self.ID = gasID
         self.ISO = isoID
-        self.IPLANET = nplanet
+        self.IPLANET : PlanetEnum = nplanet
         self.LATITUDE = xlat
         self.LONGITUDE = 0.0
-        self.AMFORM = amform
+        self.AMFORM : AtmosphericProfileFormatEnum = amform
         self.NLOCATIONS = 1
         self.edit_H(height*1.0e3)
         self.edit_P(press*101325.)
         self.edit_T(temp)
         self.edit_VMR(vmr)
 
-        if ( (self.AMFORM==1) or (self.AMFORM==2) ):
+        if self.AMFORM in (
+                AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE,
+                AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR
+            ):
             self.calc_molwt()
-        else:
+        elif self.AMFORM == AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:
             molwt1 = np.zeros(npro)
             molwt1[:] = molwt
             self.MOLWT = molwt1 / 1000.   #kg/mole
+        else:
+            raise ValueError(f'Atmosphere_0.AMFORM must be one of {tuple(AtmosphericProfileFormatEnum)}')
 
         self.calc_grav()
 
@@ -1292,11 +1326,16 @@ class Atmosphere_0:
         nlat = 1    #Would need to be updated to include more latitudes
         fref.write('\t %i \n' % (nlat))
 
-        if self.AMFORM==0:
+        if self.AMFORM==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:
             fref.write('\t %i \t %7.4f \t %i \t %i \t %7.4f \n' % (self.IPLANET,self.LATITUDE,self.NP,self.NVMR,self.MOLWT[0]*1.0e3))
-        else:
+        elif self.AMFORM in (
+                AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE,
+                AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR
+            ):
             fref.write('\t %i \t %7.4f \t %i \t %i \n' % (self.IPLANET,self.LATITUDE,self.NP,self.NVMR))
-
+        else:
+            raise ValueError(f'Atmosphere_0.AMFORM must be one of {tuple(AtmosphericProfileFormatEnum)}')
+            
         gasname = [''] * self.NVMR
         header = [''] * (3+self.NVMR)
         header[0] = 'height(km)'
