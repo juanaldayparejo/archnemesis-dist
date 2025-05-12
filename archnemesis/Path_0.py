@@ -15,7 +15,7 @@ class Path_0:
         ------
         @param AtmClass_List: list of class objects
             A list of class objects defining each of the calculations to be performed (AtmCalc_0 classes)
-        @param COMBINE: log
+        @param COMBINE: bool
             Flag indicating whether the different calculations can be merged and performed simultaneously
             or need to be performed separately
 

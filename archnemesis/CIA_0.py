@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import os
 from numba import jit
 
+from archnemesis.enums import Gas, ParaH2Ratio
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
@@ -20,8 +22,32 @@ Collision-Induced Absorption Class.
 
 class CIA_0:
 
-    def __init__(self, runname='', INORMAL=0, NPAIR=9, NT=25, CIADATA=None, CIATABLE='CO2-CO2_HITRAN.h5', NWAVE=1501, NPARA=0, IPAIRG1=[39,39,39,39,39,22,22,6,39], IPAIRG2=[39,40,39,40,22,6,22,6,6], INORMALT=[0,0,1,1,0,0,0,0,0]):
-
+    def __init__(
+            self, 
+            runname='', 
+            INORMAL=ParaH2Ratio.EQUILIBRIUM, 
+            NPAIR=9, 
+            NT=25, 
+            CIADATA=None, 
+            CIATABLE='CO2-CO2_HITRAN.h5', 
+            NWAVE=1501, 
+            NPARA=0, 
+            IPAIRG1=[
+                Gas.H2, Gas.H2, Gas.H2, Gas.H2, Gas.H2, Gas.N2, Gas.N2, Gas.CH4, Gas.H2], 
+            IPAIRG2=[
+                Gas.H2, Gas.He, Gas.H2, Gas.He, Gas.N2, Gas.CH4, Gas.N2, Gas.CH4, Gas.CH4], 
+            INORMALT=[
+                ParaH2Ratio.EQUILIBRIUM,
+                ParaH2Ratio.EQUILIBRIUM,
+                ParaH2Ratio.NORMAL,
+                ParaH2Ratio.NORMAL,
+                ParaH2Ratio.EQUILIBRIUM,
+                ParaH2Ratio.EQUILIBRIUM,
+                ParaH2Ratio.EQUILIBRIUM,
+                ParaH2Ratio.EQUILIBRIUM,
+                ParaH2Ratio.EQUILIBRIUM
+            ]
+        ):
         """
         Inputs
         ------
@@ -80,12 +106,12 @@ class CIA_0:
 
         #Input parameters
         self.runname = runname
-        self.INORMAL = INORMAL
+        #self.INORMAL : ParaH2Ratio = INORMAL
         self.NPAIR = NPAIR
         self.NPARA = NPARA
-        self.IPAIRG1 = IPAIRG1
-        self.IPAIRG2 = IPAIRG2
-        self.INORMALT = INORMALT
+        self.IPAIRG1 : list[Gas] = IPAIRG1
+        self.IPAIRG2 : list[Gas] = IPAIRG2
+        self.INORMALT : list[ParaH2Ratio] = INORMALT
         self.NT = NT
         self.NWAVE = NWAVE
         self.FRAC = np.array([0])
@@ -101,7 +127,20 @@ class CIA_0:
         self.WAVEN = None # np.zeros(NWAVE)
         self.TEMP = None # np.zeros(NT)
         self.K_CIA = None #np.zeros(NPAIR,NPARA,NT,NWAVE)
-
+        
+        # private attributes
+        self._inormal = None
+        
+        # set properties
+        self.INORMAL = INORMAL
+    
+    @property
+    def INORMAL(self) -> ParaH2Ratio:
+        return self._inormal
+    
+    @INORMAL.setter
+    def INORMAL(self, value):
+        self._inormal = ParaH2Ratio(value)
         
     ##################################################################################
 
@@ -126,11 +165,9 @@ class CIA_0:
             'NWAVE must be int'
         assert self.NWAVE > 0 , \
             'NWAVE must be >0'
-            
-        assert np.issubdtype(type(self.INORMAL), np.integer) == True , \
-            'INORMAL must be int'
-        assert ((self.INORMAL == 0) or (self.INORMAL == 1) ), \
-            'INORMAL must be either 0 or 1'
+        
+        assert isinstance(self.INORMAL, ParaH2Ratio) , \
+            'INORMAL must be ParaH2Ratio'
             
         assert np.issubdtype(type(self.NPARA), np.integer) == True , \
             'NPARA must be int'
@@ -180,7 +217,7 @@ class CIA_0:
             gasname2 = gas_info[str(self.IPAIRG2[i])]['name']
 
             label = gasname1+'-'+gasname2
-            if self.INORMALT[i]==1:
+            if self.INORMALT[i]== ParaH2Ratio.NORMAL:
                 label = label + " ('normal')"
                 
             print(label)
@@ -200,14 +237,14 @@ class CIA_0:
 
         with h5py.File(runname+'.h5','r') as f:
 
-            #Checking if Spectroscopy exists
-            e = "/CIA" in f
-            if e==False:
-                raise ValueError('error :: CIA is not defined in HDF5 file')
-            else:
-                self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
-                self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
-                self.INORMAL = np.int32(f.get('CIA/INORMAL'))
+        #Checking if Spectroscopy exists
+        e = "/CIA" in f
+        if e==False:
+            raise ValueError('error :: CIA is not defined in HDF5 file')
+        else:
+            self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
+            self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
+            self.INORMAL = ParaH2Ratio(np.int32(f.get('CIA/INORMAL')))
     
         # Resolve archnemesis path if it has been indirected
         self.CIADATA = archnemesis_resolve_path(self.CIADATA)
@@ -237,7 +274,7 @@ class CIA_0:
         grp = f.create_group("CIA")
 
         #Writing the necessary flags
-        dset = grp.create_dataset('INORMAL',data=self.INORMAL)
+        dset = grp.create_dataset('INORMAL',data=int(self.INORMAL))
         dset.attrs['title'] = "Flag indicating whether the ortho/para-H2 ratio is in equilibrium (0 for 1:1) or normal (1 for 3:1)"
         
         #Write the directory where CIA tables are stored
@@ -306,7 +343,7 @@ class CIA_0:
             gasname2 = gas_info[str(self.IPAIRG2[i])]['name']
 
             label = gasname1+'-'+gasname2
-            if self.INORMALT[i]==1:
+            if self.INORMALT[i]==ParaH2Ratio.NORMAL:
                 label = label + " ('normal')"
 
             iTEMP = np.argmin(np.abs(self.TEMP-296.))
@@ -407,49 +444,58 @@ class CIA_0:
         from scipy.io import FortranFile
         
         try:
-            f = FortranFile(filename, 'r' )
+            f = FortranFile(filename, 'r')
             
-            if NPARA!=0:
+            if NPARA != 0:
                 NPAIR = 2
                 TEMPS = f.read_reals(dtype='float32')
                 FRAC = np.abs(f.read_reals(dtype='float32'))
                 K_H2H2 = f.read_reals(dtype='float32')
                 K_H2HE = f.read_reals(dtype='float32')
-                KCIA_list = np.vstack([K_H2H2,K_H2HE]).reshape((-1,),order='F')
-                IPAIRG1=np.array([39,39])
-                IPAIRG2=np.array([39,40])
-                INORMALT=np.array([0,0])
+                KCIA_list = np.vstack([K_H2H2, K_H2HE]).reshape((-1,), order='F')
+                IPAIRG1 = np.array([Gas.H2, Gas.H2])
+                IPAIRG2 = np.array([Gas.H2, Gas.He])
+                INORMALT = np.array([ParaH2Ratio.EQUILIBRIUM, ParaH2Ratio.EQUILIBRIUM])
                 
                 self.FRAC = FRAC
                 
-                
-            #Reading the actual CIA file
-            if NPARA==0:
-                NPAIR = 9 # 9 pairs of collision induced absorption opacities
-                TEMPS = f.read_reals( dtype='float64' )
-                KCIA_list = f.read_reals( dtype='float32' )
-                IPAIRG1=np.array([39,39,39,39,39,22,22,6,39])
-                IPAIRG2=np.array([39,40,39,40,22,6,22,6,6])
-                INORMALT=np.array([0,0,1,1,0,0,0,0,0])
+            # Reading the actual CIA file
+            if NPARA == 0:
+                NPAIR = 9  # 9 pairs of collision-induced absorption opacities
+                TEMPS = f.read_reals(dtype='float64')
+                KCIA_list = f.read_reals(dtype='float32')
+                IPAIRG1 = np.array([Gas.H2, Gas.H2, Gas.H2, Gas.H2, Gas.H2, Gas.N2, Gas.N2, Gas.CH4, Gas.H2])
+                IPAIRG2 = np.array([Gas.H2, Gas.He, Gas.H2, Gas.He, Gas.N2, Gas.CH4, Gas.N2, Gas.CH4, Gas.CH4])
+                INORMALT = np.array([
+                    ParaH2Ratio.EQUILIBRIUM,
+                    ParaH2Ratio.EQUILIBRIUM,
+                    ParaH2Ratio.NORMAL,
+                    ParaH2Ratio.NORMAL,
+                    ParaH2Ratio.EQUILIBRIUM,
+                    ParaH2Ratio.EQUILIBRIUM,
+                    ParaH2Ratio.EQUILIBRIUM,
+                    ParaH2Ratio.EQUILIBRIUM,
+                    ParaH2Ratio.EQUILIBRIUM
+                ])
         finally:
             f.close()
 
         NT = len(TEMPS)
-        NWAVE = int(len(KCIA_list)/NT/NPAIR/max(NPARA,1))
-        NU_GRID = np.linspace(0,dnu*(NWAVE-1),NWAVE)
-        K_CIA = np.zeros((NPAIR,max(NPARA,1),NT,NWAVE)) # NPAIR x NPARA x NT x NWAVE
-    
+        NWAVE = int(len(KCIA_list) / NT / NPAIR / max(NPARA, 1))
+        NU_GRID = np.linspace(0, dnu * (NWAVE - 1), NWAVE)
+        K_CIA = np.zeros((NPAIR, max(NPARA, 1), NT, NWAVE))  # NPAIR x NPARA x NT x NWAVE
+
         index = 0
         for iwn in range(NWAVE):
             for itemp in range(NT):
-                for ipara in range(max(NPARA,1)):
+                for ipara in range(max(NPARA, 1)):
                     for ipair in range(NPAIR):
-                        K_CIA[ipair,ipara,itemp,iwn] = KCIA_list[index]
+                        K_CIA[ipair, ipara, itemp, iwn] = KCIA_list[index]
                         index += 1
-                        
-        #Changing the units of the CIA table (NEMESIS format) from cm-1 amagat-2 to cm5 molecule-2
-        AMAGAT = 2.68675E19 #molecule cm-3 (definition of amagat unit)
-        K_CIA = K_CIA / (AMAGAT**2.) #cm5 molecule-2
+
+        # Changing the units of the CIA table (NEMESIS format) from cm-1 amagat-2 to cm5 molecule-2
+        AMAGAT = 2.68675E19  # molecule cm-3 (definition of amagat unit)
+        K_CIA = K_CIA / (AMAGAT**2.)  # cm5 molecule-2
 
         self.NWAVE = NWAVE
         self.NT = NT
@@ -883,4 +929,4 @@ def read_cia_hitran_file(filename):
         ix = ix + nwave[i]
         
     return ncases,temp,nwave,waven,kn
-    
+

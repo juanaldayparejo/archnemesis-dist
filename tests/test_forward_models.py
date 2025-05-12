@@ -168,8 +168,8 @@ def test_thermal_emission_cirs():
 
     
     # Use a NumPy comparison for arrays
-    assert np.allclose(calculation_cirsrad, expected_nemesis, rtol=5.0e-2)
-    assert np.allclose(calculation_cirsradg, expected_nemesis, rtol=5.0e-2)
+    assert np.allclose(calculation_cirsrad, expected_nemesis, rtol=5.0e-2), 'Calculated values must be close to expected values'
+    assert np.allclose(calculation_cirsradg, expected_nemesis, rtol=5.0e-2), 'Calculated values must be close to expected values'
     
 def test_multiple_scattering_cirs():  
     '''
@@ -340,4 +340,4 @@ def test_multiple_scattering_cirs():
                            1.13109403e-10, 2.85760887e-10, 1.57417775e-10, 9.16895863e-11,
                            9.61232342e-11, 1.80943924e-10, 2.78555559e-10, 1.36275909e-10])
     
-    assert np.allclose(calculation_cirsrad, expected_nemesis, rtol=5.0e-2)
+    assert np.allclose(calculation_cirsrad, expected_nemesis, rtol=5.0e-2), "Calculated values must be close to expected values"

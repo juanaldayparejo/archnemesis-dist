@@ -1,9 +1,15 @@
 from archnemesis import *
+from archnemesis.enums import (
+    WaveUnit,
+    SpectraUnit,
+    SpectralCalculationMode,
+    Gas
+)
 import numpy as np
 import scipy
 import matplotlib.pyplot as plt
 import os
-from numba import jit,njit
+from numba import jit, njit
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -20,23 +26,27 @@ State Vector Class.
 
 class Spectroscopy_0:
 
-    def __init__(self, RUNNAME='', ILBL=2, NGAS=2, ONLINE=False):
+    def __init__(self, RUNNAME: str = '', ILBL: SpectralCalculationMode = SpectralCalculationMode.LINE_BY_LINE_TABLES, NGAS: int = 2, ONLINE: bool = False):
 
         """
         Inputs
         ------
         @param ISPACE: int,
-            Flag indicating the units of the spectral coordinate (0) Wavenumber cm-1 (1) Wavelength um
-        @param ILBL: int,
-            Flag indicating if the calculations are performed using pre-tabulated
-            correlated-K tables (0) or line-by-line tables (2)
+            Flag indicating the units of the spectral coordinate:
+            (0) Wavenumber (cm-1) 
+            (1) Wavelength (um)
+        @param ILBL: SpectralCalculationMode enum,
+            Flag indicating if the calculations are performed using:
+            - K_TABLES (0) - Pre-tabulated correlated-k tables
+            - LINE_BY_LINE_RUNTIME (1) - Calculate line-by-line during runtime  
+            - LINE_BY_LINE_TABLES (2) - Pre-tabulated line-by-line tables
         @param ONLINE: bool,
             Flag indicating whether the look-up tables must be read and stored on memory (False), 
             or they are read online when calling calc_klbl or calc_k (True)
         @param NGAS: int,
             Number of active gases to include in the atmosphere
         @param ID: 1D array,
-            Gas ID for each active gas
+            Gas ID for each active gas (using Gas enum)
         @param ISO: 1D array,
             Isotope ID for each gas, default 0 for all isotopes in terrestrial relative abundance
         @param LOCATION: 1D array,
@@ -80,15 +90,16 @@ class Spectroscopy_0:
         Spectroscopy_0.calc_kg()
         """
 
-        #Input parameters
+
+        # Input parameters with validation
         self.RUNNAME = RUNNAME
-        self.ILBL = ILBL
+        #self.ILBL = SpectralCalculationMode(ILBL) if not isinstance(ILBL, SpectralCalculationMode) else ILBL
         self.NGAS = NGAS
         self.ONLINE = ONLINE
 
-        #Attributes
-        self.ISPACE = None
-        self.ID = None        #(NGAS)
+        # Attributes with proper typing
+        #self.ISPACE: Optional[WaveUnit] = None
+        self.ID: Optional[np.ndarray] = None  # Array of Gas enum values (NGAS)
         self.ISO = None       #(NGAS)
         self.LOCATION = None  #(NGAS)
         self.NWAVE = None     
@@ -103,7 +114,33 @@ class Spectroscopy_0:
         self.FWHM = None
         
         self.K = None #(NWAVE,NG,NP,NT,NGAS)
-
+        
+        # private attributes
+        self._ilbl = None
+        self._ispace = None
+        
+        # set property values
+        self.ILBL = ILBL
+        self.ISPACE = WaveUnit.Wavenumber_cm  # Default value
+    
+    @property
+    def ILBL(self) -> SpectralCalculationMode:
+        return self._ilbl
+    
+    @ILBL.setter
+    def ILBL(self, value):
+        self._ilbl = SpectralCalculationMode(value)
+    
+    @property
+    def ISPACE(self) -> WaveUnit:
+        return self._ispace
+    
+    @ISPACE.setter
+    def ISPACE(self, value):
+        self._ispace = WaveUnit(value)
+    
+    
+    
 
     ######################################################################################################
 
@@ -111,14 +148,15 @@ class Spectroscopy_0:
         """
         Subroutine to assess whether the variables of the Spectroscopy class are correct
         """   
+        # Checking common parameters
+        assert isinstance(self.ILBL, SpectralCalculationMode), \
+            'ILBL must be SpectralCalculationMode enum'
 
-        #Checking some common parameters to all cases        
-        assert np.issubdtype(type(self.ILBL), np.integer) == True , \
-            'ILBL must be int'
-        assert self.ILBL >= 0 , \
-            'ILBL must be =0 (correlated-k) or =2 (line-by-line)'
-        assert self.ILBL <= 2 , \
-            'ILBL must be =0 (correlated-k) and =2 (line-by-line)'
+        if self.ISPACE is not None:
+            assert isinstance(self.ISPACE, WaveUnit), \
+                'ISPACE must be WaveUnit enum'
+            assert self.ISPACE in (WaveUnit.Wavenumber_cm, WaveUnit.Wavelength_um), \
+                'ISPACE must be Wavenumber_cm or Wavelength_um'
 
         assert np.issubdtype(type(self.NGAS), np.integer) == True , \
             'NGAS must be int'
@@ -129,7 +167,7 @@ class Spectroscopy_0:
             assert len(self.LOCATION) == self.NGAS , \
                 'LOCATION must have size (NGAS)'
 
- 
+
     ######################################################################################################
     def summary_info(self):
         """
@@ -138,7 +176,7 @@ class Spectroscopy_0:
 
         from archnemesis.Data import gas_info
 
-        if self.ILBL==0:
+        if self.ILBL==SpectralCalculationMode.K_TABLES:
             print('Calculation type ILBL :: ',self.ILBL,' (k-distribution)')
             print('Number of radiatively-active gaseous species :: ',self.NGAS)
             gasname = ['']*self.NGAS
@@ -163,7 +201,7 @@ class Spectroscopy_0:
             print('Number of pressure levels :: ',self.NP)
             print('Pressure range :: ',self.PRESS.min(),'-',self.PRESS.max(),'atm')
 
-        elif self.ILBL==2:
+        elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
             print('Calculation type ILBL :: ',self.ILBL,' (line-by-line)')
             print('Number of radiatively-active gaseous species :: ',self.NGAS)
             gasname = ['']*self.NGAS
@@ -206,10 +244,10 @@ class Spectroscopy_0:
         """
         K_array = np.array(K_array)
 
-        if self.ILBL==0: #K-tables
+        if self.ILBL==SpectralCalculationMode.K_TABLES: #K-tables
             assert K_array.shape == (self.NWAVE, self.NG, self.NP, self.NT, self.NGAS),\
                 'K should be (NWAVE,NG,NP,NT,NGAS) if ILBL=0 (K-tables)'
-        elif self.ILBL==2: #LBL-tables
+        elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
             assert K_array.shape == (self.NWAVE, self.NP, abs(self.NT), self.NGAS),\
                 'K should be (NWAVE,NP,NT,NGAS) if ILBL=2 (LBL-tables)'
         else:
@@ -219,7 +257,7 @@ class Spectroscopy_0:
 
 
     ######################################################################################################
-    def write_hdf5(self,runname,inside_telluric=False):
+    def write_hdf5(self, runname, inside_telluric=False):
         """
         Write the information about the k-tables or lbl-tables into the HDF5 file
 
@@ -251,27 +289,22 @@ class Spectroscopy_0:
         dset = grp.create_dataset('NGAS',data=self.NGAS)
         dset.attrs['title'] = "Number of radiatively active gases in atmosphere"
 
-        dset = grp.create_dataset('ILBL',data=self.ILBL)
+        dset = grp.create_dataset('ILBL',data=int(self.ILBL))
         dset.attrs['title'] = "Spectroscopy calculation type"
-        if self.ILBL==0:
+        if self.ILBL==SpectralCalculationMode.K_TABLES:
             dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
-        elif self.ILBL==2:
+        elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
             dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
         else:
             raise ValueError('error :: ILBL must be 0 or 2')
 
-
         if self.NGAS>0:
-
-            if((self.ILBL==0) or (self.ILBL==2)):
+            if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
                 dt = h5py.special_dtype(vlen=str)
                 dset = grp.create_dataset('LOCATION',data=self.LOCATION,dtype=dt)
                 dset.attrs['title'] = "Location of the pre-tabulated tables"
-                #dset = grp.create_dataset('LOCATION', (self.NGAS),'S1000', self.LOCATION)
-                #dset.attrs['title'] = "Location of the pre-tabulated tables"
 
         f.close()
-
 
     ######################################################################################################
     def read_hdf5(self,runname,inside_telluric=False):
@@ -297,13 +330,10 @@ class Spectroscopy_0:
             f.close()
             raise ValueError('error :: Spectroscopy is not defined in HDF5 file')
         else:
-
             self.NGAS = np.int32(f.get(name+'/NGAS'))
-            self.ILBL = np.int32(f.get(name+'/ILBL'))
+            self.ILBL = SpectralCalculationMode(np.int32(f.get(name+'/ILBL')))
 
             if self.NGAS>0:
-
-                #self.LOCATION = np.int32(f.get('Spectroscopy/LOCATION'))
                 LOCATION1 = f.get(name+'/LOCATION')
                 LOCATION = ['']*self.NGAS
                 for igas in range(self.NGAS):
@@ -316,7 +346,6 @@ class Spectroscopy_0:
                 f.close()
 
             f.close()
-
 
     ######################################################################################################
     def read_lls(self, runname):
@@ -446,7 +475,7 @@ class Spectroscopy_0:
 
         if self.NGAS>0:
 
-            if self.ILBL==0:
+            if self.ILBL==SpectralCalculationMode.K_TABLES:
 
                 #Getting the extension of the look-up tables to see whether they are in HDF5 or binary formats
                 ext = np.zeros(self.NGAS,dtype='int32')
@@ -509,7 +538,7 @@ class Spectroscopy_0:
                     
                     raise ValueError('error in read_header:: HDF5 correlated-k look-up tables have not yet been implemented')
 
-            elif self.ILBL==2:
+            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
 
                 #Getting the extension of the look-up tables to see whether they are in HDF5 or binary formats
                 ext = np.zeros(self.NGAS,dtype='int32')
@@ -581,8 +610,8 @@ class Spectroscopy_0:
                     isoIDlta = np.zeros(self.NGAS,dtype='int')
                     for i in range(self.NGAS):
                         ilbl,wave,npress,ntemp,gasID,isoID,presslevels,templevels = read_header_lta_hdf5(self.LOCATION[i])
-                        if ilbl!=2:
-                            raise ValueError('error in read_header :: ILBL in look-up tables must be the same as in Spectroscopy class')
+                        if ilbl!=SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                            raise ValueError('error :: ILBL in look-up tables must be the same as in Spectroscopy class')
                         nwavelta[i] = len(wave)
                         npresslta[i] = npress
                         ntemplta[i] = ntemp
@@ -646,7 +675,7 @@ class Spectroscopy_0:
         if self.ONLINE==False:
             #Tables must be read and stored on memory
 
-            if self.ILBL==0: #K-tables
+            if self.ILBL==SpectralCalculationMode.K_TABLES: #K-tables
 
                 kstore = np.zeros([self.NWAVE,self.NG,self.NP,self.NT,self.NGAS])
                 for igas in range(self.NGAS):
@@ -655,7 +684,7 @@ class Spectroscopy_0:
                 self.edit_K(kstore)
 
 
-            elif self.ILBL==2: #LBL-tables
+            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
                 kstore = np.zeros([self.NWAVE,self.NP,abs(self.NT),self.NGAS])
                 for igas in range(self.NGAS):
                     npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wave,k = read_lbltable(self.LOCATION[igas],self.WAVE.min(),self.WAVE.max())
@@ -687,7 +716,7 @@ class Spectroscopy_0:
             raise ValueError('error in write_table_hdf5 :: The specified gas is not defined in the Spectroscopy class')
         
         
-        if self.ILBL==2:
+        if self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
             
             if os.path.exists(filename+'.h5')==True:
                 os.remove(filename+'.h5')
@@ -697,9 +726,9 @@ class Spectroscopy_0:
             #Writing the header information
             dset = f.create_dataset('ILBL',data=self.ILBL)
             dset.attrs['title'] = "Spectroscopy calculation type"
-            if self.ILBL==0:
+            if self.ILBL==SpectralCalculationMode.K_TABLES:
                 dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
-            elif self.ILBL==2:
+            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
                 dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
             else:
                 raise ValueError('error :: ILBL must be 0 or 2')
@@ -1531,7 +1560,7 @@ def read_header_lta_hdf5(filename):
         f = h5py.File(filename+'.h5','r')
 
     ilbl = np.int32(f.get('ILBL'))
-    if ilbl==2:
+    if ilbl==SpectralCalculationMode.LINE_BY_LINE_TABLES:
         wave = np.array(f.get('WAVE'))
         npress = np.int32(f.get('NP'))
         ntemp = np.int32(f.get('NT'))
