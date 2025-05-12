@@ -1536,7 +1536,7 @@ class ForwardModel_0:
             
             elif self.Variables.VARIDENT[ivar,2]==51:
                 #Model 51. Scaling of a reference profile
-           #***************************************************************                
+               #***************************************************************                
                 scale = np.exp(self.Variables.XN[ix])
                 scale_gas, scale_iso = self.Variables.VARPARAM[ivar,1:3]
                 self.AtmosphereX,xmap1 = model51(self.AtmosphereX,ipar,scale,scale_gas,scale_iso)
@@ -1547,7 +1547,7 @@ class ForwardModel_0:
                 
             elif self.Variables.VARIDENT[ivar,2]==110:
                 #Model 110. Venus cloud model from Haus et al. (2016) with altitude offset
-           #************************************************************************************  
+               #************************************************************************************  
               
                 offset = self.Variables.XN[ix]   #altitude offset in km
                 idust0 = np.abs(self.Variables.VARIDENT[ivar,0])-1  #Index of the first cloud mode                
@@ -1557,7 +1557,7 @@ class ForwardModel_0:
                 
             elif self.Variables.VARIDENT[ivar,2]==111:
                 #Model 110. Venus cloud model and SO2 vmr profile with altitude offset
-           #************************************************************************************  
+              #************************************************************************************  
               
                 offset = self.Variables.XN[ix]   #altitude offset in km
                 so2_deep = np.exp(self.Variables.XN[ix+1])   #SO2 vmr below the cloud
@@ -1569,8 +1569,8 @@ class ForwardModel_0:
                 ix = ix + self.Variables.NXVAR[ivar]
                 
             elif self.Variables.VARIDENT[ivar,2]==202:
-#           Model 202. Scaling factor of telluric atmospheric profile
-#           ***************************************************************
+                #Model 202. Scaling factor of telluric atmospheric profile
+                #***************************************************************
 
                 scafac = self.Variables.XN[ix]
                 varid1 = self.Variables.VARIDENT[ivar,0] ; varid2 = self.Variables.VARIDENT[ivar,1]

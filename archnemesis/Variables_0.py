@@ -550,7 +550,7 @@ class Variables_0:
             if varident[i,2] <= 100:    #Parameter must be an atmospheric one
 
                 if varident[i,2] == 0:
-#               ********* continuous profile ************************
+                    #********* continuous profile ************************
                     s = f.readline().split()
                     f1 = open(s[0],'r')
                     tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
@@ -598,9 +598,9 @@ class Variables_0:
 
 
                 elif varident[i,2] == -1:
-#               * continuous cloud, but cloud retrieved as particles/cm3 rather than
-#               * particles per gram to decouple it from pressure.
-#               ********* continuous particles/cm3 profile ************************
+                    #* continuous cloud, but cloud retrieved as particles/cm3 rather than
+                    #* particles per gram to decouple it from pressure.
+                    #********* continuous particles/cm3 profile ************************
                     if varident[i,0] >= 0:
                         raise ValueError('error in read_apr_nemesis :: model -1 type is only for use with aerosols')
         
@@ -641,8 +641,8 @@ class Variables_0:
                     ix = ix + nlevel
 
                 elif varident[i,2] == 1:
-#               ******** profile held as deep amount, fsh and knee pressure **
-#               Read in xdeep,fsh,pknee
+                    #******** profile held as deep amount, fsh and knee pressure **
+                    #Read in xdeep,fsh,pknee
                     tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
                     pknee = float(tmp[0])
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
@@ -674,8 +674,8 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 2:
-#               **** model 2 - Simple scaling factor of reference profile *******
-#               Read in scaling factor
+                    #**** model 2 - Simple scaling factor of reference profile *******
+                    #Read in scaling factor
 
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     x0[ix] = float(tmp[0])
@@ -684,8 +684,8 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 3:
-#               **** model 3 - Exponential scaling factor of reference profile *******
-#               Read in scaling factor
+                    #**** model 3 - Exponential scaling factor of reference profile *******
+                    #Read in scaling factor
         
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     xfac = float(tmp[0])
@@ -701,8 +701,8 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 4:
-#               ******** profile held as deep amount, fsh and VARIABLE knee press
-#               Read in xdeep,fsh,pknee
+                    #******** profile held as deep amount, fsh and VARIABLE knee press
+                    #Read in xdeep,fsh,pknee
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     pknee = float(tmp[0])
                     eknee = float(tmp[1])
@@ -737,10 +737,10 @@ class Variables_0:
 
 
                 elif varident[i,2] == 9:
-#               ******** cloud profile held as total optical depth plus
-#               ******** base height and fractional scale height. Below the knee
-#               ******** pressure the profile is set to zero - a simple
-#               ******** cloud in other words!
+                    #******** cloud profile held as total optical depth plus
+                    #******** base height and fractional scale height. Below the knee
+                    #******** pressure the profile is set to zero - a simple
+                    #******** cloud in other words!
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     hknee = tmp[0]
                     eknee = tmp[1]
@@ -782,9 +782,9 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 32:
-#               ******** cloud profile is represented by a value at a 
-#               ******** variable pressure level and fractional scale height.
-#               ******** Below the knee pressure the profile is set to drop exponentially.
+                    #******** cloud profile is represented by a value at a 
+                    #******** variable pressure level and fractional scale height.
+                    #******** Below the knee pressure the profile is set to drop exponentially.
 
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     pknee = tmp[0]
@@ -841,8 +841,8 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 45:
-#               ******** Irwin CH4 model. Represented by tropospheric and stratospheric methane 
-#               ******** abundances, along with methane humidity. 
+                    #******** Irwin CH4 model. Represented by tropospheric and stratospheric methane 
+                    #******** abundances, along with methane humidity. 
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     tropo = tmp[0]
                     etropo = tmp[1]
@@ -877,8 +877,8 @@ class Variables_0:
                     ix = ix + 1                   
                     
                 elif varident[i,2] == 47:
-#               ******** cloud profile is represented by a peak optical depth at a 
-#               ******** variable pressure level and a Gaussian profile with FWHM (in log pressure)
+                    #******** cloud profile is represented by a peak optical depth at a 
+                    #******** variable pressure level and a Gaussian profile with FWHM (in log pressure)
 
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     xdeep = tmp[0]
@@ -935,7 +935,7 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 49:
-#               ********* continuous profile in linear scale ************************
+                    #********* continuous profile in linear scale ************************
                     s = f.readline().split()
                     f1 = open(s[0],'r')
                     tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
@@ -976,7 +976,7 @@ class Variables_0:
 
 
                 elif varident[i,2] == 50:
-#               ********* continuous profile of a scaling factor ************************
+                    #********* continuous profile of a scaling factor ************************
                     s = f.readline().split()
                     f1 = open(s[0],'r')
                     tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
@@ -1015,7 +1015,7 @@ class Variables_0:
 
 
                 elif varident[i,2] == 51:
-#               ********* multiple of different profile ************************
+                    #********* multiple of different profile ************************
                     prof = np.fromfile(f,sep=' ',count=2,dtype='int')
                     profgas = prof[0]
                     profiso = prof[1]
@@ -1038,7 +1038,7 @@ class Variables_0:
             else:
 
                 if varident[i,2] == 110:
-#               ******** model for Venus cloud following Haus et al. (2016) with altitude offset
+                    #******** model for Venus cloud following Haus et al. (2016) with altitude offset
                 
                     if varident[i,0]>0:
                         raise ValueError('error in read_apr model 110 :: VARIDENT[0] must be negative to be associated with the aerosols')
@@ -1051,7 +1051,7 @@ class Variables_0:
                     ix = ix + 1
                     
                 if varident[i,2] == 111:
-#               ******** model for Venus cloud and SO2 vmr profile with altitude offset
+                    #******** model for Venus cloud and SO2 vmr profile with altitude offset
                 
                     if varident[i,0]>0:
                         raise ValueError('error in read_apr model 111 :: VARIDENT[0] must be negative to be associated with the aerosols')
@@ -1082,7 +1082,7 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 202:
-#               ********* simple scaling of telluric atmospheric profile ************************
+                    #********* simple scaling of telluric atmospheric profile ************************
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     x0[ix] = float(tmp[0])
                     sx[ix,ix] = (float(tmp[1]))**2.
@@ -1091,7 +1091,7 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 228:
-#               ******** model for retrieving the ILS and Wavelength calibration in ACS MIR solar occultation observations
+                    #******** model for retrieving the ILS and Wavelength calibration in ACS MIR solar occultation observations
                 
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #V0
                     x0[ix] = float(tmp[0])
@@ -1150,7 +1150,7 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 229:
-#               ******** model for retrieving the ILS in ACS MIR solar occultation observations
+                    #******** model for retrieving the ILS in ACS MIR solar occultation observations
 
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #wavenumber offset at lowest wavenumber
                     x0[ix] = float(tmp[0])
@@ -1203,7 +1203,7 @@ class Variables_0:
 
 
                 elif varident[i,2] == 230:
-#               ******** model for retrieving multiple ILS (different spectral windows) in ACS MIR solar occultation observations
+                    #******** model for retrieving multiple ILS (different spectral windows) in ACS MIR solar occultation observations
 
                     s = f.readline().split()
                     f1 = open(s[0],'r')
@@ -1232,7 +1232,7 @@ class Variables_0:
                             ix = ix + 1
 
                 elif varident[i,2] == 231:
-#               ******** multiplication of calculated spectrum by polynomial function (following polynomial of degree N)
+                    #******** multiplication of calculated spectrum by polynomial function (following polynomial of degree N)
 
                     #The computed spectra is multiplied by R = R0 * POL
                     #Where the polynomial function POL depends on the wavelength given by:
@@ -1256,8 +1256,8 @@ class Variables_0:
                             ix = ix + 1
 
                 elif varident[i,2] == 2310:
-#               ******** Continuum addition to transmission spectra using a varying scaling factor (following polynomial of degree N)
-#                        in several spectral windows 
+                    #******** Continuum addition to transmission spectra using a varying scaling factor (following polynomial of degree N)
+                    #  in several spectral windows 
 
                     #The computed spectra is multiplied by R = R0 * (T0 + POL)
                     #Where the polynomial function POL depends on the wavelength given by:
@@ -1295,7 +1295,7 @@ class Variables_0:
                                 ix = ix + 1
 
                 elif varident[i,2] == 232:
-#               ******** Continuum addition to transmission spectra using the Angstrom coefficient
+                    #******** Continuum addition to transmission spectra using the Angstrom coefficient
 
                     #The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( - TAU0 * (WAVE/WAVE0)**-ALPHA )
                     #Where the parameters to fit are TAU0 and ALPHA
@@ -1324,7 +1324,7 @@ class Variables_0:
                         ix = ix + 2
 
                 elif varident[i,2] == 233:
-#               ******** Aerosol opacity modelled with a variable angstrom coefficient. Applicable to transmission spectra.
+                    #******** Aerosol opacity modelled with a variable angstrom coefficient. Applicable to transmission spectra.
 
                     #The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( -TAU_AERO )
                     #Where the aerosol opacity is modelled following
@@ -1360,7 +1360,7 @@ class Variables_0:
                         ix = ix + 3
 
                 elif varident[i,2] == 444:
-#               ******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
+                    #******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
                     s = f.readline().split()    
                     haze_f = open(s[0],'r')
                     haze_waves = []
@@ -1418,12 +1418,8 @@ class Variables_0:
                                     sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
                                     sx[ix+k,ix+j] = sx[ix+j,ix+k]
                 
-#                 return params, param_errs, dists, dist_mults, haze_waves, calc_waves,\
-#                         float(clen), float(vref), float(nreal_ref), float(v_od_norm)
-                    
-                
                 elif varident[i,2] == 446:
-#               ******** model for retrieving an aerosol particle size distribution from a tabulated look-up table
+                    #******** model for retrieving an aerosol particle size distribution from a tabulated look-up table
 
                     #This model changes the extinction coefficient of a given aerosol population based on 
                     #the extinction coefficient look-up table stored in a separate file. 
@@ -1460,7 +1456,7 @@ class Variables_0:
                     ix = ix + 1
                     
                 elif varident[i,2] == 447:
-#               ******** model for retrieving the Doppler shift
+                    #******** model for retrieving the Doppler shift
 
                     #Read the Doppler velocity and its uncertainty
                     s = f.readline().split()
@@ -1512,7 +1508,7 @@ class Variables_0:
                 
                 
                 elif varident[i,2] == 666:
-#               ******** pressure at given altitude
+                    #******** pressure at given altitude
                     tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
                     htan = float(tmp[0])
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
@@ -1532,7 +1528,7 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 667:
-#               ******** dilution factor to account for thermal gradients thorughout exoplanet
+                    #******** dilution factor to account for thermal gradients thorughout exoplanet
                     tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
                     xfac = float(tmp[0])
                     xfacerr = float(tmp[1])
@@ -1542,7 +1538,7 @@ class Variables_0:
                     ix = ix + 1
                     
                 elif varident[i,2] == 777:
-#               ******** tangent height correction
+                    #******** tangent height correction
                     s = f.readline().split()
                     hcorr = float(s[0])
                     herr = float(s[1])
@@ -1554,7 +1550,7 @@ class Variables_0:
                     ix = ix + 1
 
                 elif varident[i,2] == 887:
-#               ******** Cloud x-section spectrum
+                    #******** Cloud x-section spectrum
 
                     #Read in number of points, cloud id, and correlation between elements.
                     s = f.readline().split()
@@ -1605,7 +1601,7 @@ class Variables_0:
                     ix = ix + nwv
 
                 elif varident[i,2] == 998:
-#               ******** map of surface temperatures 
+                    #******** map of surface temperatures 
                     ipfile = f.readline().split()
                     ipfile = ipfile[0]
                     ftsurf = open(ipfile,'r')
@@ -1630,7 +1626,7 @@ class Variables_0:
                         ix = ix + 1
 
                 elif varident[i,2] == 999:
-#               ******** surface temperature
+                    #******** surface temperature
                     s = f.readline().split()
                     tsurf = float(s[0])
                     esurf = float(s[1])
@@ -1643,7 +1639,7 @@ class Variables_0:
                     
                     
                 elif varident[i,2] == 1002:
-#               ******** scaling of atmospheric profiles at multiple locations (linear scale)
+                    #******** scaling of atmospheric profiles at multiple locations (linear scale)
                     
                     s = f.readline().split()
                     
@@ -1712,7 +1708,7 @@ class Variables_0:
                     
                     
                 elif varident[i,2] == 1999:
-#               ******** surface temperature at multiple locations
+                    #******** surface temperature at multiple locations
                     
                     s = f.readline().split()
                     
