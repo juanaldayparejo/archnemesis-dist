@@ -8,6 +8,10 @@ import pickle
 
 from archnemesis.enums import WaveUnit, SpectraUnit
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.INFO)
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
