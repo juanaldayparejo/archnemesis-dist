@@ -236,15 +236,14 @@ class CIA_0:
         import h5py
 
         with h5py.File(runname+'.h5','r') as f:
-
-        #Checking if Spectroscopy exists
-        e = "/CIA" in f
-        if e==False:
-            raise ValueError('error :: CIA is not defined in HDF5 file')
-        else:
-            self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
-            self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
-            self.INORMAL = ParaH2Ratio(np.int32(f.get('CIA/INORMAL')))
+            #Checking if Spectroscopy exists
+            e = "/CIA" in f
+            if e==False:
+                raise ValueError('error :: CIA is not defined in HDF5 file')
+            else:
+                self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
+                self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
+                self.INORMAL = ParaH2Ratio(np.int32(f.get('CIA/INORMAL')))
     
         # Resolve archnemesis path if it has been indirected
         self.CIADATA = archnemesis_resolve_path(self.CIADATA)
