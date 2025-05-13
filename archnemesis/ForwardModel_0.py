@@ -112,6 +112,8 @@ class ForwardModel_0:
             ForwardModel_0.nemesisfmg()
             ForwardModel_0.nemesisSOfm()
             ForwardModel_0.nemesisSOfmg()
+            ForwardModel_0.nemesisLfm()
+            ForwardModel_0.nemesisLfmg()
             ForwardModel_0.nemesisCfm()
             ForwardModel_0.nemesisMAPfm()
             ForwardModel_0.jacobian_nemesis(nemesisSO=False)
@@ -131,6 +133,8 @@ class ForwardModel_0:
             ForwardModel_0.calc_pathg()
             ForwardModel_0.calc_path_SO()
             ForwardModel_0.calc_pathg_SO()
+            ForwardModel_0.calc_path_L()
+            ForwardModel_0.calc_pathg_L()
 
         Radiative transfer calculations
         ##########################################
@@ -796,6 +800,255 @@ class ForwardModel_0:
         return SPECONV,dSPECONV
 
 
+    ###############################################################################################
+
+    def nemesisLfm(self):
+
+        """
+            FUNCTION NAME : nemesisLfm()
+
+            DESCRIPTION : This function computes a forward model for a limb geometry (thermal emission)
+            
+                          This forward model is optimised so that all tangent altitudes are calculated simulatneously,
+                           substantially increasing the computational speed of the forward model
+
+            INPUTS : none
+
+            OPTIONAL INPUTS: none
+
+            OUTPUTS :
+
+                SPECMOD(NCONV,NGEOM) :: Modelled spectra
+
+            CALLING SEQUENCE:
+
+                ForwardModel.nemesisLfm()
+
+            MODIFICATION HISTORY : Juan Alday (08/05/2025)
+
+        """
+
+        from scipy import interpolate
+        from copy import deepcopy
+
+        #First we change the reference atmosphere taking into account the parameterisations in the state vector
+        self.Variables1 = deepcopy(self.Variables)
+        self.MeasurementX = deepcopy(self.Measurement)
+        self.AtmosphereX = deepcopy(self.Atmosphere)
+        self.ScatterX = deepcopy(self.Scatter)
+        self.StellarX = deepcopy(self.Stellar)
+        self.SurfaceX = deepcopy(self.Surface)
+        self.LayerX = deepcopy(self.Layer)
+        self.SpectroscopyX = deepcopy(self.Spectroscopy)
+        self.CIAX = deepcopy(self.CIA)
+        flagh2p = False
+
+        #Errors and checks
+        self.check_gas_spec_atm()
+        self.check_wave_range_consistency()
+        
+        #Defining spectral range         
+        self.Measurement.build_ils(IGEOM=0) 
+        wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
+            
+        #Reading tables in the required wavelength range
+        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+
+        #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
+        self.adjust_hydrostat = False
+
+        #Mapping variables into different classes
+        xmap = self.subprofretg()
+
+        #Calculating the atmospheric paths
+        self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
+        self.calc_path_L()
+        BASEH_TANHE = np.zeros(self.PathX.NPATH)
+        for i in range(self.PathX.NPATH):
+            BASEH_TANHE[i] = self.LayerX.BASEH[self.PathX.LAYINC[int(self.PathX.NLAYIN[i]/2),i]]/1.0e3
+
+        #Calling CIRSrad to calculate the spectra
+        SPECOUT = self.CIRSrad()
+
+        #Interpolating the spectra to the correct altitudes defined in Measurement
+        SPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM])
+        for i in range(self.MeasurementX.NGEOM):
+
+            #Find altitudes above and below the actual tangent height
+            ibase = np.argmin(np.abs(BASEH_TANHE-self.MeasurementX.TANHE[i]))
+            base0 = BASEH_TANHE[ibase]/1.0e3
+            if base0<=self.MeasurementX.TANHE[i]:
+                ibasel = ibase
+                ibaseh = ibase + 1
+            else:
+                ibasel = ibase - 1
+                ibaseh = ibase
+
+            if ibaseh>self.PathX.NPATH-1:
+                SPECMOD[:,i] = SPECOUT[:,ibasel]
+            else:
+                fhl = (self.MeasurementX.TANHE[i]-BASEH_TANHE[ibasel])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+                fhh = (BASEH_TANHE[ibaseh]-self.MeasurementX.TANHE[i])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+
+                SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
+
+        #Convolving the spectrum with the instrument line shape
+        print('Convolving spectra and gradients with instrument line shape')
+        if self.SpectroscopyX.ILBL==0:
+            SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+        elif self.SpectroscopyX.ILBL==2:
+            SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+        dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
+
+        #Applying any changes to the spectra required by the state vector
+        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+
+        return SPECONV
+
+
+    ###############################################################################################
+
+    def nemesisLfmg(self):
+
+        """
+            FUNCTION NAME : nemesisSOfmg()
+
+            DESCRIPTION : This function computes a forward model for a limb observation (thermal emission) and the gradients
+                       of the radiance spectrum with respect to the elements in the state vector
+
+            INPUTS :
+
+                runname :: Name of the Nemesis run
+                Variables :: Python class defining the parameterisations and state vector
+                Measurement :: Python class defining the measurements
+                Atmosphere :: Python class defining the reference atmosphere
+                Spectroscopy :: Python class defining the parameters required for the spectroscopic calculations
+                Scatter :: Python class defining the parameters required for scattering calculations
+                Stellar :: Python class defining the stellar spectrum
+                Surface :: Python class defining the surface
+                CIA :: Python class defining the Collision-Induced-Absorption cross-sections
+                Layer :: Python class defining the layering scheme to be applied in the calculations
+
+            OPTIONAL INPUTS: none
+
+            OUTPUTS :
+
+                SPECMOD(NCONV,NGEOM) :: Modelled spectra
+                dSPECMOD(NCONV,NGEOM,NX) :: Derivatives of each spectrum in each geometry with
+                                        respect to the elements of the state vector
+
+            CALLING SEQUENCE:
+
+                nemesisLfmg(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer)
+
+            MODIFICATION HISTORY : Juan Alday (25/07/2021)
+
+        """
+
+        from scipy import interpolate
+        from copy import deepcopy
+
+        #First we change the reference atmosphere taking into account the parameterisations in the state vector
+        self.Variables1 = deepcopy(self.Variables)
+        self.MeasurementX = deepcopy(self.Measurement)
+        self.AtmosphereX = deepcopy(self.Atmosphere)
+        self.ScatterX = deepcopy(self.Scatter)
+        self.StellarX = deepcopy(self.Stellar)
+        self.SurfaceX = deepcopy(self.Surface)
+        self.LayerX = deepcopy(self.Layer)
+        self.SpectroscopyX = deepcopy(self.Spectroscopy)
+        self.CIAX = deepcopy(self.CIA)
+        flagh2p = False
+
+        #Errors and checks
+        self.check_gas_spec_atm()
+        self.check_wave_range_consistency()
+        
+        #Defining spectral range         
+        self.Measurement.build_ils(IGEOM=0) 
+        wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
+            
+        #Reading tables in the required wavelength range
+        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+
+        #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
+        self.adjust_hydrostat = False
+
+        #Mapping variables into different classes
+        xmap = self.subprofretg()
+
+        #Calculating the atmospheric paths
+        self.calc_pathg_L()
+        BASEH_TANHE = np.zeros(self.PathX.NPATH)
+        for i in range(self.PathX.NPATH):
+            BASEH_TANHE[i] = self.LayerX.BASEH[self.PathX.LAYINC[int(self.PathX.NLAYIN[i]/2),i]]/1.0e3
+
+
+        #Calling CIRSrad to calculate the spectra
+        print('Running CIRSradg')
+        #SPECOUT,dSPECOUT2,dTSURF = CIRSradg(self.runname,self.Variables,self.MeasurementX,self.AtmosphereX,self.SpectroscopyX,self.ScatterX,self.StellarX,self.SurfaceX,self.CIAX,self.LayerX,self.PathX)
+        SPECOUT,dSPECOUT2,dTSURF = self.CIRSradg()
+
+        #Mapping the gradients from Layer properties to Profile properties
+        print('Mapping gradients from Layer to Profile')
+        #Calculating the elements from NVMR+2+NDUST that need to be mapped
+        incpar = []
+        for i in range(self.AtmosphereX.NVMR+2+self.AtmosphereX.NDUST):
+            if np.mean(xmap[:,i,:])!=0.0:
+                incpar.append(i)
+
+        dSPECOUT1 = map2pro(dSPECOUT2,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.PathX.NLAYIN,self.PathX.LAYINC,self.LayerX.DTE,self.LayerX.DAM,self.LayerX.DCO,INCPAR=incpar)
+        #(NWAVE,NVMR+2+NDUST,NPRO,NPATH)
+        del dSPECOUT2
+
+        #Mapping the gradients from Profile properties to elements in state vector
+        print('Mapping gradients from Profile to State Vector')
+        dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+        #(NWAVE,NPATH,NX)
+        del dSPECOUT1
+
+        #Interpolating the spectra to the correct altitudes defined in Measurement
+        SPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM])
+        dSPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM,self.Variables.NX])
+        for i in range(self.MeasurementX.NGEOM):
+
+            #Find altitudes above and below the actual tangent height
+            ibase = np.argmin(np.abs(BASEH_TANHE-self.MeasurementX.TANHE[i]))
+            base0 = BASEH_TANHE[ibase]
+            
+            if base0<=self.MeasurementX.TANHE[i]:
+                ibasel = ibase
+                ibaseh = ibase + 1
+            else:
+                ibasel = ibase - 1
+                ibaseh = ibase
+
+            if ibaseh>self.PathX.NPATH-1:
+                SPECMOD[:,i] = SPECOUT[:,ibasel]
+                dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]
+            else:
+                fhl = (self.MeasurementX.TANHE[i]-BASEH_TANHE[ibasel])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+                fhh = (BASEH_TANHE[ibaseh]-self.MeasurementX.TANHE[i])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+
+                SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
+                dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]*(1.-fhl) + dSPECOUT[:,ibaseh,:]*(1.-fhh)
+
+        #Convolving the spectrum with the instrument line shape
+        print('Convolving spectra and gradients with instrument line shape')
+        if self.SpectroscopyX.ILBL==0:
+            SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+        elif self.SpectroscopyX.ILBL==2:
+            SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+
+        #Calculating the gradients of any parameterisations involving the convolution
+        dSPECONV = self.subspeconv(self.SpectroscopyX.WAVE,SPECMOD,dSPECONV)
+        
+        #Applying any changes to the spectra required by the state vector
+        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+        
+        return SPECONV,dSPECONV
+
+
 ###############################################################################################
 
     def nemesisCfm(self):
@@ -867,7 +1120,7 @@ class ForwardModel_0:
 
         #Applying any changes to the spectra required by the state vector
         dSPECOUT = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM,self.Variables.NX])
-        SPECOUT,dSPECOUT = self.subspecret(SPECOUT,dSPECOUT,IGEOM=None)
+        SPECOUT,dSPECOUT = self.subspecret(SPECOUT,dSPECOUT)
 
         #Convolving the spectrum with the instrument line shape
         print('Convolving spectra and gradients with instrument line shape')
@@ -1010,10 +1263,10 @@ class ForwardModel_0:
 
         """
         
-        start, end, xnx, ixrun, nemesisSO, YNtot, nfm = args
+        start, end, xnx, ixrun, nemesisSO, nemesisL, YNtot, nfm = args
         results = np.copy(YNtot)  # Local copy to prevent conflicts
         for ifm in range(start, end):
-            inp = (ifm, nfm, xnx, ixrun, nemesisSO, results)
+            inp = (ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, results)
             results = self.execute_fm(inp)
         return start, results
 
@@ -1031,7 +1284,7 @@ class ForwardModel_0:
 
         """
         
-        ifm, nfm, xnx, ixrun, nemesisSO, YNtot = inp
+        ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, YNtot = inp
         print(f'Calculating forward model {ifm+1}/{nfm}',flush=True)
         original_stdout = sys.stdout  # Store the original stdout
         try:
@@ -1039,6 +1292,8 @@ class ForwardModel_0:
             self.Variables.XN = xnx[:, ixrun[ifm]]
             if nemesisSO:
                 SPECMOD = self.nemesisSOfm()
+            elif nemesisL:
+                SPECMOD = self.nemesisLfm()
             else:
                 SPECMOD = self.nemesisfm()
             
@@ -1056,7 +1311,7 @@ class ForwardModel_0:
     
     ###############################################################################################
 
-    def jacobian_nemesis(self,NCores=1,nemesisSO=False):
+    def jacobian_nemesis(self,NCores=1,nemesisSO=False,nemesisL=False):
 
         """
 
@@ -1143,6 +1398,8 @@ class ForwardModel_0:
 
             if nemesisSO==True:
                 SPECMOD,dSPECMOD = self.nemesisSOfmg()
+            elif nemesisL==True:
+                SPECMOD,dSPECMOD = self.nemesisLfmg()
             else:
                 SPECMOD,dSPECMOD = self.nemesisfmg()
                 
@@ -1188,7 +1445,7 @@ class ForwardModel_0:
 
             chunks = [(i * base_chunk_size + min(i, remainder),
                        (i + 1) * base_chunk_size + min(i + 1, remainder),
-                       xnx, ixrun, nemesisSO, YNtot, nfm) for i in range(NCores)]
+                       xnx, ixrun, nemesisSO, nemesisL, YNtot, nfm) for i in range(NCores)]
 
             results = Parallel(n_jobs=NCores)(
                 delayed(self.chunked_execution)(chunk) for chunk in chunks
@@ -2867,6 +3124,202 @@ class ForwardModel_0:
 
     ###############################################################################################
 
+    def calc_path_L(self,Atmosphere=None,Scatter=None,Measurement=None,Layer=None):
+
+        """
+        FUNCTION NAME : calc_path_L()
+
+        DESCRIPTION : Based on the flags read in the different NEMESIS files (e.g., .fla, .set files),
+                      different parameters in the Path class are changed to perform correctly
+                      the radiative transfer calculations
+
+        INPUTS : None
+
+        OPTIONAL INPUTS:
+
+            Atmosphere :: Python class defining the reference atmosphere (Default : self.AtmosphereX)
+            Scatter :: Python class defining the parameters required for scattering calculations (Default : self.ScatterX)
+            Measurement :: Python class defining the measurements and observations (Default : self.MeasurementX)
+            Layer :: Python class defining the atmospheric layering scheme for the calculation (Default : self.LayerX)
+
+        OUTPUTS :
+
+            self.PathX :: Python class defining the calculation type and the path
+
+        CALLING SEQUENCE:
+
+            ForwardModel.calc_path_L()
+
+        MODIFICATION HISTORY : Juan Alday (08/05/2025)
+        """
+
+        from archnemesis import AtmCalc_0,Path_0
+
+        #Initialise variables
+        if Atmosphere is None:
+            Atmosphere = self.AtmosphereX
+        if Scatter is None:
+            Scatter = self.ScatterX
+        if Measurement is None:
+            Measurement = self.MeasurementX
+        if Layer is None:
+            Layer = self.LayerX
+
+        #Based on the new reference atmosphere, we split the atmosphere into layers
+        ################################################################################
+
+        #Limb or nadir observation?
+        #Is observation at limb? (coded with -ve emission angle where sol_ang is then the tangent altitude)
+
+        #Based on the new reference atmosphere, we split the atmosphere into layers
+        #In solar occultation LAYANG = 90.0
+        Layer.LAYANG = 90.0
+        
+        #Calculating the atmospheric layering
+        Layer.calc_layering(H=Atmosphere.H,P=Atmosphere.P,T=Atmosphere.T, ID=Atmosphere.ID, VMR=Atmosphere.VMR, DUST=Atmosphere.DUST, PARAH2=Atmosphere.PARAH2, MOLWT=Atmosphere.MOLWT)
+
+        #Based on the atmospheric layerinc, we calculate each required atmospheric path to model the measurements
+        #############################################################################################################
+
+        #Calculating the required paths that need to be calculated
+        ITANHE = []
+        for igeom in range(Measurement.NGEOM):
+
+            ibase = np.argmin(np.abs(Layer.BASEH/1.0e3-Measurement.TANHE[igeom]))
+            base0 = Layer.BASEH[ibase]/1.0e3
+            
+            if base0<=Measurement.TANHE[igeom]:
+                ibasel = ibase
+                ibaseh = ibase + 1
+                if ibaseh==Layer.NLAY:
+                    ibaseh = ibase
+            else:
+                ibasel = ibase - 1
+                ibaseh = ibase
+
+            ITANHE.append(ibasel)
+            ITANHE.append(ibaseh)
+
+        ITANHE = np.unique(ITANHE)
+
+        NCALC = len(ITANHE)    #Number of calculations (geometries) to be performed
+        AtmCalc_List = []
+        for ICALC in range(NCALC):
+            #iAtmCalc = AtmCalc_0(Layer,LIMB=True,BOTLAY=ITANHE[ICALC],ANGLE=90.0,IPZEN=0,THERM=True)
+            iAtmCalc = AtmCalc_0(
+                Layer,
+                path_observer_pointing = PathObserverPointing.LIMB,
+                BOTLAY=ITANHE[ICALC],
+                ANGLE=90.0,
+                IPZEN=ZenithAngleOrigin.BOTTOM,
+                path_calc = PathCalc.THERMAL_EMISSION,
+            )
+            AtmCalc_List.append(iAtmCalc)
+
+        #We initialise the total Path class, indicating that the calculations can be combined
+        self.PathX = Path_0(AtmCalc_List,COMBINE=True)
+
+    ###############################################################################################
+
+    def calc_pathg_L(self,Atmosphere=None,Scatter=None,Measurement=None,Layer=None):
+
+        """
+        FUNCTION NAME : calc_pathg_L()
+
+        DESCRIPTION : Based on the flags read in the different NEMESIS files (e.g., .fla, .set files),
+                  different parameters in the Path class are changed to perform correctly
+                  the radiative transfer calculations. This version also computes the matrices relating
+                  the properties of each layer (Layer) with the properties of the input profiles (Atmosphere)
+
+        INPUTS : None
+
+        OPTIONAL INPUTS:
+
+            Atmosphere :: Python class defining the reference atmosphere (Default : self.AtmosphereX)
+            Scatter :: Python class defining the parameters required for scattering calculations (Default : self.ScatterX)
+            Measurement :: Python class defining the measurements and observations (Default : self.MeasurementX)
+            Layer :: Python class defining the atmospheric layering scheme for the calculation (Default : self.LayerX)
+
+        OUTPUTS :
+
+            self.PathX :: Python class defining the calculation type and the path
+
+        CALLING SEQUENCE:
+
+            Layer,Path = calc_pathg(Atmosphere,Scatter,Layer)
+
+        MODIFICATION HISTORY : Juan Alday (15/03/2021)
+        """
+
+        from archnemesis import AtmCalc_0,Path_0
+
+        #Initialise variables
+        if Atmosphere is None:
+            Atmosphere = self.AtmosphereX
+        if Scatter is None:
+            Scatter = self.ScatterX
+        if Measurement is None:
+            Measurement = self.MeasurementX
+        if Layer is None:
+            Layer = self.LayerX
+
+
+        #Based on the new reference atmosphere, we split the atmosphere into layers
+        ################################################################################
+
+        #Limb or nadir observation?
+        #Is observation at limb? (coded with -ve emission angle where sol_ang is then the tangent altitude)
+
+        #Based on the new reference atmosphere, we split the atmosphere into layers
+        #In solar occultation LAYANG = 90.0
+        Layer.LAYANG = 90.0
+
+        #Calculating the atmospheric layering
+        Layer.calc_layeringg(H=Atmosphere.H,P=Atmosphere.P,T=Atmosphere.T, ID=Atmosphere.ID,VMR=Atmosphere.VMR, DUST=Atmosphere.DUST, PARAH2=Atmosphere.PARAH2, MOLWT=Atmosphere.MOLWT)
+
+        #Based on the atmospheric layerinc, we calculate each required atmospheric path to model the measurements
+        #############################################################################################################
+
+        #Calculating the required paths that need to be calculated
+        ITANHE = []
+        for igeom in range(Measurement.NGEOM):
+
+            ibase = np.argmin(np.abs(Layer.BASEH/1.0e3-Measurement.TANHE[igeom]))
+            base0 = Layer.BASEH[ibase]/1.0e3
+            
+            if base0<=Measurement.TANHE[igeom]:
+                ibasel = ibase
+                ibaseh = ibase + 1
+                if ibaseh==Layer.NLAY:
+                    ibaseh = ibase
+            else:
+                ibasel = ibase - 1
+                ibaseh = ibase
+
+            ITANHE.append(ibasel)
+            ITANHE.append(ibaseh)
+
+        ITANHE = np.unique(ITANHE)
+
+        NCALC = len(ITANHE)    #Number of calculations (geometries) to be performed
+        AtmCalc_List = []
+        for ICALC in range(NCALC):
+            #iAtmCalc = AtmCalc_0(Layer,LIMB=True,BOTLAY=ITANHE[ICALC],ANGLE=90.0,IPZEN=0,THERM=True)
+            iAtmCalc = AtmCalc_0(
+                Layer,
+                path_observer_pointing = PathObserverPointing.LIMB,
+                BOTLAY=ITANHE[ICALC],
+                ANGLE=90.0,
+                IPZEN=ZenithAngleOrigin.BOTTOM,
+                path_calc = PathCalc.THERMAL_EMISSION,
+            )
+            AtmCalc_List.append(iAtmCalc)
+
+        #We initialise the total Path class, indicating that the calculations can be combined
+        self.PathX = Path_0(AtmCalc_List,COMBINE=True)
+
+    ###############################################################################################
+
     def calc_path_C(self,Atmosphere=None,Scatter=None,Measurement=None,Layer=None):
 
         """
@@ -3761,13 +4214,12 @@ class ForwardModel_0:
                 EMTEMP = Path.EMTEMP[0:NLAYIN,ipath]
                 EMPRESS = Layer.PRESS[Path.LAYINC[0:NLAYIN,ipath]]
                 
-                SPECOUT[:,:,ipath],dSPECOUT[:,:,:,:,ipath],dTSURF[:,:,ipath] = calc_thermal_emission_spectrumg(Measurement.ISPACE,Spectroscopy.WAVE,TAUTOT_LAYINC[:,:,0:NLAYIN,ipath],dTAUTOT_LAYINC[:,:,:,0:NLAYIN,ipath],Atmosphere.NVMR,EMTEMP,EMPRESS,Surface.TSURF,EMISSIVITY)
+                SPECOUT[:,:,ipath],dSPECOUT[:,:,:,0:NLAYIN,ipath],dTSURF[:,:,ipath] = calc_thermal_emission_spectrumg(Measurement.ISPACE,Spectroscopy.WAVE,TAUTOT_LAYINC[:,:,0:NLAYIN,ipath],dTAUTOT_LAYINC[:,:,:,0:NLAYIN,ipath],Atmosphere.NVMR,EMTEMP,EMPRESS,Surface.TSURF,EMISSIVITY)
         
                 #Changing the units of the spectra and gradients
                 SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
                 dTSURF[:,:,ipath] = (dTSURF[:,:,ipath].T * xfac).T
                 dSPECOUT[:,:,:,:,ipath] = np.transpose(np.transpose(dSPECOUT[:,:,:,:,ipath],axes=[1,2,3,0])*xfac,axes=[3,0,1,2])
-        
 
         #Now integrate over g-ordinates
         print('CIRSradg :: Integrading over g-ordinates')
