@@ -1244,7 +1244,27 @@ class ForwardModel_0:
 
     ###############################################################################################
 
-    
+    def _get_ipar(self, varident : np.ndarray[[3],int]) -> None | int:
+        """
+        Calculates the value of 'ipar', an integer that encodes which
+        atmospheric profile is to be retrieved. Returns 'None' if the
+        parameterised model is not an atmospheric one.
+        """
+        if ((varident[2]<100) 
+                    or ((varident[2]>=1000) and (varident[2]<=1100))
+                ):
+            if varident[0]==0:     #Temperature is to be retrieved
+                ipar = self.AtmosphereX.NVMR
+            elif varident[0]>0:    #Gas VMR is to be retrieved
+                jvmr = np.nonzero( (np.array(self.AtmosphereX.ID)==varident[0]) & (np.array(self.AtmosphereX.ISO)==varident[1]) )[0]
+                assert len(jvmr)==1, 'Cannot have more than gas VMR retrieved at once'
+                ipar = int(jvmr[0])
+            elif varident[0]<0:
+                jcont = -int(varident[0])
+                ipar = self.AtmosphereX.NVMR + jcont
+            return ipar
+        else:
+            return None
 
     def subprofretg(self):
 
@@ -1336,72 +1356,18 @@ class ForwardModel_0:
         #Going through the different variables an updating the atmosphere accordingly
         ix = 0
         for ivar in range(self.Variables.NVAR):
-        
             
+            
+            ipar = self._get_ipar(self.Variables.VARIDENT[ivar])
 
-            #Model parameterisation applies to an atmospheric parameter 
-            if((self.Variables.VARIDENT[ivar,2]<=100)):
-
-                #Reading the atmospheric profile which is going to be changed by the current variable
-                xref = np.zeros([self.AtmosphereX.NP])
-
-                if self.Variables.VARIDENT[ivar,0]==0:     #Temperature is to be retrieved
-                    xref[:] = self.AtmosphereX.T
-                    ipar = self.AtmosphereX.NVMR
-                elif self.Variables.VARIDENT[ivar,0]>0:    #Gas VMR is to be retrieved
-                    jvmr = np.where( (np.array(self.AtmosphereX.ID)==self.Variables.VARIDENT[ivar,0]) & (np.array(self.AtmosphereX.ISO)==self.Variables.VARIDENT[ivar,1]) )
-                    jvmr = int(jvmr[0])
-                    xref[:] = self.AtmosphereX.VMR[:,jvmr]
-                    ipar = jvmr
-                elif self.Variables.VARIDENT[ivar,0]<0:
-                    jcont = -int(self.Variables.VARIDENT[ivar,0])
-                    if jcont>self.AtmosphereX.NDUST+2:
-                        raise ValueError('error :: Variable outside limits',self.Variables.VARIDENT[ivar,0],self.Variables.VARIDENT[ivar,1],self.Variables.VARIDENT[ivar,2])
-                    elif jcont==self.AtmosphereX.NDUST+1:   #Para-H2
-                        xref[:] = self.AtmosphereX.PARAH2
-                    elif abs(jcont)==self.AtmosphereX.NDUST+2: #Fractional cloud cover
-                        xref[:] = self.AtmosphereX.FRAC
-                    else:
-                        xref[:] = self.AtmosphereX.DUST[:,jcont-1]
-
-                    ipar = self.AtmosphereX.NVMR + jcont
-
-                x1 = np.zeros(self.AtmosphereX.NP)
 
             #Model parameterisation applies to atmospheric parameters in multiple locations
-            elif ((self.Variables.VARIDENT[ivar,2]>=1000) & (self.Variables.VARIDENT[ivar,2]<=1100)):
-
-                if self.AtmosphereX.NLOCATIONS<=1:
+            if ((self.Variables.VARIDENT[ivar,2]>=1000) 
+                    and (self.Variables.VARIDENT[ivar,2]<=1100)
+                    and (self.AtmosphereX.NLOCATION <= 1)
+                ):
                     raise ValueError('error in subprofretg :: Models 1000-1100 are meant to be used for models of atmospheric properties in multiple locations')
 
-                #Reading the atmospheric profile which is going to be changed by the current variable
-                xref = np.zeros((self.AtmosphereX.NP,self.AtmosphereX.NLOCATIONS))
-
-                if self.Variables.VARIDENT[ivar,0]==0:     #Temperature is to be retrieved
-                    xref[:,:] = self.AtmosphereX.T[:,:]
-                    ipar = self.AtmosphereX.NVMR
-                elif self.Variables.VARIDENT[ivar,0]>0:    #Gas VMR is to be retrieved
-                    jvmr = np.where( (np.array(self.AtmosphereX.ID)==self.Variables.VARIDENT[ivar,0]) & (np.array(self.AtmosphereX.ISO)==self.Variables.VARIDENT[ivar,1]) )
-                    jvmr = int(jvmr[0])
-                    xref[:,:] = self.AtmosphereX.VMR[:,jvmr,:]
-                    ipar = jvmripar
-                elif self.Variables.VARIDENT[ivar,0]<0:
-                    jcont = -int(self.Variables.VARIDENT[ivar,0])
-                    if jcont>self.AtmosphereX.NDUST+2:
-                        raise ValueError('error :: Variable outside limits',self.Variables.VARIDENT[ivar,0],self.Variables.VARIDENT[ivar,1],self.Variables.VARIDENT[ivar,2])
-                    elif jcont==self.AtmosphereX.NDUST+1:   #Para-H2
-                        if flagh2p==True:
-                            xref[:,:] = self.AtmosphereX.PARAH2[:,:]
-                        else:
-                            raise ValueError('error :: Para-H2 is declared as variable but atmosphere is not from Giant Planet')
-                    elif abs(jcont)==self.AtmosphereX.NDUST+2: #Fractional cloud cover
-                        xref[:,:] = self.AtmosphereX.FRAC[:,:]
-                    else:
-                        xref[:,:] = self.AtmosphereX.DUST[:,jcont-1,:]
-
-                    ipar = self.AtmosphereX.NVMR + jcont
-
-                x1 = np.zeros((self.AtmosphereX.NP,self.AtmosphereX.NLOCATIONS))
 
             # Calculate state vector for the model
             ix = self.Variables.models[ivar].calculate_from_state_vector(self, ix, ipar, ivar, xmap)
@@ -1443,37 +1409,14 @@ class ForwardModel_0:
         ix = 0
         for ivar in range(self.Variables.NVAR):
 
-            #Model parameterisation applies to an atmospheric parameter 
-            if((self.Variables.VARIDENT[ivar,2]<=100)):
+            ipar = self._get_ipar(self.Variables.VARIDENT[ivar])
 
-                #Reading the atmospheric profile which is going to be changed by the current variable
-                xref = np.zeros([self.AtmosphereX.NP])
-
-                if self.Variables.VARIDENT[ivar,0]==0:     #Temperature is to be retrieved
-                    xref[:] = self.AtmosphereX.T
-                    ipar = self.AtmosphereX.NVMR
-                elif self.Variables.VARIDENT[ivar,0]>0:    #Gas VMR is to be retrieved
-                    jvmr = np.where( (np.array(self.AtmosphereX.ID)==self.Variables.VARIDENT[ivar,0]) & (np.array(self.AtmosphereX.ISO)==self.Variables.VARIDENT[ivar,1]) )
-                    jvmr = int(jvmr[0])
-                    xref[:] = self.AtmosphereX.VMR[:,jvmr]
-                    ipar = jvmr
-                elif self.Variables.VARIDENT[ivar,0]<0:
-                    jcont = -int(self.Variables.VARIDENT[ivar,0])
-                    if jcont>self.AtmosphereX.NDUST+2:
-                        raise ValueError('error :: Variable outside limits',self.Variables.VARIDENT[ivar,0],self.Variables.VARIDENT[ivar,1],self.Variables.VARIDENT[ivar,2])
-                    elif jcont==self.AtmosphereX.NDUST+1:   #Para-H2
-                         #if flagh2p==True:
-                        xref[:] = self.AtmosphereX.PARAH2
-                         #else:
-                             #raise ValueError('error :: Para-H2 is declared as variable but atmosphere is not from Giant Planet')
-                    elif abs(jcont)==self.AtmosphereX.NDUST+2: #Fractional cloud cover
-                        xref[:] = self.AtmosphereX.FRAC
-                    else:
-                        xref[:] = self.AtmosphereX.DUST[:,jcont-1]
-
-                    ipar = self.AtmosphereX.NVMR + jcont
-
-                x1 = np.zeros(self.AtmosphereX.NP)
+            #Model parameterisation applies to atmospheric parameters in multiple locations
+            if ((self.Variables.VARIDENT[ivar,2]>=1000) 
+                    and (self.Variables.VARIDENT[ivar,2]<=1100)
+                    and (self.AtmosphereX.NLOCATION <= 1)
+                ):
+                    raise ValueError('error in subprofretg :: Models 1000-1100 are meant to be used for models of atmospheric properties in multiple locations')
 
             # Patch state vector for the model
             ix = self.Variables.models[ivar].patch_from_state_vector(self, ix, ipar, ivar, xmap)
