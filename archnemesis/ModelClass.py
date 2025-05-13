@@ -11,28 +11,12 @@ _lgr.setLevel(logging.WARN)
 class ModelBase:
     id : int = None
     
-    def __init__(self, variables : "Variables_0", varident : np.ndarray[[3],int], NPRO : int, nlocations : int, i_state_vector_start : int):
-        self.state_vector_start = i_state_vector_start
-        self.n_state_vector_entries = self.get_nxvar(variables, varident, NPRO, nlocations)
-        self.state_vector_end = self.state_vector_start + self.n_state_vector_entries
+    def __init__(self, i_state_vector_start : int, n_state_vector_entries : int):
+        self.state_vector_slice = slice(i_state_vector_start, i_state_vector_start+n_state_vector_entries)
     
-    def get_apriori_state_vector_slice(self, variables : "Variables_0"):
-        return (
-            variables.XA[self.state_vector_start:self.state_vector_end],
-            variables.LX[self.state_vector_start:self.state_vector_end],
-            variables.FIX[self.state_vector_start:self.state_vector_end],
-            variables.NUM[self.state_vector_start:self.state_vector_end],
-            variables.DSTEP[self.state_vector_start:self.state_vector_end],
-        )
+    def get_state_vector_slice(self, state_vector : np.ndarray[['xn'], float]):
+        return state_vector[self.state_vector_slice]
     
-    def get_posterior_state_vector_slice(self, variables : "Variables_0"):
-        return (
-            variables.XN[self.state_vector_start:self.state_vector_end],
-            variables.LX[self.state_vector_start:self.state_vector_end],
-            variables.FIX[self.state_vector_start:self.state_vector_end],
-            variables.NUM[self.state_vector_start:self.state_vector_end],
-            variables.DSTEP[self.state_vector_start:self.state_vector_end],
-        )
     
 
 

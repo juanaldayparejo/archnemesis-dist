@@ -1403,19 +1403,8 @@ class ForwardModel_0:
 
                 x1 = np.zeros((self.AtmosphereX.NP,self.AtmosphereX.NLOCATIONS))
 
-
-            #Looping through each model
-            #######################################################################
-            model_found_for_varident = False
-            for model in Models:
-                if model.is_varident_valid(self.Variables.VARIDENT[ivar]):
-                    model_found_for_varident = True
-                    ix = model.calculate_from_state_vector(self, ix, ipar, ivar, xmap)
-                    break
-                
-            if not model_found_for_varident:
-                raise NotImplementedError(f'ForwardModel_0 :: subprofretg :: No model found for varident={self.Variables.VARIDENT[ivar]}')
-
+            # Calculate state vector for the model
+            ix = self.Variables.models[ivar].calculate_from_state_vector(self, ix, ipar, ivar, xmap)
             
 
 
@@ -1486,19 +1475,8 @@ class ForwardModel_0:
 
                 x1 = np.zeros(self.AtmosphereX.NP)
 
-            #Looping through each model
-            #######################################################################
-
-            model_found_for_varident = False
-            for model in Models:
-                if model.is_varident_valid(self.Variables.VARIDENT[ivar]):
-                    model_found_for_varident = True
-                    ix = model.patch_from_state_vector(self, ix, ipar, ivar, xmap)
-                    break
-                
-            if not model_found_for_varident:
-                raise NotImplementedError(f'ForwardModel_0 :: subprofretg :: No model found for varident={self.Variables.VARIDENT[ivar]}')
-                
+            # Patch state vector for the model
+            ix = self.Variables.models[ivar].patch_from_state_vector(self, ix, ipar, ivar, xmap)
         
         return xmap
 

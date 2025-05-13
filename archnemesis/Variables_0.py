@@ -127,13 +127,26 @@ class Variables_0:
     def models(self):
         return self._models
     
+    def _get_models_params(self, state_vec, unlog=True, split_fixed=True):
+        m_pars = [x.get_state_vector_slice(state_vec) for x in self.models]
+        if unlog:
+            for i in len(m_pars):
+                m_pars[i] = np.array([np.exp(x) if log else x for x, log in zip(m_pars[i], self.models[i].get_state_vector_slice(self.LX))]) 
+        
+        if split_fixed:
+            for i in len(m_pars):
+                fix = self.models[i].get_state_vector_slice(self.FIX)
+                m_pars[i] = tuple(m_pars[i][fix==1], m_pars[i][fix==0])
+        
+        return tuple(m_pars)
+    
     @property
-    def models_apriori_params(self):
-        return tuple(x.get_apriori_state_vector_slice(self) for x in self.models)
+    def models_apriori_params(self, unlog=True, split_fixed=True):
+        return self._get_models_params(self.XA, unlog=unlog, split_fixed=split_fixed)
     
     @property
     def models_posterior_params(self):
-        return tuple(x.get_posterior_state_vector_slice(self) for x in self.models)
+        return self._get_models_params(self.XN, unlog=unlog, split_fixed=split_fixed)
 
     def edit_VARIDENT(self, VARIDENT_array):
         """
@@ -247,7 +260,7 @@ class Variables_0:
         nxvar = np.zeros(self.NVAR,dtype='int32')
         assert self.VARIDENT.ndim == 2, "self.VARIDENT must have 2 dimensions"
         
-        self._models = []
+        self._models = np.zeros((self.NVAR,), dtype=object)
         
         sum = 0
 
@@ -256,15 +269,15 @@ class Variables_0:
             for model in Models:
                 if model.is_varident_valid(self.VARIDENT[i]):
                     found_model_for_varident = True
-                    self._models.append(model(self, self.VARIDENT[i], NPRO, nlocations, sum))
                     nxvar[i] = model.get_nxvar(self, self.VARIDENT[i], NPRO, nlocations)
+                    self._models[i] = model(sum, nxvar[i])
+                    print(f'{i=} {self._models[i]=}')
                     sum += nxvar[i]
                     break
             
             if not found_model_for_varident:
                 raise ValueError('error :: varID not included in calc_NXVAR()')
                 
-        self._models = tuple(self._models)
         self.NXVAR = nxvar
 
     ################################################################################################################
