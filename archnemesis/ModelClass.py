@@ -1,5 +1,5 @@
 import numpy as np
-from typing import IO
+from typing import IO, Any
 
 from archnemesis.Scatter_0 import kk_new_sub
 
@@ -18,6 +18,68 @@ class ModelBase:
         return state_vector[self.state_vector_slice]
     
     
+    ## Abstract methods below this line, subclasses must implement all of these methods ##
+    
+    @classmethod
+    def is_varident_valid(
+            cls,
+            varident : np.ndarray[[3],int],
+        ) -> bool:
+        ...
+    
+    @classmethod
+    def __call__(cls, *args, **kwargs) -> Any:
+        ...
+    
+    @classmethod
+    def from_apr_to_state_vector(
+            cls,
+            variables : "Variables_0",
+            f : IO,
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            lx : np.ndarray[["mx"],int],
+            x0 : np.ndarray[["mx"],float],
+            sx : np.ndarray[["mx","mx"],float],
+            varfile : list[str],
+            npro : int,
+            nlocations : int,
+            sxminfac : float,
+        ) -> int:
+        ...
+        
+    @classmethod
+    def calculate_from_state_vector(
+            cls,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ipar : int,
+            ivar : int,
+            xmap : np.ndarray,
+        ) -> int:
+        ...
+
+    @classmethod
+    def patch_from_state_vector(
+            cls,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ipar : int,
+            ivar : int,
+            xmap : np.ndarray,
+        ) -> int:
+        ...
+    
+    @classmethod
+    def get_nxvar(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            NPRO : int,
+            nlocations : int,
+        ) -> int:
+        ...
 
 
 class Modelm1(ModelBase):
@@ -94,7 +156,6 @@ class Modelm1(ModelBase):
             jtmp = ipar - (atm.NVMR+1)
             x1 = np.exp(xprof)
             if jtmp<atm.NDUST:
-    #             rho = atm.calc_rho()  #kg/m3
                 atm.DUST_UNITS_FLAG[jtmp] = -1
                 atm.DUST[:,jtmp] = x1 #* 1000. * rho
             elif jtmp==atm.NDUST:
