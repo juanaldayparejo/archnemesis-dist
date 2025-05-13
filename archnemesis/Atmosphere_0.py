@@ -12,7 +12,7 @@ from archnemesis import *
 import numpy as np
 from scipy.special import legendre
 
-from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum
+from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileType
 
 class Atmosphere_0:
     """
@@ -479,6 +479,32 @@ class Atmosphere_0:
         f.close()       
 
     ##################################################################################
+
+    def ipar_to_atm_profile_type(ipar : int) -> tuple[AtmosphericProfileType, int]:
+        """
+        ipar :: Atmospheric parameter to be changed
+            (0 to NVMR-1) :: Gas VMR
+            (NVMR) :: Temperature
+            (NVMR+1 to NVMR+NDUST-1) :: Aerosol density
+            (NVMR+NDUST) :: Para-H2
+            (NVMR+NDUST+1) :: Fractional cloud coverage
+        """
+        if ipar >=0 and ipar < self.NVMR:
+            return AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO, ipar
+        
+        if ipar == self.NVMR:
+            return AtmosphericProfileType.TEMPERATURE, 0
+        
+        if ipar > self.NVMR and ipar < self.NVMR+self.NDUST:
+            return AtmosphericProfileType.AEROSOL_DENSITY, ipar - (self.NVMR+1)
+        
+        if ipar == self.NVMR+self.NDUST:
+            return AtmosphericProfileType.PARA_H2_FRACTION, 0
+        
+        if ipar == self.NVMR+self.NDUST+1:
+            return AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE, 0
+        
+        raise ValueError(f'Atmosphere_0 :: ipar_to_atm_profile_type :: {ipar=} is not a supported value')
 
     def edit_H(self, array):
         """

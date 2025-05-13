@@ -1,5 +1,5 @@
 from archnemesis import *
-from archnemesis.Models import Models
+from archnemesis.Models import *
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -17,7 +17,7 @@ from archnemesis.enums import (
     LowerBoundaryCondition,
     WaveUnit,
     PathObserverPointing,
-    RayleighScatteringMode,
+    RayleighScatteringMode
 )
 
 #!/usr/local/bin/python3
@@ -1244,10 +1244,8 @@ class ForwardModel_0:
 
     ###############################################################################################
 
-    
-
     def subprofretg(self):
-
+        # NOTE: the output `xmap` is only used wht the "gradient" versions of nemesis calcs (the "*fmg" methods).
         """
         FUNCTION NAME : subprogretg()
 
@@ -1336,8 +1334,6 @@ class ForwardModel_0:
         #Going through the different variables an updating the atmosphere accordingly
         ix = 0
         for ivar in range(self.Variables.NVAR):
-        
-            
 
             #Model parameterisation applies to an atmospheric parameter 
             if((self.Variables.VARIDENT[ivar,2]<=100)):
@@ -1384,7 +1380,7 @@ class ForwardModel_0:
                     jvmr = np.where( (np.array(self.AtmosphereX.ID)==self.Variables.VARIDENT[ivar,0]) & (np.array(self.AtmosphereX.ISO)==self.Variables.VARIDENT[ivar,1]) )
                     jvmr = int(jvmr[0])
                     xref[:,:] = self.AtmosphereX.VMR[:,jvmr,:]
-                    ipar = jvmripar
+                    ipar = jvmr
                 elif self.Variables.VARIDENT[ivar,0]<0:
                     jcont = -int(self.Variables.VARIDENT[ivar,0])
                     if jcont>self.AtmosphereX.NDUST+2:
@@ -1406,17 +1402,403 @@ class ForwardModel_0:
 
             #Looping through each model
             #######################################################################
-            model_found_for_varident = False
-            for model in Models:
-                if model.is_varident_valid(self.Variables.VARIDENT[ivar]):
-                    model_found_for_varident = True
-                    ix = model.calculate_from_state_vector(self, ix, ipar, ivar, xmap)
-                    break
+
+            if self.Variables.VARIDENT[ivar,2]==-1:
+                #Model -1. Continuous aerosol profile in particles cm-3
+                #***************************************************************
+
+                xprof = np.zeros(self.Variables.NXVAR[ivar])
+                xprof[:] = self.Variables.XN[ix:ix+self.Variables.NXVAR[ivar]]
+                jtmp = ipar - (self.AtmosphereX.NVMR+1)
+                if self.Variables.VARPARAM[ivar,0]\
+                    and ipar > self.AtmosphereX.NVMR\
+                    and jtmp < self.AtmosphereX.NDUST: # Fortran true so flip aerosol model
+                    
+                    self.AtmosphereX,xmap1 = model0(self.AtmosphereX,ipar,xprof)
+                else:
+                    self.AtmosphereX,xmap1 = modelm1(self.AtmosphereX,ipar,xprof)
+                    
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,2]==0:
+                #Model 0. Continuous profile
+                #***************************************************************
+
+                xprof = np.zeros(self.Variables.NXVAR[ivar])
+                xprof[:] = self.Variables.XN[ix:ix+self.Variables.NXVAR[ivar]]
+                jtmp = ipar - (self.AtmosphereX.NVMR+1)
+                if (self.Variables.VARPARAM[ivar,0] != 0
+                        and ipar > self.AtmosphereX.NVMR
+                        and jtmp < self.AtmosphereX.NDUST
+                    ): # Fortran true so flip aerosol model
+                    self.AtmosphereX,xmap1 = modelm1(self.AtmosphereX,ipar,xprof)
+                else:
+                    self.AtmosphereX,xmap1 = model0(self.AtmosphereX,ipar,xprof)
+        
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,2]==2:
+                #Model 2. Scaling factor
+                #***************************************************************
+
+                self.AtmosphereX,xmap1 = model2(self.AtmosphereX,ipar,self.Variables.XN[ix])
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,2]==3:
+                #Model 3. Log scaling factor
+                #***************************************************************
+
+                self.AtmosphereX,xmap1 = model3(self.AtmosphereX,ipar,self.Variables.XN[ix])
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,2]==9:
+                #Model 9. Simple cloud represented by base height, fractional scale height
+                     #and the total integrated cloud density
+                #***************************************************************
+
+                tau = np.exp(self.Variables.XN[ix])    #Integrated dust column-density
+                fsh = np.exp(self.Variables.XN[ix+1])  #Fractional scale height
+                href = self.Variables.XN[ix+2]         #Base height (km)
+
+                self.AtmosphereX,xmap1 = model9(self.AtmosphereX,ipar,href,fsh,tau)
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+
+                ix = ix + self.Variables.NXVAR[ivar]
                 
-            if not model_found_for_varident:
-                raise NotImplementedError(f'ForwardModel_0 :: subprofretg :: No model found for varident={self.Variables.VARIDENT[ivar]}')
+            elif self.Variables.VARIDENT[ivar,2]==32:
+                #Model 32. Cloud profile is represented by a value at a variable
+                     #pressure level and fractional scale height.
+                     #Below the knee pressure the profile is set to drop exponentially.
+                #***************************************************************
+                tau = np.exp(self.Variables.XN[ix])   #Base pressure (atm)
+                fsh = np.exp(self.Variables.XN[ix+1])  #Integrated dust column-density (m-2) or opacity
+                pref = np.exp(self.Variables.XN[ix+2])  #Fractional scale height
+                self.AtmosphereX,xmap1 = model32(self.AtmosphereX,ipar,pref,fsh,tau)
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,2]==45:
+                #Model 45. Irwin CH4 model. Variable deep tropospheric and stratospheric abundances,
+                    #along with tropospheric humidity.
+                #***************************************************************
+                tropo = np.exp(self.Variables.XN[ix])   # Deep tropospheric abundance
+                humid = np.exp(self.Variables.XN[ix+1])  # Humidity
+                strato = np.exp(self.Variables.XN[ix+2])  # Stratospheric abundance
+                self.AtmosphereX,xmap1 = model45(self.AtmosphereX, ipar, tropo, humid, strato)
+                xmap[ix] = xmap1
+                
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+            elif self.Variables.VARIDENT[ivar,2]==47:
+                #Model 47. Profile is represented by a Gaussian with a specified optical thickness centred
+                     #at a variable pressure level plus a variable FWHM (log press) in height.
+                #***************************************************************
+                tau = np.exp(self.Variables.XN[ix])   #Integrated dust column-density (m-2) or opacity
+                pref = np.exp(self.Variables.XN[ix+1])  #Base pressure (atm)
+                fwhm = np.exp(self.Variables.XN[ix+2])  #FWHM
+                self.AtmosphereX,xmap1 = model47(self.AtmosphereX, ipar, tau, pref, fwhm)
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+                
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+                
+            elif self.Variables.VARIDENT[ivar,2]==49:
+                #Model 50. Continuous profile in linear scale
+                #***************************************************************
+
+                xprof = np.zeros(self.Variables.NXVAR[ivar])
+                xprof[:] = self.Variables.XN[ix:ix+self.Variables.NXVAR[ivar]]
+                self.AtmosphereX,xmap1 = model49(self.AtmosphereX,ipar,xprof)
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,2]==50:
+                #Model 50. Continuous profile of scaling factors
+                #***************************************************************
+
+                xprof = np.zeros(self.Variables.NXVAR[ivar])
+                xprof[:] = self.Variables.XN[ix:ix+self.Variables.NXVAR[ivar]]
+                self.AtmosphereX,xmap1 = model50(self.AtmosphereX,ipar,xprof)
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+
+                ix = ix + self.Variables.NXVAR[ivar]
 
             
+            elif self.Variables.VARIDENT[ivar,2]==51:
+                #Model 51. Scaling of a reference profile
+               #***************************************************************                
+                scale = np.exp(self.Variables.XN[ix])
+                scale_gas, scale_iso = self.Variables.VARPARAM[ivar,1:3]
+                self.AtmosphereX,xmap1 = model51(self.AtmosphereX,ipar,scale,scale_gas,scale_iso)
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+                
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+                
+            elif self.Variables.VARIDENT[ivar,2]==110:
+                #Model 110. Venus cloud model from Haus et al. (2016) with altitude offset
+               #************************************************************************************  
+              
+                offset = self.Variables.XN[ix]   #altitude offset in km
+                idust0 = np.abs(self.Variables.VARIDENT[ivar,0])-1  #Index of the first cloud mode                
+                self.AtmosphereX = model110(self.AtmosphereX,idust0,offset)
+                
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+            elif self.Variables.VARIDENT[ivar,2]==111:
+                #Model 110. Venus cloud model and SO2 vmr profile with altitude offset
+              #************************************************************************************  
+              
+                offset = self.Variables.XN[ix]   #altitude offset in km
+                so2_deep = np.exp(self.Variables.XN[ix+1])   #SO2 vmr below the cloud
+                so2_top = np.exp(self.Variables.XN[ix+2])   #SO2 vmr above the cloud
+                
+                idust0 = np.abs(self.Variables.VARIDENT[ivar,0])-1  #Index of the first cloud mode                
+                self.AtmosphereX = model111(self.AtmosphereX,idust0,so2_deep,so2_top,offset)
+                
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+            elif self.Variables.VARIDENT[ivar,2]==202:
+                #Model 202. Scaling factor of telluric atmospheric profile
+                #***************************************************************
+
+                scafac = self.Variables.XN[ix]
+                varid1 = self.Variables.VARIDENT[ivar,0] ; varid2 = self.Variables.VARIDENT[ivar,1]
+                if self.TelluricX is not None:
+                    self.TelluricX = model202(self.TelluricX,varid1,varid2,scafac)
+
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+
+            elif self.Variables.VARIDENT[ivar,0]==228:
+                #Model 228. Retrieval of instrument line shape for ACS-MIR and wavelength calibration
+                #**************************************************************************************
+
+                V0 = self.Variables.XN[ix]
+                C0 = self.Variables.XN[ix+1]
+                C1 = self.Variables.XN[ix+2]
+                C2 = self.Variables.XN[ix+3]
+                P0 = self.Variables.XN[ix+4]
+                P1 = self.Variables.XN[ix+5]
+                P2 = self.Variables.XN[ix+6]
+                P3 = self.Variables.XN[ix+7]
+
+                self.MeasurementX,self.SpectroscopyX = model228(self.MeasurementX,self.SpectroscopyX,V0,C0,C1,C2,P0,P1,P2,P3)
+
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,0]==229:
+                #Model 229. Retrieval of instrument line shape for ACS-MIR (v2)
+                #***************************************************************
+
+                par1 = self.Variables.XN[ix]
+                par2 = self.Variables.XN[ix+1]
+                par3 = self.Variables.XN[ix+2]
+                par4 = self.Variables.XN[ix+3]
+                par5 = self.Variables.XN[ix+4]
+                par6 = self.Variables.XN[ix+5]
+                par7 = self.Variables.XN[ix+6]
+
+                self.MeasurementX = model229(self.MeasurementX,par1,par2,par3,par4,par5,par6,par7)
+
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,0]==230:
+                #Model 230. Retrieval of multiple instrument line shapes for ACS-MIR
+                #***************************************************************
+
+                nwindows = int(self.Variables.VARPARAM[ivar,0])
+                liml = np.zeros(nwindows)
+                limh = np.zeros(nwindows)
+                i0 = 1
+                for iwin in range(nwindows):
+                    liml[iwin] = self.Variables.VARPARAM[ivar,i0]
+                    limh[iwin] = self.Variables.VARPARAM[ivar,i0+1]
+                    i0 = i0 + 2
+
+                par1 = np.zeros((7,nwindows))
+                for iwin in range(nwindows):
+                    for jwin in range(7):
+                        par1[jwin,iwin] = self.Variables.XN[ix]
+                        ix = ix + 1
+
+                self.MeasurementX = model230(self.MeasurementX,nwindows,liml,limh,par1)
+
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,0]==231:
+                #Model 231. Continuum addition to transmission spectra using a varying scaling factor (given a polynomial of degree N)
+                #***************************************************************
+
+                #The computed transmission spectra is multiplied by R = R0 * POL
+                #Where POL is given by POL = A0 + A1*(WAVE-WAVE0) + A2*(WAVE-WAVE0)**2. + ...
+
+                #The effect of this model takes place after the computation of the spectra in CIRSrad!
+                if int(self.Variables.VARPARAM[ivar,0])!=self.MeasurementX.NGEOM:
+                    raise ValueError('error using Model 231 :: The number of levels for the addition of continuum must be the same as NGEOM')
+
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,0]==2310:
+                #Model 2310. Continuum addition to transmission spectra using a varying scaling factor (given a polynomial of degree N)
+                       #in several spectral windows
+                #***************************************************************
+
+                #The computed transmission spectra is multiplied by R = R0 * POL
+                #Where POL is given by POL = A0 + A1*(WAVE-WAVE0) + A2*(WAVE-WAVE0)**2. + ...
+
+                #The effect of this model takes place after the computation of the spectra in CIRSrad!
+                if int(self.Variables.VARPARAM[ivar,0])!=self.MeasurementX.NGEOM:
+                    raise ValueError('error using Model 2310 :: The number of levels for the addition of continuum must be the same as NGEOM')
+
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,0]==232:
+                #Model 232. Continuum addition to transmission spectra using the angstrom coefficient
+                #***************************************************************
+
+                #The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( - TAU0 * (WAVE/WAVE0)**-ALPHA )
+                #Where the parameters to fit are TAU0 and ALPHA
+
+                #The effect of this model takes place after the computation of the spectra in CIRSrad!
+                if int(self.Variables.NXVAR[ivar]/2)!=self.MeasurementX.NGEOM:
+                    raise ValueError('error using Model 232 :: The number of levels for the addition of continuum must be the same as NGEOM')
+
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,0]==233:
+                #Model 233. Continuum addition to transmission spectra using a variable angstrom coefficient
+                #***************************************************************
+
+                #The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( -TAU_AERO )
+                #Where the aerosol opacity is modelled following
+
+                # np.log(TAU_AERO) = a0 + a1 * np.log(WAVE) + a2 * np.log(WAVE)**2.
+
+                #The coefficient a2 accounts for a curvature in the angstrom coefficient used in model 232. Note that model
+                #233 converges to model 232 when a2=0.
+
+                #The effect of this model takes place after the computation of the spectra in CIRSrad!
+                if int(self.Variables.NXVAR[ivar]/3)!=self.MeasurementX.NGEOM:
+                    raise ValueError('error using Model 233 :: The number of levels for the addition of continuum must be the same as NGEOM')
+
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+                
+            elif self.Variables.VARIDENT[ivar,0]==444:
+                idust = int(self.Variables.VARIDENT[ivar,1]) - 1
+                iscat = 1 # Should add an option for this
+                xprof = self.Variables.XN[ix:ix+self.Variables.NXVAR[ivar]]
+                self.ScatterX = model444(self.ScatterX,idust,iscat,xprof,self.Variables.HAZE_PARAMS)
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,0]==446:
+                #Model 446. model for retrieving the particle size distribution based on the data in a look-up table
+                #***************************************************************
+
+                #This model fits the particle size distribution based on the optical properties at different sizes
+                #tabulated in a pre-computed look-up table. What this model does is to interpolate the optical 
+                #properties based on those tabulated.
+
+                idust0 = int(self.Variables.VARPARAM[ivar,0])
+                wavenorm = int(self.Variables.VARPARAM[ivar,1])
+                xwave = self.Variables.VARPARAM[ivar,2]
+                lookupfile = self.Variables.VARFILE[ivar]
+                rsize = self.Variables.XN[ix]
+
+                self.ScatterX = model446(self.ScatterX,idust0,wavenorm,xwave,rsize,lookupfile,MakePlot=False)
+
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+                
+            elif self.Variables.VARIDENT[ivar,0]==500:
+                
+                icia = self.Variables.VARIDENT[ivar,1]
+                
+                if self.Measurement.ISPACE == WaveUnit.Wavelength_um:
+                    vlo = 1e4/(self.SpectroscopyX.WAVE.max())
+                    vhi = 1e4/(self.SpectroscopyX.WAVE.min())
+                else:
+                    vlo = self.SpectroscopyX.WAVE.min()
+                    vhi = self.SpectroscopyX.WAVE.max()
+                    
+                nbasis = self.Variables.VARPARAM[ivar,0]
+                amplitudes = np.exp(self.Variables.XN[ix:ix+self.Variables.NXVAR[ivar]])*1e-40
+                
+                new_k_cia, xmap1 = model500(self.CIA.K_CIA.copy(), self.CIA.WAVEN, icia, vlo, vhi, nbasis, amplitudes)
+              
+                self.CIA.K_CIA = new_k_cia
+                self.CIAX.K_CIA = new_k_cia
+                
+                    
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+
+            elif self.Variables.VARIDENT[ivar,0]==666:
+                #Model 666. Retrieval of tangent pressure at given tangent height
+                #***************************************************************
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,0]==667:
+                #Model 667. Retrieval of dilution factor to account for thermal gradients in planets
+                #***************************************************************
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+            elif self.Variables.VARIDENT[ivar,0]==777:
+                #Model 777. Retrieval of tangent height corrections
+                #***************************************************************
+                
+                hcorr = self.Variables.XN[ix]
+                
+                self.MeasurementX = model777(self.MeasurementX,hcorr)
+                
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            elif self.Variables.VARIDENT[ivar,0]==999:
+                #Model 999. Retrieval of surface temperature
+                #***************************************************************
+
+                tsurf = self.Variables.XN[ix]
+                self.SurfaceX.TSURF = tsurf
+
+                ipar = -1
+                ix = ix + self.Variables.NXVAR[ivar]
+                
+            elif self.Variables.VARIDENT[ivar,2]==1002:
+                #Model 1002. Scaling factors at multiple locations
+                #***************************************************************
+
+                self.AtmosphereX,xmap1 = model1002(self.AtmosphereX,ipar,self.Variables.XN[ix:ix+self.Variables.NXVAR[ivar]],MakePlot=False)
+                #This calculation takes a long time for big arrays
+                #xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP,0:self.AtmosphereX.NLOCATIONS] = xmap1[:,:,:,:]
+
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            else:
+                print('error in Variable ',self.Variables.VARIDENT[ivar,0],self.Variables.VARIDENT[ivar,1],self.Variables.VARIDENT[ivar,2])
+                raise ValueError('error :: Model parameterisation has not yet been included')
 
 
         #Now check if any gas in the retrieval saturates
@@ -1489,16 +1871,23 @@ class ForwardModel_0:
             #Looping through each model
             #######################################################################
 
-            model_found_for_varident = False
-            for model in Models:
-                if model.is_varident_valid(self.Variables.VARIDENT[ivar]):
-                    model_found_for_varident = True
-                    ix = model.patch_from_state_vector(self, ix, ipar, ivar, xmap)
-                    break
+            if self.Variables.VARIDENT[ivar,2]==-1:
+                #Model -1. Continuous aerosol profile in particles cm-3
+                #***************************************************************
+
+                xprof = np.zeros(self.Variables.NXVAR[ivar])
+                xprof[:] = self.Variables.XN[ix:ix+self.Variables.NXVAR[ivar]]
+                self.AtmosphereX,xmap1 = modelm1(self.AtmosphereX,ipar,xprof)
+                xmap[ix:ix+self.Variables.NXVAR[ivar],:,0:self.AtmosphereX.NP] = xmap1[:,:,:]
+
+                ix = ix + self.Variables.NXVAR[ivar]
+
+            else:
                 
-            if not model_found_for_varident:
-                raise NotImplementedError(f'ForwardModel_0 :: subprofretg :: No model found for varident={self.Variables.VARIDENT[ivar]}')
-                
+                ix = ix + self.Variables.NXVAR[ivar]
+
+        #Write out modified profiles to .prf file
+        #Atmosphere.write_to_file()
         
         return xmap
 
