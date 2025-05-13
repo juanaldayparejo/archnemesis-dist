@@ -25,7 +25,7 @@ class ModelBase:
             variables.DSTEP[self.state_vector_start:self.state_vector_end],
         )
     
-    def get_posterior_state_vector_sice(self, variables : "Variables_0"):
+    def get_posterior_state_vector_slice(self, variables : "Variables_0"):
         return (
             variables.XN[self.state_vector_start:self.state_vector_end],
             variables.LX[self.state_vector_start:self.state_vector_end],
@@ -4212,6 +4212,8 @@ class Model444(ModelBase):
             sxminfac : float,
         ) -> int:
         #******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
+        
+        _lgr.debug(f'{ix=}')
         s = f.readline().split()    
         haze_f = open(s[0],'r')
         haze_waves = []
@@ -4224,10 +4226,12 @@ class Model444(ModelBase):
             sx[ix,ix] = (float(xa_erri)/float(xai))**2.
 
             ix = ix + 1
+        _lgr.debug(f'{ix=}')
 
         nwave, clen = haze_f.readline().split('!')[0].split()
         vref, nreal_ref = haze_f.readline().split('!')[0].split()
         v_od_norm = haze_f.readline().split('!')[0]
+        _lgr.debug(f'{nwave=} {clen=} {vref=} {nreal_ref=} {v_od_norm=}')
 
         for j in range(int(nwave)):
             line = haze_f.readline().split()
@@ -4242,7 +4246,7 @@ class Model444(ModelBase):
 
             if float(clen) < 0:
                 break
-
+        _lgr.debug(f'{ix=}')
 
         idust = varident[1]-1
 
@@ -4268,6 +4272,7 @@ class Model444(ModelBase):
                     if xfac >= sxminfac:
                         sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
                         sx[ix+k,ix+j] = sx[ix+j,ix+k]
+        _lgr.debug(f'{ix=}')
 
         return ix
 

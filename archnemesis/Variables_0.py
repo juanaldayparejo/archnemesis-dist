@@ -256,10 +256,9 @@ class Variables_0:
             for model in Models:
                 if model.is_varident_valid(self.VARIDENT[i]):
                     found_model_for_varident = True
+                    self._models.append(model(self, self.VARIDENT[i], NPRO, nlocations, sum))
                     nxvar[i] = model.get_nxvar(self, self.VARIDENT[i], NPRO, nlocations)
                     sum += nxvar[i]
-                    
-                    self._models.append(model(self, self.VARIDENT[i], NPRO, nlocations, sum))
                     break
             
             if not found_model_for_varident:
@@ -453,6 +452,7 @@ class Variables_0:
                             nlocations,
                             sxminfac
                         )
+                        print(f'{varident[i] = } {ix=}')
 
                 
                 if not found_model_for_varident:
