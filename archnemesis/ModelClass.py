@@ -1,3 +1,34 @@
+"""
+This module contains the base classes for models as a whole, some specialised base classes for specific types
+of model, and the "concrete" classes that are the models that can be used.
+
+Base classes are useful for two reasons:
+    
+    1) They define an interface for models, we can assume that each model has at least the sub-set of methods and attributes
+    that its base classes have. If the base class is an "abstract" class, then you know you need to define the abstract methods
+    on the child class.
+    
+    2) They define 'default' implementations of methods, and 'default' values of attributes. This cuts down on copy-pasting code
+    and means that if we need to change the defaults we only need to change them in one place. Every time you inherit from a class
+    you get all of the methods and attributes of that class for 'free'. You can overwrite the base classes methods and attributes 
+    in the child class if you want the child class to behave differently.
+
+The "concrete" classes are the actual model implementations that can be used. Only the methods and attributes that differ from
+their parent class need to be written. For example, every class that inherits from `SpectralModelBase` does not need to define
+the 'calculate_from_subprofretg' method to do nothing, the base class does that for you.
+
+For the purposes of making a class a 'valid' model class it must:
+    
+    1) Inherit from ModelBase at some point (i.e. it can inherit from AtmosphereModelBase, and as AtmosphereModelBase inherits
+    from ModelBase that is ok)
+    
+    2) Have a class-level `id` attribute that is not 'None'
+
+The 'Models.py' module uses these two criteria to select classes from this file and build the 'Model.Model' tuple. See the
+imports in 'Variables_0.py' to see how to get hold of the valid models.
+
+"""
+
 import numpy as np
 import numpy.ma
 from typing import IO, Any
@@ -11,6 +42,7 @@ _lgr.setLevel(logging.WARN)
 
 StateVectorEntry = namedtuple('StateVectorValue', ['model_id', 'sv_slice', 'is_fixed', 'apriori_value', 'posterior_value'])
 
+## BASE CLASSES - These set interfaces and defaults for concrete classes ##
 
 class ModelBase:
     """
@@ -50,6 +82,9 @@ class ModelBase:
         This should be overloaded in subclasses to make it easy to get the apriori and posterior values of the
         parameters for this model. If not overwritten only one parameter called "unspecified" is defined, which
         contains all the parameters for the model.
+        
+        QUESTION: Should this be a more general 'parameter_definitions' property that includes more things that just
+        state vector slice information (e.g. descriptions, units, short name, long name, etc.)?
         """
         return {
             'unspecified' : slice(None)
@@ -288,6 +323,7 @@ class ModelBase:
         ) -> int: # Should return the number of elements the model has stored in the state vector
         ...
 
+
 class AtmosphericModelBase(ModelBase):
     """
     Abstract base class of all parameterised models used by ArchNemesis that interact with the Atmosphere component.
@@ -315,6 +351,7 @@ class AtmosphericModelBase(ModelBase):
         ) -> int: # Should return updated value of `ix`
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Atmospheric models')
 
+
 class NonAtmosphericModelBase(ModelBase):
     """
     Abstract base class of all parameterised models used by ArchNemesis that interact with anything but the Atmosphere component.
@@ -328,6 +365,7 @@ class NonAtmosphericModelBase(ModelBase):
             varident : np.ndarray[[3],int],
         ) -> bool:
         return varident[0]==cls.id
+
 
 class SpectralModelBase(NonAtmosphericModelBase):
     """
@@ -349,6 +387,7 @@ class SpectralModelBase(NonAtmosphericModelBase):
         ) -> int:
         raise NotImplementedError(f'calculate_from_subspecret should be implemented for all Spectral models')
 
+
 class InstrumentModelBase(NonAtmosphericModelBase):
     """
     Abstract base class of all parameterised models used by ArchNemesis that interact with the instrument parameters of the Spectroscopy component.
@@ -367,6 +406,7 @@ class InstrumentModelBase(NonAtmosphericModelBase):
             xmap : np.ndarray,
         ) -> int: # Should return updated value of `ix`
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Instrument models')
+
 
 class ScatteringModelBase(NonAtmosphericModelBase):
     """
@@ -387,6 +427,7 @@ class ScatteringModelBase(NonAtmosphericModelBase):
         ) -> int: # Should return updated value of `ix`
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Scattering models')
 
+
 class DopplerModelBase(NonAtmosphericModelBase):
     """
     Abstract base class of all parameterised models used by ArchNemesis that interact with the doppler shift parameters of the Measurement component.
@@ -405,6 +446,7 @@ class DopplerModelBase(NonAtmosphericModelBase):
             xmap : np.ndarray,
         ) -> int: # Should return updated value of `ix`
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Doppler models')
+
 
 class CollisionInducedAbsorptionModelBase(NonAtmosphericModelBase):
     """
@@ -425,6 +467,7 @@ class CollisionInducedAbsorptionModelBase(NonAtmosphericModelBase):
             xmap : np.ndarray,
         ) -> int: # Should return updated value of `ix`
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Collision Induced Absorption models')
+
 
 class TangentHeightCorrectionModelBase(NonAtmosphericModelBase):
     """
@@ -447,6 +490,7 @@ class TangentHeightCorrectionModelBase(NonAtmosphericModelBase):
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Doppler models')
 
 
+## CONCRETE CLASSES - These define actual models that can be used ##
 
 class Modelm1(AtmosphericModelBase):
     id : int = -1
