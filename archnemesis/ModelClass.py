@@ -30,6 +30,7 @@ imports in 'Variables_0.py' to see how to get hold of the valid models.
 NOTE: A lot of the data in Variables_0 should probably be stored on the model, that is a future task.
 
 """
+from __future__ import annotations #  for 3.9 compatability
 
 import numpy as np
 import numpy.ma
@@ -42,7 +43,6 @@ from archnemesis.Scatter_0 import kk_new_sub
 from archnemesis.ngauss import ngauss
 from archnemesis.enums import WaveUnit
 
-from __future__ import annotations #  for 3.9 compatability
 
 
 if TYPE_CHECKING:

@@ -1,3 +1,5 @@
+from __future__ import annotations #  for 3.9 compatability
+
 from archnemesis import *
 from archnemesis.enums import WaveUnit
 import numpy as np
@@ -5,7 +7,7 @@ import matplotlib.pyplot as plt
 import os
 import h5py
 
-from __future__ import annotations #  for 3.9 compatability
+
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-

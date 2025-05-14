@@ -1,3 +1,4 @@
+from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 from archnemesis.Models import Models
 import numpy as np
@@ -20,7 +21,6 @@ from archnemesis.enums import (
     RayleighScatteringMode,
 )
 
-from __future__ import annotations #  for 3.9 compatability
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-

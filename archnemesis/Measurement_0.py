@@ -1,3 +1,4 @@
+from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 from archnemesis.enums import InstrumentLineshape, WaveUnit, SpectraUnit
 import numpy as np
@@ -6,7 +7,6 @@ import matplotlib as matplotlib
 import os
 from numba import jit
 
-from __future__ import annotations #  for 3.9 compatability
 
 import logging
 _lgr = logging.getLogger(__name__)

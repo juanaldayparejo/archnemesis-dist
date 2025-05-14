@@ -7,6 +7,7 @@
 #	required by the NEMESIS and archNEMESIS radiative transfer codes         
 # 
 # MODIFICATION HISTORY: Juan Alday 15/03/2021
+from __future__ import annotations #  for 3.9 compatability
 
 from archnemesis import *
 from copy import copy
@@ -18,7 +19,6 @@ from archnemesis.enums import (
 )
 
 
-from __future__ import annotations #  for 3.9 compatability
 
 ###############################################################################################
 ###############################################################################################

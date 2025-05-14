@@ -1,11 +1,11 @@
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations #  for 3.9 compatability
 import sys
 import numpy as np
 
 from archnemesis.enums import ZenithAngleOrigin, PathObserverPointing, PathCalc
 
-from __future__ import annotations #  for 3.9 compatability
 
 """
 Object to calculate the atmospheric paths

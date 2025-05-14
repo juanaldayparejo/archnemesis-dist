@@ -1,3 +1,4 @@
+from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 from archnemesis.Models import Models
 from archnemesis.ModelClass import ModelBase, StateVectorEntry, ThingHolder
@@ -6,7 +7,6 @@ import matplotlib.pyplot as plt
 import os
 import os.path
 
-from __future__ import annotations #  for 3.9 compatability
 
 import logging
 _lgr = logging.getLogger(__name__)

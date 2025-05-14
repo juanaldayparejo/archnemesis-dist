@@ -1,3 +1,4 @@
+from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,7 +9,6 @@ import pickle
 
 from archnemesis.enums import WaveUnit, SpectraUnit
 
-from __future__ import annotations #  for 3.9 compatability
 
 import logging
 _lgr = logging.getLogger(__name__)

@@ -1,10 +1,10 @@
+from __future__ import annotations #  for 3.9 compatability
 import archnemesis as ans
 from archnemesis.enums import RetrievalStrategy
 import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-from __future__ import annotations #  for 3.9 compatability
 
 def retrieval_nemesis(
         runname,

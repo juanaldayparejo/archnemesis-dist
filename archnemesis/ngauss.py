@@ -1,9 +1,9 @@
+from __future__ import annotations #  for 3.9 compatability
 
 import numpy as np
 
 import matplotlib.pyplot as plt
 
-from __future__ import annotations #  for 3.9 compatability
 
 def ngauss(npx,x,ng,iamp,imean,ifwhm,MakePlot=False):
 

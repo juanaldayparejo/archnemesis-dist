@@ -1,3 +1,4 @@
+from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 from archnemesis.Data.path_data import *
 import numpy as np
@@ -7,7 +8,6 @@ from numba import jit
 
 from archnemesis.enums import Gas, ParaH2Ratio
 
-from __future__ import annotations #  for 3.9 compatability
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
