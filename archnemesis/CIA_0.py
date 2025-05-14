@@ -7,6 +7,8 @@ from numba import jit
 
 from archnemesis.enums import Gas, ParaH2Ratio
 
+from __future__ import annotations #  for 3.9 compatability
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 

@@ -1,5 +1,7 @@
 from enum import IntEnum, IntFlag, auto
 
+from __future__ import annotations #  for 3.9 compatability
+
 
 class PlanetEnum(IntEnum):
     """

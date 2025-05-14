@@ -14,6 +14,8 @@ from scipy.special import legendre
 
 from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileType
 
+from __future__ import annotations #  for 3.9 compatability
+
 class Atmosphere_0:
     """
     Clear atmosphere. Simplest possible profile.

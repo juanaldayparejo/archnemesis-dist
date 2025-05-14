@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import os
 import os.path
 
+from __future__ import annotations #  for 3.9 compatability
+
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.WARN)

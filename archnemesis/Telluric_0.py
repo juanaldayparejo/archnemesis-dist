@@ -12,6 +12,8 @@ import numpy as np
 
 from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnit, SpectralCalculationMode
 
+from __future__ import annotations #  for 3.9 compatability
+
 class Telluric_0:
     """
     Class to define the telluric atmosphere and observing geometry from the Earth. 

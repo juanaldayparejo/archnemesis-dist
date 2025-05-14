@@ -1,6 +1,9 @@
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 import numpy as np
+
+from __future__ import annotations #  for 3.9 compatability
+
 """
 Object to calculate the atmospheric paths
 """

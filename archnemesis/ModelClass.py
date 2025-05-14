@@ -42,6 +42,8 @@ from archnemesis.Scatter_0 import kk_new_sub
 from archnemesis.ngauss import ngauss
 from archnemesis.enums import WaveUnit
 
+from __future__ import annotations #  for 3.9 compatability
+
 
 if TYPE_CHECKING:
     # NOTE: This is just here to make 'flake8' play nice with the type hints
@@ -85,6 +87,9 @@ class ThingHolder:
     @value.setter
     def value(self, _v):
         self._value = _v
+    
+    def __eq__(self, other):
+        return self.value == other.value
 
 ## BASE CLASSES - These set interfaces and defaults for concrete classes ##
 

@@ -9,6 +9,9 @@ from archnemesis.enums import (
     InterpolationMethod,
 )
 
+from __future__ import annotations #  for 3.9 compatability
+
+
 AVOGAD = 6.02214076e23
 """
 Object to store layering scheme settings and averaged properties of each layer.
