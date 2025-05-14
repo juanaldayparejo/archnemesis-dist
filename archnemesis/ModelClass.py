@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from archnemesis.ForwardModel_0 import ForwardModel_0
     from archnemesis.Scatter_0 import Scatter_0
     from archnemesis.Spectroscopy_0 import Spectroscopy_0
+    from archnemesis.Measurement_0 import Measurement_0
     
     nx = 'number of elements in state vector'
     m = 'an undetermined number, but probably less than "nx"'
@@ -312,6 +313,7 @@ class ModelBase:
             varfile : ThingHolder, # should be a reference to the original
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int: # Should return updated value of `ix`
         ...
@@ -543,7 +545,7 @@ class Modelm1(AtmosphericModelBase):
         super().__init__(*args, **kwargs)
     
     @classmethod
-    def calculate(cls, atm,ipar,xprof,MakePlot=False):
+    def calculate(cls, atm,ipar,xprof):
 
         """
             FUNCTION NAME : modelm1()
@@ -611,23 +613,6 @@ class Modelm1(AtmosphericModelBase):
         for j in range(npro):
             xmap[0:npro,ipar,j] = x1[:] #* 1000. * rho
 
-
-        if MakePlot==True:
-            fig,(ax1,ax2) = plt.subplots(1,2,figsize=(7,5))
-
-            for i in range(atm.NDUST):
-                ax1.semilogx(atm.DUST[:,i]*rho,atm.H/1000.)
-                ax2.semilogx(atm.DUST[:,i],atm.H/1000.)
-
-            ax1.grid()
-            ax2.grid()
-            ax1.set_xlabel('Aerosol density (particles per cm$^{-3}$)')
-            ax1.set_ylabel('Altitude (km)')
-            ax2.set_xlabel('Aerosol density (particles per gram of atm)')
-            ax2.set_ylabel('Altitude (km)')
-            plt.tight_layout()
-            plt.show()
-
         return atm,xmap
 
 
@@ -646,6 +631,7 @@ class Modelm1(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #* continuous cloud, but cloud retrieved as particles/cm3 rather than
@@ -886,6 +872,7 @@ class Model0(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #********* continuous profile ************************
@@ -1099,6 +1086,7 @@ class Model2(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #**** model 2 - Simple scaling factor of reference profile *******
@@ -1257,6 +1245,7 @@ class Model3(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #**** model 3 - Exponential scaling factor of reference profile *******
@@ -1464,6 +1453,7 @@ class Model9(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** cloud profile held as total optical depth plus
@@ -1772,6 +1762,7 @@ class Model32(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** cloud profile is represented by a value at a 
@@ -1985,6 +1976,7 @@ class Model45(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** Irwin CH4 model. Represented by tropospheric and stratospheric methane 
@@ -2240,6 +2232,7 @@ class Model47(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** cloud profile is represented by a peak optical depth at a 
@@ -2448,6 +2441,7 @@ class Model49(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #********* continuous profile in linear scale ************************
@@ -2639,6 +2633,7 @@ class Model50(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #********* continuous profile of a scaling factor ************************
@@ -2796,6 +2791,7 @@ class Model51(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #********* multiple of different profile ************************
@@ -3023,6 +3019,7 @@ class Model110(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** model for Venus cloud following Haus et al. (2016) with altitude offset
@@ -3280,6 +3277,7 @@ class Model111(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** model for Venus cloud and SO2 vmr profile with altitude offset
@@ -3441,6 +3439,7 @@ class Model202(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #********* simple scaling of telluric atmospheric profile ************************
@@ -3665,6 +3664,7 @@ class Model228(InstrumentModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** model for retrieving the ILS and Wavelength calibration in ACS MIR solar occultation observations
@@ -3956,6 +3956,7 @@ class Model229(InstrumentModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** model for retrieving the ILS in ACS MIR solar occultation observations
@@ -4280,6 +4281,7 @@ class Model230(InstrumentModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** model for retrieving multiple ILS (different spectral windows) in ACS MIR solar occultation observations
@@ -4456,6 +4458,7 @@ class Model444(ScatteringModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
@@ -4699,6 +4702,7 @@ class Model446(ScatteringModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** model for retrieving an aerosol particle size distribution from a tabulated look-up table
@@ -4850,6 +4854,7 @@ class Model447(DopplerModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** model for retrieving the Doppler shift
@@ -4977,6 +4982,7 @@ class Model500(CollisionInducedAbsorptionModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
 
@@ -5144,6 +5150,7 @@ class Model777(TangentHeightCorrectionModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** tangent height correction
@@ -5278,6 +5285,7 @@ class Model887(ScatteringModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** Cloud x-section spectrum
@@ -5488,6 +5496,7 @@ class Model1002(AtmosphericModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** scaling of atmospheric profiles at multiple locations (linear scale)
@@ -5636,6 +5645,7 @@ class Model231(SpectralModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** multiplication of calculated spectrum by polynomial function (following polynomial of degree N)
@@ -5753,6 +5763,7 @@ class Model2310(SpectralModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         """
@@ -5900,6 +5911,7 @@ class Model232(SpectralModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         """
@@ -6041,6 +6053,7 @@ class Model233(SpectralModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         """
@@ -6217,6 +6230,7 @@ class Model667(SpectralModelBase):
             varfile : ThingHolder,
             npro : int,
             nlocations : int,
+            runname : str,
             sxminfac : float,
         ) -> int:
         #******** dilution factor to account for thermal gradients thorughout exoplanet
