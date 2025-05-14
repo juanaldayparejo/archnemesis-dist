@@ -269,7 +269,7 @@ class Variables_0:
             for model in Models:
                 if model.is_varident_valid(self.VARIDENT[i]):
                     found_model_for_varident = True
-                    nxvar[i] = model.get_nxvar(self, self.VARIDENT[i], NPRO, nlocations)
+                    nxvar[i] = model.get_nxvar(self, self.VARIDENT[i], self.VARPARAM[i], NPRO, nlocations)
                     self._models[i] = model(sum, nxvar[i])
                     print(f'{i=} {self._models[i]=}')
                     sum += nxvar[i]
@@ -459,7 +459,8 @@ class Variables_0:
                             ix, 
                             lx, 
                             x0, 
-                            sx, 
+                            sx,
+                            inum, 
                             varfile, 
                             npro, 
                             nlocations,

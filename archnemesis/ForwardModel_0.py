@@ -1370,7 +1370,7 @@ class ForwardModel_0:
 
 
             # Calculate state vector for the model
-            ix = self.Variables.models[ivar].calculate_from_state_vector(self, ix, ipar, ivar, xmap)
+            ix = self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, xmap)
             
 
 
@@ -1419,7 +1419,7 @@ class ForwardModel_0:
                     raise ValueError('error in subprofretg :: Models 1000-1100 are meant to be used for models of atmospheric properties in multiple locations')
 
             # Patch state vector for the model
-            ix = self.Variables.models[ivar].patch_from_state_vector(self, ix, ipar, ivar, xmap)
+            ix = self.Variables.models[ivar].patch_from_subprofretg(self, ix, ipar, ivar, xmap)
         
         return xmap
 
@@ -1462,217 +1462,7 @@ class ForwardModel_0:
         ix = 0
         for ivar in range(self.Variables.NVAR):
 
-            if self.Variables.VARIDENT[ivar,0]==231:
-                #Model 231. Scaling of spectra using a varying scaling factor (following a polynomial of degree N)
-                #****************************************************************************************************
-
-                NGEOM = int(self.Variables.VARPARAM[ivar,0])
-                NDEGREE = int(self.Variables.VARPARAM[ivar,1])
-
-                for i in range(self.Measurement.NGEOM):
-
-                    #Getting the coefficients
-                    T = np.zeros(NDEGREE+1)
-                    for j in range(NDEGREE+1):
-                        T[j] = self.Variables.XN[ix+j]
-
-                    WAVE0 = self.Measurement.VCONV[0,i]
-                    spec = np.zeros(self.Measurement.NCONV[i])
-                    spec[:] = SPECMOD[0:self.Measurement.NCONV[i],i]
-
-                    #Changing the state vector based on this parameterisation
-                    POL = np.zeros(self.Measurement.NCONV[i])
-                    for j in range(NDEGREE+1):
-                        POL[:] = POL[:] + T[j]*(self.Measurement.VCONV[0:self.Measurement.NCONV[i],i]-WAVE0)**j
-
-                    SPECMOD[0:self.Measurement.NCONV[i],i] = SPECMOD[0:self.Measurement.NCONV[i],i] * POL[:]
-
-                    #Changing the rest of the gradients based on the impact of this parameterisation
-                    for ixn in range(self.Variables.NX):
-                        dSPECMOD[0:self.Measurement.NCONV[i],i,ixn] = dSPECMOD[0:self.Measurement.NCONV[i],i,ixn] * POL[:]
-
-                    #Defining the analytical gradients for this parameterisation
-                    for j in range(NDEGREE+1):
-                        dSPECMOD[0:self.Measurement.NCONV[i],i,ix+j] = spec[:] * (self.Measurement.VCONV[0:self.Measurement.NCONV[i],i]-WAVE0)**j
-
-                    ix = ix + (NDEGREE+1)
-                    
-            elif self.Variables.VARIDENT[ivar,0]==2310:
-                #Model 2310. Scaling of spectra using a varying scaling factor (following a polynomial of degree N)
-                       #in multiple spectral windows
-                #****************************************************************************************************
-
-                NGEOM = int(self.Variables.VARPARAM[ivar,0])
-                NDEGREE = int(self.Variables.VARPARAM[ivar,1])
-                NWINDOWS = int(self.Variables.VARPARAM[ivar,2])
-
-                lowin = np.zeros(NWINDOWS)
-                hiwin = np.zeros(NWINDOWS)
-                i0 = 0
-                for IWIN in range(NWINDOWS):
-                    lowin[IWIN] = float(self.Variables.VARPARAM[ivar,3+i0])
-                    i0 = i0 + 1
-                    hiwin[IWIN] = float(self.Variables.VARPARAM[ivar,3+i0])
-                    i0 = i0 + 1
-
-                for IWIN in range(NWINDOWS):
-
-                    ivin = np.where( (self.SpectroscopyX.WAVE>=lowin[IWIN]) & (self.SpectroscopyX.WAVE<hiwin[IWIN]) )[0]
-                    nvin = len(ivin)
-
-                    for i in range(self.MeasurementX.NGEOM):
-
-                        #Getting the coefficients
-                        T = np.zeros(NDEGREE+1)
-                        for j in range(NDEGREE+1):
-                            T[j] = self.Variables.XN[ix+j]
-
-                        WAVE0 = self.SpectroscopyX.WAVE[ivin].min()
-                        spec = np.zeros(nvin)
-                        spec[:] = SPECMOD[ivin,i]
-
-                        #Changing the state vector based on this parameterisation
-                        POL = np.zeros(nvin)
-                        for j in range(NDEGREE+1):
-                            POL[:] = POL[:] + T[j]*(self.SpectroscopyX.WAVE[ivin]-WAVE0)**j
-
-                        SPECMOD[ivin,i] = SPECMOD[ivin,i] * POL[:]
-
-                        #Changing the rest of the gradients based on the impact of this parameterisation
-                        for ixn in range(self.Variables.NX):
-                            dSPECMOD[ivin,i,ixn] = dSPECMOD[ivin,i,ixn] * POL[:]
-
-                        #Defining the analytical gradients for this parameterisation
-                        for j in range(NDEGREE+1):
-                            dSPECMOD[ivin,i,ix+j] = spec[:] * (self.SpectroscopyX.WAVE[ivin]-WAVE0)**j
-
-                        ix = ix + (NDEGREE+1)
-
-            elif self.Variables.VARIDENT[ivar,0]==232:
-                #Model 232. Continuum addition to transmission spectra using the angstrom coefficient
-                #***************************************************************
-
-                #The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( - TAU0 * (WAVE/WAVE0)**-ALPHA )
-                #Where the parameters to fit are TAU0 and ALPHA
-
-                #The effect of this model takes place after the computation of the spectra in CIRSrad!
-                if int(self.Variables.NXVAR[ivar]/2)!=self.MeasurementX.NGEOM:
-                    raise ValueError('error using Model 232 :: The number of levels for the addition of continuum must be the same as NGEOM')
-
-                if self.MeasurementX.NGEOM>1:
-
-                    for i in range(self.MeasurementX.NGEOM):
-                        TAU0 = self.Variables.XN[ix]
-                        ALPHA = self.Variables.XN[ix+1]
-                        WAVE0 = self.Variables.VARPARAM[ivar,1]
-
-                        spec = np.zeros(self.SpectroscopyX.NWAVE)
-                        spec[:] = SPECMOD[:,i]
-
-                        #Changing the state vector based on this parameterisation
-                        SPECMOD[:,i] = SPECMOD[:,i] * np.exp ( -TAU0 * (self.SpectroscopyX.WAVE/WAVE0)**(-ALPHA) )
-
-                        #Changing the rest of the gradients based on the impact of this parameterisation
-                        for ixn in range(self.Variables.NX):
-                            dSPECMOD[:,i,ixn] = dSPECMOD[:,i,ixn] * np.exp ( -TAU0 * (self.SpectroscopyX.WAVE/WAVE0)**(-ALPHA) )
-
-                        #Defining the analytical gradients for this parameterisation
-                        dSPECMOD[:,i,ix] = spec[:] * ( -((self.SpectroscopyX.WAVE/WAVE0)**(-ALPHA)) * np.exp ( -TAU0 * (self.SpectroscopyX.WAVE/WAVE0)**(-ALPHA) ) )
-                        dSPECMOD[:,i,ix+1] = spec[:] * TAU0 * np.exp ( -TAU0 * (self.SpectroscopyX.WAVE/WAVE0)**(-ALPHA) ) * np.log(self.SpectroscopyX.WAVE/WAVE0) * (self.SpectroscopyX.WAVE/WAVE0)**(-ALPHA)
-
-                        ix = ix + 2
-
-                else:
-
-
-                    T0 = self.Variables.XN[ix]
-                    ALPHA = self.Variables.XN[ix+1]
-                    WAVE0 = self.Variables.VARPARAM[ivar,1]
-
-                    ix = ix + 2
-
-            elif self.Variables.VARIDENT[ivar,0]==233:
-                #Model 232. Continuum addition to transmission spectra using a variable angstrom coefficient (Schuster et al., 2006 JGR)
-                #***************************************************************
-
-                #The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( -TAU_AERO )
-                #Where the aerosol opacity is modelled following
-
-                # np.log(TAU_AERO) = a0 + a1 * np.log(WAVE) + a2 * np.log(WAVE)**2.
-
-                #The coefficient a2 accounts for a curvature in the angstrom coefficient used in model 232. Note that model
-                #233 converges to model 232 when a2=0.
-
-                #The effect of this model takes place after the computation of the spectra in CIRSrad!
-                if int(self.Variables.NXVAR[ivar]/3)!=self.MeasurementX.NGEOM:
-                    raise ValueError('error using Model 233 :: The number of levels for the addition of continuum must be the same as NGEOM')
-
-                if self.MeasurementX.NGEOM>1:
-
-                    for i in range(self.MeasurementX.NGEOM):
-
-                        A0 = self.Variables.XN[ix]
-                        A1 = self.Variables.XN[ix+1]
-                        A2 = self.Variables.XN[ix+2]
-
-                        spec = np.zeros(self.SpectroscopyX.NWAVE)
-                        spec[:] = SPECMOD[:,i]
-
-                        #Calculating the aerosol opacity at each wavelength
-                        TAU = np.exp(A0 + A1 * np.log(self.SpectroscopyX.WAVE) + A2 * np.log(self.SpectroscopyX.WAVE)**2.)
-
-                        #Changing the state vector based on this parameterisation
-                        SPECMOD[:,i] = SPECMOD[:,i] * np.exp ( -TAU )
-
-                        #Changing the rest of the gradients based on the impact of this parameterisation
-                        for ixn in range(self.Variables.NX):
-                            dSPECMOD[:,i,ixn] = dSPECMOD[:,i,ixn] * np.exp ( -TAU )
-
-                        #Defining the analytical gradients for this parameterisation
-                        dSPECMOD[:,i,ix] = spec[:] * (-TAU) * np.exp(-TAU)
-                        dSPECMOD[:,i,ix+1] = spec[:] * (-TAU) * np.exp(-TAU) * np.log(self.SpectroscopyX.WAVE)
-                        dSPECMOD[:,i,ix+2] = spec[:] * (-TAU) * np.exp(-TAU) * np.log(self.SpectroscopyX.WAVE)**2.
-
-                        ix = ix + 3
-
-                else:
-
-                    A0 = self.Variables.XN[ix]
-                    A1 = self.Variables.XN[ix+1]
-                    A2 = self.Variables.XN[ix+2]
-
-                    #Getting spectrum
-                    spec = np.zeros(self.SpectroscopyX.NWAVE)
-                    spec[:] = SPECMOD
-
-                    #Calculating aerosol opacity
-                    TAU = np.exp(A0 + A1 * np.log(self.SpectroscopyX.WAVE) + A2 * np.log(self.SpectroscopyX.WAVE)**2.)
-
-                    SPECMOD[:] = SPECMOD[:] * np.exp(-TAU)
-                    for ixn in range(self.Variables.NX):
-                        dSPECMOD[:,ixn] = dSPECMOD[:,ixn] * np.exp(-TAU)
-
-                    #Defining the analytical gradients for this parameterisation
-                    dSPECMOD[:,ix] = spec[:] * (-TAU) * np.exp(-TAU)
-                    dSPECMOD[:,ix+1] = spec[:] * (-TAU) * np.exp(-TAU) * np.log(self.SpectroscopyX.WAVE)
-                    dSPECMOD[:,ix+2] = spec[:] * (-TAU) * np.exp(-TAU) * np.log(self.SpectroscopyX.WAVE)**2.
-
-                    ix = ix + 3
-
-            elif self.Variables.VARIDENT[ivar,0]==667:
-                #Model 667. Spectrum scaled by dilution factor to account for thermal gradients in planets
-                #**********************************************************************************************
-
-                xfactor = self.Variables.XN[ix]
-                spec = np.zeros(self.SpectroscopyX.NWAVE)
-                spec[:] = SPECMOD
-                SPECMOD = model667(SPECMOD,xfactor)
-                dSPECMOD = dSPECMOD * xfactor
-                dSPECMOD[:,ix] = spec[:]
-                ix = ix + 1
-
-            else:
-                ix = ix + self.Variables.NXVAR[ivar]
+            ix = self.Variables.models[ivar].calculate_from_subspecret(self, ix, ivar, SPECMOD, dSPECMOD)
 
         return SPECMOD,dSPECMOD
 
