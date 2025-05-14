@@ -1,5 +1,7 @@
 import numpy as np
+import numpy.ma
 from typing import IO, Any
+from collections import namedtuple
 
 from archnemesis.Scatter_0 import kk_new_sub
 
@@ -7,15 +9,198 @@ import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.WARN)
 
+StateVectorEntry = namedtuple('StateVectorValue', ['model_id', 'sv_slice', 'is_fixed', 'apriori_value', 'posterior_value'])
+
 
 class ModelBase:
+    """
+    Abstract base class of all parameterised models used by ArchNemesis. This class should be subclassed further for models of a particular component.
+    """
     id : int = None # All "*ModelBase" classes that are not meant to be used should have an id of 'None'
+    name : str = 'name should be overwritten in subclass'
+    description : str = 'description should be overwritten in subclass'
     
-    def __init__(self, i_state_vector_start : int, n_state_vector_entries : int):
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            n_state_vector_entries : int
+        ):
+        """
+        Initialise an instance of the model.
+        
+        ARGUMENTS
+            i_state_vector_start : int
+                The index of the first entry of the model parameters in the state vector
+            n_state_vector_entries : int
+                The number of model parameters that are stored in the state vector
+        
+        RETURNS
+            An initialised instance of this object
+        """
+        # Store where the model parameters are positioned within the state vector
+        self.state_vector_start = i_state_vector_start
+        self.n_state_vector_entries = n_state_vector_entries
         self.state_vector_slice = slice(i_state_vector_start, i_state_vector_start+n_state_vector_entries)
+        
     
-    def get_state_vector_slice(self, state_vector : np.ndarray[['xn'], float]):
+    @property
+    def parameter_slices(self) -> dict[str, slice]:
+        """
+        A dictionary that maps parameter names to the sub-slices of the state vector that holds the parameter values.
+        This should be overloaded in subclasses to make it easy to get the apriori and posterior values of the
+        parameters for this model. If not overwritten only one parameter called "unspecified" is defined, which
+        contains all the parameters for the model.
+        """
+        return {
+            'unspecified' : slice(None)
+        }
+    
+    def get_state_vector_slice(self, state_vector : np.ndarray[['nx'], float]):
+        """
+        Gets the slice of a `state_vector` that holds only the parameters for the model
+        """
         return state_vector[self.state_vector_slice]
+    
+    def get_value_from_state_vector(
+            self,
+            state_vector : np.ndarray[['nx'],float],
+            state_vector_log : np.ndarray[['nx'],int],
+            sub_slice : slice = slice(None),
+        ) -> np.ndarray[['m'],float]:
+        """
+        Returns the value of elements of a (sub-slice of a) state vector associated with the model.
+        
+        ARGUMENTS
+            state_vector : np.ndarray[['nx'],float]
+                Array that we want to pull from. Will normally be the apriori or posterior state vector.
+            state_vector_log : np.ndarray[['nx'],int]
+                Array of boolean flags indicating if the value stored in `state_vector` is the exponential logarithm
+                of the 'real' value.
+            sub_slice : slice = slice(None)
+                A sub-slice that is applied after the state vector is sliced the first time to only contain elements
+                associated with the model. For example this can be set to 'slice(0,1)' to only get the first element
+                of the state vector associated with the model, useful when splitting up the "whole model" state vector
+                to get each individual parameter of the model.
+        
+        RETURNS
+            value : np.ndarray[['m'],float]
+                Array of 'real' (i.e. unlogged where applicable) values of (a sub-slice of) the parameters of the model.
+        """
+        
+        a_val = state_vector[self.state_vector_slice][sub_slice]
+        a_exp = np.exp(a_val)
+        a_log_flag = state_vector_log[self.state_vector_slice][sub_slice] != 0
+        
+        return np.where(a_log_flag, a_exp, a_val)
+    
+    def set_value_to_state_vector(
+            self,
+            value : np.ndarray[['m'],float],
+            state_vector : np.ndarray[['nx'],float],
+            state_vector_log : np.ndarray[['nx'],int],
+            sub_slice : slice = slice(None),
+        ):
+        """
+        Sets the value of elements of a (sub-slice of a) state vector associated with the model.
+        
+        ARGUMENTS
+            value : np.ndarray[['m'],float]
+                Array of 'real' (i.e. unlogged where applicable) values of (a sub-slice of) the parameters of the model
+                that we want to store in the state vector.
+            state_vector : np.ndarray[['nx'],float]
+                Array that we want to push to. Will normally be the apriori or posterior state vector.
+            state_vector_log : np.ndarray[['nx'],int]
+                Array of boolean flags indicating if the value stored in `state_vector` is the exponential logarithm
+                of the 'real' value.
+            sub_slice : slice = slice(None)
+                A sub-slice that is applied after the state vector is sliced the first time to only contain elements
+                associated with the model. For example this can be set to 'slice(0,1)' to only set the first element
+                of the state vector associated with the model, useful when setting a single parameter of the model.
+        
+        RETURNS:
+            None
+        """
+        
+        value_log = np.log(value)
+        log_flag = state_vector_log[self.state_vector_slice][sub_slice] != 0
+        
+        state_vector[self.state_vector_slice][sub_slice] = np.where(log_flag, value_log, value)
+    
+    def get_parameters_from_state_vector(
+            self,
+            apriori_state_vector : np.ndarray[['nx'],float],
+            posterior_state_vector : np.ndarray[['nx'],float],
+            state_vector_log : np.ndarray[['nx'],int],
+            state_vector_fix : np.ndarray[['nx'],int],
+        ) -> dict[str, StateVectorEntry]:
+        """
+        Retrieve parameters from state vector as a dictionary of name : value pairs
+        
+        ARGUMENTS
+            apriori_state_vector : np.ndarray[['nx'],float]
+                The complete apriori state vector with 'nx' entries
+            
+            posterior_state_vector : np.ndarray[['nx'],float]
+                The complete posterior state vector with 'nx' entries
+            
+            state_vector_log : np.ndarray[['nx'],int]
+                Array of 'log' flags for each entry in either state vector (they share these flags)
+                if the flag is non-zero the value stored in both state vectors is the exponential
+                logarithm of the 'real' value.
+            
+            state_vector_fix : np.ndarray[['nx'],int]
+                Array of the 'fix' flags for each entry in either state vector (they share these flags)
+                if the flag is non-zero, the value stored in both state vectors is not retrieved, and
+                therefore should be the same in each of the apriori/posterior state vectors.
+        
+        RETURNS
+            parameters : dict[str, StateVectorEntry]
+                A dictionary that maps parameter names to the "StateVectorEntry" associated with that parameter.
+                StateVectorEntry is a named tuple with the following fields:
+                    model_id : int
+                        The id of the model that the state vector entry is associated with
+                    sv_slice : slice
+                        Slice of the state vector that the parameter is associated with. sv_slice.end - sv_slice.start = 'm'
+                        where 'm' is the number of entries in the state vector associated with the parameter.
+                    is_fixed : np.ndarray[['m'],bool]
+                        Array of boolean flags for each element of the parameter, if True the element is fixed (i.e. it is
+                        not retrieved and should be identical between the apriori/posterior values)
+                    apriori_value : np.ndarray[['m'],float]
+                        Value of each element of the parameter in the apriori state vector. The value has been 'unlogged'
+                        where applicable.
+                    posterior_value : np.ndarray[['m'],float]
+                        Value of each element of the parameter in the posterior state vector. The value has been 'unlogged'
+                        where applicable.
+        """
+        parameters = dict()
+        
+        assert self.state_vector_slice.step is None or self.state_vector_slice.step == 1, "A step larger than 1 is not supported when slicing a state vector"
+        
+        for name, pslice in self.parameter_slices.items():
+            assert pslice.step is None or pslice.step == 1, "A step larger than 1 is not supported when sub-slicing a state vector"
+            
+            apriori_value = self.get_value_from_state_vector(
+                apriori_state_vector, 
+                state_vector_log, 
+                pslice
+            )
+            posterior_value = self.get_value_from_state_vector(
+                posterior_state_vector, 
+                state_vector_log, 
+                pslice
+            )
+            
+            fix_flag = self.get_state_vector_slice(state_vector_fix)[pslice] != 0
+            
+            p_start, p_stop, p_step = pslice.indices(self.n_state_vector_entries)
+            parameters[name] = StateVectorEntry(
+                self.id,
+                slice(self.state_vector_slice.start + p_start, self.state_vector_slice.start + p_stop),
+                fix_flag,
+                apriori_value,
+                posterior_value
+            )
+        return parameters
     
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
@@ -104,7 +289,12 @@ class ModelBase:
         ...
 
 class AtmosphericModelBase(ModelBase):
-
+    """
+    Abstract base class of all parameterised models used by ArchNemesis that interact with the Atmosphere component.
+    """
+    name : str = 'name of atmospheric model should be overwritten in subclass'
+    description : str = 'description of atmospheric model should be overwritten in subclass'
+    
     @classmethod
     def is_varident_valid(
             cls,
@@ -126,6 +316,11 @@ class AtmosphericModelBase(ModelBase):
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Atmospheric models')
 
 class NonAtmosphericModelBase(ModelBase):
+    """
+    Abstract base class of all parameterised models used by ArchNemesis that interact with anything but the Atmosphere component.
+    """
+    name : str = 'name of non-atmospheric model should be overwritten in subclass'
+    description : str = 'description of non-atmospheric model should be overwritten in subclass'
     
     @classmethod
     def is_varident_valid(
@@ -135,6 +330,11 @@ class NonAtmosphericModelBase(ModelBase):
         return varident[0]==cls.id
 
 class SpectralModelBase(NonAtmosphericModelBase):
+    """
+    Abstract base class of all parameterised models used by ArchNemesis that interact with the calculated spectrum in the forward model.
+    """
+    name : str = 'name of spectral model should be overwritten in subclass'
+    description : str = 'description of spectral model should be overwritten in subclass'
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
@@ -150,6 +350,11 @@ class SpectralModelBase(NonAtmosphericModelBase):
         raise NotImplementedError(f'calculate_from_subspecret should be implemented for all Spectral models')
 
 class InstrumentModelBase(NonAtmosphericModelBase):
+    """
+    Abstract base class of all parameterised models used by ArchNemesis that interact with the instrument parameters of the Spectroscopy component.
+    """
+    name : str = 'name of instrument model should be overwritten in subclass'
+    description : str = 'description of instrument model should be overwritten in subclass'
     ## Abstract methods below this line, subclasses must implement all of these methods ##
 
     @classmethod
@@ -164,6 +369,11 @@ class InstrumentModelBase(NonAtmosphericModelBase):
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Instrument models')
 
 class ScatteringModelBase(NonAtmosphericModelBase):
+    """
+    Abstract base class of all parameterised models used by ArchNemesis that interact with a Scatter component, i.e. that sets the scattering properties of an aerosol.
+    """
+    name : str = 'name of scattering model should be overwritten in subclass'
+    description : str = 'description of scattering model should be overwritten in subclass'
     ## Abstract methods below this line, subclasses must implement all of these methods ##
 
     @classmethod
@@ -178,6 +388,12 @@ class ScatteringModelBase(NonAtmosphericModelBase):
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Scattering models')
 
 class DopplerModelBase(NonAtmosphericModelBase):
+    """
+    Abstract base class of all parameterised models used by ArchNemesis that interact with the doppler shift parameters of the Measurement component.
+    """
+    name : str = 'name of doppler model should be overwritten in subclass'
+    description : str = 'description of doppler model should be overwritten in subclass'
+    
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     @classmethod
     def calculate_from_subprofretg(
@@ -191,6 +407,13 @@ class DopplerModelBase(NonAtmosphericModelBase):
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Doppler models')
 
 class CollisionInducedAbsorptionModelBase(NonAtmosphericModelBase):
+    """
+    Abstract base class of all parameterised models used by ArchNemesis that interact with the CIA (CollisionInducedAbsorption) component.
+    """
+    name : str = 'name of CIA model should be overwritten in subclass'
+    description : str = 'description of CIA model should be overwritten in subclass'
+    
+    
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     @classmethod
     def calculate_from_subprofretg(
@@ -204,6 +427,13 @@ class CollisionInducedAbsorptionModelBase(NonAtmosphericModelBase):
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Collision Induced Absorption models')
 
 class TangentHeightCorrectionModelBase(NonAtmosphericModelBase):
+    """
+    Abstract base class of all parameterised models used by ArchNemesis that interact with the tangent height limb-observation parameter of the Measurement component.
+    """
+    name : str = 'name of tangent height correction model should be overwritten in subclass'
+    description : str = 'description of tangent height correction model should be overwritten in subclass'
+    
+    
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     @classmethod
     def calculate_from_subprofretg(
@@ -1239,6 +1469,14 @@ class Model32(AtmosphericModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    @property
+    def parameter_slices(self) -> dict[str, slice]:
+        return {
+            'tau' : slice(0,1),
+            'frac_scale_height' : slice(1,2),
+            'p_ref' : slice(2,3),
+        }
+
     @classmethod
     def calculate(cls, atm,ipar,pref,fsh,tau,MakePlot=False):
 
@@ -1553,6 +1791,14 @@ class Model45(AtmosphericModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    @property
+    def parameter_slices(self) -> dict[str, slice]:
+        return {
+            'deep_vmr' : slice(0,1),
+            'humidity' : slice(1,2),
+            'strato_vmr' : slice(2,3),
+        }
+
     @classmethod
     def calculate(cls, atm, ipar, tropo, humid, strato, MakePlot=True):
 
@@ -1734,7 +1980,14 @@ class Model47(AtmosphericModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
     
-
+    @property
+    def parameter_slices(self) -> dict[str, slice]:
+        return {
+            'tau' : slice(0,1),
+            'p_ref' : slice(1,2),
+            'fwhm' : slice(2,3),
+        }
+    
     @classmethod
     def calculate(cls, atm, ipar, tau, pref, fwhm, MakePlot=False):
 
@@ -4025,7 +4278,13 @@ class Model444(ScatteringModelBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    
+
+    @property
+    def parameter_slices(self) -> dict[str, slice]:
+        return {
+            'particle_size_distribution_params' : slice(0,2),
+            'imaginary_ref_idx' : slice(2,None),
+        }
 
     @classmethod
     def calculate(cls, Scatter,idust,iscat,xprof,haze_params):
@@ -4073,7 +4332,7 @@ class Model444(ScatteringModelBase):
         elif iscat == 4:
             pars = (a,0,0)
         else:
-            print(f'WARNING: ISCAT = {iscat} not implemented for model 444 yet! Defaulting to iscat = 1.')
+            _lgr.warning(f'ISCAT = {iscat} not implemented for model 444 yet! Defaulting to iscat = 1.')
             pars = (a,b,(1-3*b)/b)
 
         Scatter.WAVER = haze_params['WAVE',idust]

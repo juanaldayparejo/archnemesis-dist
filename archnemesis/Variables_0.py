@@ -1,8 +1,14 @@
 from archnemesis import *
 from archnemesis.Models import Models
+from archnemesis.ModelClass import ModelBase, StateVectorEntry
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import os.path
+
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.WARN)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -121,33 +127,172 @@ class Variables_0:
         self.NUM = None #np.zeros(NX)
         self.DSTEP = None #np.zeros(NX)
         self.HAZE_PARAMS = {}
+        
+        # private attributes
+        self._models = None
     ################################################################################################################
 
     @property
-    def models(self):
+    def models(self) -> np.ndarray[['NVAR'], ModelBase]:
+        """
+        Returns a numpy array filled with the models whose parameters are in the state vector
+        """
+        if self._models is None:
+            raise RuntimeError(f'Cannot show models for Variables_0 instance as the class has not been fully constructed yet.')
         return self._models
     
-    def _get_models_params(self, state_vec, unlog=True, split_fixed=True):
-        m_pars = [x.get_state_vector_slice(state_vec) for x in self.models]
-        if unlog:
-            for i in len(m_pars):
-                m_pars[i] = np.array([np.exp(x) if log else x for x, log in zip(m_pars[i], self.models[i].get_state_vector_slice(self.LX))]) 
-        
-        if split_fixed:
-            for i in len(m_pars):
-                fix = self.models[i].get_state_vector_slice(self.FIX)
-                m_pars[i] = tuple(m_pars[i][fix==1], m_pars[i][fix==0])
-        
-        return tuple(m_pars)
-    
     @property
-    def models_apriori_params(self, unlog=True, split_fixed=True):
-        return self._get_models_params(self.XA, unlog=unlog, split_fixed=split_fixed)
+    def model_parameters(self) -> tuple[dict[str,StateVectorEntry],...]:
+        """
+        Returns a tuple of dictionaries that contain the values of the parameters of the models in the state vector
+        """
+        return tuple(
+            model.get_parameters_from_state_vector(
+                self.XA,
+                self.XN,
+                self.LX,
+                self.FIX
+            )
+            for model in self.models
+        )
     
-    @property
-    def models_posterior_params(self):
-        return self._get_models_params(self.XN, unlog=unlog, split_fixed=split_fixed)
-
+    def plot_model_parameters(
+            self, 
+            plot_dir : None | str = None, 
+            show : bool = False
+        ):
+        """
+        Plots the parameters of the models in the state vector
+        
+        ARGUMENTS
+            plot_dir : None | str = None
+                if not 'None', will save the plot to this directory to save the plot to
+                this directory with the file name 'model_parameters'
+            show : bool = False
+                if True will show the plot interactively
+        """
+        mp = self.model_parameters
+        
+        _lgr.debug('all model parameters:')
+        for x in mp:
+            _lgr.debug(f'\t{x}')
+        
+        n_rows = len(mp) # number of models we have
+        n_cols = 10 # this is the 'resolution' of columns
+        
+        # Work out how much space each parameter of each model needs on its row
+        # is in fraction of row used up by a parameter. I.e. if i^th model has two parameters (p1,p2)
+        # and p1 has 2 points, and p2 has 3 points, then frac[i] = (0.4, 0.6)
+        f_cols = tuple(
+            tuple(
+                (v.sv_slice.stop - v.sv_slice.start)
+                /(
+                    sum(
+                        (u.sv_slice.stop-u.sv_slice.start for u in x.values())
+                    )
+                ) for v in x.values()
+            ) for x in mp
+        )
+        _lgr.debug(f'{n_rows=} {n_cols=}')
+        _lgr.debug(f'{f_cols=}')
+        
+        
+        subplot_layout = [['' for c in range(n_cols)] for r in range(n_rows)]
+        _lgr.debug(f'subplot_layout.shape = ({len(subplot_layout)}, {len(subplot_layout[0])})')
+        
+        for r, model_params in enumerate(mp):
+            c0 = 0
+            c = 0
+            f_col = f_cols[r]
+            for p_idx, (p_name, p_val) in enumerate(model_params.items()):
+                last_col = c0 + f_col[p_idx] * n_cols
+                model_param_id_str = f'{p_val.model_id}_{r}_{p_idx}'
+                _lgr.debug(f'{model_param_id_str}')
+                
+                while c < last_col:
+                    _lgr.debug(f'{r=} {c=}')
+                    _lgr.debug(f'before: {subplot_layout[r][c]=}')
+                    subplot_layout[r][c] = model_param_id_str
+                    _lgr.debug(f'after: {subplot_layout[r][c]=}')
+                    c += 1
+                
+                c0 = last_col
+        
+        
+        _lgr.debug('subplot_layout:')
+        for x in subplot_layout:
+            _lgr.debug(f'\t{x}')
+            
+        
+        
+        
+        f = plt.figure(figsize=(8,12))
+        
+        axes = f.subplot_mosaic(
+            subplot_layout, 
+            gridspec_kw=dict(
+                wspace=0.2*n_cols, 
+                hspace=0.1*n_rows
+            )
+        )
+        
+        _lgr.debug(f'{len(axes.values())=}')
+        _lgr.debug(f'{tuple(axes.keys())=}')
+        
+        ax_iter = iter(axes.values())
+        
+        f.suptitle('Model Parameters\n(in same order as varident)', fontsize=10)
+        
+        is_first_plot=True
+        for model_params in mp:
+            is_first_col = True
+            for pname, pval in model_params.items():
+                ax = next(ax_iter)
+                x = range(pval.apriori_value.size)
+                
+                if is_first_col:
+                    is_first_col = False
+                    ax.set_title(f'{pval.model_id} : {pname}', fontsize=8)
+                else:
+                    ax.set_title(pname, fontsize=8)
+                
+                # draw lines
+                ax.plot(x, pval.apriori_value, linestyle='-', linewidth=1, marker='none', color='tab:blue', alpha=0.6)
+                ax.plot(x, pval.posterior_value, linestyle='-', linewidth=1, marker='none', color='tab:orange', alpha=0.6)
+                
+                # draw fixed
+                temp = np.array(pval.apriori_value)
+                temp[~pval.is_fixed] = np.nan
+                ax.plot(x, temp, linestyle='none', linewidth=1, marker='x', color='black', alpha=0.6, label='fixed' if is_first_plot else None)
+                
+                # draw non-fixed
+                temp = np.array(pval.apriori_value)
+                temp[pval.is_fixed] = np.nan
+                ax.plot(x, temp, linestyle='none', linewidth=1, marker='o', color='tab:blue', alpha=0.6, label='apriori' if is_first_plot else None)
+                
+                temp = np.array(pval.posterior_value)
+                temp[pval.is_fixed] = np.nan
+                ax.plot(x, temp, linestyle='none', linewidth=1, marker='o', color='tab:orange', alpha=0.6, label='posterior' if is_first_plot else None)
+                
+                
+                # set plot element styling
+                ax.tick_params(axis='both', which='both', labelsize=6)
+                
+                is_first_plot = False
+            
+            f.legend()
+        
+        if plot_dir is not None:
+            os.makedirs(plot_dir, exist_ok=True)
+            plt.savefig(os.path.join(plot_dir, 'model_parameters'))
+        
+        if show:
+            plt.show()
+        
+        return
+        
+        
+        
     def edit_VARIDENT(self, VARIDENT_array):
         """
         Edit the Variable IDs
