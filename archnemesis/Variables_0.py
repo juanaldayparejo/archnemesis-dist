@@ -1,6 +1,6 @@
 from archnemesis import *
 from archnemesis.Models import Models
-from archnemesis.ModelClass import ModelBase, StateVectorEntry
+from archnemesis.ModelClass import ModelBase, StateVectorEntry, ThingHolder
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -22,6 +22,8 @@ Created on Tue Mar 29 17:27:12 2021
 
 Model variables Class.
 """
+
+
 
 class Variables_0:
 
@@ -580,7 +582,13 @@ class Variables_0:
             x0 = np.zeros([mx])
             sx = np.zeros([mx,mx])
             inum = np.zeros([mx],dtype='int')
-            varfile = ['']*nvar
+            # varfile = ['']*nvar
+            # Slight hack because strings are immutable so passing varfile[i] would not actually
+            # be able to change the value in varfile, it would change the string that the argument
+            # inside the function points to. Also varfile is only used in one place, so we can probably
+            # remove it completely if we want to and nothing bad would happen.
+            
+            varfile = [ThingHolder('') for _ in range(nvar)]
 
             #Reading data
             ix = 0
@@ -606,7 +614,7 @@ class Variables_0:
                             x0, 
                             sx,
                             inum, 
-                            varfile, 
+                            varfile[i], 
                             npro, 
                             nlocations,
                             sxminfac

@@ -27,20 +27,63 @@ For the purposes of making a class a 'valid' model class it must:
 The 'Models.py' module uses these two criteria to select classes from this file and build the 'Model.Model' tuple. See the
 imports in 'Variables_0.py' to see how to get hold of the valid models.
 
+NOTE: A lot of the data in Variables_0 should probably be stored on the model, that is a future task.
+
 """
 
 import numpy as np
 import numpy.ma
-from typing import IO, Any
+from typing import TYPE_CHECKING, IO, Any
 from collections import namedtuple
 
+import matplotlib.pyplot as plt # used in some of the models, I should really remove the plotting code or at least separate it from the calculation code
+
 from archnemesis.Scatter_0 import kk_new_sub
+from archnemesis.ngauss import ngauss
+from archnemesis.enums import WaveUnit
+
+
+if TYPE_CHECKING:
+    # NOTE: This is just here to make 'flake8' play nice with the type hints
+    # the problem is that importing Variables_0 or ForwardModel_0 creates a circular import
+    # this actually means that I should possibly redesign how those work to avoid circular imports
+    # but that is outside the scope of what I want to accomplish here
+    from archnemesis.Variables_0 import Variables_0
+    from archnemesis.ForwardModel_0 import ForwardModel_0
+    from archnemesis.Scatter_0 import Scatter_0
+    from archnemesis.Spectroscopy_0 import Spectroscopy_0
+    
+    nx = 'number of elements in state vector'
+    m = 'an undetermined number, but probably less than "nx"'
+    mx = 'synonym for nx'
+    mparam = 'the number of parameters a model has'
+    NCONV = 'number of spectral bins'
+    NGEOM = 'number of geometries'
+    NX = 'number of elements in state vector'
+    NDEGREE = 'number of degrees in a polynomial'
+    NWINDOWS = 'number of spectral windows'
 
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.WARN)
 
+
 StateVectorEntry = namedtuple('StateVectorValue', ['model_id', 'sv_slice', 'is_fixed', 'apriori_value', 'posterior_value'])
+
+class ThingHolder:
+    """
+    Helper class to enable setting immutable things like strings via function arguments
+    """
+    def __init__(self, s=''):
+        self._value = s
+    
+    @property
+    def value(self):
+        return self._value
+    
+    @value.setter
+    def value(self, _v):
+        self._value = _v
 
 ## BASE CLASSES - These set interfaces and defaults for concrete classes ##
 
@@ -266,7 +309,7 @@ class ModelBase:
             x0 : np.ndarray[["mx"],float], # should be a reference to the original
             sx : np.ndarray[["mx","mx"],float], # should be a reference to the original
             inum : np.ndarray[["mx"],int], # should be a reference to the original
-            varfile : list[str], # should be a reference to the original
+            varfile : ThingHolder, # should be a reference to the original
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -600,7 +643,7 @@ class Modelm1(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -840,7 +883,7 @@ class Model0(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -1053,7 +1096,7 @@ class Model2(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -1211,7 +1254,7 @@ class Model3(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -1418,7 +1461,7 @@ class Model9(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -1726,7 +1769,7 @@ class Model32(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -1939,7 +1982,7 @@ class Model45(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -2194,7 +2237,7 @@ class Model47(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -2402,7 +2445,7 @@ class Model49(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -2593,7 +2636,7 @@ class Model50(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -2750,7 +2793,7 @@ class Model51(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -2977,7 +3020,7 @@ class Model110(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -3234,7 +3277,7 @@ class Model111(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -3395,7 +3438,7 @@ class Model202(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -3619,7 +3662,7 @@ class Model228(InstrumentModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -3910,7 +3953,7 @@ class Model229(InstrumentModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -4234,7 +4277,7 @@ class Model230(InstrumentModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -4410,7 +4453,7 @@ class Model444(ScatteringModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -4653,7 +4696,7 @@ class Model446(ScatteringModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -4683,7 +4726,7 @@ class Model446(ScatteringModelBase):
         #Read the name of the look-up table file
         s = f.readline().split()
         fnamex = s[0]
-        varfile[i] = fnamex
+        varfile = fnamex
 
         #Reading the particle size and its a priori error
         s = f.readline().split()
@@ -4804,7 +4847,7 @@ class Model447(DopplerModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -4931,7 +4974,7 @@ class Model500(CollisionInducedAbsorptionModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -5098,7 +5141,7 @@ class Model777(TangentHeightCorrectionModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -5232,7 +5275,7 @@ class Model887(ScatteringModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -5442,7 +5485,7 @@ class Model1002(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -5478,16 +5521,6 @@ class Model1002(AtmosphericModelBase):
         varparam[0] = nlocs
         iparj = 1
         for iloc in range(nlocs):
-
-            #Including lats and lons in varparam
-            #varparam[iparj]  = lats[iloc]
-            #iparj = iparj + 1
-            #varparam[iparj] = lons[iloc]
-            #iparj = iparj + 1
-
-            #if iparj==mparam:
-            #    raise ValueError('error in reading .apr :: Need to increase the mparam')
-
             #Including surface temperature in the state vector
             x0[ix+iloc] = sfactor[iloc]
             sx[ix+iloc,ix+iloc] = efactor[iloc]**2.0
@@ -5569,7 +5602,7 @@ class Model231(SpectralModelBase):
             T = COEFF[i]
 
             WAVE0 = meas.VCONV[0,i]
-            spec[:] = np.array(SPECMOD[0:meas.NCONV[i],i])
+            spec = np.array(SPECMOD[0:meas.NCONV[i],i])
 
             #Changing the state vector based on this parameterisation
             POL = np.zeros(meas.NCONV[i])
@@ -5600,7 +5633,7 @@ class Model231(SpectralModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -5685,7 +5718,7 @@ class Model2310(SpectralModelBase):
                 T = COEFF[i]
 
                 WAVE0 = Spectroscopy.WAVE[ivin].min()
-                spec[:] = np.array(SPECMOD[ivin,i])
+                spec = np.array(SPECMOD[ivin,i])
 
                 #Changing the state vector based on this parameterisation
                 POL = np.zeros(nvin)
@@ -5717,7 +5750,7 @@ class Model2310(SpectralModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -5864,7 +5897,7 @@ class Model232(SpectralModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -5882,8 +5915,8 @@ class Model232(SpectralModelBase):
         f1 = open(s[0],'r')
         tmp = np.fromfile(f1,sep=' ',count=1,dtype='int')
         nlevel = int(tmp[0])
-        varparam[i,0] = nlevel
-        varparam[i,1] = wavenorm
+        varparam[0] = nlevel
+        varparam[1] = wavenorm
         for ilevel in range(nlevel):
             tmp = np.fromfile(f1,sep=' ',count=4,dtype='float')
             r0 = float(tmp[0])   #Opacity level at wavenorm
@@ -6005,7 +6038,7 @@ class Model233(SpectralModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
@@ -6027,7 +6060,7 @@ class Model233(SpectralModelBase):
         f1 = open(s[0],'r')
         tmp = np.fromfile(f1,sep=' ',count=1,dtype='int')
         nlevel = int(tmp[0])
-        varparam[i,0] = nlevel
+        varparam[0] = nlevel
         for ilevel in range(nlevel):
             tmp = np.fromfile(f1,sep=' ',count=6,dtype='float')
             a0 = float(tmp[0])   #A0
@@ -6181,7 +6214,7 @@ class Model667(SpectralModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : list[str],
+            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             sxminfac : float,
