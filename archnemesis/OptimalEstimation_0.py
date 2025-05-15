@@ -62,7 +62,7 @@ class OptimalEstimation_0:
             # the file and select the last one
             lines_per_record = (1+2*nx+4*ny+nx*ny)
             n_records_in_file = (n_lines - 1)//lines_per_record
-            n_skip_lines = (n_record_in_file -1)*lines_per_record
+            n_skip_lines = (n_records_in_file -1)*lines_per_record
             
             _lgr.info(f'{lines_per_record=} {n_records_in_file=} {n_skip_lines=}')
             _lgr.info('We want the final state of the iterations, so we want to read the final record in the file.')
