@@ -391,6 +391,8 @@ class OptimalEstimation_0:
         """
 
         import h5py
+        from archnemesis.helpers import h5py_helper
+        
 
         with h5py.File(runname+'.h5','r') as f:
 
@@ -407,20 +409,20 @@ class OptimalEstimation_0:
                 #Checking if Retrieval already exists
                 if ('/Retrieval/Output' in f)==True:
 
-                    self.NX = np.int32(f.get('Retrieval/Output/OptimalEstimation/NX'))
-                    self.NY = np.int32(f.get('Retrieval/Output/OptimalEstimation/NY'))
+                    self.NX = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/NX', np.int32)
+                    self.NY = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/NY', np.int32)
 
-                    self.XN = np.array(f.get('Retrieval/Output/OptimalEstimation/XN'))
-                    self.XA = np.array(f.get('Retrieval/Output/OptimalEstimation/XA'))
-                    self.ST = np.array(f.get('Retrieval/Output/OptimalEstimation/SX'))
-                    self.SA = np.array(f.get('Retrieval/Output/OptimalEstimation/SA'))
-                    self.KK = np.array(f.get('Retrieval/Output/OptimalEstimation/KK'))
-                    self.AA = np.array(f.get('Retrieval/Output/OptimalEstimation/AA'))
-                    self.DD = np.array(f.get('Retrieval/Output/OptimalEstimation/DD'))
-
-                    self.YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
-                    self.Y = np.array(f.get('Retrieval/Output/OptimalEstimation/Y'))
-                    self.SE = np.array(f.get('Retrieval/Output/OptimalEstimation/SE'))
+                    self.XN = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/XN', np.array)
+                    self.XA = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/XA', np.array)
+                    self.ST = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/SX', np.array)
+                    self.SA = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/SA', np.array)
+                    self.KK = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/KK', np.array)
+                    self.AA = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/AA', np.array)
+                    self.DD = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/DD', np.array)
+                    
+                    self.YN = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/YN', np.array)
+                    self.Y = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/Y', np.array)
+                    self.SE = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/SY', np.array)
 
 
     def edit_KK(self, KK_array):

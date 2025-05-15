@@ -40,7 +40,7 @@ from collections import namedtuple
 import matplotlib.pyplot as plt # used in some of the models, I should really remove the plotting code or at least separate it from the calculation code
 
 from archnemesis.Scatter_0 import kk_new_sub
-from archnemesis.ngauss import ngauss
+from archnemesis.helpers.maths_helper import ngauss
 from archnemesis.enums import WaveUnit
 
 
