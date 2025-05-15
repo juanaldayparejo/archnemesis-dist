@@ -1,3 +1,4 @@
+from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,6 +8,11 @@ import pickle
 
 
 from archnemesis.enums import WaveUnit, SpectraUnit
+
+
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.INFO)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -23,6 +29,81 @@ Optimal Estimation Class. It includes all parameters that are relevant for the r
 """
 
 class OptimalEstimation_0:
+
+    @classmethod
+    def from_itr(cls, runname):
+        """
+        Read "runname.itr" file, populate OptimalEstimation object as if it was the output of "coreretOE(...)"
+        """
+        _lgr.info(f'Creating {cls.__name__} instance from {runname}.itr file')
+        # Get the number of lines in the file
+        n_lines = 0
+        with open(f'{runname}.itr', 'rb') as f:
+            n_lines = sum(1 for _ in f)
+        
+        _lgr.info(f'{n_lines=}')
+        
+        with open(f'{runname}.itr', 'r') as f:
+            nx, ny, niter = map(int, f.readline().strip().split())
+            
+            _lgr.info(f'{nx=} {ny=} {niter=}')
+            
+            instance = cls(
+                IRET=0, 
+                NITER=niter, 
+                NX=nx, 
+                NY=ny, 
+                PHILIMIT=None, # We don't have this information so ignore it
+                NCORES=None # we don't have this information so ignore it
+            )
+            
+            # Each iteration has 1 + 2*NX + 4*NY + NX*NY lines
+            # Therefore work out how many iterations were written to
+            # the file and select the last one
+            lines_per_record = (1+2*nx+4*ny+nx*ny)
+            n_records_in_file = (n_lines - 1)//lines_per_record
+            n_skip_lines = (n_records_in_file -1)*lines_per_record
+            
+            _lgr.info(f'{lines_per_record=} {n_records_in_file=} {n_skip_lines=}')
+            _lgr.info('We want the final state of the iterations, so we want to read the final record in the file.')
+            
+            for _ in range(n_skip_lines):
+                f.readline()
+            
+            # Now read in the final iteration
+            chisq, phi = map(float, f.readline().strip().split())
+            _lgr.info(f'{chisq=} {phi=}')
+            
+            xn_array = np.zeros((nx,))
+            xa_array = np.zeros((nx,))
+            y_array = np.zeros((ny,))
+            se_array = np.zeros((ny,ny)) # only stored the diagonal elements in *.itr file
+            yn_prev_array = np.zeros((ny,))
+            yn_array = np.zeros((ny,))
+            kk_array = np.zeros((ny,nx))
+            
+            for i in range(nx): xn_array[i] = float(f.readline().strip())
+            for i in range(nx): xa_array[i] = float(f.readline().strip())
+            for i in range(ny): y_array[i] = float(f.readline().strip())
+            for i in range(ny): se_array[i,i] = float(f.readline().strip())
+            for i in range(ny): yn_prev_array[i] = float(f.readline().strip())
+            for i in range(ny): yn_array[i] = float(f.readline().strip())
+            for i in range(nx):
+                for j in range(ny): kk_array[j,i] = float(f.readline().strip())
+            
+            instance.edit_XN(xn_array)
+            instance.edit_XA(xa_array)
+            instance.edit_Y(y_array)
+            instance.edit_SE(se_array)
+            instance.edit_YN(yn_array)
+            instance.edit_KK(kk_array)
+        
+        return chisq, phi, yn_prev_array, instance
+            
+            
+                
+                
+
 
     def __init__(self, IRET=0, NITER=1, NX=1, NY=1, PHILIMIT=0.1, NCORES=1):
 
@@ -238,6 +319,15 @@ class OptimalEstimation_0:
                 
                 dset = f.create_dataset('Retrieval/Output/OptimalEstimation/SY',data=self.SE)
                 dset.attrs['title'] = "Measurement vector covariance matrix"
+                
+                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/KK',data=self.KK)
+                dset.attrs['title'] = "Jacobian matrix"
+                
+                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/AA',data=self.AA)
+                dset.attrs['title'] = "Averaging kernel"
+                
+                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/DD',data=self.DD)
+                dset.attrs['title'] = "Gain matrix"
 
 
 
@@ -301,35 +391,39 @@ class OptimalEstimation_0:
         """
 
         import h5py
+        from archnemesis.helpers import h5py_helper
+        
 
-        f = h5py.File(runname+'.h5','r')
+        with h5py.File(runname+'.h5','r') as f:
 
-        #Checking if Surface exists
-        e = "/Retrieval" in f
-        if e==False:
-            raise ValueError('error :: Retrieval is not defined in HDF5 file')
-        else:
+            #Checking if Surface exists
+            e = "/Retrieval" in f
+            if e==False:
+                raise ValueError('error :: Retrieval is not defined in HDF5 file')
+            else:
 
-            self.NITER = np.int32(f.get('Retrieval/NITER'))
-            self.IRET = np.int32(f.get('Retrieval/IRET'))
-            self.PHILIMIT = np.float64(f.get('Retrieval/PHILIMIT'))
+                self.NITER = np.int32(f.get('Retrieval/NITER'))
+                self.IRET = np.int32(f.get('Retrieval/IRET'))
+                self.PHILIMIT = np.float64(f.get('Retrieval/PHILIMIT'))
 
-            #Checking if Retrieval already exists
-            if ('/Retrieval/Output' in f)==True:
+                #Checking if Retrieval already exists
+                if ('/Retrieval/Output' in f)==True:
 
-                self.NX = np.int32(f.get('Retrieval/Output/OptimalEstimation/NX'))
-                self.NY = np.int32(f.get('Retrieval/Output/OptimalEstimation/NY'))
+                    self.NX = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/NX', np.int32)
+                    self.NY = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/NY', np.int32)
 
-                self.XN = np.array(f.get('Retrieval/Output/OptimalEstimation/XN'))
-                self.XA = np.array(f.get('Retrieval/Output/OptimalEstimation/XA'))
-                self.ST = np.array(f.get('Retrieval/Output/OptimalEstimation/SX'))
-                self.SA = np.array(f.get('Retrieval/Output/OptimalEstimation/SA'))
+                    self.XN = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/XN', np.array)
+                    self.XA = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/XA', np.array)
+                    self.ST = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/SX', np.array)
+                    self.SA = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/SA', np.array)
+                    self.KK = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/KK', np.array)
+                    self.AA = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/AA', np.array)
+                    self.DD = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/DD', np.array)
+                    
+                    self.YN = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/YN', np.array)
+                    self.Y = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/Y', np.array)
+                    self.SE = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/SY', np.array)
 
-                self.YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
-                self.Y = np.array(f.get('Retrieval/Output/OptimalEstimation/Y'))
-                self.SE = np.array(f.get('Retrieval/Output/OptimalEstimation/SE'))
-
-        f.close()
 
     def edit_KK(self, KK_array):
         """
@@ -553,8 +647,9 @@ class OptimalEstimation_0:
 
         x_out = np.zeros(self.NX)
 
-        for i in range(self.NX):
-            x_out[i] = self.XA[i] + mp1[i,0] - mp2[i,0]
+        #for i in range(self.NX):
+        #    x_out[i] = self.XA[i] + mp1[i,0] - mp2[i,0]
+        x_out = self.XA + mp1[:self.NX,0] - mp2[:self.NX,0]
         
         return x_out
 
@@ -918,11 +1013,19 @@ class OptimalEstimation_0:
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
         fig,ax1 = plt.subplots(1,1,figsize=(10,3))
-        im = ax1.imshow(np.transpose(self.KK),aspect='auto',origin='lower',cmap='jet')
+        ax1.set_title('Jacobian Matrix')
+        # Center limits around zero
+        vmin = np.nanmin(self.KK)
+        vmax = np.nanmax(self.KK)
+        centered_limit = max(abs(vmin),abs(vmax))
+        
+        im = ax1.imshow(np.transpose(self.KK),aspect='auto',origin='lower',cmap='jet', vmin=-centered_limit, vmax=centered_limit)
         divider = make_axes_locatable(ax1)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         cbar = plt.colorbar(im, cax=cax)
         cbar.set_label('Gradients (dR/dx)')
+        ax1.set_ylabel('state vector element #')
+        ax1.set_xlabel('measurement vector element #')
         ax1.grid()
         plt.tight_layout()
         plt.show()
@@ -936,14 +1039,40 @@ class OptimalEstimation_0:
 
         #fig,ax1 = plt.subplots(1,1,figsize=(10,3))
         fig = plt.figure(figsize=(10,4))
-        ax1 = plt.subplot2grid((1,3),(0,0),colspan=1,rowspan=2)
-        ax2 = plt.subplot2grid((1,3),(0,2),colspan=1,rowspan=1)
-        ax1.plot(range(self.NY),self.Y,c='black',label='Measured spectra')
-        ax1.plot(range(self.NY),self.YN,c='tab:red',label='Modelled spectra')
-        ax2.plot(range(self.NY),self.Y-self.YN,c='tab:red')
+        ax1 = plt.subplot2grid((2,3),(0,0),rowspan=1,colspan=2)
+        ax1.set_title('Measured and modelled spectra')
+        ax2 = plt.subplot2grid((2,3),(1,0),rowspan=1,colspan=2)
+        ax2.set_title('Spectra residual')
+
+        ax3 = plt.subplot2grid((2,3),(0,2),rowspan=1,colspan=1)
+        ax3.set_title('apriori and retrieved state vector')
+        ax4 = plt.subplot2grid((2,3),(1,2),rowspan=1,colspan=1)
+        ax4.set_title('state vector residual')
+        
+        ax1.plot(range(self.NY),self.Y,c='black',label='Measured spectra', alpha=0.6)
+        ax1.plot(range(self.NY),self.YN,c='tab:red',label='Modelled spectra', alpha=0.6)
         ax1.set_xlabel('Measurement vector element #')
         ax1.set_ylabel('Radiance')
         ax1.grid()
+        ax1.legend()
+        
+        ax2.plot(range(self.NY),self.Y-self.YN,c='tab:red', alpha=0.6)
+        ax2.set_xlabel('Measurement vector element #')
+        ax2.set_ylabel('Residual Radiance')
+        ax2.grid()
+
+        ax3.plot(range(self.NX),self.XA,c='black',label='Apriori state vector', alpha=0.6)
+        ax3.plot(range(self.NX),self.XN,c='tab:red',label='Retrieved state vector', alpha=0.6)
+        ax3.set_xlabel('State vector element #')
+        ax3.set_ylabel('State vector element value')
+        ax3.grid()
+        ax3.legend()
+
+        ax4.plot(range(self.NX),self.XA-self.XN,c='tab:red', alpha=0.6)
+        ax4.set_xlabel('State vector element #')
+        ax4.set_ylabel('Residual value of state vector element')
+        ax4.grid()
+        
         plt.tight_layout()
         plt.show()
 
@@ -955,7 +1084,7 @@ class OptimalEstimation_0:
 ###############################################################################################
 
 def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,\
-                 NITER=10,PHILIMIT=0.1,NCores=1,nemesisSO=False,write_itr=True):
+                 NITER=10,PHILIMIT=0.1,NCores=1,nemesisSO=False,write_itr=True, return_forward_model=False):
 
 
     """
@@ -989,6 +1118,8 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
 
             nemesisSO :: If True, the retrieval uses the function jacobian_nemesisSO(), adapated specifically
                          for solar occultation observations, rather than the more general jacobian_nemesis() function.
+            
+            return_forward_model :: if True will return the ForwardModel as well as the OptimalEstimation.
 
         OUTPUTS :
 
@@ -1073,20 +1204,18 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
 
         print('nemesis :: Iteration '+str(it)+'/'+str(OptimalEstimation.NITER))
 
-        if write_itr==True:
-            
         #Writing into .itr file
         ####################################
-
-            fitr.write('%10.5f %10.5f \n' % (OptimalEstimation.CHISQ,OptimalEstimation.PHI))
-            for i in range(OptimalEstimation.NX):fitr.write('%10.5f \n' % (XN1[i]))
-            for i in range(OptimalEstimation.NX):fitr.write('%10.5f \n' % (OptimalEstimation.XA[i]))
-            for i in range(OptimalEstimation.NY):fitr.write('%10.5f \n' % (OptimalEstimation.Y[i]))
-            for i in range(OptimalEstimation.NY):fitr.write('%10.5f \n' % (OptimalEstimation.SE[i,i]))
-            for i in range(OptimalEstimation.NY):fitr.write('%10.5f \n' % (YN1[i]))
-            for i in range(OptimalEstimation.NY):fitr.write('%10.5f \n' % (OptimalEstimation.YN[i]))
+        if write_itr==True:
+            fitr.write(f'{OptimalEstimation.CHISQ:09.4E} {OptimalEstimation.PHI:09.4E}\n')
+            for i in range(OptimalEstimation.NX):fitr.write(f'{XN1[i]:09.4E}\n')#'%10.5f \n' % (XN1[i]))
+            for i in range(OptimalEstimation.NX):fitr.write(f'{OptimalEstimation.XA[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.XA[i]))
+            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.Y[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.Y[i]))
+            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.SE[i,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.SE[i,i]))
+            for i in range(OptimalEstimation.NY):fitr.write(f'{YN1[i]:09.4E}\n')#'%10.5f \n' % (YN1[i]))
+            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.YN[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.YN[i]))
             for i in range(OptimalEstimation.NX):
-                for j in range(OptimalEstimation.NY):fitr.write('%10.5f \n' % (OptimalEstimation.KK[j,i]))
+                for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.KK[j,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.KK[j,i]))
 
 
         #Calculating next state vector
@@ -1099,8 +1228,8 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
         #  alambda to stop the new trial vector xn1 being too far from the
         #  last 'best-fit' value xn
 
-        IBRAKE = 0
-        while IBRAKE==0: #We continue in this while loop until we do not find problems with the state vector
+        check_marquardt_brake = True
+        while check_marquardt_brake: #We continue in this while loop until we do not find problems with the state vector
     
             for j in range(OptimalEstimation.NX):
                 XN1[j] = OptimalEstimation.XN[j] + (X_OUT[j]-OptimalEstimation.XN[j])/(1.0+alambda)
@@ -1110,17 +1239,17 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
                     if((XN1[j]>85.) or (XN1[j]<-85.)):
                         print('nemesis :: log(number gone out of range) --- increasing brake')
                         alambda = alambda * 10.
-                        IBRAKE = 0
+                        check_marquardt_brake = True
                         if alambda>1.e30:
                             raise ValueError('error in nemesis :: Death spiral in braking parameters - stopping')
                         break
                     else:
-                        IBRAKE = 1
+                        check_marquardt_brake = False
                 else:
-                    IBRAKE = 1
+                    check_marquardt_brake = False
                     pass
                         
-            if IBRAKE==0:
+            if check_marquardt_brake==True: # [JD] If I am reading this correctly, anything in the loop after this line is skipped.
                 continue
                         
             #Check to see if any VMRs or other parameters have gone negative.
@@ -1144,7 +1273,7 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
             #if(len(np.where(Atmosphere1.VMR<0.0))>0):
             #    print('nemesisSO :: VMR has gone negative --- increasing brake')
             #    alambda = alambda * 10.
-            #    IBRAKE = 0
+            #    check_marquardt_brake = True
             #    continue
             
             #iwhere = np.where(Atmosphere1.T<0.0)
@@ -1152,7 +1281,7 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
             if(len(iwhere[0])>0):
                 print('nemesis :: Temperature has gone negative --- increasing brake')
                 alambda = alambda * 10.
-                IBRAKE = 0
+                check_marquardt_brake = True
                 continue
 
 
@@ -1201,6 +1330,18 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
             #Leave xn and kk alone and try again with more braking
             alambda = alambda*10.0  #increase Marquardt brake
 
+    #Writing into .itr file for final iteration
+    ####################################
+    if write_itr==True:
+        fitr.write(f'{OptimalEstimation.CHISQ:09.4E} {OptimalEstimation.PHI:09.4E}\n')
+        for i in range(OptimalEstimation.NX):fitr.write(f'{XN1[i]:09.4E}\n')#'%10.5f \n' % (XN1[i]))
+        for i in range(OptimalEstimation.NX):fitr.write(f'{OptimalEstimation.XA[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.XA[i]))
+        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.Y[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.Y[i]))
+        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.SE[i,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.SE[i,i]))
+        for i in range(OptimalEstimation.NY):fitr.write(f'{YN1[i]:09.4E}\n')#'%10.5f \n' % (YN1[i]))
+        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.YN[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.YN[i]))
+        for i in range(OptimalEstimation.NX):
+            for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.KK[j,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.KK[j,i]))
 
     #Calculating output parameters
     ######################################################
@@ -1220,6 +1361,9 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
     #Writing the contribution of each gas to .gcn file
     #if nemesisSO==True:
     #    calc_gascn(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer)
-
-    return OptimalEstimation
+    
+    if return_forward_model:
+        return OptimalEstimation, ForwardModel
+    else:
+        return OptimalEstimation
 

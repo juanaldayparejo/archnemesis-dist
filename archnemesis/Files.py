@@ -7,6 +7,7 @@
 #	required by the NEMESIS and archNEMESIS radiative transfer codes         
 # 
 # MODIFICATION HISTORY: Juan Alday 15/03/2021
+from __future__ import annotations #  for 3.9 compatability
 
 from archnemesis import *
 from copy import copy
@@ -16,6 +17,7 @@ from archnemesis.enums import (
     SpectralCalculationMode, LowerBoundaryCondition, ScatteringCalculationMode, AerosolPhaseFunctionCalculationMode,
     ParaH2Ratio, RayleighScatteringMode
 )
+
 
 
 ###############################################################################################
@@ -111,7 +113,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Atmosphere class and read file
     ##############################################################
 
-    Atmosphere = Atmosphere_0()
+    Atmosphere = Atmosphere_0(runname=runname)
 
     #Read gaseous atmosphere
     Atmosphere.read_hdf5(runname)
@@ -131,7 +133,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     # there for gas giants that are different for the defaults
     # when constructing via Surface_0()
     Surface.read_hdf5(runname)
-    if np.mean(Surface.TSURF)<0.0:
+    if np.mean(Surface.TSURF)<=0.0:
         Surface.GASGIANT=True   #If T is negative then we omit the surface
 
 
@@ -150,7 +152,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     f.close()
     
     if e==True:
-        CIA = CIA_0()
+        CIA = CIA_0(runname=runname)
         CIA.read_hdf5(runname)
     else:
         CIA = None
@@ -166,7 +168,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Measurement class and read file
     ###############################################################
 
-    Measurement = Measurement_0()
+    Measurement = Measurement_0(runname=runname)
     Measurement.read_hdf5(runname,calc_MeasurementVector=calc_SE)
     
     #Initialise Spectroscopy class and read file
@@ -178,7 +180,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     f.close()
 
     if e is True:
-        Spectroscopy = Spectroscopy_0()
+        Spectroscopy = Spectroscopy_0(RUNNAME=runname)
         Spectroscopy.read_hdf5(runname)
     else:
         raise ValueError('error :: Spectroscopy needs to be defined in HDF5 file')
@@ -255,32 +257,27 @@ def read_retparam_hdf5(runname):
 
     import h5py
 
-    f = h5py.File(runname+'.h5','r')
+    with h5py.File(runname+'.h5','r') as f:
 
-    #Checking if Surface exists
-    e = "/Retrieval" in f
-    if e==False:
-        f.close()
-        raise ValueError('error :: Retrieval is not defined in HDF5 file')
-    else:
-
-        #Checking if Retrieval already exists
-        if ('/Retrieval/Output/Parameters' in f)==True:
-
-            NVAR = np.int32(f.get('Retrieval/Output/Parameters/NVAR'))
-            NXVAR = np.array(f.get('Retrieval/Output/Parameters/NXVAR'))
-            VARIDENT = np.array(f.get('Retrieval/Output/Parameters/VARIDENT'))
-            VARPARAM = np.array(f.get('Retrieval/Output/Parameters/VARPARAM'))
-            RETPARAM = np.array(f.get('Retrieval/Output/Parameters/RETPARAM'))
-            RETERRPARAM = np.array(f.get('Retrieval/Output/Parameters/RETERRPARAM'))
-            APRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRPARAM'))
-            APRERRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRERRPARAM'))
-
-        else:
-            
-            f.close()
+        #Checking if Retrieval exists
+        if "/Retrieval" not in f:
+            raise ValueError('error :: Retrieval is not defined in HDF5 file')
+            return None
+        
+        if '/Retrieval/Output/Parameters' not in f:
             raise ValueError('error :: Retrieval/Output/Parameters is not defined in HDF5 file')
-    
+            return None
+
+
+        NVAR = np.int32(f.get('Retrieval/Output/Parameters/NVAR'))
+        NXVAR = np.array(f.get('Retrieval/Output/Parameters/NXVAR'))
+        VARIDENT = np.array(f.get('Retrieval/Output/Parameters/VARIDENT'))
+        VARPARAM = np.array(f.get('Retrieval/Output/Parameters/VARPARAM'))
+        RETPARAM = np.array(f.get('Retrieval/Output/Parameters/RETPARAM'))
+        RETERRPARAM = np.array(f.get('Retrieval/Output/Parameters/RETERRPARAM'))
+        APRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRPARAM'))
+        APRERRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRERRPARAM'))
+
 
     return NVAR,NXVAR,VARIDENT,VARPARAM,APRPARAM,APRERRPARAM,RETPARAM,RETERRPARAM
 
@@ -313,9 +310,16 @@ def read_bestfit_hdf5(runname):
     import h5py
 
     #Reading the best fit
-    f = h5py.File(runname+'.h5','r')
-    YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
-    f.close()
+    with h5py.File(runname+'.h5','r') as f:
+        if "/Retrieval" not in f:
+            raise ValueError('error :: Retrieval is not defined in HDF5 file')
+            return None
+        
+        if '/Retrieval/Output/OptimalEstimation/YN' not in f:
+            raise ValueError('error :: Retrieval/Output/OptimalEstimation/YN is not defined in HDF5 file')
+            return None
+        
+        YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
  
     #Writing the measurement vector in same format as in Measurement
     Measurement = Measurement_0()
@@ -380,11 +384,11 @@ def read_input_files(runname):
             Surface :: Python class defining the surface
             CIA :: Python class defining the Collision-Induced-Absorption cross-sections
             Layer :: Python class defining the layering scheme to be applied in the calculations
+            Retrieval :: Python class defining the initial Optimal Esimation setup for the input data
 
         CALLING SEQUENCE:
         
-            Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables = read_input_files(runname)
- 
+            Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = read_input_files(runname)
         MODIFICATION HISTORY : Juan Alday (29/04/2019)
     """
 
