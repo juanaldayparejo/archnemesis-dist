@@ -1,9 +1,11 @@
-from collections.abc import Sequence, Iterable
-import pytest
-import archnemesis as ans
 import os
+from collections.abc import Sequence, Iterable
+import shutil
+
+import pytest
 import numpy as np
 
+import archnemesis as ans
 
 def ensure_equal_type(a, b):
     # 'a' and 'b' are not neccesarily the same types at this point
@@ -115,117 +117,136 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_paramters():
             continue
         
         
-        delete_h5_at_end=True
+        # We are going to overwrite any h5_file that is already
+        # present, therefore ensure we back up and restore any
+        # h5 files that already exist
+        h5_filename = runname+'.h5'
+        backup_h5_filename = h5_filename+'.bak'
         if os.path.exists(runname+'.h5'):
             delete_h5_at_end = False
-        
-        ###### PERFORM TEST ######
-        print('#'*40)
-        print(f'In directory "{current_example_dir}", performing input file format consistency test...')
-    
-        # Read LEGACY format
-        Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
-        
-        # Write to HDF5 format
-        for item in (Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Retrieval):#,Variables):
-            if hasattr(item, 'write_hdf5'):
-                item.write_hdf5(runname)
-            elif hasattr(item, 'write_input_hdf5'):
-                item.write_input_hdf5(runname)
-            else:
-                raise RuntimeError(f'For example at "{current_example_dir}", class "{type(item)}" does not have an attribute like "write{{_input,_}}hdf5", cannot continue writing new style file.')
-
-        # Read HDF5 format
-        Atmosphere_,Measurement_,Spectroscopy_,Scatter_,Stellar_,Surface_,CIA_,Layer_,Variables_,Retrieval_,Telluric_ = ans.Files.read_input_files_hdf5(runname)
-
-        # Define the pairs of instances we want to compare
-        pairs = (
-            (Atmosphere, Atmosphere_),
-            (Measurement, Measurement_),
-            (Spectroscopy, Spectroscopy_),
-            (Scatter, Scatter_),
-            (Stellar, Stellar_),
-            (Surface, Surface_),
-            (CIA, CIA_),
-            (Layer, Layer_),
-            (Variables, Variables_),
-            (Retrieval, Retrieval_),
-            #(Telluric, Telluric_)
-        )
-
-        # Loop over instances and compare their ALL_CAPS attributes
-        for old_format, new_format in pairs:
-            print(f'\nTesting integrity of {old_format.__class__.__name__}')
-            # assume that everything in all caps should be identical
-            of_attrs = tuple(item for item in filter(lambda x: x.isupper(), old_format.__dict__.keys()))
-            nf_attrs = tuple(item for item in filter(lambda x: x.isupper(), new_format.__dict__.keys()))
-
-            assert len(of_attrs) == len(nf_attrs), f'For example at "{current_example_dir}", class must have same number of attributes regardless of input format'
+            restore_backed_up_h5_at_end = True
+            shutil.move(h5_filename, backup_h5_filename)
             
-            print(f'{of_attrs=}')
-            print(f'{nf_attrs=}')
-            assert all(x==y for x,y in zip(of_attrs, nf_attrs)), f"For example at '{current_example_dir}', class must have same attribute names regardless of input format"
-
-            for k in of_attrs:
-                print(f'Testing attribute {old_format.__class__.__name__}.{k}:')
-                o_attr = getattr(old_format, k)
-                n_attr = getattr(new_format, k)
-
-                # Special cases
-                if f'{old_format.__class__.__name__}.{k}' == 'Atmosphere_0.DUST_UNITS_FLAG':
-                    # HDF5 always uses number density (m^-3), indicated by 'None'
-                    # Legacy always uses mass density (g cm^-3) indicated by a numpy array of -1 values.
-                    assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
-                    continue
-                if f'{old_format.__class__.__name__}.{k}' == 'Layer_0.DUST_UNITS_FLAG':
-                    # HDF5 always uses number density (m^-3), indicated by 'None'
-                    # Legacy always uses mass density (g cm^-3) indicated by a numpy array of -1 values.
-                    assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
-                    continue
-                if f'{old_format.__class__.__name__}.{k}' == 'Spectroscopy_0.RUNNAME':
-                    # HDF5 files do not use this parameter
-                    continue
-                if f'{old_format.__class__.__name__}.{k}' == 'CIA_0.CIATABLE':
-                    if (o_attr != n_attr):
-                        if o_attr.endswith('.tab') and n_attr.endswith('.h5'):
-                            assert o_attr[:-4] == n_attr[:-3], f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, different CIATABLE values must only be due to altering format from '.tab' to '.h5'"
-                            continue
-                    assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, mismatched CIATABLE values '{o_attr}' vs '{n_attr}' not allowed except for format change"
-                
-                (
-                    are_types_same, 
-                    casting_rules_compared,
-                    is_fwd_safe_casting_possible, 
-                    is_bkwd_safe_casting_possible, 
-                    is_fwd_samekind_casting_possible, 
-                    is_bkwd_samekind_casting_possible
-                ) = ensure_equal_type(o_attr, n_attr)
-
-                if are_types_same:
-                    pass # this is fine
-                elif (not are_types_same) and casting_rules_compared:
-                    # Need to know how casting rules fail
-                    if is_fwd_safe_casting_possible and is_bkwd_safe_casting_possible:
-                        pass
-                    elif is_fwd_samekind_casting_possible and is_bkwd_samekind_casting_possible:
-                        msg = f"Types change when using different input format. They are the same kind, but safe casting is not always possible {type(o_attr)} and {type(n_attr)}"
-                        print(f'WARNING: {msg}')
-                        #raise RuntimeWarning(msg)
-                    else:
-                        assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class must have attributes that are at least the same kind of type regardless of input format"
+        else:
+            delete_h5_at_end=True
+            restore_backed_up_h5_at_end = False
+        
+        
+        # NOTE: We have put the test in a "try, finally" block
+        # this is because we want to make sure we delete any
+        # *.h5 files that were created so we don't pollute the file system.
+        
+        try:
+            ###### PERFORM TEST ######
+            print('#'*40)
+            print(f'In directory "{current_example_dir}", performing input file format consistency test...')
+        
+            # Read LEGACY format
+            Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
+            
+            # Write to HDF5 format
+            for item in (Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Retrieval):#,Variables):
+                if hasattr(item, 'write_hdf5'):
+                    item.write_hdf5(runname)
+                elif hasattr(item, 'write_input_hdf5'):
+                    item.write_input_hdf5(runname)
                 else:
-                    # types are not the same and we didn't compare casting rules
-                    assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class attributes must have identical types if they are not numerical regardless of input format"
-                
-                #print(f'\t{o_attr} == {n_attr}')            
-                assert ensure_equal_value(o_attr, n_attr), f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class must have same values regardless of input format: {o_attr} != {n_attr}"
+                    raise RuntimeError(f'For example at "{current_example_dir}", class "{type(item)}" does not have an attribute like "write{{_input,_}}hdf5", cannot continue writing new style file.')
 
-        ###### END TEST ######
-        
-        # Delete any created '*.h5' file
-        if delete_h5_at_end:
-            os.remove(runname+'.h5')
-        
-        # Change back to starting directory after test has completed
-        os.chdir(starting_dir)
+            # Read HDF5 format
+            Atmosphere_,Measurement_,Spectroscopy_,Scatter_,Stellar_,Surface_,CIA_,Layer_,Variables_,Retrieval_,Telluric_ = ans.Files.read_input_files_hdf5(runname)
+
+            # Define the pairs of instances we want to compare
+            pairs = (
+                (Atmosphere, Atmosphere_),
+                (Measurement, Measurement_),
+                (Spectroscopy, Spectroscopy_),
+                (Scatter, Scatter_),
+                (Stellar, Stellar_),
+                (Surface, Surface_),
+                (CIA, CIA_),
+                (Layer, Layer_),
+                (Variables, Variables_),
+                (Retrieval, Retrieval_),
+                #(Telluric, Telluric_)
+            )
+
+            # Loop over instances and compare their ALL_CAPS attributes
+            for old_format, new_format in pairs:
+                print(f'\nTesting integrity of {old_format.__class__.__name__}')
+                # assume that everything in all caps should be identical
+                of_attrs = tuple(item for item in filter(lambda x: x.isupper(), old_format.__dict__.keys()))
+                nf_attrs = tuple(item for item in filter(lambda x: x.isupper(), new_format.__dict__.keys()))
+
+                assert len(of_attrs) == len(nf_attrs), f'For example at "{current_example_dir}", class must have same number of attributes regardless of input format'
+                
+                print(f'{of_attrs=}')
+                print(f'{nf_attrs=}')
+                assert all(x==y for x,y in zip(of_attrs, nf_attrs)), f"For example at '{current_example_dir}', class must have same attribute names regardless of input format"
+
+                for k in of_attrs:
+                    print(f'Testing attribute {old_format.__class__.__name__}.{k}:')
+                    o_attr = getattr(old_format, k)
+                    n_attr = getattr(new_format, k)
+
+                    # Special cases
+                    if f'{old_format.__class__.__name__}.{k}' == 'Atmosphere_0.DUST_UNITS_FLAG':
+                        # HDF5 always uses number density (m^-3), indicated by 'None'
+                        # Legacy always uses mass density (g cm^-3) indicated by a numpy array of -1 values.
+                        assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
+                        continue
+                    if f'{old_format.__class__.__name__}.{k}' == 'Layer_0.DUST_UNITS_FLAG':
+                        # HDF5 always uses number density (m^-3), indicated by 'None'
+                        # Legacy always uses mass density (g cm^-3) indicated by a numpy array of -1 values.
+                        assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
+                        continue
+                    if f'{old_format.__class__.__name__}.{k}' == 'Spectroscopy_0.RUNNAME':
+                        # HDF5 files do not use this parameter
+                        continue
+                    if f'{old_format.__class__.__name__}.{k}' == 'CIA_0.CIATABLE':
+                        if (o_attr != n_attr):
+                            if o_attr.endswith('.tab') and n_attr.endswith('.h5'):
+                                assert o_attr[:-4] == n_attr[:-3], f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, different CIATABLE values must only be due to altering format from '.tab' to '.h5'"
+                                continue
+                        assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, mismatched CIATABLE values '{o_attr}' vs '{n_attr}' not allowed except for format change"
+                    
+                    (
+                        are_types_same, 
+                        casting_rules_compared,
+                        is_fwd_safe_casting_possible, 
+                        is_bkwd_safe_casting_possible, 
+                        is_fwd_samekind_casting_possible, 
+                        is_bkwd_samekind_casting_possible
+                    ) = ensure_equal_type(o_attr, n_attr)
+
+                    if are_types_same:
+                        pass # this is fine
+                    elif (not are_types_same) and casting_rules_compared:
+                        # Need to know how casting rules fail
+                        if is_fwd_safe_casting_possible and is_bkwd_safe_casting_possible:
+                            pass
+                        elif is_fwd_samekind_casting_possible and is_bkwd_samekind_casting_possible:
+                            msg = f"Types change when using different input format. They are the same kind, but safe casting is not always possible {type(o_attr)} and {type(n_attr)}"
+                            print(f'WARNING: {msg}')
+                            #raise RuntimeWarning(msg)
+                        else:
+                            assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class must have attributes that are at least the same kind of type regardless of input format"
+                    else:
+                        # types are not the same and we didn't compare casting rules
+                        assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class attributes must have identical types if they are not numerical regardless of input format"
+                    
+                    #print(f'\t{o_attr} == {n_attr}')            
+                    assert ensure_equal_value(o_attr, n_attr), f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class must have same values regardless of input format: {o_attr} != {n_attr}"
+
+            ###### END TEST ######
+        finally:
+            # Delete any created '*.h5' file
+            if delete_h5_at_end:
+                os.remove(h5_filename)
+            if restore_backed_up_h5_at_end:
+                os.remove(h5_filename)
+                shutil.move(backup_h5_filename, h5_filename)
+            
+            # Change back to starting directory after test has completed
+            os.chdir(starting_dir)
 
