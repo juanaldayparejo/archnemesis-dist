@@ -1077,14 +1077,39 @@ class OptimalEstimation_0:
         plt.show()
 
 
+
+
 ###############################################################################################
 ###############################################################################################
 #   OPTIMAL ESTIMATION CONVERGENCE LOOP
 ###############################################################################################
 ###############################################################################################
 
-def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,\
-                 NITER=10,PHILIMIT=0.1,NCores=1,nemesisSO=False,write_itr=True, return_forward_model=False):
+def coreretOE(
+        runname,
+        Variables,
+        Measurement,
+        Atmosphere,
+        Spectroscopy,
+        Scatter,
+        Stellar,
+        Surface,
+        CIA,
+        Layer,
+        Telluric,
+        NITER=10,
+        PHILIMIT=0.1,
+        NCores=1,
+        nemesisSO=False,
+        write_itr=True,
+        return_forward_model=False,
+        return_phi_and_chisq_history=False,
+    ) -> (
+        OptimalEstimation_0 
+        | tuple[OptimalEstimation_0, ForwardModel_0]
+        | tuple[OptimalEstimation_0, np.ndarray, np.ndarray]
+        | tuple[OptimalEstimation_0, ForwardModel_0, np.ndarray, np.ndarray]
+    ):
 
 
     """
@@ -1152,6 +1177,9 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
     OptimalEstimation.edit_Y(Measurement.Y)
     OptimalEstimation.edit_SE(Measurement.SE)
 
+    phi_history = np.full((NITER+1,), fill_value=np.nan)
+    chisq_history = np.full((NITER+1,), fill_value=np.nan)
+
     #Opening .itr file
     #################################################################
 
@@ -1184,6 +1212,10 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
 
     OPHI = OptimalEstimation.PHI
     print('chisq/ny = '+str(OptimalEstimation.CHISQ))
+    
+    phi_history[0] = OPHI
+    chisq_history[0] = OptimalEstimation.CHISQ
+    
 
     #Assessing whether retrieval is going to be OK
     #################################################################
@@ -1329,6 +1361,10 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
         else:
             #Leave xn and kk alone and try again with more braking
             alambda = alambda*10.0  #increase Marquardt brake
+        
+        phi_history[it+1] = OptimalEstimation.PHI
+        chisq_history[it+1] = OptimalEstimation.CHISQ
+    
 
     #Writing into .itr file for final iteration
     ####################################
@@ -1362,8 +1398,13 @@ def coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
     #if nemesisSO==True:
     #    calc_gascn(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer)
     
+    result = (OptimalEstimation,)
+    
     if return_forward_model:
-        return OptimalEstimation, ForwardModel
-    else:
-        return OptimalEstimation
-
+        result = *result, ForwardModel
+        
+    if return_phi_and_chisq_history:
+        result = *result, phi_history, chisq_history
+    
+    return *result
+    
