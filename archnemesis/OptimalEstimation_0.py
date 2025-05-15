@@ -1398,6 +1398,17 @@ def coreretOE(
     #if nemesisSO==True:
     #    calc_gascn(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer)
     
+    with open(f'phi_chisq.txt', 'w') as f:
+        w_iter = max(4, int(np.ceil(np.log10(NITER))))
+        fmt = f'{{:0{w_iter}}} | {{:09.3E}} | {{:09.3E}}\n'
+        f.write(
+            'iter' + ('' if w_iter <= 4 else ' '*(w_iter-4))
+            +' | phi      '
+            +' | chisq    \n'
+        )
+        for i,(p,c) in enumerate(zip(phi_history, chisq_history)):
+            f.write(fmt.format(i, p, c))
+    
     result = (OptimalEstimation,)
     
     if return_forward_model:
