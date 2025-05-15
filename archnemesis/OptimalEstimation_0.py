@@ -1426,5 +1426,5 @@ def coreretOE(
     if return_phi_and_chisq_history:
         result = *result, phi_history, chisq_history
     
-    return *result
+    return result[0] if len(result) == 1 else result
     
