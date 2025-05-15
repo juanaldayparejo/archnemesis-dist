@@ -99,7 +99,6 @@ class ModelBase:
     """
     id : int = None # All "*ModelBase" classes that are not meant to be used should have an id of 'None'
     name : str = 'name should be overwritten in subclass'
-    description : str = 'description should be overwritten in subclass'
     
     def __init__(
             self, 
@@ -379,7 +378,6 @@ class AtmosphericModelBase(ModelBase):
     Abstract base class of all parameterised models used by ArchNemesis that interact with the Atmosphere component.
     """
     name : str = 'name of atmospheric model should be overwritten in subclass'
-    description : str = 'description of atmospheric model should be overwritten in subclass'
     
     @classmethod
     def is_varident_valid(
@@ -407,7 +405,6 @@ class NonAtmosphericModelBase(ModelBase):
     Abstract base class of all parameterised models used by ArchNemesis that interact with anything but the Atmosphere component.
     """
     name : str = 'name of non-atmospheric model should be overwritten in subclass'
-    description : str = 'description of non-atmospheric model should be overwritten in subclass'
     
     @classmethod
     def is_varident_valid(
@@ -422,7 +419,6 @@ class SpectralModelBase(NonAtmosphericModelBase):
     Abstract base class of all parameterised models used by ArchNemesis that interact with the calculated spectrum in the forward model.
     """
     name : str = 'name of spectral model should be overwritten in subclass'
-    description : str = 'description of spectral model should be overwritten in subclass'
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
@@ -443,7 +439,6 @@ class InstrumentModelBase(NonAtmosphericModelBase):
     Abstract base class of all parameterised models used by ArchNemesis that interact with the instrument parameters of the Spectroscopy component.
     """
     name : str = 'name of instrument model should be overwritten in subclass'
-    description : str = 'description of instrument model should be overwritten in subclass'
     ## Abstract methods below this line, subclasses must implement all of these methods ##
 
     @classmethod
@@ -463,7 +458,6 @@ class ScatteringModelBase(NonAtmosphericModelBase):
     Abstract base class of all parameterised models used by ArchNemesis that interact with a Scatter component, i.e. that sets the scattering properties of an aerosol.
     """
     name : str = 'name of scattering model should be overwritten in subclass'
-    description : str = 'description of scattering model should be overwritten in subclass'
     ## Abstract methods below this line, subclasses must implement all of these methods ##
 
     @classmethod
@@ -483,7 +477,6 @@ class DopplerModelBase(NonAtmosphericModelBase):
     Abstract base class of all parameterised models used by ArchNemesis that interact with the doppler shift parameters of the Measurement component.
     """
     name : str = 'name of doppler model should be overwritten in subclass'
-    description : str = 'description of doppler model should be overwritten in subclass'
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     @classmethod
@@ -503,7 +496,6 @@ class CollisionInducedAbsorptionModelBase(NonAtmosphericModelBase):
     Abstract base class of all parameterised models used by ArchNemesis that interact with the CIA (CollisionInducedAbsorption) component.
     """
     name : str = 'name of CIA model should be overwritten in subclass'
-    description : str = 'description of CIA model should be overwritten in subclass'
     
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
@@ -524,7 +516,6 @@ class TangentHeightCorrectionModelBase(NonAtmosphericModelBase):
     Abstract base class of all parameterised models used by ArchNemesis that interact with the tangent height limb-observation parameter of the Measurement component.
     """
     name : str = 'name of tangent height correction model should be overwritten in subclass'
-    description : str = 'description of tangent height correction model should be overwritten in subclass'
     
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
