@@ -1169,6 +1169,7 @@ def coreretOE(
 
     OptimalEstimation.NITER = NITER
     OptimalEstimation.PHILIMIT = PHILIMIT
+    OptimalEstimation.NCORES = NCores
     OptimalEstimation.NX = Variables.NX
     OptimalEstimation.NY = Measurement.NY
     OptimalEstimation.edit_XA(Variables.XA)
@@ -1179,6 +1180,8 @@ def coreretOE(
 
     phi_history = np.full((NITER+1,), fill_value=np.nan)
     chisq_history = np.full((NITER+1,), fill_value=np.nan)
+
+    print(f'coreretOE :: Starting OptimalEstimation retrieval with NITER={OptimalEstimation.NITER} PHILIMIT={OptimalEstimation.PHILIMIT} NCORES={OptimalEstimation.NCORES}')
 
     #Opening .itr file
     #################################################################
@@ -1365,6 +1368,21 @@ def coreretOE(
         phi_history[it+1] = OptimalEstimation.PHI
         chisq_history[it+1] = OptimalEstimation.CHISQ
     
+    print(f'coreretOE :: Completed Optimal Estimation retrieval. Showing phi and chisq evolution')
+    with open(f'phi_chisq.txt', 'w') as f:
+        w_iter = max(4, int(np.ceil(np.log10(NITER))))
+        fmt = f'{{:0{w_iter}}} | {{:09.3E}} | {{:09.3E}}\n'
+        head = ('iter' + ('' if w_iter <= 4 else ' '*(w_iter-4))
+            +' | phi      '
+            +' | chisq    \n'
+        )
+        print(f'\t{head}')
+        f.write(head)
+        for i,(p,c) in enumerate(zip(phi_history, chisq_history)):
+            line = fmt.format(i, p, c)
+            print(f'\t{line}')
+            f.write(line)
+            
 
     #Writing into .itr file for final iteration
     ####################################
@@ -1398,16 +1416,7 @@ def coreretOE(
     #if nemesisSO==True:
     #    calc_gascn(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer)
     
-    with open(f'phi_chisq.txt', 'w') as f:
-        w_iter = max(4, int(np.ceil(np.log10(NITER))))
-        fmt = f'{{:0{w_iter}}} | {{:09.3E}} | {{:09.3E}}\n'
-        f.write(
-            'iter' + ('' if w_iter <= 4 else ' '*(w_iter-4))
-            +' | phi      '
-            +' | chisq    \n'
-        )
-        for i,(p,c) in enumerate(zip(phi_history, chisq_history)):
-            f.write(fmt.format(i, p, c))
+    
     
     result = (OptimalEstimation,)
     
