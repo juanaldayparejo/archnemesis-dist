@@ -20,8 +20,38 @@ class NonAtmosphericModelBase(ModelBase):
             varident : np.ndarray[[3],int],
         ) -> bool:
         return varident[0]==cls.id
-
-
+    
+    
+    def patch_from_subprofretg(
+            self,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ipar : int,
+            ivar : int,
+            xmap : np.ndarray,
+        ) -> None:
+        """
+        Patches values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
+        """
+        _lgr.info(f'Model id {self.id} method "patch_from_subprofretg" does nothing...')
+    
+    
+    def calculate_from_subspecret(
+            self,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ivar : int,
+            SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
+            dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
+        ) -> None:
+        """
+        Updated spectra based upon values of model parameters in the state vector. Called from ForwardModel_0::subspecret.
+        """
+        _lgr.info(f'Model id {self.id} method "calculate_from_subspecret" does nothing...')
+    
+    
+    ## Abstract methods below this line, subclasses must implement all of these methods ##
+    
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -30,7 +60,7 @@ class NonAtmosphericModelBase(ModelBase):
             ivar : int,
             xmap : np.ndarray,
         ) -> None:
-        raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all NonAtmospheric models')
+        raise NotImplementedError(f'calculate_from_subprofretg must be implemented for all NonAtmospheric models')
 
 
 class Model228(NonAtmosphericModelBase):

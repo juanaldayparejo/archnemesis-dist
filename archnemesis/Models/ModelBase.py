@@ -236,14 +236,6 @@ class ModelBase:
     
     
     @classmethod
-    def calculate(cls, *args, **kwargs) -> Any:
-        """
-        Models are so varied in here that I cannot make any specific interface at this level of abstraction
-        """
-        ...
-    
-    
-    @classmethod
     def from_apr_to_state_vector(
             cls,
             variables : "Variables_0", # An instance of the archnemesis.Variables_0.Variables_0 class that is reading the *.apr file
@@ -264,7 +256,19 @@ class ModelBase:
         Constructs a model from its entry in a *.apr file.
         """
         ...
+    
+    
+    @classmethod
+    def calculate(cls, *args, **kwargs) -> Any:
+        """
+        This class method should perform the lowest-level calculation for the model. Note that it is a class
+        method (so we can easily call it from other models if need be) so you must pass any instance attributes
+        as arguments.
         
+        Models are so varied in here that I cannot make any specific interface at this level of abstraction.
+        """
+        ...
+    
     
     def calculate_from_subprofretg(
             self,
@@ -277,7 +281,7 @@ class ModelBase:
         """
         Updated values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
         """
-        _lgr.info(f'No calculation of model id {self.id} in subprofretg')
+        ...
 
     
     def patch_from_subprofretg(
@@ -291,7 +295,7 @@ class ModelBase:
         """
         Patches values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
         """
-        _lgr.info(f'No patch of model id {self.id} in subprofretg')
+        ...
     
     
     def calculate_from_subspecret(
@@ -305,4 +309,4 @@ class ModelBase:
         """
         Updated spectra based upon values of model parameters in the state vector. Called from ForwardModel_0::subspecret.
         """
-        _lgr.info(f'No calculation of model id {self.id} in subspecret')
+        ...
