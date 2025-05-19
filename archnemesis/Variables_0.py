@@ -1,7 +1,6 @@
 from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
-from archnemesis.Models import Models
-from archnemesis.ModelClass import ModelBase, StateVectorEntry
+from archnemesis.Models import Models, ModelBase, ModelParameterEntry
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -142,7 +141,7 @@ class Variables_0:
         return self._models
     
     @property
-    def model_parameters(self) -> tuple[dict[str,StateVectorEntry],...]:
+    def model_parameters(self) -> tuple[dict[str,ModelParameterEntry],...]:
         """
         Returns a tuple of dictionaries that contain the values of the parameters of the models in the state vector
         """
