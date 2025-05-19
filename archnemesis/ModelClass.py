@@ -34,7 +34,7 @@ from __future__ import annotations #  for 3.9 compatability
 
 import numpy as np
 import numpy.ma
-from typing import TYPE_CHECKING, IO, Any
+from typing import TYPE_CHECKING, IO, Any, Self
 from collections import namedtuple
 
 import matplotlib.pyplot as plt # used in some of the models, I should really remove the plotting code or at least separate it from the calculation code
@@ -68,28 +68,10 @@ if TYPE_CHECKING:
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.WARN)
+_lgr.setLevel(logging.DEBUG)
 
 
 StateVectorEntry = namedtuple('StateVectorValue', ['model_id', 'sv_slice', 'is_fixed', 'apriori_value', 'posterior_value'])
-
-class ThingHolder:
-    """
-    Helper class to enable setting immutable things like strings via function arguments
-    """
-    def __init__(self, s=''):
-        self._value = s
-    
-    @property
-    def value(self):
-        return self._value
-    
-    @value.setter
-    def value(self, _v):
-        self._value = _v
-    
-    def __eq__(self, other):
-        return self.value == other.value
 
 ## BASE CLASSES - These set interfaces and defaults for concrete classes ##
 
@@ -121,6 +103,7 @@ class ModelBase:
         self.state_vector_start = i_state_vector_start
         self.n_state_vector_entries = n_state_vector_entries
         self.state_vector_slice = slice(i_state_vector_start, i_state_vector_start+n_state_vector_entries)
+        _lgr.debug(f'{self.id=} {self.state_vector_start=} {self.n_state_vector_entries=}')
         
     
     @property
@@ -288,6 +271,7 @@ class ModelBase:
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
+    
     @classmethod
     def is_varident_valid(
             cls,
@@ -295,12 +279,13 @@ class ModelBase:
         ) -> bool:
         ...
     
-    @classmethod
-    def calculate(cls, *args, **kwargs) -> Any:
+    
+    def calculate(self, *args, **kwargs) -> Any:
         """
         Models are so varied in here that I cannot make any specific interface at this level of abstraction
         """
         ...
+    
     
     @classmethod
     def from_apr_to_state_vector(
@@ -314,64 +299,46 @@ class ModelBase:
             x0 : np.ndarray[["mx"],float], # should be a reference to the original
             sx : np.ndarray[["mx","mx"],float], # should be a reference to the original
             inum : np.ndarray[["mx"],int], # should be a reference to the original
-            varfile : ThingHolder, # should be a reference to the original
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int: # Should return updated value of `ix`
+        ) -> Self:
         ...
         
-    @classmethod
-    def calculate_from_subprofretg(
-            cls,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> int: # Should return updated value of `ix`
-        _lgr.info(f'No calculation of model id {cls.id} in subprofretg')
-        ix = ix + forward_model.Variables.NXVAR[ivar]
-        return ix
-
-    @classmethod
-    def patch_from_subprofretg(
-            cls,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> int: # Should return updated value of `ix`
-        _lgr.info(f'No patch of model id {cls.id} in subprofretg')
-        ix = ix + forward_model.Variables.NXVAR[ivar]
-        return ix
     
-    @classmethod
+    def calculate_from_subprofretg(
+            self,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ipar : int,
+            ivar : int,
+            xmap : np.ndarray,
+        ) -> None: # Should 
+        _lgr.warning(f'No calculation of model id {self.id} in subprofretg')
+
+    
+    def patch_from_subprofretg(
+            self,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ipar : int,
+            ivar : int,
+            xmap : np.ndarray,
+        ) -> None: # Should 
+        _lgr.warning(f'No patch of model id {self.id} in subprofretg')
+    
+    
     def calculate_from_subspecret(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ivar : int,
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
-        ) -> int:
-        _lgr.info(f'No calculation of model id {cls.id} in subspecret')
-        ix = ix + forward_model.Variables.NXVAR[ivar]
-        return ix
+        ) -> None:
+        _lgr.warning(f'No calculation of model id {self.id} in subspecret')
     
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int: # Should return the number of elements the model has stored in the state vector
-        ...
-
 
 class AtmosphericModelBase(ModelBase):
     """
@@ -413,7 +380,6 @@ class NonAtmosphericModelBase(ModelBase):
         ) -> bool:
         return varident[0]==cls.id
 
-
 class SpectralModelBase(NonAtmosphericModelBase):
     """
     Abstract base class of all parameterised models used by ArchNemesis that interact with the calculated spectrum in the forward model.
@@ -422,15 +388,15 @@ class SpectralModelBase(NonAtmosphericModelBase):
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
-    @classmethod
+    
     def calculate_from_subspecret(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ivar : int,
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
-        ) -> int:
+        ) -> None:
         raise NotImplementedError(f'calculate_from_subspecret should be implemented for all Spectral models')
 
 
@@ -441,15 +407,15 @@ class InstrumentModelBase(NonAtmosphericModelBase):
     name : str = 'name of instrument model should be overwritten in subclass'
     ## Abstract methods below this line, subclasses must implement all of these methods ##
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int: # Should return updated value of `ix`
+        ) -> None: # Should 
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Instrument models')
 
 
@@ -460,15 +426,15 @@ class ScatteringModelBase(NonAtmosphericModelBase):
     name : str = 'name of scattering model should be overwritten in subclass'
     ## Abstract methods below this line, subclasses must implement all of these methods ##
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int: # Should return updated value of `ix`
+        ) -> None: # Should 
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Scattering models')
 
 
@@ -479,15 +445,15 @@ class DopplerModelBase(NonAtmosphericModelBase):
     name : str = 'name of doppler model should be overwritten in subclass'
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int: # Should return updated value of `ix`
+        ) -> None: # Should 
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Doppler models')
 
 
@@ -499,15 +465,15 @@ class CollisionInducedAbsorptionModelBase(NonAtmosphericModelBase):
     
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int: # Should return updated value of `ix`
+        ) -> None: # Should 
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Collision Induced Absorption models')
 
 
@@ -519,15 +485,15 @@ class TangentHeightCorrectionModelBase(NonAtmosphericModelBase):
     
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int: # Should return updated value of `ix`
+        ) -> None: # Should 
         raise NotImplementedError(f'calculate_from_subprofretg should be implemented for all Doppler models')
 
 
@@ -537,11 +503,10 @@ class Modelm1(AtmosphericModelBase):
     id : int = -1
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
     
-    @classmethod
-    def calculate(cls, atm,ipar,xprof):
+    
+    
+    def calculate(self, atm,ipar,xprof):
 
         """
             FUNCTION NAME : modelm1()
@@ -609,9 +574,10 @@ class Modelm1(AtmosphericModelBase):
         for j in range(npro):
             xmap[0:npro,ipar,j] = x1[:] #* 1000. * rho
 
-        return atm,xmap
+        
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -624,12 +590,12 @@ class Modelm1(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #* continuous cloud, but cloud retrieved as particles/cm3 rather than
         #* particles per gram to decouple it from pressure.
         #********* continuous particles/cm3 profile ************************
@@ -672,17 +638,17 @@ class Modelm1(AtmosphericModelBase):
                     sx[ix+k,ix+j] = sx[ix+j,ix+k]
         ix = ix + nlevel
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model -1. Continuous aerosol profile in particles cm-3
         #***************************************************************
 
@@ -695,59 +661,48 @@ class Modelm1(AtmosphericModelBase):
 
             forward_model.AtmosphereX,xmap1 = Model0.calculate(forward_model.AtmosphereX,ipar,xprof)
         else:
-            forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,xprof)
+            forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,xprof)
 
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
+    
     def patch_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model -1. Continuous aerosol profile in particles cm-3
         #***************************************************************
 
         xprof = np.zeros(forward_model.Variables.NXVAR[ivar])
         xprof[:] = forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]]
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,xprof)
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,xprof)
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return NPRO
-
+    
 
 class Model0(AtmosphericModelBase):
     id : int = 0
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, atm,ipar,xprof,MakePlot=False):
+    
+    def calculate(self, atm,ipar,xprof,MakePlot=False):
 
         """
             FUNCTION NAME : model0()
@@ -853,6 +808,7 @@ class Model0(AtmosphericModelBase):
         return atm,xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -865,12 +821,12 @@ class Model0(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #********* continuous profile ************************
         s = f.readline().split()
         f1 = open(s[0],'r')
@@ -918,17 +874,17 @@ class Model0(AtmosphericModelBase):
         ix = ix + nlevel
 
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 0. Continuous profile
         #***************************************************************
 
@@ -941,37 +897,26 @@ class Model0(AtmosphericModelBase):
             ): # Fortran true so flip aerosol model
             forward_model.AtmosphereX,xmap1 = Modelm1.calculate(forward_model.AtmosphereX,ipar,xprof)
         else:
-            forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,xprof)
+            forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,xprof)
 
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return NPRO
-
+    
 
 class Model2(AtmosphericModelBase):
     id : int = 2
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, atm,ipar,scf,MakePlot=False):
+    
+    def calculate(self, atm,ipar,scf,MakePlot=False):
 
         """
             FUNCTION NAME : model2()
@@ -1067,6 +1012,7 @@ class Model2(AtmosphericModelBase):
         return atm,xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -1079,12 +1025,12 @@ class Model2(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #**** model 2 - Simple scaling factor of reference profile *******
         #Read in scaling factor
 
@@ -1094,49 +1040,38 @@ class Model2(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 2. Scaling factor
         #***************************************************************
 
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,forward_model.Variables.XN[ix])
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,forward_model.Variables.XN[ix])
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 1
-
+    
 
 class Model3(AtmosphericModelBase):
     id : int = 3
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
 
-    @classmethod
-    def calculate(cls, atm,ipar,scf,MakePlot=False):
+    
+    def calculate(self, atm,ipar,scf,MakePlot=False):
 
         """
             FUNCTION NAME : model3()
@@ -1226,6 +1161,7 @@ class Model3(AtmosphericModelBase):
         return atm,xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -1238,12 +1174,12 @@ class Model3(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #**** model 3 - Exponential scaling factor of reference profile *******
         #Read in scaling factor
 
@@ -1260,49 +1196,38 @@ class Model3(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 3. Log scaling factor
         #***************************************************************
 
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,forward_model.Variables.XN[ix])
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,forward_model.Variables.XN[ix])
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 1
-
+    
 
 class Model9(AtmosphericModelBase):
     id : int = 9
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
 
-    @classmethod
-    def calculate(cls, atm,ipar,href,fsh,tau,MakePlot=False):
+    
+    def calculate(self, atm,ipar,href,fsh,tau,MakePlot=False):
 
         """
             FUNCTION NAME : model9()
@@ -1434,6 +1359,7 @@ class Model9(AtmosphericModelBase):
         return atm,xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -1446,12 +1372,12 @@ class Model9(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** cloud profile held as total optical depth plus
         #******** base height and fractional scale height. Below the knee
         #******** pressure the profile is set to zero - a simple
@@ -1496,17 +1422,17 @@ class Model9(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 9. Simple cloud represented by base height, fractional scale height
             #and the total integrated cloud density
         #***************************************************************
@@ -1515,32 +1441,21 @@ class Model9(AtmosphericModelBase):
         fsh = np.exp(forward_model.Variables.XN[ix+1])  #Fractional scale height
         href = forward_model.Variables.XN[ix+2]         #Base height (km)
 
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,href,fsh,tau)
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,href,fsh,tau)
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 3
-
+    
 
 class Model32(AtmosphericModelBase):
     id : int = 32
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
 
     @property
     def parameter_slices(self) -> dict[str, slice]:
@@ -1550,8 +1465,8 @@ class Model32(AtmosphericModelBase):
             'p_ref' : slice(2,3),
         }
 
-    @classmethod
-    def calculate(cls, atm,ipar,pref,fsh,tau,MakePlot=False):
+    
+    def calculate(self, atm,ipar,pref,fsh,tau,MakePlot=False):
 
         """
             FUNCTION NAME : model32()
@@ -1743,6 +1658,7 @@ class Model32(AtmosphericModelBase):
         return atm,xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -1755,12 +1671,12 @@ class Model32(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** cloud profile is represented by a value at a 
         #******** variable pressure level and fractional scale height.
         #******** Below the knee pressure the profile is set to drop exponentially.
@@ -1819,17 +1735,17 @@ class Model32(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 32. Cloud profile is represented by a value at a variable
             #pressure level and fractional scale height.
             #Below the knee pressure the profile is set to drop exponentially.
@@ -1837,33 +1753,22 @@ class Model32(AtmosphericModelBase):
         tau = np.exp(forward_model.Variables.XN[ix])   #Base pressure (atm)
         fsh = np.exp(forward_model.Variables.XN[ix+1])  #Integrated dust column-density (m-2) or opacity
         pref = np.exp(forward_model.Variables.XN[ix+2])  #Fractional scale height
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,pref,fsh,tau)
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,pref,fsh,tau)
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 3
-
+    
 
 class Model45(AtmosphericModelBase):
     id : int = 45
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
 
     @property
     def parameter_slices(self) -> dict[str, slice]:
@@ -1873,8 +1778,8 @@ class Model45(AtmosphericModelBase):
             'strato_vmr' : slice(2,3),
         }
 
-    @classmethod
-    def calculate(cls, atm, ipar, tropo, humid, strato, MakePlot=True):
+    
+    def calculate(self, atm, ipar, tropo, humid, strato, MakePlot=True):
 
         """
             FUNCTION NAME : model45()
@@ -1957,6 +1862,7 @@ class Model45(AtmosphericModelBase):
         return atm, xnewgrad
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -1969,12 +1875,12 @@ class Model45(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** Irwin CH4 model. Represented by tropospheric and stratospheric methane 
         #******** abundances, along with methane humidity. 
         tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
@@ -2010,50 +1916,39 @@ class Model45(AtmosphericModelBase):
 
         ix = ix + 1                   
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 45. Irwin CH4 model. Variable deep tropospheric and stratospheric abundances,
             #along with tropospheric humidity.
         #***************************************************************
         tropo = np.exp(forward_model.Variables.XN[ix])   # Deep tropospheric abundance
         humid = np.exp(forward_model.Variables.XN[ix+1])  # Humidity
         strato = np.exp(forward_model.Variables.XN[ix+2])  # Stratospheric abundance
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX, ipar, tropo, humid, strato)
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX, ipar, tropo, humid, strato)
         xmap[ix] = xmap1
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 3
-
+    
 
 class Model47(AtmosphericModelBase):
     id : int = 47
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
     @property
     def parameter_slices(self) -> dict[str, slice]:
@@ -2063,8 +1958,8 @@ class Model47(AtmosphericModelBase):
             'fwhm' : slice(2,3),
         }
     
-    @classmethod
-    def calculate(cls, atm, ipar, tau, pref, fwhm, MakePlot=False):
+    
+    def calculate(self, atm, ipar, tau, pref, fwhm, MakePlot=False):
 
         """
             FUNCTION NAME : model47()
@@ -2213,6 +2108,7 @@ class Model47(AtmosphericModelBase):
         return atm, xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -2225,12 +2121,12 @@ class Model47(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** cloud profile is represented by a peak optical depth at a 
         #******** variable pressure level and a Gaussian profile with FWHM (in log pressure)
 
@@ -2288,54 +2184,46 @@ class Model47(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 47. Profile is represented by a Gaussian with a specified optical thickness centred
             #at a variable pressure level plus a variable FWHM (log press) in height.
         #***************************************************************
         tau = np.exp(forward_model.Variables.XN[ix])   #Integrated dust column-density (m-2) or opacity
         pref = np.exp(forward_model.Variables.XN[ix+1])  #Base pressure (atm)
         fwhm = np.exp(forward_model.Variables.XN[ix+2])  #FWHM
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX, ipar, tau, pref, fwhm)
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX, ipar, tau, pref, fwhm)
+        
+        _lgr.debug(f'{self.n_state_vector_entries=}')
+        _lgr.debug(f'{forward_model.Variables.NXVAR[ivar]=}')
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 3
-
+    
 
 class Model49(AtmosphericModelBase):
     id : int = 49
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, atm,ipar,xprof,MakePlot=False):
+    
+    def calculate(self, atm,ipar,xprof,MakePlot=False):
 
         """
             FUNCTION NAME : model0()
@@ -2422,6 +2310,7 @@ class Model49(AtmosphericModelBase):
         return atm,xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -2434,12 +2323,12 @@ class Model49(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #********* continuous profile in linear scale ************************
         s = f.readline().split()
         f1 = open(s[0],'r')
@@ -2480,52 +2369,41 @@ class Model49(AtmosphericModelBase):
 
 
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 50. Continuous profile in linear scale
         #***************************************************************
 
         xprof = np.zeros(forward_model.Variables.NXVAR[ivar])
         xprof[:] = forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]]
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,xprof)
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,xprof)
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return NPRO
-
+    
 
 class Model50(AtmosphericModelBase):
     id : int = 50
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, atm,ipar,xprof,MakePlot=False):
+    
+    def calculate(self, atm,ipar,xprof,MakePlot=False):
 
         """
             FUNCTION NAME : model0()
@@ -2614,6 +2492,7 @@ class Model50(AtmosphericModelBase):
         return atm,xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -2626,12 +2505,12 @@ class Model50(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #********* continuous profile of a scaling factor ************************
         s = f.readline().split()
         f1 = open(s[0],'r')
@@ -2670,54 +2549,43 @@ class Model50(AtmosphericModelBase):
         ix = ix + nlevel
 
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 50. Continuous profile of scaling factors
         #***************************************************************
 
         xprof = np.zeros(forward_model.Variables.NXVAR[ivar])
         xprof[:] = forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]]
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,xprof)
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,xprof)
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
 
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return NPRO
-
+    
 
 class Model51(AtmosphericModelBase):
     id : int = 51
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, atm, ipar, scale, scale_gas, scale_iso):
+    
+    def calculate(self, atm, ipar, scale, scale_gas, scale_iso):
         """
             FUNCTION NAME : model51()
 
@@ -2772,6 +2640,7 @@ class Model51(AtmosphericModelBase):
         return atm,xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -2784,12 +2653,12 @@ class Model51(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #********* multiple of different profile ************************
         prof = np.fromfile(f,sep=' ',count=2,dtype='int')
         profgas = prof[0]
@@ -2807,53 +2676,42 @@ class Model51(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 51. Scaling of a reference profile
         #***************************************************************                
         scale = np.exp(forward_model.Variables.XN[ix])
         scale_gas, scale_iso = forward_model.Variables.VARPARAM[ivar,1:3]
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,scale,scale_gas,scale_iso)
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,scale,scale_gas,scale_iso)
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
 
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 1
-
+    
 
 class Model110(AtmosphericModelBase):
     id : int = 110
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, atm, idust0, z_offset):
+    
+    def calculate(self, atm, idust0, z_offset):
         """
             FUNCTION NAME : model110()
 
@@ -3000,6 +2858,7 @@ class Model110(AtmosphericModelBase):
         return atm
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -3012,12 +2871,12 @@ class Model110(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** model for Venus cloud following Haus et al. (2016) with altitude offset
 
         if varident[0]>0:
@@ -3030,52 +2889,41 @@ class Model110(AtmosphericModelBase):
         inum[ix] = 1
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 110. Venus cloud model from Haus et al. (2016) with altitude offset
         #************************************************************************************  
 
         offset = forward_model.Variables.XN[ix]   #altitude offset in km
         idust0 = np.abs(forward_model.Variables.VARIDENT[ivar,0])-1  #Index of the first cloud mode                
-        forward_model.AtmosphereX = cls.calculate(forward_model.AtmosphereX,idust0,offset)
+        forward_model.AtmosphereX = self.calculate(forward_model.AtmosphereX,idust0,offset)
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 1
-
+    
 
 class Model111(AtmosphericModelBase):
     id : int = 111
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, atm, idust0, so2_deep, so2_top, z_offset):
+    
+    def calculate(self, atm, idust0, so2_deep, so2_top, z_offset):
         """
             FUNCTION NAME : model111()
 
@@ -3258,6 +3106,7 @@ class Model111(AtmosphericModelBase):
         return atm
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -3270,12 +3119,12 @@ class Model111(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** model for Venus cloud and SO2 vmr profile with altitude offset
 
         if varident[0]>0:
@@ -3306,17 +3155,17 @@ class Model111(AtmosphericModelBase):
         inum[ix] = 1
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 110. Venus cloud model and SO2 vmr profile with altitude offset
         #************************************************************************************  
 
@@ -3325,36 +3174,25 @@ class Model111(AtmosphericModelBase):
         so2_top = np.exp(forward_model.Variables.XN[ix+2])   #SO2 vmr above the cloud
 
         idust0 = np.abs(forward_model.Variables.VARIDENT[ivar,0])-1  #Index of the first cloud mode                
-        forward_model.AtmosphereX = cls.calculate(forward_model.AtmosphereX,idust0,so2_deep,so2_top,offset)
+        forward_model.AtmosphereX = self.calculate(forward_model.AtmosphereX,idust0,so2_deep,so2_top,offset)
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 3
-
+    
 
 class Model202(AtmosphericModelBase):
     id : int = 202
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, telluric,varid1,varid2,scf):
+    
+    def calculate(self, telluric,varid1,varid2,scf):
 
         """
             FUNCTION NAME : model202()
@@ -3420,6 +3258,7 @@ class Model202(AtmosphericModelBase):
         return telluric
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -3432,12 +3271,12 @@ class Model202(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #********* simple scaling of telluric atmospheric profile ************************
         tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
         x0[ix] = float(tmp[0])
@@ -3446,54 +3285,43 @@ class Model202(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 202. Scaling factor of telluric atmospheric profile
         #***************************************************************
 
         scafac = forward_model.Variables.XN[ix]
         varid1 = forward_model.Variables.VARIDENT[ivar,0] ; varid2 = forward_model.Variables.VARIDENT[ivar,1]
         if forward_model.TelluricX is not None:
-            forward_model.TelluricX = cls.calculate(forward_model.TelluricX,varid1,varid2,scafac)
+            forward_model.TelluricX = self.calculate(forward_model.TelluricX,varid1,varid2,scafac)
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
 
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 1
-
+    
 
 class Model228(InstrumentModelBase):
     id : int = 228
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, Measurement,Spectroscopy,V0,C0,C1,C2,P0,P1,P2,P3,MakePlot=False):
+    
+    def calculate(self, Measurement,Spectroscopy,V0,C0,C1,C2,P0,P1,P2,P3,MakePlot=False):
 
         """
             FUNCTION NAME : model228()
@@ -3645,6 +3473,7 @@ class Model228(InstrumentModelBase):
         return Measurement,Spectroscopy
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -3657,12 +3486,12 @@ class Model228(InstrumentModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** model for retrieving the ILS and Wavelength calibration in ACS MIR solar occultation observations
 
         tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #V0
@@ -3721,17 +3550,17 @@ class Model228(InstrumentModelBase):
         inum[ix] = 1
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 228. Retrieval of instrument line shape for ACS-MIR and wavelength calibration
         #**************************************************************************************
 
@@ -3744,36 +3573,25 @@ class Model228(InstrumentModelBase):
         P2 = forward_model.Variables.XN[ix+6]
         P3 = forward_model.Variables.XN[ix+7]
 
-        forward_model.MeasurementX,forward_model.SpectroscopyX = cls.calculate(forward_model.MeasurementX,forward_model.SpectroscopyX,V0,C0,C1,C2,P0,P1,P2,P3)
+        forward_model.MeasurementX,forward_model.SpectroscopyX = self.calculate(forward_model.MeasurementX,forward_model.SpectroscopyX,V0,C0,C1,C2,P0,P1,P2,P3)
 
         ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 8
-
+    
 
 class Model229(InstrumentModelBase):
     id : int = 229
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
 
-    @classmethod
-    def calculate(cls, Measurement,par1,par2,par3,par4,par5,par6,par7,MakePlot=False):
+    
+    def calculate(self, Measurement,par1,par2,par3,par4,par5,par6,par7,MakePlot=False):
 
         """
             FUNCTION NAME : model2()
@@ -3937,6 +3755,7 @@ class Model229(InstrumentModelBase):
         return Measurement
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -3949,12 +3768,12 @@ class Model229(InstrumentModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** model for retrieving the ILS in ACS MIR solar occultation observations
 
         tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #wavenumber offset at lowest wavenumber
@@ -4007,17 +3826,17 @@ class Model229(InstrumentModelBase):
         ix = ix + 1
 
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 229. Retrieval of instrument line shape for ACS-MIR (v2)
         #***************************************************************
 
@@ -4029,37 +3848,26 @@ class Model229(InstrumentModelBase):
         par6 = forward_model.Variables.XN[ix+5]
         par7 = forward_model.Variables.XN[ix+6]
 
-        forward_model.MeasurementX = cls.calculate(forward_model.MeasurementX,par1,par2,par3,par4,par5,par6,par7)
+        forward_model.MeasurementX = self.calculate(forward_model.MeasurementX,par1,par2,par3,par4,par5,par6,par7)
 
         ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 7
-
+    
 
 class Model230(InstrumentModelBase):
     id : int = 230
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, Measurement,nwindows,liml,limh,par,MakePlot=False):
+    
+    def calculate(self, Measurement,nwindows,liml,limh,par,MakePlot=False):
 
         """
             FUNCTION NAME : model230()
@@ -4262,6 +4070,7 @@ class Model230(InstrumentModelBase):
         return Measurement
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -4274,12 +4083,12 @@ class Model230(InstrumentModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** model for retrieving multiple ILS (different spectral windows) in ACS MIR solar occultation observations
 
         s = f.readline().split()
@@ -4308,17 +4117,17 @@ class Model230(InstrumentModelBase):
                 inum[ix] = 0
                 ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 230. Retrieval of multiple instrument line shapes for ACS-MIR
         #***************************************************************
 
@@ -4337,32 +4146,47 @@ class Model230(InstrumentModelBase):
                 par1[jwin,iwin] = forward_model.Variables.XN[ix]
                 ix = ix + 1
 
-        forward_model.MeasurementX = cls.calculate(forward_model.MeasurementX,nwindows,liml,limh,par1)
+        forward_model.MeasurementX = self.calculate(forward_model.MeasurementX,nwindows,liml,limh,par1)
 
         ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 7*int(varident[0])
-
+    
 
 class Model444(ScatteringModelBase):
     id : int = 444
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            n_state_vector_entries : int,
+            haze_params : dict[str,Any],
+        ):
+        """
+        Initialise an instance of the model.
+        
+        ## ARGUMENTS ##
+            
+            i_state_vector_start : int
+                The index of the first entry of the model parameters in the state vector
+            
+            n_state_vector_entries : int
+                The number of model parameters that are stored in the state vector
+            
+            haze_params: dict[str, Any]
+                Optical constants for the haze this model represents
+                
+        
+        ## RETURNS ##
+            An initialised instance of this object
+        """
+        super().__init__(i_state_vector_start, n_state_vector_entries)
+        
+        self.haze_params : str = haze_params
 
     @property
     def parameter_slices(self) -> dict[str, slice]:
@@ -4371,8 +4195,8 @@ class Model444(ScatteringModelBase):
             'imaginary_ref_idx' : slice(2,None),
         }
 
-    @classmethod
-    def calculate(cls, Scatter,idust,iscat,xprof,haze_params):
+    
+    def calculate(self, Scatter,idust,iscat,xprof,haze_params):
         """
             FUNCTION NAME : model444()
 
@@ -4439,6 +4263,7 @@ class Model444(ScatteringModelBase):
         return Scatter
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -4451,12 +4276,12 @@ class Model444(ScatteringModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
         
         _lgr.debug(f'{ix=}')
@@ -4496,11 +4321,12 @@ class Model444(ScatteringModelBase):
 
         idust = varident[1]-1
 
-        variables.HAZE_PARAMS['NX',idust] = 2+len(haze_waves)
-        variables.HAZE_PARAMS['WAVE',idust] = haze_waves
-        variables.HAZE_PARAMS['NREAL',idust] = float(nreal_ref)
-        variables.HAZE_PARAMS['WAVE_REF',idust] = float(vref)
-        variables.HAZE_PARAMS['WAVE_NORM',idust] = float(v_od_norm)
+        haze_params = dict()
+        haze_params['NX',idust] = 2+len(haze_waves)
+        haze_params['WAVE',idust] = haze_waves
+        haze_params['NREAL',idust] = float(nreal_ref)
+        haze_params['WAVE_REF',idust] = float(vref)
+        haze_params['WAVE_NORM',idust] = float(v_od_norm)
 
         varparam[0] = 2+len(haze_waves)
         varparam[1] = float(clen)
@@ -4520,53 +4346,63 @@ class Model444(ScatteringModelBase):
                         sx[ix+k,ix+j] = sx[ix+j,ix+k]
         _lgr.debug(f'{ix=}')
 
-        return ix
+        return cls(ix_0, ix-ix_0, haze_params)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         idust = int(forward_model.Variables.VARIDENT[ivar,1]) - 1
         iscat = 1 # Should add an option for this
         xprof = forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]]
-        forward_model.ScatterX = cls.calculate(forward_model.ScatterX,idust,iscat,xprof,forward_model.Variables.HAZE_PARAMS)
+        forward_model.ScatterX = self.calculate(forward_model.ScatterX,idust,iscat,xprof,self.haze_params)
         ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        try:
-            idust = varident[1]-1
-            return variables.HAZE_PARAMS['NX',idust]
-        except: # happens when reading .mre
-            return varparam[0]
-
+    
 
 class Model446(ScatteringModelBase):
     id : int = 446
 
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            n_state_vector_entries : int,
+            lookup_table_fpath : str,
+        ):
+        """
+        Initialise an instance of the model.
+        
+        ## ARGUMENTS ##
+            
+            i_state_vector_start : int
+                The index of the first entry of the model parameters in the state vector
+            
+            n_state_vector_entries : int
+                The number of model parameters that are stored in the state vector
+            
+            lookup_table_fpath: str
+                path to the lookup table of extinction coefficient vs particle size
+                
+        
+        ## RETURNS ##
+            An initialised instance of this object
+        """
+        super().__init__(i_state_vector_start, n_state_vector_entries)
+        
+        self.lookup_table_fpath : str = lookup_table_fpath
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+
     
-
-    @classmethod
-    def calculate(cls, Scatter,idust,wavenorm,xwave,rsize,lookupfile,MakePlot=False):
+    def calculate(self, Scatter,idust,wavenorm,xwave,rsize,lookupfile,MakePlot=False):
 
         """
             FUNCTION NAME : model446()
@@ -4683,6 +4519,7 @@ class Model446(ScatteringModelBase):
         return Scatter
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -4695,12 +4532,12 @@ class Model446(ScatteringModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** model for retrieving an aerosol particle size distribution from a tabulated look-up table
 
         #This model changes the extinction coefficient of a given aerosol population based on 
@@ -4726,7 +4563,6 @@ class Model446(ScatteringModelBase):
         #Read the name of the look-up table file
         s = f.readline().split()
         fnamex = s[0]
-        varfile = fnamex
 
         #Reading the particle size and its a priori error
         s = f.readline().split()
@@ -4737,17 +4573,17 @@ class Model446(ScatteringModelBase):
 
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0, fnamex)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 446. model for retrieving the particle size distribution based on the data in a look-up table
         #***************************************************************
 
@@ -4758,38 +4594,27 @@ class Model446(ScatteringModelBase):
         idust0 = int(forward_model.Variables.VARPARAM[ivar,0])
         wavenorm = int(forward_model.Variables.VARPARAM[ivar,1])
         xwave = forward_model.Variables.VARPARAM[ivar,2]
-        lookupfile = forward_model.Variables.VARFILE[ivar]
         rsize = forward_model.Variables.XN[ix]
 
-        forward_model.ScatterX = cls.calculate(forward_model.ScatterX,idust0,wavenorm,xwave,rsize,lookupfile,MakePlot=False)
+        forward_model.ScatterX = self.calculate(forward_model.ScatterX,idust0,wavenorm,xwave,rsize,self.lookup_table_fpath,MakePlot=False)
 
         ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 1
-
+    
 
 class Model447(DopplerModelBase):
     id : int = 447
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
+    
     @classmethod
     def is_varident_valid(
             cls,
@@ -4798,8 +4623,8 @@ class Model447(DopplerModelBase):
         _lgr.warning(f'Model id = {cls.id} is not implemented yet, so it will never be chosen as a valid model')
         return False
 
-    @classmethod
-    def calculate(cls, Measurement,v_doppler):
+    
+    def calculate(self, Measurement,v_doppler):
 
         """
             FUNCTION NAME : model447()
@@ -4835,6 +4660,7 @@ class Model447(DopplerModelBase):
         return Measurement
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -4847,12 +4673,12 @@ class Model447(DopplerModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** model for retrieving the Doppler shift
 
         #Read the Doppler velocity and its uncertainty
@@ -4868,43 +4694,32 @@ class Model447(DopplerModelBase):
 
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         raise NotImplementedError
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 1
-
+    
 
 class Model500(CollisionInducedAbsorptionModelBase):
     id : int = 500
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, k_cia, waven, icia, vlo, vhi, nbasis, amplitudes):
+    
+    def calculate(self, k_cia, waven, icia, vlo, vhi, nbasis, amplitudes):
         """
             FUNCTION NAME : model500()
 
@@ -4963,6 +4778,7 @@ class Model500(CollisionInducedAbsorptionModelBase):
         return k_cia,xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -4975,12 +4791,12 @@ class Model500(CollisionInducedAbsorptionModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
 
         s = f.readline().split()
         amp_f = open(s[0],'r')
@@ -5016,17 +4832,17 @@ class Model500(CollisionInducedAbsorptionModelBase):
         ix = ix + nbasis
 
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
 
         icia = forward_model.Variables.VARIDENT[ivar,1]
 
@@ -5040,7 +4856,7 @@ class Model500(CollisionInducedAbsorptionModelBase):
         nbasis = forward_model.Variables.VARPARAM[ivar,0]
         amplitudes = np.exp(forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]])*1e-40
 
-        new_k_cia, xmap1 = cls.calculate(forward_model.CIA.K_CIA.copy(), forward_model.CIA.WAVEN, icia, vlo, vhi, nbasis, amplitudes)
+        new_k_cia, xmap1 = self.calculate(forward_model.CIA.K_CIA.copy(), forward_model.CIA.WAVEN, icia, vlo, vhi, nbasis, amplitudes)
 
         forward_model.CIA.K_CIA = new_k_cia
         forward_model.CIAX.K_CIA = new_k_cia
@@ -5048,29 +4864,19 @@ class Model500(CollisionInducedAbsorptionModelBase):
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
-        return ix
+        
 
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return int(varparam[0])
-
+    
 
 class Model777(TangentHeightCorrectionModelBase):
     id : int = 777
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
+    
     @classmethod
     def is_varident_valid(
             cls,
@@ -5078,8 +4884,8 @@ class Model777(TangentHeightCorrectionModelBase):
         ) -> bool:
         return varident[0]==777
 
-    @classmethod
-    def calculate(cls, Measurement,hcorr,MakePlot=False):
+    
+    def calculate(self, Measurement,hcorr,MakePlot=False):
 
         """
             FUNCTION NAME : model777()
@@ -5131,6 +4937,7 @@ class Model777(TangentHeightCorrectionModelBase):
         return Measurement
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -5143,12 +4950,12 @@ class Model777(TangentHeightCorrectionModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** tangent height correction
         s = f.readline().split()
         hcorr = float(s[0])
@@ -5160,50 +4967,40 @@ class Model777(TangentHeightCorrectionModelBase):
 
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 777. Retrieval of tangent height corrections
         #***************************************************************
 
         hcorr = forward_model.Variables.XN[ix]
 
-        forward_model.MeasurementX = cls.calculate(forward_model.MeasurementX,hcorr)
+        forward_model.MeasurementX = self.calculate(forward_model.MeasurementX,hcorr)
 
         ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 1
-
+    
 
 class Model887(ScatteringModelBase):
     id : int = 887
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
+    
     @classmethod
     def is_varident_valid(
             cls,
@@ -5212,8 +5009,8 @@ class Model887(ScatteringModelBase):
         _lgr.warning(f"Model with id {cls.id} is not implemented")
         return False
 
-    @classmethod
-    def calculate(cls, Scatter,xsc,idust,MakePlot=False):
+    
+    def calculate(self, Scatter,xsc,idust,MakePlot=False):
 
         """
             FUNCTION NAME : model887()
@@ -5266,6 +5063,7 @@ class Model887(ScatteringModelBase):
             plt.show()
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -5278,12 +5076,12 @@ class Model887(ScatteringModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** Cloud x-section spectrum
 
         #Read in number of points, cloud id, and correlation between elements.
@@ -5334,42 +5132,31 @@ class Model887(ScatteringModelBase):
 
         ix = ix + nwv
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         raise NotImplementedError
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return int(varparam[0])
-
+    
 
 class Model1002(AtmosphericModelBase):
     id : int = 1002
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, atm,ipar,scf,MakePlot=False):
+    
+    def calculate(self, atm,ipar,scf,MakePlot=False):
 
         """
             FUNCTION NAME : model2()
@@ -5477,6 +5264,7 @@ class Model1002(AtmosphericModelBase):
         return atm,xmap
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -5489,12 +5277,12 @@ class Model1002(AtmosphericModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** scaling of atmospheric profiles at multiple locations (linear scale)
 
         s = f.readline().split()
@@ -5553,47 +5341,37 @@ class Model1002(AtmosphericModelBase):
         ix = ix + nlocs
 
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subprofretg(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> int:
+        ) -> None:
         #Model 1002. Scaling factors at multiple locations
         #***************************************************************
 
-        forward_model.AtmosphereX,xmap1 = cls.calculate(forward_model.AtmosphereX,ipar,forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]],MakePlot=False)
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]],MakePlot=False)
         #This calculation takes a long time for big arrays
         #xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP,0:forward_model.AtmosphereX.NLOCATIONS] = xmap1[:,:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
-        return ix
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 1 * nlocations   
-
+    
 
 class Model231(SpectralModelBase):
     id : int = 231
     
-    @classmethod
+    
     def calculate(
-            cls, 
+            self, 
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
             igeom_slices : tuple[slice,...],
@@ -5626,6 +5404,7 @@ class Model231(SpectralModelBase):
 
         return SPECMOD, dSPECMOD
     
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -5638,12 +5417,12 @@ class Model231(SpectralModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** multiplication of calculated spectrum by polynomial function (following polynomial of degree N)
 
         #The computed spectra is multiplied by R = R0 * POL
@@ -5666,45 +5445,35 @@ class Model231(SpectralModelBase):
                 sx[ix,ix] = (err0)**2.
                 inum[ix] = 0
                 ix = ix + 1
-        return ix
+        return cls(ix_0, ix-ix_0)
         
-    @classmethod
+    
     def calculate_from_subspecret(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ivar : int,
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
-        ) -> int:
+        ) -> None:
         NGEOM = int(forward_model.Variables.VARPARAM[ivar,0])
         NDEGREE = int(forward_model.Variables.VARPARAM[ivar,1])
         COEFF = np.array(forward_model.Variables.XN[ix : ix+(NDEGREE+1)*forward_model.Measurement.NGEOM]).reshape((NDEGREE+1,forward_model.Measurement.NGEOM))
         
         igeom_slices = tuple(slice(ix+(NDEGREE+1)*igeom, ix+(NDEGREE+1)*(igeom+1)) for igeom, nconv in enumerate(forward_model.Measurement.NCONV))
         
-        SPECMOD[...], dSPECMOD[...] = cls.calculate(SPECMOD, dSPECMOD, igeom_slices, forward_model.Measurement, NGEOM, NDEGREE, COEFF)
+        SPECMOD[...], dSPECMOD[...] = self.calculate(SPECMOD, dSPECMOD, igeom_slices, forward_model.Measurement, NGEOM, NDEGREE, COEFF)
         
-        return ix + COEFF.size
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return varparam[0]*(varparam[1]+1)
-
+    
 # [JD] This uses forward_model.SpectroscopyX, whereas Model231 uses forward_model.Measurement, is this correct?
 class Model2310(SpectralModelBase):
     id : int = 2310
     
-    @classmethod
+    
     def calculate(
-            cls, 
+            self, 
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
             igeom_slices : tuple[slice,...],
@@ -5744,6 +5513,7 @@ class Model2310(SpectralModelBase):
 
         return SPECMOD, dSPECMOD
     
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -5756,12 +5526,12 @@ class Model2310(SpectralModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         """
         Continuum addition to transmission spectra using a varying scaling factor (following polynomial of degree N)
         in several spectral windows 
@@ -5801,17 +5571,17 @@ class Model2310(SpectralModelBase):
                     sx[ix,ix] = (err0)**2.
                     inum[ix] = 0
                     ix = ix + 1
-        return ix
+        return cls(ix_0, ix-ix_0)
         
-    @classmethod
+    
     def calculate_from_subspecret(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ivar : int,
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
-        ) -> int:
+        ) -> None:
         """
         Model 2310. Scaling of spectra using a varying scaling factor (following a polynomial of degree N)
         in multiple spectral windows
@@ -5835,7 +5605,7 @@ class Model2310(SpectralModelBase):
         
         igeom_slices = tuple(slice(ix+(NDEGREE+1)*igeom, ix+(NDEGREE+1)*(igeom+1)) for igeom, nconv in enumerate(forward_model.Measurement.NCONV))
 
-        SPECMOD[...], dSPECMOD[...] = cls.calculate(
+        SPECMOD[...], dSPECMOD[...] = self.calculate(
             SPECMOD, 
             dSPECMOD, 
             igeom_slices, 
@@ -5847,26 +5617,16 @@ class Model2310(SpectralModelBase):
             hiwin
         )
 
-        return ix + (COEFF.size * NWINDOWS)
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident: np.ndarray[[3],int],
-            varparam: np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return varparam[0]*(varparam[1]+1)*varparam[2]
-
+    
 
 class Model232(SpectralModelBase):
     id : int = 232
     
-    @classmethod
+    
     def calculate(
-            cls, 
+            self, 
             SPECMOD : np.ndarray[['NCONV'],float],
             dSPECMOD : np.ndarray[['NCONV','NX'],float],
             igeom_slice : slice,
@@ -5892,6 +5652,7 @@ class Model232(SpectralModelBase):
 
         return SPECMOD, dSPECMOD
     
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -5904,12 +5665,12 @@ class Model232(SpectralModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         """
         Continuum addition to transmission spectra using the Angstrom coefficient
 
@@ -5938,17 +5699,17 @@ class Model232(SpectralModelBase):
             inum[ix] = 0
             inum[ix+1] = 0                        
             ix = ix + 2
-        return ix
+        return cls(ix_0, ix-ix_0)
         
-    @classmethod
+    
     def calculate_from_subspecret(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ivar : int,
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
-        ) -> int:
+        ) -> None:
         """
         Model 232. Continuum addition to transmission spectra using the angstrom coefficient
 
@@ -5969,7 +5730,7 @@ class Model232(SpectralModelBase):
                 ALPHA = forward_model.Variables.XN[ix+1]
                 WAVE0 = forward_model.Variables.VARPARAM[ivar,1]
                 
-                SPECMOD[:,i], dSPECMOD[:,i] = cls.calculate(
+                SPECMOD[:,i], dSPECMOD[:,i] = self.calculate(
                     SPECMOD[:,i], 
                     dSPECMOD[:,i], 
                     igeom_slices[i], 
@@ -5984,28 +5745,18 @@ class Model232(SpectralModelBase):
             ALPHA = forward_model.Variables.XN[ix+1]
             WAVE0 = forward_model.Variables.VARPARAM[ivar,1]
             
-            _lgr.warning(f'It looks like there is no calculation for NGEOM=1 for model id = {cls.id}')
+            _lgr.warning(f'It looks like there is no calculation for NGEOM=1 for model id = {self.id}')
 
-        return ix + 2*NGEOM
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 2*varparam[0]
-
+    
 
 class Model233(SpectralModelBase):
     id : int = 233
     
-    @classmethod
+    
     def calculate(
-            cls, 
+            self, 
             SPECMOD : np.ndarray[['NCONV'],float],
             dSPECMOD : np.ndarray[['NCONV','NX'],float],
             igeom_slice : slice,
@@ -6034,6 +5785,7 @@ class Model233(SpectralModelBase):
 
         return SPECMOD, dSPECMOD
     
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -6046,12 +5798,12 @@ class Model233(SpectralModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         """
         Aerosol opacity modelled with a variable angstrom coefficient. Applicable to transmission spectra.
 
@@ -6088,17 +5840,17 @@ class Model233(SpectralModelBase):
             inum[ix+1] = 0    
             inum[ix+2] = 0                  
             ix = ix + 3
-        return ix
+        return cls(ix_0, ix-ix_0)
         
-    @classmethod
+    
     def calculate_from_subspecret(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ivar : int,
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
-        ) -> int:
+        ) -> None:
         """
         Model 232. Continuum addition to transmission spectra using a variable angstrom coefficient (Schuster et al., 2006 JGR)
         ***************************************************************
@@ -6128,7 +5880,7 @@ class Model233(SpectralModelBase):
                 A1 = forward_model.Variables.XN[ix+1]
                 A2 = forward_model.Variables.XN[ix+2]
                 
-                SPECMOD[:,i], dSPECMOD[:,i] = cls.calculate(
+                SPECMOD[:,i], dSPECMOD[:,i] = self.calculate(
                     SPECMOD[:,i], 
                     dSPECMOD[:,i],
                     igeom_slices[i],
@@ -6143,7 +5895,7 @@ class Model233(SpectralModelBase):
             A1 = forward_model.Variables.XN[ix+1]
             A2 = forward_model.Variables.XN[ix+2]
 
-            SPECMOD[:], dSPECMOD[:] = cls.calculate(
+            SPECMOD[:], dSPECMOD[:] = self.calculate(
                 SPECMOD[:], 
                 dSPECMOD[:],
                 slice(ix,ix+3),
@@ -6153,30 +5905,19 @@ class Model233(SpectralModelBase):
                 A2
             )
 
-        return ix + 3*NGEOM
+        
 
-    @classmethod
-    def get_nxvar(
-            cls,
-            variables : "Variables_0",
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[[3],int],
-            NPRO : int,
-            nlocations : int,
-        ) -> int:
-        return 3*varparam[0]
-
+    
 
 class Model667(SpectralModelBase):
     id : int = 667
 
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    
     
 
-    @classmethod
-    def calculate(cls, Spectrum,xfactor,MakePlot=False):
+    
+    def calculate(self, Spectrum,xfactor,MakePlot=False):
 
         """
             FUNCTION NAME : model667()
@@ -6211,6 +5952,7 @@ class Model667(SpectralModelBase):
         return Spectrum
 
 
+    
     @classmethod
     def from_apr_to_state_vector(
             cls,
@@ -6223,12 +5965,12 @@ class Model667(SpectralModelBase):
             x0 : np.ndarray[["mx"],float],
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
-            varfile : ThingHolder,
             npro : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
-        ) -> int:
+        ) -> Self:
+        ix_0 = ix
         #******** dilution factor to account for thermal gradients thorughout exoplanet
         tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
         xfac = float(tmp[0])
@@ -6238,34 +5980,34 @@ class Model667(SpectralModelBase):
         sx[ix,ix] = xfacerr**2.
         ix = ix + 1
 
-        return ix
+        return cls(ix_0, ix-ix_0)
 
-    @classmethod
+    
     def calculate_from_subspecret(
-            cls,
+            self,
             forward_model : "ForwardModel_0",
             ix : int,
             ivar : int,
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
-        ) -> int:
+        ) -> None:
         #Model 667. Spectrum scaled by dilution factor to account for thermal gradients in planets
         #**********************************************************************************************
 
         xfactor = forward_model.Variables.XN[ix]
         spec = np.zeros(forward_model.SpectroscopyX.NWAVE)
         spec[:] = SPECMOD
-        SPECMOD = cls.calculate(SPECMOD,xfactor)
+        SPECMOD = self.calculate(SPECMOD,xfactor)
         dSPECMOD = dSPECMOD * xfactor
         dSPECMOD[:,ix] = spec[:]
         ix = ix + 1
 
 
-        return ix
+        
 
-    @classmethod
+    
     def get_nxvar(
-            cls,
+            self,
             variables : "Variables_0",
             varident: np.ndarray[[3],int],
             varparam: np.ndarray[[3],int],

@@ -1372,8 +1372,8 @@ class ForwardModel_0:
 
 
             # Calculate state vector for the model
-            ix = self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, xmap)
-            
+            self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, xmap)
+            ix += self.Variables.models[ivar].n_state_vector_entries
 
 
         #Now check if any gas in the retrieval saturates
@@ -1421,7 +1421,8 @@ class ForwardModel_0:
                     raise ValueError('error in subprofretg :: Models 1000-1100 are meant to be used for models of atmospheric properties in multiple locations')
 
             # Patch state vector for the model
-            ix = self.Variables.models[ivar].patch_from_subprofretg(self, ix, ipar, ivar, xmap)
+            self.Variables.models[ivar].patch_from_subprofretg(self, ix, ipar, ivar, xmap)
+            ix += self.Variables.models[ivar].n_state_vector_entries
         
         return xmap
 
@@ -1464,7 +1465,8 @@ class ForwardModel_0:
         ix = 0
         for ivar in range(self.Variables.NVAR):
 
-            ix = self.Variables.models[ivar].calculate_from_subspecret(self, ix, ivar, SPECMOD, dSPECMOD)
+            self.Variables.models[ivar].calculate_from_subspecret(self, ix, ivar, SPECMOD, dSPECMOD)
+            ix += self.Variables.models[ivar].n_state_vector_entries
 
         return SPECMOD,dSPECMOD
 

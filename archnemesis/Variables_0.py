@@ -1,7 +1,7 @@
 from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 from archnemesis.Models import Models
-from archnemesis.ModelClass import ModelBase, StateVectorEntry, ThingHolder
+from archnemesis.ModelClass import ModelBase, StateVectorEntry
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -10,7 +10,7 @@ import os.path
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.WARN)
+_lgr.setLevel(logging.DEBUG)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -63,9 +63,6 @@ class Variables_0:
             Variable ID
         @attribute VARPARAM: 2D array (NVAR,NPARAM)
             Extra parameters needed to implement the parameterisation
-        @attribute VARFILE: 1D array  (NVAR)
-            Extra parameters needed to implement the parameterisation that need to be passed as a string
-            For instance, giving the name of a file that stores data for a given parameterisation
         @attribute NXVAR: 1D array
             Number of points in state vector associated with each variable
         @attribute XA: 1D array
@@ -122,7 +119,6 @@ class Variables_0:
         # Input the following profiles using the edit_ methods.
         self.VARIDENT = None # np.zeros(NVAR,3)
         self.VARPARAM = None # np.zeros(NVAR,NPARAM)
-        self.VARFILE = None  #(NVAR)
         self.NXVAR =  None # np.zeros(NX)
         self.XN = None # np.zeros(NX)
         self.LX = None # np.zeros(NX)
@@ -130,7 +126,6 @@ class Variables_0:
         self.SX = None # np.zeros((NX, NX))
         self.NUM = None #np.zeros(NX)
         self.DSTEP = None #np.zeros(NX)
-        self.HAZE_PARAMS = {}
         
         # private attributes
         self._models = None
@@ -141,8 +136,9 @@ class Variables_0:
         """
         Returns a numpy array filled with the models whose parameters are in the state vector
         """
+        
         if self._models is None:
-            raise RuntimeError(f'Cannot show models for Variables_0 instance as the class has not been fully constructed yet.')
+            raise AttributeError(f'Models have not been found yet (e.g. by "Variables_0.read_apr(...)")')
         return self._models
     
     @property
@@ -406,27 +402,17 @@ class Variables_0:
         @param NXVAR_array: 1D array
             Number of parameters in the state vector associated with each model
         """
-        nxvar = np.zeros(self.NVAR,dtype='int32')
+        
+        assert len(self.models) == self.NVAR, "Must have one model per variable"
+        
+        
+        nxvar = np.zeros(len(self.models),dtype='int32')
         assert self.VARIDENT.ndim == 2, "self.VARIDENT must have 2 dimensions"
         
-        self._models = np.zeros((self.NVAR,), dtype=object)
+        for i, model in enumerate(self.models):
+            nxvar[i] = model.n_state_vector_entries
         
-        sum = 0
-
-        for i in range(self.NVAR):
-            found_model_for_varident = False
-            for model in Models:
-                if model.is_varident_valid(self.VARIDENT[i]):
-                    found_model_for_varident = True
-                    nxvar[i] = model.get_nxvar(self, self.VARIDENT[i], self.VARPARAM[i], NPRO, nlocations)
-                    self._models[i] = model(sum, nxvar[i])
-                    print(f'{i=} {self._models[i]=}')
-                    sum += nxvar[i]
-                    break
-            
-            if not found_model_for_varident:
-                raise ValueError('error :: varID not included in calc_NXVAR()')
-                
+        
         self.NXVAR = nxvar
 
     ################################################################################################################
@@ -555,6 +541,10 @@ class Variables_0:
         
         from archnemesis import Scatter_0
         
+        if self._models is not None:
+            _lgr.warning(f'Already have models for {runname}, will overwrite them as we read the *.apr file.')
+        self._models = []
+            
 
         #Open file
         with open(runname+'.apr','r') as f:
@@ -584,14 +574,7 @@ class Variables_0:
             x0 = np.zeros([mx])
             sx = np.zeros([mx,mx])
             inum = np.zeros([mx],dtype='int')
-            # varfile = ['']*nvar
-            # Slight hack because strings are immutable so passing varfile[i] would not actually
-            # be able to change the value in varfile, it would change the string that the argument
-            # inside the function points to. Also varfile is only used in one place, so we can probably
-            # remove it completely if we want to and nothing bad would happen.
             
-            varfile = [ThingHolder('') for _ in range(nvar)]
-
             #Reading data
             ix = 0
         
@@ -606,22 +589,26 @@ class Variables_0:
                 for model in Models:
                     if model.is_varident_valid(varident[i]):
                         found_model_for_varident = True
-                        ix = model.from_apr_to_state_vector(
-                            self, 
-                            f, 
-                            varident[i], 
-                            varparam[i], 
-                            ix, 
-                            lx, 
-                            x0, 
-                            sx,
-                            inum, 
-                            varfile[i], 
-                            npro, 
-                            nlocations,
-                            runname,
-                            sxminfac
+                        self._models.append(
+                                model.from_apr_to_state_vector(
+                                self, 
+                                f, 
+                                varident[i], 
+                                varparam[i], 
+                                ix, 
+                                lx, 
+                                x0, 
+                                sx,
+                                inum, 
+                                npro, 
+                                nlocations,
+                                runname,
+                                sxminfac
+                            )
                         )
+                        
+                        ix += self._models[-1].n_state_vector_entries
+                        
                         print(f'{varident[i] = } {ix=}')
 
                 
@@ -650,7 +637,6 @@ class Variables_0:
         self.edit_SA(sa)
         self.edit_LX(lx1)
         self.NUM = inum1
-        self.VARFILE = varfile
         self.calc_DSTEP()
         self.calc_FIX()
         
