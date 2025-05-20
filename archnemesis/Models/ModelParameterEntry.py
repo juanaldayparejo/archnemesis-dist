@@ -1,3 +1,4 @@
+from __future__ import annotations #  for 3.9 compatability
 from typing import TYPE_CHECKING
 import dataclasses as dc
 

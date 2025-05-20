@@ -1,3 +1,4 @@
+from __future__ import annotations #  for 3.9 compatability
 import dataclasses as dc
 
 import numpy as np
