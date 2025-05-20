@@ -1,8 +1,10 @@
-
+from typing import TYPE_CHECKING
 import dataclasses as dc
 
 import numpy as np
 
+if TYPE_CHECKING:
+    m = "Number of elements of the parameter"
 
 @dc.dataclass
 class ModelParameterEntry:
