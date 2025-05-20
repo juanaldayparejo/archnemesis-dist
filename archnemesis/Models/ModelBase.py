@@ -1,17 +1,19 @@
 from __future__ import annotations #  for 3.9 compatability
 
-import numpy as np
-import numpy.ma
+import abc
 from typing import TYPE_CHECKING, IO, Any, Self
 from collections import namedtuple
 
 import matplotlib.pyplot as plt # used in some of the models, I should really remove the plotting code or at least separate it from the calculation code
 
+import numpy.ma
+import numpy as np
 from archnemesis.Scatter_0 import kk_new_sub
 from archnemesis.helpers.maths_helper import ngauss
 from archnemesis.enums import WaveUnit
 
 from .ModelParameterEntry import ModelParameterEntry
+from .ModelParameter import ModelParameter
 
 
 if TYPE_CHECKING:
@@ -42,9 +44,9 @@ _lgr.setLevel(logging.DEBUG)
 
 
 
-class ModelBase:
+class ModelBase(abc.ABC):
     """
-    Abstract base class of all parameterised models used by ArchNemesis. This class should be subclassed further for models of a particular component.
+        Abstract base class of all parameterised models used by ArchNemesis. This class should be subclassed further for models of a particular component.
     """
     id : int = None # All "*ModelBase" classes that are not meant to be used should have an id of 'None'
     name : str = 'name should be overwritten in subclass'
@@ -52,72 +54,122 @@ class ModelBase:
     def __init__(
             self, 
             i_state_vector_start : int, 
-            n_state_vector_entries : int
+            #   The index of the first entry of the model parameters in the state vector
+            
+            n_state_vector_entries : int,
+            #   The number of model parameters that are stored in the state vector
         ):
         """
-        Initialise an instance of the model.
-        
-        ARGUMENTS
-            i_state_vector_start : int
-                The index of the first entry of the model parameters in the state vector
-            n_state_vector_entries : int
-                The number of model parameters that are stored in the state vector
-        
-        RETURNS
-            An initialised instance of this object
+            Initialise an instance of the model.
+            
+            ## ARGUMENTS ##
+                
+                i_state_vector_start : int
+                    The index of the first entry of the model parameters in the state vector
+                
+                n_state_vector_entries : int
+                    The number of model parameters that are stored in the state vector
+            
+            ## RETURNS ##
+                
+                None
         """
         # Store where the model parameters are positioned within the state vector
         self.state_vector_start = i_state_vector_start
         self.n_state_vector_entries = n_state_vector_entries
         self.state_vector_slice = slice(i_state_vector_start, i_state_vector_start+n_state_vector_entries)
+        
+        # default parameters, the default will make a fake "all_parameters" parameter
+        # that contains everything.
+        self.parameters = (
+            ModelParameter('all_parameters', slice(None), f'default parameter that is all of the parameters for model id {self.id}', 'UNDEFINED'),
+        )
+        
         _lgr.debug(f'{self.id=} {self.state_vector_start=} {self.n_state_vector_entries=}')
-        
+        return
     
-    @property
-    def parameter_slices(self) -> dict[str, slice]:
-        """
-        A dictionary that maps parameter names to the sub-slices of the state vector that holds the parameter values.
-        This should be overloaded in subclasses to make it easy to get the apriori and posterior values of the
-        parameters for this model. If not overwritten only one parameter called "all_parameters" is defined, which
-        contains all the parameters for the model.
-        
-        QUESTION: Should this be a more general 'parameter_definitions' property that includes more things that just
-        state vector slice information (e.g. descriptions, units, short name, long name, etc.)?
-        """
-        return {
-            'all_parameters' : slice(None)
-        }
     
-    def get_state_vector_slice(self, state_vector : np.ndarray[['nx'], float]):
+    def get_state_vector_slice(
+            self, 
+            state_vector : np.ndarray[['nx'], float|int],
+            #   Array that we want to pull from. Will normally be the apriori or posterior state vector.
+            
+        ) -> np.ndarray[['mparam'],float|int]:
         """
-        Gets the slice of a `state_vector` that holds only the parameters for the model
+            Gets the slice of a `state_vector`-like object (i.e. same shape and ordering as state vector)
+            that holds only the parameters for the model.
         """
         return state_vector[self.state_vector_slice]
+    
+    
+    def get_parameter_entries_from_state_vector(
+            self,
+            state_vector : np.ndarray[['nx'],float],
+            #   Array that we want to pull from. Will normally be the apriori or posterior state vector.
+            
+        ) -> tuple[float | np.ndarray[[int],float],...]:
+        """
+            Returns a tuple of copies of the entries (raw entries, not unlogged etc.) of parameters (defined via `self.parameters`).
+            Parameters with a single entry will be a 'float', parameters that consist of multiple entries will be a numpy array.
+            
+            ## RETURNS ##
+            
+                entries : tuple[float | np.ndarray[[int],float],...]
+                    Entries retrieved from the state vector, no processing is done to the entries.
+        """
+        sv_slice = self.get_state_vector_slice(state_vector)
+        return tuple(np.array(sv_slice[p.slice]) if len(sv_slice[p.slice]) > 1 else sv_slice[p.slice][0] for p in self.parameters)
+    
+    
+    def get_parameter_values_from_state_vector(
+            self,
+            state_vector : np.ndarray[['nx'],float],
+            #   Array that we want to pull from. Will normally be the apriori or posterior state vector.
+            
+            state_vector_log : np.ndarray[['nx'],int],
+            #   Array of boolean flags indicating if the value stored in `state_vector` is the exponential logarithm
+            #   of the 'real' value.
+            
+        ) -> tuple[float | np.ndarray[[int],float],...]:
+        """
+            Returns a tuple of copies of the values (entry will be unlogged etc. if required) of parameters (defined via `self.parameters`).
+            Parameters with a single entry will be a 'float', parameters that consist of multiple entries will be a numpy array.
+            
+            ## RETURNS ##
+            
+                values : tuple[float | np.ndarray[[int],float],...]
+                    Values retrieved from the state vector, unlogged as required depending upon the `state_vector_log` array entries.
+        """
+        sv_slice = self.get_state_vector_slice(state_vector)
+        sv_slice_exp = np.exp(sv_slice)
+        log_slice = (self.get_state_vector_slice(state_vector_log) > 0)
+        values = np.where(log_slice, sv_slice_exp, sv_slice)
+        return tuple(np.array(values[p.slice]) if len(values[p.slice]) > 1 else values[p.slice][0] for p in self.parameters)
+    
     
     def get_value_from_state_vector(
             self,
             state_vector : np.ndarray[['nx'],float],
+            #   Array that we want to pull from. Will normally be the apriori or posterior state vector.
+            
             state_vector_log : np.ndarray[['nx'],int],
+            #   Array of boolean flags indicating if the value stored in `state_vector` is the exponential logarithm
+            #   of the 'real' value.
+            
             sub_slice : slice = slice(None),
+            #   A sub-slice that is applied after the state vector is sliced the first time to only contain elements
+            #   associated with the model. For example this can be set to 'slice(0,1)' to only get the first element
+            #   of the state vector associated with the model, useful when splitting up the "whole model" state vector
+            #   to get each individual parameter of the model.
+            
         ) -> np.ndarray[['m'],float]:
         """
-        Returns the value of elements of a (sub-slice of a) state vector associated with the model.
-        
-        ARGUMENTS
-            state_vector : np.ndarray[['nx'],float]
-                Array that we want to pull from. Will normally be the apriori or posterior state vector.
-            state_vector_log : np.ndarray[['nx'],int]
-                Array of boolean flags indicating if the value stored in `state_vector` is the exponential logarithm
-                of the 'real' value.
-            sub_slice : slice = slice(None)
-                A sub-slice that is applied after the state vector is sliced the first time to only contain elements
-                associated with the model. For example this can be set to 'slice(0,1)' to only get the first element
-                of the state vector associated with the model, useful when splitting up the "whole model" state vector
-                to get each individual parameter of the model.
-        
-        RETURNS
-            value : np.ndarray[['m'],float]
-                Array of 'real' (i.e. unlogged where applicable) values of (a sub-slice of) the parameters of the model.
+            Returns the value (entry will be unlogged if required) of elements of a (sub-slice of a) state vector associated with the model.
+            
+            ## RETURNS ##
+                
+                value : np.ndarray[['m'],float]
+                    Array of 'real' (i.e. unlogged where applicable) values of (a sub-slice of) the parameters of the model.
         """
         
         a_val = state_vector[self.state_vector_slice][sub_slice]
@@ -129,93 +181,107 @@ class ModelBase:
     def set_value_to_state_vector(
             self,
             value : np.ndarray[['m'],float],
+            #   Array of values we want to put into the `state_vector` array
+            
             state_vector : np.ndarray[['nx'],float],
+            #   Array that we want to push to. Will normally be the apriori or posterior state vector.
+            
             state_vector_log : np.ndarray[['nx'],int],
+            #   Array of boolean flags indicating if the value stored in `state_vector` is the exponential logarithm
+            #   of the 'real' value.
+            
             sub_slice : slice = slice(None),
-        ):
+            #   A sub-slice that is applied after the state vector is sliced the first time to only contain elements
+            #   associated with the model. For example this can be set to 'slice(0,1)' to only get the first element
+            #   of the state vector associated with the model, useful when splitting up the "whole model" state vector
+            #   to get each individual parameter of the model.
+            
+        ) -> None:
         """
-        Sets the value of elements of a (sub-slice of a) state vector associated with the model.
-        
-        ARGUMENTS
-            value : np.ndarray[['m'],float]
-                Array of 'real' (i.e. unlogged where applicable) values of (a sub-slice of) the parameters of the model
-                that we want to store in the state vector.
-            state_vector : np.ndarray[['nx'],float]
-                Array that we want to push to. Will normally be the apriori or posterior state vector.
-            state_vector_log : np.ndarray[['nx'],int]
-                Array of boolean flags indicating if the value stored in `state_vector` is the exponential logarithm
-                of the 'real' value.
-            sub_slice : slice = slice(None)
-                A sub-slice that is applied after the state vector is sliced the first time to only contain elements
-                associated with the model. For example this can be set to 'slice(0,1)' to only set the first element
-                of the state vector associated with the model, useful when setting a single parameter of the model.
-        
-        RETURNS:
-            None
+            Sets the value (will be logged if required) of elements of a (sub-slice of a) state vector associated with the model.
+            
+            ## RETURNS ##
+                
+                None
         """
         
         value_log = np.log(value)
         log_flag = state_vector_log[self.state_vector_slice][sub_slice] != 0
         
         state_vector[self.state_vector_slice][sub_slice] = np.where(log_flag, value_log, value)
+        return
+    
     
     def get_parameters_from_state_vector(
             self,
             apriori_state_vector : np.ndarray[['nx'],float],
+            #   The complete apriori state vector with 'nx' entries
+            
             posterior_state_vector : np.ndarray[['nx'],float],
+            #   The complete posterior state vector with 'nx' entries
+            
             state_vector_log : np.ndarray[['nx'],int],
+            #   Array of 'log' flags for each entry in either state vector (they share these flags)
+            #   if the flag is non-zero the value stored in both state vectors is the exponential
+            #   logarithm of the 'real' value.
+                
             state_vector_fix : np.ndarray[['nx'],int],
+            #   Array of the 'fix' flags for each entry in either state vector (they share these flags)
+            #   if the flag is non-zero, the value stored in both state vectors is not retrieved, and
+            #   therefore should be the same in each of the apriori/posterior state vectors.
+            
         ) -> dict[str, ModelParameterEntry]:
         """
-        Retrieve parameters from state vector as a dictionary of name : value pairs
-        
-        ARGUMENTS
+            Retrieve parameters from state vector as a dictionary of name : value pairs
             
-            apriori_state_vector : np.ndarray[['nx'],float]
-                The complete apriori state vector with 'nx' entries
+            ## ARGUMENTS ##
+                
+                apriori_state_vector : np.ndarray[['nx'],float]
+                    The complete apriori state vector with 'nx' entries
+                
+                posterior_state_vector : np.ndarray[['nx'],float]
+                    The complete posterior state vector with 'nx' entries
+                
+                state_vector_log : np.ndarray[['nx'],int]
+                    Array of 'log' flags for each entry in either state vector (they share these flags)
+                    if the flag is non-zero the value stored in both state vectors is the exponential
+                    logarithm of the 'real' value.
+                
+                state_vector_fix : np.ndarray[['nx'],int]
+                    Array of the 'fix' flags for each entry in either state vector (they share these flags)
+                    if the flag is non-zero, the value stored in both state vectors is not retrieved, and
+                    therefore should be the same in each of the apriori/posterior state vectors.
             
-            posterior_state_vector : np.ndarray[['nx'],float]
-                The complete posterior state vector with 'nx' entries
-            
-            state_vector_log : np.ndarray[['nx'],int]
-                Array of 'log' flags for each entry in either state vector (they share these flags)
-                if the flag is non-zero the value stored in both state vectors is the exponential
-                logarithm of the 'real' value.
-            
-            state_vector_fix : np.ndarray[['nx'],int]
-                Array of the 'fix' flags for each entry in either state vector (they share these flags)
-                if the flag is non-zero, the value stored in both state vectors is not retrieved, and
-                therefore should be the same in each of the apriori/posterior state vectors.
-        
-        RETURNS
-            
-            parameters : dict[str, ModelParameterEntry]
-                A dictionary that maps parameter names to the "ModelParameterEntry" associated with that parameter.
+            ## RETURNS ##
+                
+                parameters : dict[str, ModelParameterEntry]
+                    A dictionary that maps parameter names to the "ModelParameterEntry" associated with that parameter.
         """
         parameters = dict()
         
         assert self.state_vector_slice.step is None or self.state_vector_slice.step == 1, "A step larger than 1 is not supported when slicing a state vector"
         
-        for name, pslice in self.parameter_slices.items():
-            assert pslice.step is None or pslice.step == 1, "A step larger than 1 is not supported when sub-slicing a state vector"
+        for p in self.parameters:
+            
+            assert p.slice.step is None or p.slice.step == 1, "A step larger than 1 is not supported when sub-slicing a state vector"
             
             apriori_value = self.get_value_from_state_vector(
                 apriori_state_vector, 
                 state_vector_log, 
-                pslice
+                p.slice
             )
             posterior_value = self.get_value_from_state_vector(
                 posterior_state_vector, 
                 state_vector_log, 
-                pslice
+                p.slice
             )
             
-            fix_flag = self.get_state_vector_slice(state_vector_fix)[pslice] != 0
+            fix_flag = self.get_state_vector_slice(state_vector_fix)[p.slice] != 0
             
-            p_start, p_stop, p_step = pslice.indices(self.n_state_vector_entries)
-            parameters[name] = ModelParameterEntry(
+            p_start, p_stop, p_step = p.slice.indices(self.n_state_vector_entries)
+            parameters[p.name] = ModelParameterEntry(
                 self.id,
-                name,
+                p.name,
                 slice(self.state_vector_slice.start + p_start, self.state_vector_slice.start + p_stop),
                 fix_flag,
                 apriori_value,
@@ -226,87 +292,381 @@ class ModelBase:
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
-    
     @classmethod
+    @abc.abstractmethod
     def is_varident_valid(
             cls,
-            varident : np.ndarray[[3],int], # 3 integers that specify the identity (and some parameters) of the model
+            varident : np.ndarray[[3],int],
+            #   "Variable Identifier" from a *.apr file. Consists of 3 integers. Exact interpretation depends on the model
+            #   subclass.
+            
         ) -> bool:
+        """
+            Accepts a varident from a *.apr file, returns True if the varident is compatible with the model, False otherwise.
+            Should be overwritten by a subclass
+            
+            ## ARGUMENTS ##
+            
+                varident : np.ndarra[[3],int]
+                    "Variable Identifier" from a *.apr file. Consists of 3 integers. Exact interpretation depends on the model
+                    subclass.
+            
+            ## RETURNS ##
+            
+                flag : bool
+                    True if varident is compatible with the model, False otherwise.
+        """
         ...
     
     
     @classmethod
+    @abc.abstractmethod
     def from_apr_to_state_vector(
             cls,
-            variables : "Variables_0", # An instance of the archnemesis.Variables_0.Variables_0 class that is reading the *.apr file
-            f : IO, # The open file descriptor of the *.apr file
-            varident : np.ndarray[[3],int], # Should be the correct slice of the original (which should be a reference to the sub-array)
-            varparam : np.ndarray[["mparam"],float], # Should be the correct slice of the original (which should be a reference to the sub-array)
-            ix : int, # The next free entry in the state vector
-            lx : np.ndarray[["mx"],int], # state vector flags denoting if the value in the state vector is a logarithm of the 'real' value. Should be a reference to the original
-            x0 : np.ndarray[["mx"],float], # state vector, holds values to be retrieved. Should be a reference to the original
-            sx : np.ndarray[["mx","mx"],float], # Covariance matrix for the state vector. Should be a reference to the original
-            inum : np.ndarray[["mx"],int], # state vector flags denoting if the gradient is to be numerically calulated (1) or analytically calculated (0) for the state vector entry. Should be a reference to the original
-            npro : int, # Number of altitude levels defined for the atmosphere component
-            nlocations : int, # Number of locations defined for the atmosphere component
-            runname : str, # Name of the *.apr file, without extension.
-            sxminfac : float, # Minimum factor to bother calculating covariance matrix entries between current model's parameters and other model's parameters.
+            variables : "Variables_0", 
+            #   An instance of the archnemesis.Variables_0.Variables_0 class that is reading the *.apr file
+            
+            f : IO, 
+            #   The open file descriptor of the *.apr file
+            
+            varident : np.ndarray[[3],int], 
+            #   Should be the correct slice of the original (which should be a reference to the sub-array)
+            
+            varparam : np.ndarray[["mparam"],float], 
+            #   Should be the correct slice of the original (which should be a reference to the sub-array)
+            
+            ix : int, 
+            #   The next free entry in the state vector
+            
+            lx : np.ndarray[["mx"],int], 
+            #   state vector flags denoting if the value in the state vector is a logarithm of the 'real' value. 
+            #   Should be a reference to the original
+            
+            x0 : np.ndarray[["mx"],float], 
+            #   state vector, holds values to be retrieved. Should be a reference to the original
+            
+            sx : np.ndarray[["mx","mx"],float], 
+            #   Covariance matrix for the state vector. Should be a reference to the original
+            
+            inum : np.ndarray[["mx"],int], 
+            #   state vector flags denoting if the gradient is to be numerically calculated (1) 
+            #   or analytically calculated (0) for the state vector entry. Should be a reference to the original
+            
+            npro : int, 
+            #   Number of altitude levels defined for the atmosphere component
+            
+            nlocations : int, 
+            #   Number of locations defined for the atmosphere component
+            
+            runname : str, 
+            #   Name of the *.apr file, without extension.
+            
+            sxminfac : float, 
+            #   Minimum factor to bother calculating covariance matrix entries between current model's 
+            #   parameters and other model's parameters.
+            
         ) -> Self:
         """
-        Constructs a model from its entry in a *.apr file.
+            Constructs a model from its entry in a *.apr file. Should be overwritten by a subclass
+            
+            ## ARGUMENTS ##
+            
+                variables : Variables_0
+                    The "Variables_0" instance that is reading the *.apr file
+                
+                f : IO
+                    An open file descriptor for the *.apr file.
+                
+                varident : np.ndarray[[3],int]
+                    "Variable Identifier" from a *.apr file. Consists of 3 integers. Exact interpretation depends on the model
+                    subclass.
+                
+                varparam : np.ndarray[["mparam"], float]
+                    "Variable Parameters" from a *.apr file. Holds "extra parameters" for the model. Exact interpretation depends on the model
+                    subclass. NOTE: this is a holdover from the FORTRAN code, the better way to give extra data to the model is to store it on the
+                    model instance itself.
+                
+                ix : int
+                    The index of the next free entry in the state vector
+                
+                lx : np.ndarray[["mx"],int]
+                    State vector flags denoting if the value in the state vector is a logarithm of the 'real' value. 
+                    Should be a reference to the original
+                
+                x0 : np.ndarray[["mx"],float]
+                    The actual state vector, holds values to be retrieved. Should be a reference to the original
+                
+                sx : np.ndarray[["mx","mx"],float]
+                    Covariance matrix for the state vector. Should be a reference to the original
+                
+                inum : np.ndarray[["mx"],int]
+                    state vector flags denoting if the gradient is to be numerically calulated (1) 
+                    or analytically calculated (0) for the state vector entry. Should be a reference to the original
+                
+                npro : int
+                    Number of altitude levels defined for the atmosphere component of the retrieval setup.
+                
+                n_locations : int
+                    Number of locations defined for the atmosphere component of the retrieval setup.
+                
+                runname : str
+                    Name of the *.apr file, without extension. For example '/path/to/neptune.apr' has 'neptune'
+                    as `runname`
+                
+                sxminfac : float
+                    Minimum factor to bother calculating covariance matrix entries between current 
+                    model's parameters and another model's parameters.
+            
+            
+            ## RETURNS ##
+            
+                instance : Self
+                    A constructed instance of the model class that has parameters set from information in the *.apr file
         """
         ...
     
     
     @classmethod
-    def calculate(cls, *args, **kwargs) -> Any:
+    @abc.abstractmethod
+    def calculate(
+            cls, 
+            *args, 
+            **kwargs
+        ) -> Any:
         """
-        This class method should perform the lowest-level calculation for the model. Note that it is a class
-        method (so we can easily call it from other models if need be) so you must pass any instance attributes
-        as arguments.
-        
-        Models are so varied in here that I cannot make any specific interface at this level of abstraction.
+            This class method should perform the lowest-level calculation for the model. Note that it is a class
+            method (so we can easily call it from other models if need be) so you must pass any instance attributes
+            as arguments.
+            
+            NOTE: Models are so varied in here that I cannot make any specific interface at this level of abstraction.
         """
         ...
     
-    
+    @abc.abstractmethod
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
+            #   The ForwardModel_0 instance that is calling this function. We need this so we can alter components of the forward model
+            #   inside this function.
+            
             ix : int,
+            #   The index of the state vector that corresponds to the start of the model's parameters
+            
             ipar : int,
+            #   An integer that encodes which part of the atmospheric component of the forward model this model should alter. Only
+            #   used for some Atmospheric models.
+            
             ivar : int,
+            #   The model index, the order in which the models were instantiated. NOTE: this is a vestige from the
+            #   FORTRAN version of the code, we don't really need to know this as we should be: 1) storing any model-specific
+            #   values on the model instance itself; 2) passing any model-specific data from the outside directly
+            #   instead of having the model instance look it up from a big array. However, the code for each model
+            #   was recently ported from a more FORTRAN-like implementation so this is still required by some of them
+            #   for now.
+            
             xmap : np.ndarray,
+            #   Functional derivatives of the state vector w.r.t Atmospheric profiles at each Atmosphere location.
+            #   The array is sized as:
+            #    
+            #       nx - number of state vector entries.
+            #    
+            #       NVMR - number of gas volume mixing ratio profiles in the Atmosphere component of the forward model.
+            #    
+            #       NDUST - number of aerosol profiles in the Atmosphere component of the forward model.
+            #    
+            #       NP - number of points in an atmospheric profile, all profiles in an Atmosphere component of the forward model 
+            #               should have the same number of points.
+            #    
+            #       NLOCATIONS - number of locations defined in the Atmosphere component of the forward model.
+            #
+            #   The size of the 1st dimension (NVMR+2+NDUST) is like that because it packs in 4 different atmospheric profile
+            #   types: gas volume mixing ratios (NVMR), aerosol densities (NDUST), fractional cloud cover (1), para H2 fraction (1).
+            
         ) -> None:
         """
-        Updated values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
+            Updated values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
+            
+            ## ARGUMENTS ##
+            
+                forward_model : ForwardModel_0
+                    The ForwardModel_0 instance that is calling this function. We need this so we can alter components of the forward model
+                    inside this function.
+                
+                ix : int
+                    The index of the state vector that corresponds to the start of the model's parameters
+                    
+                ipar : int
+                    An integer that encodes which part of the atmospheric component of the forward model this model should alter. Only
+                    used for some Atmospheric models.
+                
+                ivar : int
+                    The model index, the order in which the models were instantiated. NOTE: this is a vestige from the
+                    FORTRAN version of the code, we don't really need to know this as we should be: 1) storing any model-specific
+                    values on the model instance itself; 2) passing any model-specific data from the outside directly
+                    instead of having the model instance look it up from a big array. However, the code for each model
+                    was recently ported from a more FORTRAN-like implementation so this is still required by some of them
+                    for now.
+                
+                xmap : np.ndarray[[nx,NVMR+2+NDUST,NP,NLOCATIONS],float]
+                    Functional derivatives of the state vector w.r.t Atmospheric profiles at each Atmosphere location.
+                    The array is sized as:
+                        
+                        nx - number of state vector entries.
+                        
+                        NVMR - number of gas volume mixing ratio profiles in the Atmosphere component of the forward model.
+                        
+                        NDUST - number of aerosol profiles in the Atmosphere component of the forward model.
+                        
+                        NP - number of points in an atmospheric profile, all profiles in an Atmosphere component of the forward model 
+                             should have the same number of points.
+                        
+                        NLOCATIONS - number of locations defined in the Atmosphere component of the forward model.
+                    
+                    The size of the 1st dimension (NVMR+2+NDUST) is like that because it packs in 4 different atmospheric profile
+                    types: gas volume mixing ratios (NVMR), aerosol densities (NDUST), fractional cloud cover (1), para H2 fraction (1).
+                    
+                
+            ## RETURNS ##
+            
+                None
         """
         ...
 
-    
+    @abc.abstractmethod
     def patch_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
+            #   The ForwardModel_0 instance that is calling this function. We need this so we can alter components of the forward model
+            #   inside this function.
+            
             ix : int,
+            #   The index of the state vector that corresponds to the start of the model's parameters
+            
             ipar : int,
+            #   An integer that encodes which part of the atmospheric component of the forward model this model should alter. Only
+            #   used for some Atmospheric models.
+            
             ivar : int,
+            #   The model index, the order in which the models were instantiated. NOTE: this is a vestige from the
+            #   FORTRAN version of the code, we don't really need to know this as we should be: 1) storing any model-specific
+            #   values on the model instance itself; 2) passing any model-specific data from the outside directly
+            #   instead of having the model instance look it up from a big array. However, the code for each model
+            #   was recently ported from a more FORTRAN-like implementation so this is still required by some of them
+            #   for now.
+            
             xmap : np.ndarray,
+            #   Functional derivatives of the state vector w.r.t Atmospheric profiles at each Atmosphere location.
+            #   The array is sized as:
+            #    
+            #       nx - number of state vector entries.
+            #    
+            #       NVMR - number of gas volume mixing ratio profiles in the Atmosphere component of the forward model.
+            #    
+            #       NDUST - number of aerosol profiles in the Atmosphere component of the forward model.
+            #    
+            #       NP - number of points in an atmospheric profile, all profiles in an Atmosphere component of the forward model 
+            #               should have the same number of points.
+            #    
+            #       NLOCATIONS - number of locations defined in the Atmosphere component of the forward model.
+            #
+            #   The size of the 1st dimension (NVMR+2+NDUST) is like that because it packs in 4 different atmospheric profile
+            #   types: gas volume mixing ratios (NVMR), aerosol densities (NDUST), fractional cloud cover (1), para H2 fraction (1).
         ) -> None:
         """
-        Patches values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
+            Patches values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
+            
+            ## ARGUMENTS ##
+            
+                forward_model : ForwardModel_0
+                    The ForwardModel_0 instance that is calling this function. We need this so we can alter components of the forward model
+                    inside this function.
+                
+                ix : int
+                    The index of the state vector that corresponds to the start of the model's parameters
+                    
+                ipar : int
+                    An integer that encodes which part of the atmospheric component of the forward model this model should alter. Only
+                    used for some Atmospheric models.
+                
+                ivar : int
+                    The model index, the order in which the models were instantiated. NOTE: this is a vestige from the
+                    FORTRAN version of the code, we don't really need to know this as we should be: 1) storing any model-specific
+                    values on the model instance itself; 2) passing any model-specific data from the outside directly
+                    instead of having the model instance look it up from a big array. However, the code for each model
+                    was recently ported from a more FORTRAN-like implementation so this is still required by some of them
+                    for now.
+                
+                xmap : np.ndarray[[nx,NVMR+2+NDUST,NP,NLOCATIONS],float]
+                    Functional derivatives of the state vector w.r.t Atmospheric profiles at each Atmosphere location.
+                    The array is sized as:
+                        
+                        nx - number of state vector entries.
+                        
+                        NVMR - number of gas volume mixing ratio profiles in the Atmosphere component of the forward model.
+                        
+                        NDUST - number of aerosol profiles in the Atmosphere component of the forward model.
+                        
+                        NP - number of points in an atmospheric profile, all profiles in an Atmosphere component of the forward model 
+                             should have the same number of points.
+                        
+                        NLOCATIONS - number of locations defined in the Atmosphere component of the forward model.
+                    
+                    The size of the 1st dimension (NVMR+2+NDUST) is like that because it packs in 4 different atmospheric profile
+                    types: gas volume mixing ratios (NVMR), aerosol densities (NDUST), fractional cloud cover (1), para H2 fraction (1).
+                    
+                
+            ## RETURNS ##
+            
+                None
         """
         ...
     
-    
+    @abc.abstractmethod
     def calculate_from_subspecret(
             self,
             forward_model : "ForwardModel_0",
+            #   The ForwardModel_0 instance that is calling this function. We need this so we can alter components of the forward model
+            #   inside this function.
+            
             ix : int,
+            #   The index of the state vector that corresponds to the start of the model's parameters
+            
             ivar : int,
+            #   The model index, the order in which the models were instantiated. NOTE: this is a vestige from the
+            #   FORTRAN version of the code, we don't really need to know this as we should be: 1) storing any model-specific
+            #   values on the model instance itself; 2) passing any model-specific data from the outside directly
+            #   instead of having the model instance look it up from a big array. However, the code for each model
+            #   was recently ported from a more FORTRAN-like implementation so this is still required by some of them
+            #   for now.
+            
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
+            #   Modelled spectrum that we want to alter with this model. NOTE: do not assign directly to this, always
+            #   assign to slices of it. If you assign directly, then only the **reference** will change and the value
+            #   outside the function will not be altered.
+            #
+            #   The shape is defined as:
+            #
+            #       NCONV - number of "convolution points" (i.e. wavelengths/wavenumbers) in the modelled spectrum.
+            #
+            #       NGEOM - number of "geometries" (i.e. different observation setups) in the modelled spectrum.
+            
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
+            #   Gradients of the spectrum w.r.t each entry of the state vector.NOTE: do not assign directly to this, always
+            #   assign to slices of it. If you assign directly, then only the **reference** will change and the value
+            #   outside the function will not be altered.
+            #
+            #   The shape is defined as:
+            #
+            #       NCONV - number of "convolution points" (i.e. wavelengths/wavenumbers) in the modelled spectrum.
+            #
+            #       NGEOM - number of "geometries" (i.e. different observation setups) in the modelled spectrum.
+            #
+            #       NX - Number of entries in the state vector.
+            
+            
+            
         ) -> None:
         """
-        Updated spectra based upon values of model parameters in the state vector. Called from ForwardModel_0::subspecret.
+            Updated spectra based upon values of model parameters in the state vector. Called from ForwardModel_0::subspecret.
         """
         ...

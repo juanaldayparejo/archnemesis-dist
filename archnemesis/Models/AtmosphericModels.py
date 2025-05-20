@@ -1,6 +1,7 @@
 
 from .ModelBase import *
 
+from archnemesis.enums import AtmosphericProfileType
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ class AtmosphericModelBase(ModelBase):
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
+    @abc.abstractmethod
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -66,76 +68,109 @@ class AtmosphericModelBase(ModelBase):
 
 
 class Modelm1(AtmosphericModelBase):
+    """
+    In this model, the aerosol profiles is modelled as a continuous profile in units
+    of particles perModelm1 gram of atmosphere. Note that typical units of aerosol profiles in NEMESIS
+    are in particles per gram of atmosphere
+    """
+    
     id : int = -1
 
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(i_state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model.
+        # NOTE: It is best to define these in the same order and with the
+        # same names as they are saved to the state vector, and use the same
+        # names and ordering when they are passed to the `self.calculate(...)` 
+        # class method.
+        self.parameters = (
+            ModelParameter('full_profile', slice(None), 'Every value for each level of the profile', 'PROFILE_TYPE'),
+        )
+        
+        return
 
     @classmethod
-    def calculate(cls, atm,ipar,xprof):
+    def calculate(
+            cls, 
+            atm : "Atmosphere_0",
+            #   Instance of Atmosphere_0 class we are operating upon
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM of atmospheric profile type we are altering.
+            
+            atm_profile_idx : int | None,
+            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+            
+            xprof : np.ndarray[['mparam'],float],
+            #   Full profile, this model defines every value for each profile level. Has been unlogged as required
+            
+            MakePlot=False
+        ) -> tuple["Atmosphere_0", np.ndarray]:
         """
-        FUNCTION NAME : modelm1()
+            FUNCTION NAME : modelm1()
 
-        DESCRIPTION :
+            DESCRIPTION :
 
-            Function defining the model parameterisation -1 in NEMESIS.
-            In this model, the aerosol profiles is modelled as a continuous profile in units
-            of particles perModelm1 gram of atmosphere. Note that typical units of aerosol profiles in NEMESIS
-            are in particles per gram of atmosphere
+                Function defining the model parameterisation -1 in NEMESIS.
+                In this model, the aerosol profiles is modelled as a continuous profile in units
+                of particles perModelm1 gram of atmosphere. Note that typical units of aerosol profiles in NEMESIS
+                are in particles per gram of atmosphere
 
-        INPUTS :
+            INPUTS :
 
-            atm :: Python class defining the atmosphere
+                atm :: Python class defining the atmosphere
 
-            ipar :: Atmospheric parameter to be changed
-                    (0 to NVMR-1) :: Gas VMR
-                    (NVMR) :: Temperature
-                    (NVMR+1 to NVMR+NDUST-1) :: Aerosol density
-                    (NVMR+NDUST) :: Para-H2
-                    (NVMR+NDUST+1) :: Fractional cloud coverage
+                atm_profile_type :: AtmosphericProfileType
+                        ENUM of atmospheric profile type we are altering.
+                    
+                atm_profile_idx : int | None
+                    Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
 
-            xprof(npro) :: Atmospheric aerosol profile in particles/cm3
+                xprof(npro) :: Atmospheric aerosol profile in particles/cm3
 
-        OPTIONAL INPUTS:
+            OPTIONAL INPUTS:
 
-            MakePlot :: If True, a summary plot is generated
+                MakePlot :: If True, a summary plot is generated
 
-        OUTPUTS :
+            OUTPUTS :
 
-            atm :: Updated atmospheric class
-            xmap(npro,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
-                                                elements in state vector
+                atm :: Updated atmospheric class
+                xmap(npro,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
+                                                    elements in state vector
 
-        CALLING SEQUENCE:
+            CALLING SEQUENCE:
 
-            atm,xmap = modelm1(atm,ipar,xprof)
+                atm,xmap = modelm1(atm,ipar,xprof)
 
-        MODIFICATION HISTORY : Juan Alday (29/03/2021)
+            MODIFICATION HISTORY : Juan Alday (29/03/2021)
 
         """
-
+        
         npro = len(xprof)
         if npro!=atm.NP:
             raise ValueError('error in model -1 :: Number of levels in atmosphere does not match and profile')
-
-        npar = atm.NVMR+2+atm.NDUST
-        xmap = np.zeros([npro,npar,npro])
-
-        if ipar<atm.NVMR:  #Gas VMR
-            raise ValueError('error :: Model -1 is just compatible with aerosol populations (Gas VMR given)')
-        elif ipar==atm.NVMR: #Temperature
-            raise ValueError('error :: Model -1 is just compatible with aerosol populations (Temperature given)')
-        elif ipar>atm.NVMR:
-            jtmp = ipar - (atm.NVMR+1)
-            x1 = np.exp(xprof)
-            if jtmp<atm.NDUST:
-                atm.DUST_UNITS_FLAG[jtmp] = -1
-                atm.DUST[:,jtmp] = x1 #* 1000. * rho
-            elif jtmp==atm.NDUST:
-                raise ValueError('error :: Model -1 is just compatible with aerosol populations')
-            elif jtmp==atm.NDUST+1:
-                raise ValueError('error :: Model -1 is just compatible with aerosol populations')
-
-        for j in range(npro):
-            xmap[0:npro,ipar,j] = x1[:] #* 1000. * rho
+            
+        if atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+            temp = np.array(atm.DUST)
+            temp[:,atm_profile_idx] = xprof
+            atm.edit_DUST(temp)
+            xmap = np.diag(xprof)
+        
+        else:
+            raise ValueError(f'error :: Model -1 is only compatible with aerosol profiles, not {atm_profile_type}')
+            
         return atm, xmap
 
 
@@ -156,34 +191,37 @@ class Modelm1(AtmosphericModelBase):
             runname : str,
             sxminfac : float,
         ) -> Self:
-        ix_0 = ix
         #* continuous cloud, but cloud retrieved as particles/cm3 rather than
         #* particles per gram to decouple it from pressure.
         #********* continuous particles/cm3 profile ************************
+        ix_0 = ix
+        
         if varident[0] >= 0:
             raise ValueError('error in read_apr_nemesis :: model -1 type is only for use with aerosols')
 
         s = f.readline().split()
-        f1 = open(s[0],'r')
-        tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
-        nlevel = int(tmp[0])
-        if nlevel != npro:
-            raise ValueError('profiles must be listed on same grid as .prf')
-        clen = float(tmp[1])
-        pref = np.zeros([nlevel])
-        ref = np.zeros([nlevel])
-        eref = np.zeros([nlevel])
-        for j in range(nlevel):
-            tmp = np.fromfile(f1,sep=' ',count=3,dtype='float')
-            pref[j] = float(tmp[0])
-            ref[j] = float(tmp[1])
-            eref[j] = float(tmp[2])
+        
+        with open(s[0], 'r') as f1:
+            tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
+            
+            nlevel = int(tmp[0])
+            if nlevel != npro:
+                raise ValueError('profiles must be listed on same grid as .prf')
+            
+            clen = float(tmp[1])
+            pref = np.zeros([nlevel])
+            ref = np.zeros([nlevel])
+            eref = np.zeros([nlevel])
+            
+            for j in range(nlevel):
+                tmp = np.fromfile(f1,sep=' ',count=3,dtype='float')
+                pref[j] = float(tmp[0])
+                ref[j] = float(tmp[1])
+                eref[j] = float(tmp[2])
 
-            lx[ix+j] = 1
-            x0[ix+j] = np.log(ref[j])
-            sx[ix+j,ix+j] = ( eref[j]/ref[j]  )**2.
-
-        f1.close()
+                lx[ix+j] = 1
+                x0[ix+j] = np.log(ref[j])
+                sx[ix+j,ix+j] = ( eref[j]/ref[j]  )**2.
 
         #Calculating correlation between levels in continuous profile
         for j in range(nlevel):
@@ -212,21 +250,26 @@ class Modelm1(AtmosphericModelBase):
         ) -> None:
         #Model -1. Continuous aerosol profile in particles cm-3
         #***************************************************************
-
-        xprof = np.zeros(forward_model.Variables.NXVAR[ivar])
-        xprof[:] = forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]]
-        jtmp = ipar - (forward_model.AtmosphereX.NVMR+1)
-        if forward_model.Variables.VARPARAM[ivar,0]\
-            and ipar > forward_model.AtmosphereX.NVMR\
-            and jtmp < forward_model.AtmosphereX.NDUST: # Fortran true so flip aerosol model
-
-            forward_model.AtmosphereX,xmap1 = Model0.calculate(forward_model.AtmosphereX,ipar,xprof)
+        
+        atm = forward_model.AtmosphereX
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
+        
+        if atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+            calculate_fn = lambda *args, **kwargs: Model0.calculate(*args, **kwargs)
         else:
-            forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,xprof)
-
-        xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
-
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+            calculate_fn = lambda *args, **kwargs: self.calculate(*args, **kwargs)
+        
+        atm, xmap1 = calculate_fn(
+            atm,
+            atm_profile_type,
+            atm_profile_idx,
+            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        )
+        
+        forward_model.AtmosphereX = atm
+        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
+        
+        return
 
 
     def patch_from_subprofretg(
@@ -239,22 +282,78 @@ class Modelm1(AtmosphericModelBase):
         ) -> None:
         #Model -1. Continuous aerosol profile in particles cm-3
         #***************************************************************
-
-        xprof = np.zeros(forward_model.Variables.NXVAR[ivar])
-        xprof[:] = forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]]
-        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,xprof)
-        xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
-
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        atm = forward_model.AtmosphereX
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
+        
+        atm, xmap1 = self.calculate(
+            atm,
+            atm_profile_type,
+            atm_profile_idx,
+            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        )
+        
+        forward_model.AtmosphereX = atm
+        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
+        
+        return
 
 
 class Model0(AtmosphericModelBase):
+    """
+    In this model, the atmospheric parameters are modelled as continuous profiles
+    in which each element of the state vector corresponds to the atmospheric profile 
+    at each altitude level
+    """
+    
     id : int = 0
 
 
-    @classmethod
-    def calculate(cls, atm,ipar,xprof,MakePlot=False):
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(i_state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model.
+        # NOTE: It is best to define these in the same order and with the
+        # same names as they are saved to the state vector, and use the same
+        # names and ordering when they are passed to the `self.calculate(...)` 
+        # class method.
+        self.parameters = (
+            ModelParameter('full_profile', slice(None), 'Every value for each level of the profile', 'PROFILE_TYPE'),
+        )
+        
+        _lgr.debug(f'Constructed {self.__class__.__name__} with {self.state_vector_start=} {self.n_state_vector_entries=} {self.parameters=}')
+        
+        return
 
+
+
+    @classmethod
+    def calculate(
+            cls, 
+            atm : "Atmosphere_0",
+            #   Instance of Atmosphere_0 class we are operating upon
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM of atmospheric profile type we are altering.
+            
+            atm_profile_idx : int | None,
+            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+            
+            xprof : np.ndarray[['mparam'],float],
+            #   Full profile, this model defines every value for each profile level. Has been unlogged as required
+            
+            MakePlot=False
+        ) -> tuple["Atmosphere_0", np.ndarray]:
         """
             FUNCTION NAME : model0()
 
@@ -269,12 +368,11 @@ class Model0(AtmosphericModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                ipar :: Atmospheric parameter to be changed
-                        (0 to NVMR-1) :: Gas VMR
-                        (NVMR) :: Temperature
-                        (NVMR+1 to NVMR+NDUST-1) :: Aerosol density
-                        (NVMR+NDUST) :: Para-H2
-                        (NVMR+NDUST+1) :: Fractional cloud coverage
+                atm_profile_type :: AtmosphericProfileType
+                    ENUM of atmospheric profile type we are altering.
+                
+                atm_profile_idx : int | None
+                    Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
 
                 xprof(npro) :: Atmospheric profile
 
@@ -295,47 +393,42 @@ class Model0(AtmosphericModelBase):
             MODIFICATION HISTORY : Juan Alday (29/03/2021)
 
         """
+        _lgr.debug(f'Calculating {cls.__name__} {atm=} {atm_profile_type=} {atm_profile_idx=} {xprof.shape=}')
+        _lgr.debug(f'{xprof[:10]=}')
 
         npro = len(xprof)
         if npro!=atm.NP:
             raise ValueError('error in model 0 :: Number of levels in atmosphere does not match and profile')
-
-        npar = atm.NVMR+2+atm.NDUST
-        xmap = np.zeros([npro,npar,npro])
-
-        if ipar<atm.NVMR:  #Gas VMR
-            jvmr = ipar
-            x1 = np.exp(xprof)
-            vmr = np.zeros([atm.NP,atm.NVMR])
-            vmr[:,:] = atm.VMR
-            vmr[:,jvmr] = x1
-            atm.edit_VMR(vmr)
-            for j in range(npro):
-                xmap[j,ipar,j] = x1[j]
-        elif ipar==atm.NVMR: #Temperature
-            x1 = xprof
-            atm.edit_T(x1)
-            for j in range(npro):
-                xmap[j,ipar,j] = 1.
-        elif ipar>atm.NVMR:
-            jtmp = ipar - (atm.NVMR+1)
-            x1 = np.exp(xprof)
-            if jtmp<atm.NDUST: #Dust in m-3
-                dust = np.zeros([atm.NP,atm.NDUST])
-                dust[:,:] = atm.DUST
-                dust[:,jtmp] = x1
-                atm.edit_DUST(dust)
-                for j in range(npro):
-                    xmap[j,ipar,j] = x1[j]
-            elif jtmp==atm.NDUST:
-                atm.PARAH2 = x1
-                for j in range(npro):
-                    xmap[j,ipar,j] = x1[j]
-            elif jtmp==atm.NDUST+1:
-                atm.FRAC = x1
-                for j in range(npro):
-                    xmap[j,ipar,j] = x1[j]
-
+        
+        xmap = np.zeros((npro,npro))
+        
+        if atm_profile_type == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO:
+            temp = np.array(atm.VMR)
+            temp[:,atm_profile_idx] = xprof
+            atm.edit_VMR(temp)
+            xmap[...] = np.diag(xprof)
+        
+        elif atm_profile_type == AtmosphericProfileType.TEMPERATURE:
+            atm.edit_T(xprof)
+            xmap[...] = np.diag(np.ones_like(xprof))
+        
+        elif atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+            temp = np.array(atm.DUST)
+            temp[:,atm_profile_idx] = xprof
+            atm.edit_DUST(temp)
+            xmap[...] = np.diag(xprof)
+        
+        elif atm_profile_type == AtmosphericProfileType.PARA_H2_FRACTION:
+            atm.PARAH2(xprof)
+            xmap[...] = np.diag(np.ones_like(xprof))
+        
+        elif atm_profile_type == AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE:
+            atm.FRAC(xprof)
+            xmap[...] = np.diag(np.ones_like(xprof))
+        
+        else:
+            raise ValueError(f'{cls.__name__} id {cls.id} has unknown atmospheric profile type {atm_profile_type}')
+        
         if MakePlot==True:
             fig,(ax1,ax2,ax3) = plt.subplots(1,3,figsize=(10,5))
 
@@ -376,24 +469,28 @@ class Model0(AtmosphericModelBase):
             runname : str,
             sxminfac : float,
         ) -> Self:
+        _lgr.debug(f'Reading model {cls.__name__} setup from "{runname}.apr" file')
         ix_0 = ix
+        
         #********* continuous profile ************************
         s = f.readline().split()
-        f1 = open(s[0],'r')
-        tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
-        nlevel = int(tmp[0])
-        if nlevel != npro:
-            raise ValueError('profiles must be listed on same grid as .prf')
-        clen = float(tmp[1])
-        pref = np.zeros([nlevel])
-        ref = np.zeros([nlevel])
-        eref = np.zeros([nlevel])
-        for j in range(nlevel):
-            tmp = np.fromfile(f1,sep=' ',count=3,dtype='float')
-            pref[j] = float(tmp[0])
-            ref[j] = float(tmp[1])
-            eref[j] = float(tmp[2])
-        f1.close()
+        
+        with open(s[0],'r') as f1:
+            tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
+            
+            nlevel = int(tmp[0])
+            if nlevel != npro:
+                raise ValueError('profiles must be listed on same grid as .prf')
+            
+            clen = float(tmp[1])
+            pref = np.zeros([nlevel])
+            ref = np.zeros([nlevel])
+            eref = np.zeros([nlevel])
+            for j in range(nlevel):
+                tmp = np.fromfile(f1,sep=' ',count=3,dtype='float')
+                pref[j] = float(tmp[0])
+                ref[j] = float(tmp[1])
+                eref[j] = float(tmp[2])
 
         if varident[0] == 0:  # *** temperature, leave alone ****
             x0[ix:ix+nlevel] = ref[:]
@@ -434,31 +531,85 @@ class Model0(AtmosphericModelBase):
             ivar : int,
             xmap : np.ndarray,
         ) -> None:
+        _lgr.debug(f'Calculating {self.__class__.__name__} from subprofretg {forward_model=} {ix=} {ipar=} {ivar=} {xmap.shape=}')
+        
         #Model 0. Continuous profile
         #***************************************************************
-
-        xprof = np.zeros(forward_model.Variables.NXVAR[ivar])
-        xprof[:] = forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]]
-        jtmp = ipar - (forward_model.AtmosphereX.NVMR+1)
-        if (forward_model.Variables.VARPARAM[ivar,0] != 0
-                and ipar > forward_model.AtmosphereX.NVMR
-                and jtmp < forward_model.AtmosphereX.NDUST
-            ): # Fortran true so flip aerosol model
-            forward_model.AtmosphereX,xmap1 = Modelm1.calculate(forward_model.AtmosphereX,ipar,xprof)
+        
+        atm = forward_model.AtmosphereX
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
+        
+        if atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+            calculate_fn = lambda *args, **kwargs: Modelm1.calculate(*args, **kwargs)
         else:
-            forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,xprof)
-
-        xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
-
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+            calculate_fn = lambda *args, **kwargs: self.calculate(*args, **kwargs)
+        
+        _lgr.debug(f'Distributing to callable {calculate_fn}')
+        atm, xmap1 = calculate_fn(
+            atm,
+            atm_profile_type,
+            atm_profile_idx,
+            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        )
+        
+        _lgr.debug(f'Result calculated, setting values...')
+        
+        forward_model.AtmosphereX = atm
+        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
+        
+        return
 
 
 class Model2(AtmosphericModelBase):
+    """
+        In this model, the atmospheric parameters are scaled using a single factor with 
+        respect to the vertical profiles in the reference atmosphere
+    """
     id : int = 2
+
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(i_state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model.
+        # NOTE: It is best to define these in the same order and with the
+        # same names as they are saved to the state vector, and use the same
+        # names and ordering when they are passed to the `self.calculate(...)` 
+        # class method.
+        self.parameters = (
+            ModelParameter('scaling_factor', slice(0,1), 'Scaling factor applied to the reference profile', 'PROFILE_TYPE'),
+        )
+        
+        return
 
 
     @classmethod
-    def calculate(cls, atm,ipar,scf,MakePlot=False):
+    def calculate(
+            cls, 
+            atm : "Atmosphere_0",
+            #   Instance of Atmosphere_0 class we are operating upon
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM of atmospheric profile type we are altering.
+            
+            atm_profile_idx : int | None,
+            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+            
+            scf : float,
+            #   Scaling factor to be applied to the reference vertical profile
+            
+            MakePlot=False
+        ):
 
         """
             FUNCTION NAME : model2()
@@ -473,12 +624,11 @@ class Model2(AtmosphericModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                ipar :: Atmospheric parameter to be changed
-                        (0 to NVMR-1) :: Gas VMR
-                        (NVMR) :: Temperature
-                        (NVMR+1 to NVMR+NDUST-1) :: Aerosol density
-                        (NVMR+NDUST) :: Para-H2
-                        (NVMR+NDUST+1) :: Fractional cloud coverage
+                atm_profile_type :: AtmosphericProfileType
+                    ENUM of atmospheric profile type we are altering.
+                
+                atm_profile_idx : int | None
+                    Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
 
                 scf :: Scaling factor
 
@@ -489,7 +639,7 @@ class Model2(AtmosphericModelBase):
             OUTPUTS :
 
                 atm :: Updated atmospheric class
-                xmap(1,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
+                xmap(1,npro) :: Matrix of relating funtional derivatives to 
                                                  elements in state vector
 
             CALLING SEQUENCE:
@@ -500,36 +650,31 @@ class Model2(AtmosphericModelBase):
 
         """
 
-        npar = atm.NVMR+2+atm.NDUST
-        xmap = np.zeros([1,npar,atm.NP])
-
-        x1 = np.zeros(atm.NP)
-        xref = np.zeros(atm.NP)
-        if ipar<atm.NVMR:  #Gas VMR
-            jvmr = ipar
-            xref[:] = atm.VMR[:,jvmr]
-            x1[:] = atm.VMR[:,jvmr] * scf
-            atm.VMR[:,jvmr] =  x1
-        elif ipar==atm.NVMR: #Temperature
-            xref[:] = atm.T[:]
-            x1[:] = atm.T[:] * scf
-            atm.T[:] = x1 
-        elif ipar>atm.NVMR:
-            jtmp = ipar - (atm.NVMR+1)
-            if jtmp<atm.NDUST:
-                xref[:] = atm.DUST[:,jtmp]
-                x1[:] = atm.DUST[:,jtmp] * scf
-                atm.DUST[:,jtmp] = x1
-            elif jtmp==atm.NDUST:
-                xref[:] = atm.PARAH2
-                x1[:] = atm.PARAH2 * scf
-                atm.PARAH2 = x1
-            elif jtmp==atm.NDUST+1:
-                xref[:] = atm.FRAC
-                x1[:] = atm.FRAC * scf
-                atm.FRAC = x1
-
-        xmap[0,ipar,:] = xref[:]
+        xmap = np.zeros((1,atm.NP))
+        
+        if atm_profile_type == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO:
+            xmap[0,:] = atm.VMR[:, atm_profile_idx]
+            atm.VMR[:, atm_profile_idx] *= scf
+        
+        elif atm_profile_type == AtmosphericProfileType.TEMPERATURE:
+            xmap[0,:] = atm.T
+            atm.T *= scf
+        
+        elif atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+            xmap[0,:] = atm.DUST[:, atm_profile_idx]
+            atm.DUST[:, atm_profile_idx] *= scf
+        
+        elif atm_profile_type == AtmosphericProfileType.PARA_H2_FRACTION:
+            xmap[0,:] = atm.PARAH2
+            atm.PARAH2 *= scf
+        
+        elif atm_profile_type == AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE:
+            xmap[0,:] = atm.FRAC
+            atm.FRAC *= scf
+        
+        else:
+            raise ValueError(f'{cls.__name__} id {cls.id} has unknown atmospheric profile type {atm_profile_type}')
+        
 
         if MakePlot==True:
             fig,(ax1,ax2,ax3) = plt.subplots(1,3,figsize=(10,5))
@@ -594,19 +739,74 @@ class Model2(AtmosphericModelBase):
         ) -> None:
         #Model 2. Scaling factor
         #***************************************************************
-
-        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,forward_model.Variables.XN[ix])
-        xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
-
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        atm = forward_model.AtmosphereX
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
+        
+        atm, xmap1 = self.calculate(
+            atm,
+            atm_profile_type,
+            atm_profile_idx,
+            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        )
+        
+        forward_model.AtmosphereX = atm
+        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
+        
+        return
 
 
 class Model3(AtmosphericModelBase):
+    """
+        In this model, the atmospheric parameters are scaled using a single factor 
+        in logscale with respect to the vertical profiles in the reference atmosphere
+    """
+    
     id : int = 3
 
 
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(i_state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model.
+        # NOTE: It is best to define these in the same order and with the
+        # same names as they are saved to the state vector, and use the same
+        # names and ordering when they are passed to the `self.calculate(...)` 
+        # class method.
+        self.parameters = (
+            ModelParameter('scaling_factor', slice(0,1), 'Scaling factor applied to the reference profile, stored as a log in the state vector', 'PROFILE_TYPE'),
+        )
+        
+        return
+
+
     @classmethod
-    def calculate(cls, atm,ipar,scf,MakePlot=False):
+    def calculate(
+            cls, 
+            atm : "Atmosphere_0",
+            #   Instance of Atmosphere_0 class we are operating upon
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM of atmospheric profile type we are altering.
+            
+            atm_profile_idx : int | None,
+            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+            
+            scf : float,
+            #   scaling factor to be applied to the reference vertical profile
+            
+            MakePlot=False
+        ):
 
         """
             FUNCTION NAME : model3()
@@ -621,14 +821,13 @@ class Model3(AtmosphericModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                ipar :: Atmospheric parameter to be changed
-                        (0 to NVMR-1) :: Gas VMR
-                        (NVMR) :: Temperature
-                        (NVMR+1 to NVMR+NDUST-1) :: Aerosol density
-                        (NVMR+NDUST) :: Para-H2
-                        (NVMR+NDUST+1) :: Fractional cloud coverage
+                atm_profile_type :: AtmosphericProfileType
+                    ENUM of atmospheric profile type we are altering.
+                
+                atm_profile_idx : int | None
+                    Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
 
-                scf :: Log scaling factor
+                scf :: scaling factor
 
             OPTIONAL INPUTS:
 
@@ -647,31 +846,31 @@ class Model3(AtmosphericModelBase):
             MODIFICATION HISTORY : Juan Alday (29/03/2021)
 
         """
-
-        npar = atm.NVMR+2+atm.NDUST
-        xmap = np.zeros([1,npar,atm.NP])
-
-        x1 = np.zeros(atm.NP)
-        if ipar<atm.NVMR:  #Gas VMR
-            jvmr = ipar
-            x1[:] = atm.VMR[:,jvmr] * np.exp(scf)
-            atm.VMR[:,jvmr] =  x1 
-        elif ipar==atm.NVMR: #Temperature
-            x1[:] = atm.T[:] * np.exp(scf)
-            atm.T[:] = x1 
-        elif ipar>atm.NVMR:
-            jtmp = ipar - (atm.NVMR+1)
-            if jtmp<atm.NDUST:
-                x1[:] = atm.DUST[:,jtmp] * np.exp(scf)
-                atm.DUST[:,jtmp] = x1
-            elif jtmp==atm.NDUST:
-                x1[:] = atm.PARAH2 * np.exp(scf)
-                atm.PARAH2 = x1
-            elif jtmp==atm.NDUST+1:
-                x1[:] = atm.FRAC * np.exp(scf)
-                atm.FRAC = x1
-
-        xmap[0,ipar,:] = x1[:]
+        xmap = np.zeros((1,atm.NP))
+        
+        if atm_profile_type == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO:
+            xmap[0,:] = atm.VMR[:, atm_profile_idx]
+            atm.VMR[:, atm_profile_idx] *= scf
+        
+        elif atm_profile_type == AtmosphericProfileType.TEMPERATURE:
+            xmap[0,:] = atm.T
+            atm.T *= scf
+        
+        elif atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+            xmap[0,:] = atm.DUST[:, atm_profile_idx]
+            atm.DUST[:, atm_profile_idx] *= scf
+        
+        elif atm_profile_type == AtmosphericProfileType.PARA_H2_FRACTION:
+            xmap[0,:] = atm.PARAH2
+            atm.PARAH2 *= scf
+        
+        elif atm_profile_type == AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE:
+            xmap[0,:] = atm.FRAC
+            atm.FRAC *= scf
+        
+        else:
+            raise ValueError(f'{cls.__name__} id {cls.id} has unknown atmospheric profile type {atm_profile_type}')
+        
 
         if MakePlot==True:
             fig,(ax1,ax2,ax3) = plt.subplots(1,3,figsize=(10,5))
@@ -743,19 +942,83 @@ class Model3(AtmosphericModelBase):
         ) -> None:
         #Model 3. Log scaling factor
         #***************************************************************
-
-        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,forward_model.Variables.XN[ix])
-        xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
-
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        atm = forward_model.AtmosphereX
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
+        
+        atm, xmap1 = self.calculate(
+            atm,
+            atm_profile_type,
+            atm_profile_idx,
+            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        )
+        
+        forward_model.AtmosphereX = atm
+        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
+        
+        return
 
 
 class Model9(AtmosphericModelBase):
+    """
+    In this model, the profile (cloud profile) is represented by a value
+    at a certain height, plus a fractional scale height. Below the reference height 
+    the profile is set to zero, while above it the profile decays exponentially with
+    altitude given by the fractional scale height. In addition, this model scales
+    the profile to give the requested integrated cloud optical depth.
+    """
+    
     id : int = 9
 
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(i_state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model.
+        # NOTE: It is best to define these in the same order and with the
+        # same names as they are saved to the state vector, and use the same
+        # names and ordering when they are passed to the `self.calculate(...)` 
+        # class method.
+        self.parameters = (
+            ModelParameter('tau', slice(2,3), 'Total integrated column density of the cloud (aerosol)', r'$m^{-2}$'),
+            ModelParameter('frac_scale_height', slice(1,2), 'Fractional scale height (decays above `h_ref` zero below)', 'km'),
+            ModelParameter('h_ref', slice(0,1), 'Base height of cloud profile', 'km'),
+        )
+        
+        return
 
     @classmethod
-    def calculate(cls, atm,ipar,href,fsh,tau,MakePlot=False):
+    def calculate(
+            cls,
+            atm : "Atmosphere_0",
+            #   Instance of Atmosphere_0 class we are operating upon
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM of atmospheric profile type we are altering.
+            
+            atm_profile_idx : int | None,
+            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+            
+            tau,
+            #   Total integrated column density of the cloud (m-2)
+            
+            fsh,
+            #   Fractional scale height (km)
+            
+            href,
+            #   Base height of cloud profile (km)
+            
+            MakePlot=False
+        ):
 
         """
             FUNCTION NAME : model9()
@@ -773,11 +1036,11 @@ class Model9(AtmosphericModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                href :: Base height of cloud profile (km)
+                tau :: Total integrated column density of the cloud (m-2)
 
                 fsh :: Fractional scale height (km)
 
-                tau :: Total integrated column density of the cloud (m-2)
+                href :: Base height of cloud profile (km)
 
             OPTIONAL INPUTS:
 
@@ -786,12 +1049,12 @@ class Model9(AtmosphericModelBase):
             OUTPUTS :
 
                 atm :: Updated atmospheric class
-                xmap(1,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
+                xmap(3,npro) :: Matrix of relating funtional derivatives to 
                                                  elements in state vector
 
             CALLING SEQUENCE:
 
-                atm,xmap = model9(atm,ipar,href,fsh,tau)
+                atm,xmap = model9(atm,atm_profile_type,atm_profile_idx,href,fsh,tau)
 
             MODIFICATION HISTORY : Juan Alday (29/03/2021)
 
@@ -800,22 +1063,20 @@ class Model9(AtmosphericModelBase):
         from scipy.integrate import simpson
         from archnemesis.Data.gas_data import const
 
-        #Checking that profile is for aerosols
-        if(ipar<=atm.NVMR):
-            raise ValueError('error in model 9 :: This model is defined for aerosol profiles only')
 
-        if(ipar>atm.NVMR+atm.NDUST):
-            raise ValueError('error in model 9 :: This model is defined for aerosol profiles only')
-
-
+        if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
+            _msg = f'Model id={cls.id} is only defined for aerosol profiles.'
+            _lgr.error(_msg)
+            raise ValueError(_msg)
+        
+        
         #Calculating the actual atmospheric scale height in each level
         R = const["R"]
         scale = R * atm.T / (atm.MOLWT * atm.GRAV)   #scale height (m)
 
         #This gradient is calcualted numerically (in this function) as it is too hard otherwise
         xprof = np.zeros(atm.NP)
-        npar = atm.NVMR+2+atm.NDUST
-        xmap = np.zeros([3,npar,atm.NP])
+        xmap = np.zeros([3,atm.NP])
         for itest in range(4):
 
             xdeep = tau
@@ -879,10 +1140,9 @@ class Model9(AtmosphericModelBase):
             if itest==0:
                 xprof[:] = ND[:]
             else:
-                xmap[itest-1,ipar,:] = (ND[:]-xprof[:])/dx
+                xmap[itest-1,:] = (ND[:]-xprof[:])/dx
 
-        icont = ipar - (atm.NVMR+1)
-        atm.DUST[0:atm.NP,icont] = xprof
+        atm.DUST[0:atm.NP,atm_profile_idx] = xprof
 
         return atm,xmap
 
@@ -963,33 +1223,84 @@ class Model9(AtmosphericModelBase):
         #Model 9. Simple cloud represented by base height, fractional scale height
             #and the total integrated cloud density
         #***************************************************************
-
-        tau = np.exp(forward_model.Variables.XN[ix])    #Integrated dust column-density
-        fsh = np.exp(forward_model.Variables.XN[ix+1])  #Fractional scale height
-        href = forward_model.Variables.XN[ix+2]         #Base height (km)
-
-        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,href,fsh,tau)
-        xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
-
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        atm = forward_model.AtmosphereX
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
+        
+        atm, xmap1 = self.calculate(
+            atm,
+            atm_profile_type,
+            atm_profile_idx,
+            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        )
+        
+        forward_model.AtmosphereX = atm
+        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
+        
+        return
 
 
 class Model32(AtmosphericModelBase):
+    """
+        In this model, the profile (cloud profile) is represented by a value
+        at a certain pressure level, plus a fractional scale height which defines an exponential
+        drop of the cloud at higher altitudes. Below the pressure level, the cloud is set 
+        to exponentially decrease with a scale height of 1 km. 
+    """
+    
     id : int = 32
 
 
-    @property
-    def parameter_slices(self) -> dict[str, slice]:
-        return {
-            'tau' : slice(0,1),
-            'frac_scale_height' : slice(1,2),
-            'p_ref' : slice(2,3),
-        }
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(i_state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model.
+        # NOTE: It is best to define these in the same order and with the
+        # same names as they are saved to the state vector, and use the same
+        # names and ordering when they are passed to the `self.calculate(...)` 
+        # class method.
+        self.parameters = (
+            ModelParameter('tau', slice(0,1), 'Integrated dust column density', r'$m^{-2}$'),
+            ModelParameter('frac_scale_height', slice(1,2), 'Fractional scale height', 'km'),
+            ModelParameter('p_ref', slice(2,3), 'Reference pressure', 'atm'),
+        )
+        
+        return
 
 
     @classmethod
-    def calculate(cls, atm,ipar,pref,fsh,tau,MakePlot=False):
-
+    def calculate(
+            cls, 
+            atm : "Atmosphere_0",
+            #   Instance of Atmosphere_0 class we are operating upon
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM of atmospheric profile type we are altering.
+            
+            atm_profile_idx : int | None,
+            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+            
+            tau : float,
+            #   Integrated dust column-density (m-2) or opacity
+            
+            frac_scale_height : float,
+            #   Fractional scale height
+            
+            p_ref : float,
+            #   reference pressure (atm)
+            
+            MakePlot : bool = False
+        ) -> tuple["Atmosphere_0", np.ndarray]:
         """
             FUNCTION NAME : model32()
 
@@ -1005,8 +1316,17 @@ class Model32(AtmosphericModelBase):
             INPUTS :
 
                 atm :: Python class defining the atmosphere
-                pref :: Base pressure of cloud profile (atm)
-                fsh :: Fractional scale height (km)
+                
+                atm_profile_type :: AtmosphericProfileType
+                    ENUM of atmospheric profile type we are altering.
+                
+                atm_profile_idx : int | None
+                    Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+                    
+                p_ref :: Base pressure of cloud profile (atm)
+                
+                frac_scale_height :: Fractional scale height (km)
+                
                 tau :: Total integrated column density of the cloud (m-2) or cloud optical depth (if kext is normalised)
 
             OPTIONAL INPUTS:
@@ -1016,29 +1336,29 @@ class Model32(AtmosphericModelBase):
             OUTPUTS :
 
                 atm :: Updated atmospheric class
-                xmap(1,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
+                xmap(3,npro) :: Matrix of relating funtional derivatives to 
                                                  elements in state vector
 
             CALLING SEQUENCE:
 
-                atm,xmap = model32(atm,ipar,pref,fsh,tau)
+                atm,xmap = model32(atm,atm_profile_type,atm_profile_idx,p_ref,frac_scale_height,tau)
 
             MODIFICATION HISTORY : Juan Alday (29/05/2024)
 
         """
-        _lgr.debug(f'{ipar=} {pref=} {tau=}')
+        _lgr.debug(f'{atm_profile_type=}')
+        _lgr.debug(f'{atm_profile_idx=}')
+        _lgr.debug(f'{p_ref=}')
+        _lgr.debug(f'{frac_scale_height=}')
+        _lgr.debug(f'{tau=}')
 
         from scipy.integrate import simpson
         from archnemesis.Data.gas_data import const
-
-        #Checking that profile is for aerosols
-        if(ipar<=atm.NVMR):
-            raise ValueError('error in model 32 :: This model is defined for aerosol profiles only')
-
-        if(ipar>atm.NVMR+atm.NDUST):
-            raise ValueError('error in model 32 :: This model is defined for aerosol profiles only')
-
-        icont = ipar - (atm.NVMR+1)   #Index of the aerosol population we are modifying
+        
+        if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
+            _msg = f'Model id={cls.id} is only defined for aerosol profiles.'
+            _lgr.error(_msg)
+            raise ValueError(_msg)
 
         #Calculating the actual atmospheric scale height in each level
         R = const["R"]
@@ -1048,12 +1368,12 @@ class Model32(AtmosphericModelBase):
         #This gradient is calcualted numerically (in this function) as it is too hard otherwise
         xprof = np.zeros(atm.NP)
         npar = atm.NVMR+2+atm.NDUST
-        xmap = np.zeros((3,npar,atm.NP))
+        xmap = np.zeros((3,atm.NP))
         for itest in range(4):
 
             xdeep = tau
-            xfsh = fsh
-            pknee = pref
+            xfrac_scale_height = frac_scale_height
+            pknee = p_ref
             if itest==0:
                 dummy = 1
             elif itest==1: #For calculating the gradient wrt tau
@@ -1061,16 +1381,16 @@ class Model32(AtmosphericModelBase):
                 if dx==0.0:
                     dx = 0.1
                 xdeep = np.exp( np.log(tau) + dx )
-            elif itest==2: #For calculating the gradient wrt fsh
-                dx = 0.05 * np.log(fsh)  #In the state vector this variable is passed in log-scale
+            elif itest==2: #For calculating the gradient wrt frac_scale_height
+                dx = 0.05 * np.log(frac_scale_height)  #In the state vector this variable is passed in log-scale
                 if dx==0.0:
                     dx = 0.1
-                xfsh = np.exp( np.log(fsh) + dx )
-            elif itest==3: #For calculating the gradient wrt pref
-                dx = 0.05 * np.log(pref) #In the state vector this variable is passed in log-scale
+                xfrac_scale_height = np.exp( np.log(frac_scale_height) + dx )
+            elif itest==3: #For calculating the gradient wrt p_ref
+                dx = 0.05 * np.log(p_ref) #In the state vector this variable is passed in log-scale
                 if dx==0.0:
                     dx = 0.1
-                pknee = np.exp( np.log(pref) + dx )
+                pknee = np.exp( np.log(p_ref) + dx )
 
             #Getting the altitude level based on the pressure/height relation
             isort = np.argsort(atm.P)
@@ -1094,7 +1414,7 @@ class Model32(AtmosphericModelBase):
 
             #Calculating cloud density at the first level occupied by the cloud
             delh = atm.H[jknee+1] - hknee   #metres
-            xfac = 0.5 * (scale[jknee]+scale[jknee+1]) * xfsh  #metres
+            xfac = 0.5 * (scale[jknee]+scale[jknee+1]) * xfrac_scale_height  #metres
             ND[jknee+1] = np.exp(-delh/xfac)
 
 
@@ -1105,7 +1425,7 @@ class Model32(AtmosphericModelBase):
             #Calculating the cloud density above this level
             for j in range(jknee+2,atm.NP):
                 delh = atm.H[j] - atm.H[j-1]
-                xfac = scale[j] * xfsh
+                xfac = scale[j] * xfrac_scale_height
                 ND[j] = ND[j-1] * np.exp(-delh/xfac)
 
             #Calculating the cloud density below this level
@@ -1118,16 +1438,16 @@ class Model32(AtmosphericModelBase):
             Q[:] = ND[:] / rho[:] / 1.0e3 #particles per gram of atm
 
             #Now we integrate the optical thickness (calculate column density essentially)
-            OD[atm.NP-1] = ND[atm.NP-1] * (scale[atm.NP-1] * xfsh * 1.0e2)  #the factor 1.0e2 is for converting from m to cm
-            jfsh = -1
+            OD[atm.NP-1] = ND[atm.NP-1] * (scale[atm.NP-1] * xfrac_scale_height * 1.0e2)  #the factor 1.0e2 is for converting from m to cm
+            jfrac_scale_height = -1
             for j in range(atm.NP-2,-1,-1):
                 if j>jknee:
                     delh = atm.H[j+1] - atm.H[j]   #m
-                    xfac = scale[j] * xfsh
+                    xfac = scale[j] * xfrac_scale_height
                     OD[j] = OD[j+1] + (ND[j] - ND[j+1]) * xfac * 1.0e2
                 elif j==jknee:
                     delh = atm.H[j+1] - hknee
-                    xfac = 0.5 * (scale[j]+scale[j+1])*xfsh
+                    xfac = 0.5 * (scale[j]+scale[j+1])*xfrac_scale_height
                     OD[j] = OD[j+1] + (1. - ND[j+1]) * xfac * 1.0e2
                     xfac = 1000.
                     OD[j] = OD[j] + (1.0 - ND[j]) * xfac * 1.0e2
@@ -1157,16 +1477,16 @@ class Model32(AtmosphericModelBase):
             if itest==0:  #First iteration, using the values in the state vector
                 xprof[:] = Q[:]
             else:  #Next iterations used to calculate the derivatives
-                xmap[itest-1,ipar,:] = (Q[:] - xprof[:])/dx
+                xmap[itest-1,:] = (Q[:] - xprof[:])/dx
 
         #Now updating the atmosphere class with the new profile
-        atm.DUST[:,icont] = xprof[:]
+        atm.DUST[:,atm_profile_idx] = xprof[:]
         _lgr.debug(f'{xprof=}')
 
         if MakePlot==True:
 
             fig,ax1 = plt.subplots(1,1,figsize=(3,4))
-            ax1.plot(atm.DUST[:,icont],atm.P/101325.)
+            ax1.plot(atm.DUST[:,atm_profile_idx],atm.P/101325.)
             ax1.set_xscale('log')
             ax1.set_yscale('log')
             ax1.set_ylim(atm.P.max()/101325.,atm.P.min()/101325.)
@@ -1175,7 +1495,9 @@ class Model32(AtmosphericModelBase):
             ax1.grid()
             plt.tight_layout()
 
-        atm.DUST_RENORMALISATION[icont] = tau  #Adding flag to ensure that the dust optical depth is tau
+        # [JD] Question: What is this actually doing? The `tau` variable is associated with a deep abundance
+        #                not a total optical depth as far as I can tell.
+        atm.DUST_RENORMALISATION[atm_profile_idx] = tau  #Adding flag to ensure that the dust optical depth is tau
 
         return atm,xmap
 
@@ -1271,30 +1593,83 @@ class Model32(AtmosphericModelBase):
             #pressure level and fractional scale height.
             #Below the knee pressure the profile is set to drop exponentially.
         #***************************************************************
-        tau = np.exp(forward_model.Variables.XN[ix])   #Base pressure (atm)
-        fsh = np.exp(forward_model.Variables.XN[ix+1])  #Integrated dust column-density (m-2) or opacity
-        pref = np.exp(forward_model.Variables.XN[ix+2])  #Fractional scale height
-        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,pref,fsh,tau)
-        xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
-
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        #tau = np.exp(forward_model.Variables.XN[ix])   #Base pressure (atm)
+        #fsh = np.exp(forward_model.Variables.XN[ix+1])  #Integrated dust column-density (m-2) or opacity
+        #pref = np.exp(forward_model.Variables.XN[ix+2])  #Fractional scale height
+        
+        atm = forward_model.AtmosphereX
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
+        
+        if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
+            _msg = f'Model id={self.id} is only defined for {AtmosphericProfileType.AEROSOL_DENSITY}.'
+            _lgr.error(_msg)
+            raise ValueError(_msg)
+            
+        atm, xmap1 = self.calculate(
+            atm,
+            atm_profile_type,
+            atm_profile_idx,
+            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        )
+        
+        forward_model.AtmosphereX = atm
+        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
+        
+        return
 
 
 class Model45(AtmosphericModelBase):
+    """
+        Variable deep tropospheric and stratospheric abundances, along with tropospheric humidity.
+    """
+    
     id : int = 45
 
-
-    @property
-    def parameter_slices(self) -> dict[str, slice]:
-        return {
-            'deep_vmr' : slice(0,1),
-            'humidity' : slice(1,2),
-            'strato_vmr' : slice(2,3),
-        }
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(i_state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model.
+        # NOTE: It is best to define these in the same order and with the
+        # same names as they are saved to the state vector, and use the same
+        # names and ordering when they are passed to the `self.calculate(...)` 
+        # class method.
+        self.parameters = (
+            ModelParameter('deep_vmr', slice(0,1), 'deep (topospheric) gas volume mixing ratio', 'RATIO'),
+            ModelParameter('humidity', slice(1,2), 'relative humidity of gas', 'RATIO'),
+            ModelParameter('strato_vmr', slice(2,3), 'high (stratospheric) gas volume mixing ratio', 'RATIO'),
+        )
+        
+        return
 
 
     @classmethod
-    def calculate(cls, atm, ipar, tropo, humid, strato, MakePlot=True):
+    def calculate(
+            cls, 
+            atm : "Atmosphere_0",
+            #   Instance of Atmosphere_0 class we are operating upon
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM of atmospheric profile type we are altering.
+            
+            atm_profile_idx : int | None,
+            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+            
+            tropo, 
+            humid, 
+            strato, 
+            MakePlot=True
+        ) -> tuple["Atmosphere_0", np.ndarray]:
 
         """
             FUNCTION NAME : model45()
@@ -1308,12 +1683,11 @@ class Model45(AtmosphericModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                ipar :: Atmospheric parameter to be changed
-                        (0 to NVMR-1) :: Gas VMR
-                        (NVMR) :: Temperature
-                        (NVMR+1 to NVMR+NDUST-1) :: Aerosol density
-                        (NVMR+NDUST) :: Para-H2
-                        (NVMR+NDUST+1) :: Fractional cloud coverage
+                atm_profile_type :: AtmosphericProfileType
+                    ENUM of atmospheric profile type we are altering.
+                
+                atm_profile_idx : int | None
+                    Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
 
                 tropo :: Deep methane VMR
 
@@ -1328,19 +1702,24 @@ class Model45(AtmosphericModelBase):
             OUTPUTS :
 
                 atm :: Updated atmospheric class
-                xmap(npro,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
+                xmap(npro) :: Matrix of relating funtional derivatives to 
                                                  elements in state vector
 
             CALLING SEQUENCE:
 
-                atm,xmap = model45(atm, ipar, tropo, humid, strato)
+                atm,xmap = model45(atm, atm_profile_type, atm_profile_idx, tropo, humid, strato)
 
             MODIFICATION HISTORY : Joe Penn (09/10/2024)
 
         """
 
-        _lgr.debug(f'{ipar=} {tropo=} {humid=} {strato=}')
+        _lgr.debug(f'{atm_profile_type=} {atm_profile_idx=} {tropo=} {humid=} {strato=}')
 
+        if atm_profile_type != AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO:
+            _msg = f'Model id={cls.id} is only defined for gas VMR profiles.'
+            _lgr.error(_msg)
+            raise ValueError(_msg)
+            
         SCH40 = 10.6815
         SCH41 = -1163.83
         # psvp is in bar
@@ -1371,7 +1750,7 @@ class Model45(AtmosphericModelBase):
             xnew[i] = pch4[i] / pbar[i]
 
         _lgr.debug(f'{xnew=}')
-        atm.VMR[:, ipar] = xnew
+        atm.VMR[:, atm_profile_idx] = xnew
 
         return atm, xnewgrad
 
@@ -1427,7 +1806,7 @@ class Model45(AtmosphericModelBase):
         err = estrato/strato
         sx[ix,ix] = err**2.
 
-        ix = ix + 1                   
+        ix = ix + 1
 
         return cls(ix_0, ix-ix_0)
 
@@ -1443,30 +1822,88 @@ class Model45(AtmosphericModelBase):
         #Model 45. Irwin CH4 model. Variable deep tropospheric and stratospheric abundances,
             #along with tropospheric humidity.
         #***************************************************************
-        tropo = np.exp(forward_model.Variables.XN[ix])   # Deep tropospheric abundance
-        humid = np.exp(forward_model.Variables.XN[ix+1])  # Humidity
-        strato = np.exp(forward_model.Variables.XN[ix+2])  # Stratospheric abundance
-        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX, ipar, tropo, humid, strato)
-        xmap[ix] = xmap1
+        #tropo = np.exp(forward_model.Variables.XN[ix])   # Deep tropospheric abundance
+        #humid = np.exp(forward_model.Variables.XN[ix+1])  # Humidity
+        #strato = np.exp(forward_model.Variables.XN[ix+2])  # Stratospheric abundance
+        
+        #forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX, ipar, tropo, humid, strato)
+        
+        atm = forward_model.AtmosphereX
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
+        
+        atm, xmap1 = self.calculate(
+            atm, 
+            atm_profile_type, 
+            atm_profile_idx,
+            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        )
+        
+        forward_model.AtmosphereX = atm
+        xmap[ix, ipar, :] = xmap1
 
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        #ix = ix + forward_model.Variables.NXVAR[ivar]
+        return
 
 
 class Model47(AtmosphericModelBase):
+    """
+        Profile is represented by a Gaussian with a specified optical thickness centred
+        at a variable pressure level plus a variable FWHM (log press).
+    """
     id : int = 47
 
 
-    @property
-    def parameter_slices(self) -> dict[str, slice]:
-        return {
-            'tau' : slice(0,1),
-            'p_ref' : slice(1,2),
-            'fwhm' : slice(2,3),
-        }
+    def __init__(
+            self, 
+            i_state_vector_start : int, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(i_state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model.
+        # NOTE: It is best to define these in the same order and with the
+        # same names as they are saved to the state vector, and use the same
+        # names and ordering when they are passed to the `self.calculate(...)` 
+        # class method.
+        self.parameters = (
+            ModelParameter('tau', slice(0,1), 'Integrated optical thickness', 'ln(RATIO)'),
+            ModelParameter('p_ref', slice(1,2), 'Mean pressure of the cloud', 'atm'),
+            ModelParameter('fwhm', slice(2,3), 'FWHM of the log-Gaussian', 'atm?'),
+        )
+        
+        return
 
 
     @classmethod
-    def calculate(cls, atm, ipar, tau, pref, fwhm, MakePlot=False):
+    def calculate(
+            cls, 
+            atm : "Atmosphere_0",
+            #   Instance of Atmosphere_0 class we are operating upon
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM of atmospheric profile type we are altering.
+            
+            atm_profile_idx : int | None,
+            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+            
+            tau : float, 
+            #   Integrated optical thickness
+            
+            pref : float, 
+            #   Mean pressure (atm) of the cloud
+            
+            fwhm : float, 
+            #   FWHM of the log-Gaussian
+            
+            MakePlot=False
+        ) -> tuple["Atmosphere_0", np.ndarray]:
 
         """
             FUNCTION NAME : model47()
@@ -1479,13 +1916,12 @@ class Model47(AtmosphericModelBase):
             INPUTS :
 
                 atm :: Python class defining the atmosphere
-
-                ipar :: Atmospheric parameter to be changed
-                        (0 to NVMR-1) :: Gas VMR
-                        (NVMR) :: Temperature
-                        (NVMR+1 to NVMR+NDUST-1) :: Aerosol density
-                        (NVMR+NDUST) :: Para-H2
-                        (NVMR+NDUST+1) :: Fractional cloud coverage
+                
+                atm_profile_type :: AtmosphericProfileType
+                    ENUM of atmospheric profile type we are altering.
+                
+                atm_profile_idx : int | None
+                    Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
 
                 tau :: Integrated optical thickness.
 
@@ -1500,29 +1936,26 @@ class Model47(AtmosphericModelBase):
             OUTPUTS :
 
                 atm :: Updated atmospheric class
-                xmap(npro,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
+                xmap(mparam,npro) :: Matrix of relating funtional derivatives to 
                                                  elements in state vector
 
             CALLING SEQUENCE:
 
-                atm,xmap = model47(atm, ipar, tau, pref, fwhm)
+                atm,xmap = model47(atm, atm_profile_type, atm_profile_idx, tau, pref, fwhm)
 
             MODIFICATION HISTORY : Joe Penn (08/10/2024)
 
         """
-        _lgr.debug(f'{ipar=} {tau=} {pref=} {fwhm=}')
+        _lgr.debug(f'{atm_profile_type=} {atm_profile_idx=} {tau=} {pref=} {fwhm=}')
 
+        if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
+            _msg = f'Model id={cls.id} is only defined for aerosol profiles.'
+            _lgr.error(_msg)
+            raise ValueError(_msg)
+        
         from archnemesis.Data.gas_data import const
-
-        # First, check that the profile is for aerosols
-        if ipar <= atm.NVMR:
-            raise ValueError('Error in model47: This model is defined for aerosol profiles only')
-
-        if ipar > atm.NVMR + atm.NDUST:
-            raise ValueError('Error in model47: This model is defined for aerosol profiles only')
-
-        icont = ipar - (atm.NVMR + 1)   # Index of the aerosol population we are modifying
-
+        
+        
         # Calculate atmospheric properties
         R = const["R"]
         scale = R * atm.T / (atm.MOLWT * atm.GRAV)   #scale height (m)
@@ -1535,6 +1968,7 @@ class Model47(AtmosphericModelBase):
         Y0 = np.log(pref)
 
         # Compute XWID, the standard deviation of the Gaussian
+        # [JD] this calculation is not correct
         XWID = fwhm
 
         # Initialize arrays
@@ -1578,29 +2012,31 @@ class Model47(AtmosphericModelBase):
             if np.isnan(X1[j]) or X1[j] < 1e-36:
                 X1[j] = 1e-36
 
-        # Now compute the Jacobian matrix xmap
-        npar = atm.NVMR + 2 + atm.NDUST  # Assuming this is the total number of parameters
-        xmap = np.zeros((3, npar, atm.NP))
+        # Now compute the Jacobian matrix xmap, note that we only need one entry for the 'ipar' entry
+        # so we don't have to use 'ipar' in here, we pass the calcuated slice out and is is the
+        # the containing scope's job to put our returned xmap part into the 'real xmap' at the
+        # correct location.
+        xmap = np.zeros((3, atm.NP))
 
         for j in range(atm.NP):
             Y = np.log(P[j])
 
             # First parameter derivative: xmap[0, ipar, j] = X1[j] / tau
-            xmap[0, ipar, j] = X1[j] / tau  # XDEEP is tau
+            xmap[0, j] = X1[j] / tau  # XDEEP is tau
 
             # Derivative of X1[j] with respect to Y0 (pref)
-            xmap[1, ipar, j] = 2.0 * (Y - Y0) / XWID ** 2 * X1[j]
+            xmap[1, j] = 2.0 * (Y - Y0) / XWID ** 2 * X1[j]
 
             # Derivative of X1[j] with respect to XWID (fwhm)
-            xmap[2, ipar, j] = (2.0 * ((Y - Y0) ** 2) / XWID ** 3 - 1.0 / XWID) * X1[j]
+            xmap[2, j] = (2.0 * ((Y - Y0) ** 2) / XWID ** 3 - 1.0 / XWID) * X1[j]
 
         # Update the atmosphere class with the new profile
-        atm.DUST[:, icont] = X1[:]
+        atm.DUST[:, atm_profile_idx] = X1[:]
         _lgr.debug(f'{X1=}')
 
         if MakePlot:
             fig, ax1 = plt.subplots(1, 1, figsize=(3, 4))
-            ax1.plot(atm.DUST[:, icont], atm.P / 101325.0)
+            ax1.plot(atm.DUST[:, atm_profile_idx], atm.P / 101325.0)
             ax1.set_xscale('log')
             ax1.set_yscale('log')
             ax1.set_ylim(atm.P.max() / 101325.0, atm.P.min() / 101325.0)
@@ -1610,7 +2046,7 @@ class Model47(AtmosphericModelBase):
             plt.tight_layout()
             plt.show()
 
-        atm.DUST_RENORMALISATION[icont] = tau   #Adding flag to ensure that the dust optical depth is tau
+        atm.DUST_RENORMALISATION[atm_profile_idx] = tau   #Adding flag to ensure that the dust optical depth is tau
 
         return atm, xmap
 
@@ -1704,16 +2140,25 @@ class Model47(AtmosphericModelBase):
         #Model 47. Profile is represented by a Gaussian with a specified optical thickness centred
             #at a variable pressure level plus a variable FWHM (log press) in height.
         #***************************************************************
-        tau = np.exp(forward_model.Variables.XN[ix])   #Integrated dust column-density (m-2) or opacity
-        pref = np.exp(forward_model.Variables.XN[ix+1])  #Base pressure (atm)
-        fwhm = np.exp(forward_model.Variables.XN[ix+2])  #FWHM
-        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX, ipar, tau, pref, fwhm)
+        #tau = np.exp(forward_model.Variables.XN[ix])   #Integrated dust column-density (m-2) or opacity
+        #pref = np.exp(forward_model.Variables.XN[ix+1])  #Base pressure (atm)
+        #fwhm = np.exp(forward_model.Variables.XN[ix+2])  #FWHM
+        #forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX, ipar, tau, pref, fwhm)
         
-        _lgr.debug(f'{self.n_state_vector_entries=}')
-        _lgr.debug(f'{forward_model.Variables.NXVAR[ivar]=}')
-        xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
-
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        atm = forward_model.AtmosphereX
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
+        
+        atm, xmap1 = self.calculate(
+            atm, 
+            atm_profile_type, 
+            atm_profile_idx,
+            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        )
+        
+        forward_model.AtmosphereX = atm
+        xmap[self.state_vector_slice, ipar, 0:forward_model.AtmosphereX.NP] = xmap1
+        
+        return
 
 
 class Model49(AtmosphericModelBase):

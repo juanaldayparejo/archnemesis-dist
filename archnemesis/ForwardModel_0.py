@@ -1259,9 +1259,9 @@ class ForwardModel_0:
                 ipar = self.AtmosphereX.NVMR
             elif varident[0]>0:    #Gas VMR is to be retrieved
                 jvmr = np.nonzero( (np.array(self.AtmosphereX.ID)==varident[0]) & (np.array(self.AtmosphereX.ISO)==varident[1]) )[0]
-                assert len(jvmr)==1, 'Cannot have more than gas VMR retrieved at once'
+                assert len(jvmr)==1, 'Cannot have more than one gas VMR retrieved at once'
                 ipar = int(jvmr[0])
-            elif varident[0]<0:
+            elif varident[0]<0: # aerosol species density is to be retrieved
                 jcont = -int(varident[0])
                 ipar = self.AtmosphereX.NVMR + jcont
             return ipar
@@ -1329,6 +1329,8 @@ class ForwardModel_0:
         #Calculate atmospheric density
         rho = self.AtmosphereX.calc_rho() #kg/m3
 
+
+        # NOTE: instead of having two different versions of `xmap`, just use the multiple location version.
         #Initialising xmap
         if self.AtmosphereX.NLOCATIONS==1:
             # `xmap` is functional derivatives of state vector w.r.t profiles for each location

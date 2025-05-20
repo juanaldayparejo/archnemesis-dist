@@ -52,6 +52,7 @@ class NonAtmosphericModelBase(ModelBase):
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
+    @abc.abstractmethod
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -882,48 +883,67 @@ class Model230(NonAtmosphericModelBase):
 
 
 class Model444(NonAtmosphericModelBase):
+    """
+        Allows for retrieval of the particle size distribution and imaginary refractive index.
+    """
+    
     id : int = 444
 
 
     def __init__(
             self, 
             i_state_vector_start : int, 
+            #   Index of the state vector where parameters from this model start
+            
             n_state_vector_entries : int,
+            #   Number of parameters for this model stored in the state vector
+            
             haze_params : dict[str,Any],
+            #   Optical constants for the aerosol species (haze) this model represents
+            
+            aerosol_species_index : int,
+            #   Index of the aerosol species that this model pertains to
+            
+            scattering_type_id : int,
+            #   The scattering type this model uses
         ):
         """
-        Initialise an instance of the model.
-        
-        ## ARGUMENTS ##
-            
-            i_state_vector_start : int
-                The index of the first entry of the model parameters in the state vector
-            
-            n_state_vector_entries : int
-                The number of model parameters that are stored in the state vector
-            
-            haze_params: dict[str, Any]
-                Optical constants for the haze this model represents
-                
-        
-        ## RETURNS ##
-            An initialised instance of this object
+            Initialise an instance of the model.
         """
         super().__init__(i_state_vector_start, n_state_vector_entries)
         
-        self.haze_params : str = haze_params
-
-
-    @property
-    def parameter_slices(self) -> dict[str, slice]:
-        return {
-            'particle_size_distribution_params' : slice(0,2),
-            'imaginary_ref_idx' : slice(2,None),
-        }
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model
+        self.parameters = (
+            ModelParameter('particle_size_distribution_params', slice(0,2), 'Values that define the particle size distribution'),
+            ModelParameter('imaginary_ref_idx', slice(2,None), 'Imaginary refractive index of the particle size distribution'),
+        )
+        
+        # Store model-specific constants on the model instance for easy access later
+        self.haze_params = haze_params
+        self.aerosol_species_idx = aerosol_species_index
+        self.scattering_type_id = scattering_type_id
 
 
     @classmethod
-    def calculate(cls, Scatter,idust,iscat,xprof,haze_params):
+    def calculate(
+            cls, 
+            Scatter : "Scatter_0",
+            #   Scatter_0 instance of the retrieval setup we are calculating this model for
+            
+            idust : int,
+            #   Aerosol species index we are calculating this model for
+            
+            iscat : int,
+            #   scattering type we are using for this mode. NOTE: this is always set to 1 for now
+            
+            xprof : np.ndarray[["nparam"],float],
+            #   The slice of the state vector that parameters of this model are held in.
+            
+            haze_params : dict[str,Any] ,
+            #   A dictionary of constants for the aerosol being represented by this model.
+            
+        ) -> "Scatter_0":
         """
             FUNCTION NAME : model444()
 
@@ -957,7 +977,7 @@ class Model444(NonAtmosphericModelBase):
         """   
         _lgr.debug(f'{idust=} {iscat=} {xprof=} {type(xprof)=}')
         for item in ('WAVE', 'NREAL', 'WAVE_REF', 'WAVE_NORM'):
-            _lgr.debug(f'haze_params[{item},{idust}] = {type(haze_params[item,idust])} {haze_params[item,idust]}')
+            _lgr.debug(f'haze_params[{item}] : {type(haze_params[item])} = {haze_params[item]}')
 
         a = np.exp(xprof[0])
         b = np.exp(xprof[1])
@@ -971,11 +991,11 @@ class Model444(NonAtmosphericModelBase):
             _lgr.warning(f'ISCAT = {iscat} not implemented for model 444 yet! Defaulting to iscat = 1.')
             pars = (a,b,(1-3*b)/b)
 
-        Scatter.WAVER = haze_params['WAVE',idust]
+        Scatter.WAVER = haze_params['WAVE']
         Scatter.REFIND_IM = np.exp(xprof[2:])
-        reference_nreal = haze_params['NREAL',idust]
-        reference_wave = haze_params['WAVE_REF',idust]
-        normalising_wave = haze_params['WAVE_NORM',idust]
+        reference_nreal = haze_params['NREAL']
+        reference_wave = haze_params['WAVE_REF']
+        normalising_wave = haze_params['WAVE_NORM']
         if len(Scatter.REFIND_IM) == 1:
             Scatter.REFIND_IM = Scatter.REFIND_IM * np.ones_like(Scatter.WAVER)
 
@@ -1045,14 +1065,14 @@ class Model444(NonAtmosphericModelBase):
                 break
         _lgr.debug(f'{ix=}')
 
-        idust = varident[1]-1
+        aerosol_species_idx = varident[1]-1
 
         haze_params = dict()
-        haze_params['NX',idust] = 2+len(haze_waves)
-        haze_params['WAVE',idust] = haze_waves
-        haze_params['NREAL',idust] = float(nreal_ref)
-        haze_params['WAVE_REF',idust] = float(vref)
-        haze_params['WAVE_NORM',idust] = float(v_od_norm)
+        haze_params['NX'] = 2+len(haze_waves)
+        haze_params['WAVE'] = haze_waves
+        haze_params['NREAL'] = float(nreal_ref)
+        haze_params['WAVE_REF'] = float(vref)
+        haze_params['WAVE_NORM'] = float(v_od_norm)
 
         varparam[0] = 2+len(haze_waves)
         varparam[1] = float(clen)
@@ -1071,8 +1091,10 @@ class Model444(NonAtmosphericModelBase):
                         sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
                         sx[ix+k,ix+j] = sx[ix+j,ix+k]
         _lgr.debug(f'{ix=}')
+        
+        scattering_type_id = 1 # Should add a way to alter this value from the input files.
 
-        return cls(ix_0, ix-ix_0, haze_params)
+        return cls(ix_0, ix-ix_0, haze_params, aerosol_species_idx, scattering_type_id)
 
 
     def calculate_from_subprofretg(
@@ -1083,12 +1105,19 @@ class Model444(NonAtmosphericModelBase):
             ivar : int,
             xmap : np.ndarray,
         ) -> None:
-        idust = int(forward_model.Variables.VARIDENT[ivar,1]) - 1
-        iscat = 1 # Should add an option for this
-        xprof = forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]]
-        forward_model.ScatterX = self.calculate(forward_model.ScatterX,idust,iscat,xprof,self.haze_params)
-        ipar = -1
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        
+        # NOTE:
+        # ix is not required as we have stored that information on the model instance
+        # ipar is ignored for this model
+        # ivar is ignored for this model
+        # xmap is ignored for this model
+        forward_model.ScatterX = self.calculate(
+            forward_model.ScatterX,
+            self.aerosol_species_idx,
+            self.scattering_type_id,
+            self.get_state_vector_slice(forward_model.Variables.XN),
+            self.haze_params
+        )
 
 
 class Model446(NonAtmosphericModelBase):

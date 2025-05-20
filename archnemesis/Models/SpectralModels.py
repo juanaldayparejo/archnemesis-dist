@@ -53,6 +53,7 @@ class SpectralModelBase(ModelBase):
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
+    @abc.abstractmethod
     def calculate_from_subspecret(
             self,
             forward_model : "ForwardModel_0",
