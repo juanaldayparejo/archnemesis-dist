@@ -21,9 +21,8 @@ class AtmCalc_0:
             EMISS_ANG=0.0,
             SOL_ANG=0.0,
             AZI_ANG=0.0,
-            
             IPZEN = ZenithAngleOrigin.BOTTOM,
-            
+    
             path_calc = PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE,
             
             #WF=False,
@@ -271,7 +270,7 @@ class AtmCalc_0:
         #has been defined in another way in the AtmCalc_0.py file
         #######################################################################
 
-        if(self.IPZEN==ZenithAngleOrigin.BOTTOM):
+        if(self.IPZEN==ZenithAngleOrigin.ALTITUDE_ZERO):
             #Compute zenith angle of ray at bottom of bottom layer, assuming it
             #has been defined at the 0km level
             z0 = Layer.RADIUS + Layer.BASEH[self.BOTLAY]
@@ -302,7 +301,6 @@ class AtmCalc_0:
                     F = (HTAN-Layer.BASEH[self.BOTLAY])/(Layer.BASEH[self.BOTLAY+1]-Layer.BASEH[self.BOTLAY])
                     if F>0.5:
                         self.BOTLAY = self.BOTLAY + 1
-
 
         Z0 = Layer.RADIUS + Layer.BASEH[self.BOTLAY]
         SIN2A = np.sin(self.ANGLE/180.*np.pi)**2.
