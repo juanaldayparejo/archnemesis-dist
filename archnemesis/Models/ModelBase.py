@@ -1,8 +1,10 @@
 from __future__ import annotations #  for 3.9 compatability
-import sys
+import sys, os
 import abc
 from typing import TYPE_CHECKING, IO, Any
 from collections import namedtuple
+import textwrap
+import inspect
 
 if sys.version_info[0] <= 3 and sys.version_info[1] <= 10:
     from typing_extensions import Self
@@ -54,8 +56,50 @@ class ModelBase(abc.ABC):
     """
         Abstract base class of all parameterised models used by ArchNemesis. This class should be subclassed further for models of a particular component.
     """
+    
     id : int = None # All "*ModelBase" classes that are not meant to be used should have an id of 'None'
-    name : str = 'name should be overwritten in subclass'
+    
+    @classmethod
+    def to_string(cls):
+        desc_wrapper_first = textwrap.TextWrapper(
+            width = os.get_terminal_size().columns,
+            expand_tabs=True,
+            tabsize=2,
+            replace_whitespace=True,
+            initial_indent='- description: ',
+            subsequent_indent=' '*15
+        )
+        desc_wrapper_rest = textwrap.TextWrapper(
+            width = os.get_terminal_size().columns,
+            expand_tabs=True,
+            tabsize=2,
+            replace_whitespace=True,
+            initial_indent=' '*15,
+            subsequent_indent=' '*15
+        )
+        
+        ds : list[str,...] = textwrap.dedent(cls.__doc__.strip('\n') if cls.__doc__ is not None else 'DESCRIPTION NOT FOUND').split('\n')
+        
+        docstr = textwrap.indent('\n'.join((
+            desc_wrapper_first.fill(x) if i==0 else desc_wrapper_rest.fill(x) for i,x in enumerate(ds)
+        )), '|', lambda x: True)
+        """
+        docstr = textwrap.fill(
+            textwrap.dedent(cls.__doc__.strip('\n') if cls.__doc__ is not None else 'DESCRIPTION NOT FOUND'), 
+            width = os.get_terminal_size().columns,
+            expand_tabs=True,
+            tabsize=4,
+            replace_whitespace=True,
+            initial_indent='|- description: ',
+            subsequent_indent='|'+' '*15
+        )
+        """
+        return '\n'.join((
+            f'{cls.__name__}:',
+            f'|- id : {cls.id}',
+            f'|- parent classes: {", ".join((x.__name__ for x in cls.__bases__))}',
+            docstr,
+        ))
     
     def __init__(
             self, 
@@ -94,6 +138,54 @@ class ModelBase(abc.ABC):
         _lgr.debug(f'{self.id=} {self.state_vector_start=} {self.n_state_vector_entries=}')
         return
     
+    
+    def __str__(self):
+        s = self.to_string()
+        #attrs = tuple(filter(lambda x: not x.startswith('_') and x != "parameters", dir(self)))
+        attrs = inspect.getmembers(self, lambda x: not inspect.ismethod(x))
+        attrs = tuple(filter(lambda x: not x[0].startswith('_') and x[0] not in ("parameters", "id"), attrs))
+        attrs_str = '\n'.join(
+            (
+                f'|- {name} : {attr}' for name, attr in attrs
+            )
+        )
+        param_desc_wrapper_first = textwrap.TextWrapper(
+            width = os.get_terminal_size().columns,
+            expand_tabs=True,
+            tabsize=2,
+            replace_whitespace=False,
+            initial_indent='- description: ',
+            subsequent_indent=' '*15
+        )
+        param_desc_wrapper_rest = textwrap.TextWrapper(
+            width = os.get_terminal_size().columns,
+            expand_tabs=True,
+            tabsize=2,
+            replace_whitespace=False,
+            initial_indent=' '*15,
+            subsequent_indent=' '*15
+        )
+        params_str = '\n'.join(tuple(
+            '\n'.join((
+                f'|  |- {p.name} :',
+                f'|  |  |- slice : {p.slice}',
+                f'|  |  |- unit : {p.unit}',
+                textwrap.indent(
+                    '\n'.join((
+                        param_desc_wrapper_first.fill(x) if i==0 else param_desc_wrapper_rest(x) for i,x in enumerate(p.description.strip().split('\n'))
+                    )),
+                    '|  |  |',
+                    lambda x: True
+                )
+            )) for p in self.parameters
+        ))
+        return '\n'.join((
+            s,
+            attrs_str,
+            '|- Parameters:',
+            params_str,
+        ))
+        
     
     def get_state_vector_slice(
             self, 
@@ -472,7 +564,7 @@ class ModelBase(abc.ABC):
             
             xmap : np.ndarray,
             #   Functional derivatives of the state vector w.r.t Atmospheric profiles at each Atmosphere location.
-            #   The array is sized as:
+            #   The array is sized as [nx,NVMR+2+NDUST,NP,NLOCATIONS]:
             #    
             #       nx - number of state vector entries.
             #    
