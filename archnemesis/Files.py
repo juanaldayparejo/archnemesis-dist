@@ -18,6 +18,9 @@ from archnemesis.enums import (
     ParaH2Ratio, RayleighScatteringMode
 )
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 
 ###############################################################################################
@@ -209,7 +212,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #################################################################
 
     Variables = Variables_0()
-    Variables.read_apr(runname,Atmosphere.NP,nlocations=Atmosphere.NLOCATIONS)
+    Variables.read_apr(runname, Atmosphere.NP, Atmosphere.NVMR, Atmosphere.NDUST, Atmosphere.NLOCATIONS)
     Variables.XN = copy(Variables.XA)
     Variables.SX = copy(Variables.SA)
 
@@ -395,6 +398,7 @@ def read_input_files(runname):
     #Initialise Atmosphere class and read file (.ref, aerosol.ref)
     ##############################################################
 
+    _lgr.info(f'Reading atmospheric files...')
     Atm = Atmosphere_0(runname=runname)
 
     #Read gaseous atmosphere
@@ -525,9 +529,9 @@ def read_input_files(runname):
 
     #Reading .apr file and Variables Class
     #################################################################
-
+    _lgr.info(f'Reading .apr file')
     Variables = Variables_0()
-    Variables.read_apr(runname,Atm.NP)
+    Variables.read_apr(runname, Atm.NP, Atm.NVMR, Atm.NDUST, Atm.NLOCATIONS)
     Variables.XN = copy(Variables.XA)
     Variables.SX = copy(Variables.SA)
 

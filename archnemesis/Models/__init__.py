@@ -16,48 +16,64 @@ _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 
 
-class ModelPrinterMixin(type):
+def _get_all_model_classes():
+    """
+    Pulls all model classes from their files
+    """
+    return (
+        *tuple(
+            x[1] for x in inspect.getmembers(
+                AtmosphericModels,
+                lambda x: inspect.isclass(x) and issubclass(x, ModelBase) and x.id is not None
+            )
+        ),
+        *tuple(
+            x[1] for x in inspect.getmembers(
+                NonAtmosphericModels,
+                lambda x: inspect.isclass(x) and issubclass(x, ModelBase) and x.id is not None
+            )
+        ),
+        *tuple(
+            x[1] for x in inspect.getmembers(
+                SpectralModels,
+                lambda x: inspect.isclass(x) and issubclass(x, ModelBase) and x.id is not None
+            )
+        ),
+    )
+
+
+class _ModelPrinterMixin(type):
     def __repr__(cls) -> str:
-        return '\n\n'.join((x.to_string() for x in cls._model_classes))
+        return '\n\n'.join((x.to_string() for x in cls._model_classes.values()))
     
     def __str__(cls) -> str:
-        return '\n\n'.join((x.to_string() for x in cls._model_classes))
+        return '\n\n'.join((x.to_string() for x in cls._model_classes.values()))
     
     def __iter__(cls) -> Iterator[ModelBase]:
-        yield from cls._model_classes
+        yield from cls._model_classes.values()
     
     def __getitem__(cls, id) -> ModelBase:
-        try:
-            return next(filter(lambda x: x.id == id, cls._model_classes))
-        except StopIteration:
-            raise KeyError(f'No model with id {id} found.')
+        return cls._model_classes[id]
     
     def __contains__(cls, id) -> bool:
-        for x in cls._model_classes:
-            if x.id == id:
-                return True
-        return False
+        return id in cls._model_classes
     
     @property
     def ids(cls) -> tuple[int,...]:
-        return tuple(x.id for x in cls._model_classes)
+        return tuple(x.id for x in cls._model_classes.values())
     
     @property
     def names(cls) -> tuple[str,...]:
-        return tuple(x.__name__ for x in cls._model_classes)
+        return tuple(x.__name__ for x in cls._model_classes.values())
     
     def info(cls, id=None) -> str:
         if id is None:
             return repr(cls)
-        else:
-            for x in cls._model_classes:
-                if x.id == id:
-                    return x.to_string()
-            raise KeyError(f'No model with id {id} found.')
-            
+        
+        return cls._model_classes[id].to_string()
 
 
-class Models(metaclass=ModelPrinterMixin):
+class Models(metaclass = _ModelPrinterMixin):
     """
     Holds all of the model parameterisation classes indexed by ID number
     
@@ -102,26 +118,7 @@ class Models(metaclass=ModelPrinterMixin):
         
     """
     
-    _model_classes = (
-        *tuple(
-            x[1] for x in inspect.getmembers(
-                AtmosphericModels,
-                lambda x: inspect.isclass(x) and issubclass(x, ModelBase) and x.id is not None
-            )
-        ),
-        *tuple(
-            x[1] for x in inspect.getmembers(
-                NonAtmosphericModels,
-                lambda x: inspect.isclass(x) and issubclass(x, ModelBase) and x.id is not None
-            )
-        ),
-        *tuple(
-            x[1] for x in inspect.getmembers(
-                SpectralModels,
-                lambda x: inspect.isclass(x) and issubclass(x, ModelBase) and x.id is not None
-            )
-        ),
-    )
+    _model_classes = dict((x.id,x) for x in _get_all_model_classes())
     
     @classmethod
     def display(cls, id) -> None:

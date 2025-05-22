@@ -15,6 +15,17 @@ class AtmosphericModelBase(ModelBase):
     Abstract base class of all parameterised models used by ArchNemesis that interact with the Atmosphere component.
     """
     
+    def __init__(
+            self,
+            state_vector_start : int, 
+            n_state_vector_entries : int,
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM that tells us what kind of atmospheric profile this model instance represents
+        ):
+        super().__init__(state_vector_start, n_state_vector_entries)
+        self.target = atm_profile_type
+        return
+    
     
     @classmethod
     def is_varident_valid(
@@ -80,6 +91,9 @@ class TemplateAtmosphericModel(AtmosphericModelBase):
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
             
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM that tells us what kind of atmospheric profile this model instance represents
+            
             # Extra arguments to this method can store constants etc. that the
             # model requires, but we do not want to retrieve. There is a commented
             # out example below.
@@ -93,7 +107,7 @@ class TemplateAtmosphericModel(AtmosphericModelBase):
         raise NotImplementedError('This is a template model and should never be used')
         
         # Initialise the parent class
-        super().__init__(state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
         
         # To store any constants etc. that the model instance needs, pass them
@@ -215,6 +229,8 @@ class TemplateAtmosphericModel(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -282,7 +298,10 @@ class TemplateAtmosphericModel(AtmosphericModelBase):
         
         raise NotImplementedError('This is a template model and should never be used')
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -404,11 +423,14 @@ class Modelm1(AtmosphericModelBase):
             
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
             Initialise an instance of the model.
         """
-        super().__init__(state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -508,6 +530,8 @@ class Modelm1(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -558,7 +582,10 @@ class Modelm1(AtmosphericModelBase):
                     sx[ix+k,ix+j] = sx[ix+j,ix+k]
         ix = ix + nlevel
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -636,11 +663,14 @@ class Model0(AtmosphericModelBase):
             
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
             Initialise an instance of the model.
         """
-        super().__init__(state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -786,6 +816,8 @@ class Model0(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -841,7 +873,10 @@ class Model0(AtmosphericModelBase):
 
         ix = ix + nlevel
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -895,11 +930,14 @@ class Model2(AtmosphericModelBase):
             
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
             Initialise an instance of the model.
         """
-        super().__init__(state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -1033,6 +1071,8 @@ class Model2(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -1047,7 +1087,10 @@ class Model2(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -1092,11 +1135,14 @@ class Model3(AtmosphericModelBase):
             
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
             Initialise an instance of the model.
         """
-        super().__init__(state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -1229,6 +1275,8 @@ class Model3(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -1250,7 +1298,10 @@ class Model3(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -1297,11 +1348,14 @@ class Model9(AtmosphericModelBase):
             
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
             Initialise an instance of the model.
         """
-        super().__init__(state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -1481,6 +1535,8 @@ class Model9(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -1530,7 +1586,10 @@ class Model9(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -1578,11 +1637,14 @@ class Model32(AtmosphericModelBase):
             
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
             Initialise an instance of the model.
         """
-        super().__init__(state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -1836,6 +1898,8 @@ class Model32(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -1899,7 +1963,10 @@ class Model32(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -1953,11 +2020,14 @@ class Model45(AtmosphericModelBase):
             
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
             Initialise an instance of the model.
         """
-        super().__init__(state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -2089,6 +2159,8 @@ class Model45(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -2129,7 +2201,10 @@ class Model45(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -2181,11 +2256,14 @@ class Model47(AtmosphericModelBase):
             
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
+            
+            atm_profile_type : AtmosphericProfileType,
+            #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
             Initialise an instance of the model.
         """
-        super().__init__(state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -2385,6 +2463,8 @@ class Model47(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -2447,7 +2527,10 @@ class Model47(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -2591,6 +2674,8 @@ class Model49(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -2634,7 +2719,10 @@ class Model49(AtmosphericModelBase):
 
         ix = ix + nlevel
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -2769,6 +2857,8 @@ class Model50(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -2810,7 +2900,10 @@ class Model50(AtmosphericModelBase):
                     sx[ix+k,ix+j] = sx[ix+j,ix+k]
 
         ix = ix + nlevel
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -2909,6 +3002,8 @@ class Model51(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -2931,7 +3026,10 @@ class Model51(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -3125,6 +3223,8 @@ class Model110(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -3142,7 +3242,10 @@ class Model110(AtmosphericModelBase):
         inum[ix] = 1
         ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -3378,6 +3481,8 @@ class Model111(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -3413,7 +3518,10 @@ class Model111(AtmosphericModelBase):
         inum[ix] = 1
         ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -3525,6 +3633,8 @@ class Model202(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -3538,7 +3648,10 @@ class Model202(AtmosphericModelBase):
 
         ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -3692,6 +3805,8 @@ class Model1002(AtmosphericModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -3754,7 +3869,10 @@ class Model1002(AtmosphericModelBase):
 
         ix = ix + nlocs
 
-        return cls(ix_0, ix-ix_0)
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert model_classification[0] is cls.__bases__[0], "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
 
     def calculate_from_subprofretg(

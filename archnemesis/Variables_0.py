@@ -5,12 +5,15 @@ import os
 import os.path
 import textwrap
 import sys
+from typing import Type, Iterable
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from archnemesis import *
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
+from archnemesis.Models.AtmosphericModels import AtmosphericModelBase
+from archnemesis.enums import AtmosphericProfileType
 from archnemesis.helpers import io_helper
 
 import logging
@@ -137,14 +140,29 @@ class Variables_0:
     ################################################################################################################
 
     @property
-    def models(self) -> np.ndarray[['NVAR'], ModelBase]:
+    def models(self) -> list[ModelBase]:
         """
-        Returns a numpy array filled with the models whose parameters are in the state vector
+        Returns a list filled with the models whose parameters are in the state vector
         """
         
         if self._models is None:
             raise AttributeError(f'Models have not been found yet (e.g. by "Variables_0.read_apr(...)")')
         return self._models
+    
+    @property
+    def gas_vmr_models(self) -> Iterable[AtmosphericModelBase]:
+        """
+        Returns an iterable of models that deal with gas volume mixing ratios
+        """
+        return filter(lambda model: isinstance(model, AtmosphericModelBase) and model.target == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO, self.models)
+    
+    @property
+    def aerosol_density_models(self) -> Iterable[AtmosphericModelBase]:
+        """
+        Returns an iterable of models that deal with aerosol densities
+        """
+        return filter(lambda model: isinstance(model, AtmosphericModelBase) and model.target == AtmosphericProfileType.AEROSOL_DENSITY, self.models)
+    
     
     @property
     def model_parameters(self) -> tuple[dict[str,ModelParameterEntry],...]:
@@ -484,6 +502,63 @@ class Variables_0:
 
     ################################################################################################################
 
+    @staticmethod
+    def classify_model_type_from_varident(
+            varident : np.ndarray[[3],int],
+            ngas : int,
+            ndust : int
+        ) -> tuple[Type, None | AtmosphericProfileType]:
+        """
+        Works out the type of model (and subtype if applicable) identified by a VARIDENT triplet.
+        
+        ## ARGUMENTS ##
+            
+            varident : np.ndarray[[3],int]
+                Three integers that identify a model
+                
+            ngas : int
+                The number of gases present in the reference atmosphere
+            
+            ndust : int
+                The number of aerosol species present in the reference atmosphere
+            
+        ## RETURNS ##
+        
+            model_classification : tuple[Type, None | AtmosphericProfileType]
+                A tuple containing values that classify the model. From broadest scope to narrowest.
+                Currently the tuple has the elements (in order):
+                    
+                    ModelClass : Type
+                        A subclass of archnemesis.Models.ModelBase.ModelBase that denotes the broadest
+                        classification of the model. This broadly corresponds to the retrieval component
+                        that the model interacts with (e.g. Atmosphere_0, Scatter_0, Measurement_0).
+                    
+                    ParameterisedTarget : None | AtmosphericProfileType
+                        The part of the retrieval component that the model parameterises (and therefore
+                        alters). This is 'None' when unknown, or an ENUM corresponding to an attribute
+                        of the retrieval component that the model parameterises.
+        """
+        model_classification = None
+        if varident[0] == 0:
+            model_classification = ( AtmosphericModelBase, AtmosphericProfileType.TEMPERATURE)
+        elif (varident[0] > 0) and varident[0] <= ngas:
+            model_classification = ( AtmosphericModelBase, AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO)
+        elif (varident[0] < 0) and (-varident[0]) <= ndust:
+            model_classification = ( AtmosphericModelBase, AtmosphericProfileType.AEROSOL_DENSITY)
+        elif (varident[0] < 0) and (-varident[0]) == ndust + 1:
+            model_classification = ( AtmosphericModelBase, AtmosphericProfileType.PARA_H2_FRACTION)
+        elif (varident[0] < 0) and (-varident[0]) == ndust + 2:
+            model_classification = ( AtmosphericModelBase, AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE)
+        else:
+            # Other models are classified by their ID number
+            model_id_parent_classes = Models[varident[2]].__bases__
+            assert len(model_id_parent_classes) == 1, "Only support single inheritance of model classes for now"
+            model_classification = (model_id_parent_classes[0],None)
+        
+        return model_classification
+    
+    ################################################################################################################
+
     def read_hdf5(self,runname,npro):
         """
         Read the Variables field of the HDF5 file, which contains information about the variables and
@@ -516,7 +591,7 @@ class Variables_0:
             
     ################################################################################################################
 
-    def read_apr(self,runname,npro,nlocations=1):
+    def read_apr(self,runname,npro,ngas,ndust,nlocations=1):
         """
         Read the .apr file, which contains information about the variables and
         parametrisations that are to be retrieved, as well as their a priori values.
@@ -533,8 +608,12 @@ class Variables_0:
 
         @param runname: str
             Name of the Nemesis run
-        @param NPRO: int
+        @param npro: int
             Number of altitude levels in the reference atmosphere
+        @param ngas: int
+            Number of gasses in the reference atmosphere
+        @param ndust: int
+            Number of aerosol species in the reference atmosphere
             
         Optional inputs
         ----------------
@@ -595,7 +674,7 @@ class Variables_0:
                     if model.is_varident_valid(varident[i]):
                         found_model_for_varident = True
                         self._models.append(
-                                model.from_apr_to_state_vector(
+                            model.from_apr_to_state_vector(
                                 self, 
                                 f, 
                                 varident[i], 
@@ -606,6 +685,8 @@ class Variables_0:
                                 sx,
                                 inum, 
                                 npro, 
+                                ngas,
+                                ndust,
                                 nlocations,
                                 runname,
                                 sxminfac

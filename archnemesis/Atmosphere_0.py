@@ -54,6 +54,8 @@ class Atmosphere_0:
             Number of points defined in the profile
         @param NVMR: int
             Number of gases in the profile (expressed as volume mixing ratios)
+        @param NDUST: int
+            Number of aerosol species in the profile (expressed as particles per cubic meter)
         @param IPLANET: int
             Planet ID
         @param LATITUDE: real
