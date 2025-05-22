@@ -1,11 +1,17 @@
 from __future__ import annotations #  for 3.9 compatability
-from archnemesis import *
-from archnemesis.Models import Models, ModelBase, ModelParameterEntry
-import numpy as np
-import matplotlib.pyplot as plt
+
+
 import os
 import os.path
+import textwrap
+import sys
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+from archnemesis import *
+from archnemesis.Models import Models, ModelBase, ModelParameterEntry
+from archnemesis.helpers import io_helper
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -606,6 +612,15 @@ class Variables_0:
                             )
                         )
                         
+                        print(f'Variables_0 :: read_apr :: varident {varident[i]}. Constructed model "{model.__name__}" (id={model.id})')
+                        try:
+                            io_helper.push_out_width(io_helper.get_out_width() - 2)
+                            self._models[-1].set_target_state_vector(lx, x0)
+                            print(textwrap.indent(str(self._models[-1]), '  '))
+                        finally:
+                            self._models[-1].set_target_state_vector(None, None)
+                            io_helper.pop_out_width()
+                        
                         ix += self._models[-1].n_state_vector_entries
                         
                         print(f'{varident[i] = } {ix=}')
@@ -638,5 +653,6 @@ class Variables_0:
         self.NUM = inum1
         self.calc_DSTEP()
         self.calc_FIX()
+        
         
         ################################################################################################################

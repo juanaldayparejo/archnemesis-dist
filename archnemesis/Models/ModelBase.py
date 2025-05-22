@@ -19,9 +19,11 @@ import numpy as np
 from archnemesis.Scatter_0 import kk_new_sub
 from archnemesis.helpers.maths_helper import ngauss
 from archnemesis.enums import WaveUnit
+from archnemesis.helpers.io_helper import get_out_width
 
 from .ModelParameterEntry import ModelParameterEntry
 from .ModelParameter import ModelParameter
+
 
 
 if TYPE_CHECKING:
@@ -62,7 +64,7 @@ class ModelBase(abc.ABC):
     @classmethod
     def to_string(cls):
         desc_wrapper_first = textwrap.TextWrapper(
-            width = os.get_terminal_size().columns,
+            width = get_out_width(),
             expand_tabs=True,
             tabsize=2,
             replace_whitespace=True,
@@ -70,7 +72,7 @@ class ModelBase(abc.ABC):
             subsequent_indent=' '*15
         )
         desc_wrapper_rest = textwrap.TextWrapper(
-            width = os.get_terminal_size().columns,
+            width = get_out_width(),
             expand_tabs=True,
             tabsize=2,
             replace_whitespace=True,
@@ -83,17 +85,6 @@ class ModelBase(abc.ABC):
         docstr = textwrap.indent('\n'.join((
             desc_wrapper_first.fill(x) if i==0 else desc_wrapper_rest.fill(x) for i,x in enumerate(ds)
         )), '|', lambda x: True)
-        """
-        docstr = textwrap.fill(
-            textwrap.dedent(cls.__doc__.strip('\n') if cls.__doc__ is not None else 'DESCRIPTION NOT FOUND'), 
-            width = os.get_terminal_size().columns,
-            expand_tabs=True,
-            tabsize=4,
-            replace_whitespace=True,
-            initial_indent='|- description: ',
-            subsequent_indent='|'+' '*15
-        )
-        """
         return '\n'.join((
             f'{cls.__name__}:',
             f'|- id : {cls.id}',
@@ -103,7 +94,7 @@ class ModelBase(abc.ABC):
     
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   The index of the first entry of the model parameters in the state vector
             
             n_state_vector_entries : int,
@@ -114,7 +105,7 @@ class ModelBase(abc.ABC):
             
             ## ARGUMENTS ##
                 
-                i_state_vector_start : int
+                state_vector_start : int
                     The index of the first entry of the model parameters in the state vector
                 
                 n_state_vector_entries : int
@@ -124,10 +115,15 @@ class ModelBase(abc.ABC):
                 
                 None
         """
+        # Create holders for targeting at a state vector
+        self._log_flag_state_vector_target = None
+        self._apriori_state_vector_target = None
+        self._posterior_state_vector_target = None
+        
         # Store where the model parameters are positioned within the state vector
-        self.state_vector_start = i_state_vector_start
+        self.state_vector_start = state_vector_start
         self.n_state_vector_entries = n_state_vector_entries
-        self.state_vector_slice = slice(i_state_vector_start, i_state_vector_start+n_state_vector_entries)
+        self.state_vector_slice = slice(state_vector_start, state_vector_start+n_state_vector_entries)
         
         # default parameters, the default will make a fake "all_parameters" parameter
         # that contains everything.
@@ -138,6 +134,18 @@ class ModelBase(abc.ABC):
         _lgr.debug(f'{self.id=} {self.state_vector_start=} {self.n_state_vector_entries=}')
         return
     
+    
+    def set_target_state_vector(
+            self,
+            log_flag_sv,
+            apriori_sv, 
+            posterior_sv=None,
+        ):
+        self._log_flag_state_vector_target = log_flag_sv
+        self._apriori_state_vector_target = apriori_sv
+        self._posterior_state_vector_target = posterior_sv
+        return
+        
     
     def __str__(self):
         s = self.to_string()
@@ -150,7 +158,7 @@ class ModelBase(abc.ABC):
             )
         )
         param_desc_wrapper_first = textwrap.TextWrapper(
-            width = os.get_terminal_size().columns,
+            width = get_out_width(),
             expand_tabs=True,
             tabsize=2,
             replace_whitespace=False,
@@ -158,14 +166,24 @@ class ModelBase(abc.ABC):
             subsequent_indent=' '*15
         )
         param_desc_wrapper_rest = textwrap.TextWrapper(
-            width = os.get_terminal_size().columns,
+            width = get_out_width(),
             expand_tabs=True,
             tabsize=2,
             replace_whitespace=False,
             initial_indent=' '*15,
             subsequent_indent=' '*15
         )
-        params_str = '\n'.join(tuple(
+        
+        param_apriori_values = None
+        param_posterior_values = None
+        if self._log_flag_state_vector_target is not None and self._apriori_state_vector_target is not None:
+            param_apriori_values = self.get_parameter_values_from_state_vector(self._apriori_state_vector_target, self._log_flag_state_vector_target)
+            _lgr.debug(f'{param_apriori_values=}')
+        if self._log_flag_state_vector_target is not None and self._posterior_state_vector_target is not None:
+            param_posterior_values = self.get_parameter_values_from_state_vector(self._posterior_state_vector_target, self._log_flag_state_vector_target)
+        
+        
+        params_strs = [
             '\n'.join((
                 f'|  |- {p.name} :',
                 f'|  |  |- slice : {p.slice}',
@@ -176,14 +194,22 @@ class ModelBase(abc.ABC):
                     )),
                     '|  |  |',
                     lambda x: True
-                )
+                ),
             )) for p in self.parameters
-        ))
+        ]
+        
+        for i in range(len(params_strs)):
+            if param_apriori_values is not None:
+                params_strs[i] += f'\n|  |  |- apriori value : {param_apriori_values[i]}'
+            if param_posterior_values is not None:
+                params_strs[i] += f'\n|  |  |- posterior value : {param_posterior_values[i]}'
+        
+        
         return '\n'.join((
             s,
             attrs_str,
             '|- Parameters:',
-            params_str,
+            '\n'.join(params_strs),
         ))
         
     

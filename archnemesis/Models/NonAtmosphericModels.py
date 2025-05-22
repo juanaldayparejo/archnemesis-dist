@@ -72,7 +72,7 @@ class TemplateNonAtmosphericModel(NonAtmosphericModelBase):
     
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -91,7 +91,7 @@ class TemplateNonAtmosphericModel(NonAtmosphericModelBase):
         raise NotImplementedError('This is a template model and should never be used')
         
         # Initialise the parent class
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         
         # To store any constants etc. that the model instance needs, pass them
@@ -1221,7 +1221,7 @@ class Model444(NonAtmosphericModelBase):
 
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -1239,7 +1239,7 @@ class Model444(NonAtmosphericModelBase):
         """
             Initialise an instance of the model.
         """
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model
@@ -1459,7 +1459,7 @@ class Model446(NonAtmosphericModelBase):
 
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             n_state_vector_entries : int,
             lookup_table_fpath : str,
         ):
@@ -1468,7 +1468,7 @@ class Model446(NonAtmosphericModelBase):
         
         ## ARGUMENTS ##
             
-            i_state_vector_start : int
+            state_vector_start : int
                 The index of the first entry of the model parameters in the state vector
             
             n_state_vector_entries : int
@@ -1481,7 +1481,7 @@ class Model446(NonAtmosphericModelBase):
         ## RETURNS ##
             An initialised instance of this object
         """
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         self.lookup_table_fpath : str = lookup_table_fpath
 

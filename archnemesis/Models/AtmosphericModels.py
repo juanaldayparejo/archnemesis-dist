@@ -74,7 +74,7 @@ class TemplateAtmosphericModel(AtmosphericModelBase):
     
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -93,7 +93,7 @@ class TemplateAtmosphericModel(AtmosphericModelBase):
         raise NotImplementedError('This is a template model and should never be used')
         
         # Initialise the parent class
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         
         # To store any constants etc. that the model instance needs, pass them
@@ -399,7 +399,7 @@ class Modelm1(AtmosphericModelBase):
 
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -408,7 +408,7 @@ class Modelm1(AtmosphericModelBase):
         """
             Initialise an instance of the model.
         """
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -631,7 +631,7 @@ class Model0(AtmosphericModelBase):
 
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -640,7 +640,7 @@ class Model0(AtmosphericModelBase):
         """
             Initialise an instance of the model.
         """
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -890,7 +890,7 @@ class Model2(AtmosphericModelBase):
 
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -899,7 +899,7 @@ class Model2(AtmosphericModelBase):
         """
             Initialise an instance of the model.
         """
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -1087,7 +1087,7 @@ class Model3(AtmosphericModelBase):
 
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -1096,7 +1096,7 @@ class Model3(AtmosphericModelBase):
         """
             Initialise an instance of the model.
         """
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -1292,7 +1292,7 @@ class Model9(AtmosphericModelBase):
 
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -1301,7 +1301,7 @@ class Model9(AtmosphericModelBase):
         """
             Initialise an instance of the model.
         """
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -1573,7 +1573,7 @@ class Model32(AtmosphericModelBase):
 
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -1582,7 +1582,7 @@ class Model32(AtmosphericModelBase):
         """
             Initialise an instance of the model.
         """
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -1948,7 +1948,7 @@ class Model45(AtmosphericModelBase):
 
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -1957,7 +1957,7 @@ class Model45(AtmosphericModelBase):
         """
             Initialise an instance of the model.
         """
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
@@ -2176,7 +2176,7 @@ class Model47(AtmosphericModelBase):
 
     def __init__(
             self, 
-            i_state_vector_start : int, 
+            state_vector_start : int, 
             #   Index of the state vector where parameters from this model start
             
             n_state_vector_entries : int,
@@ -2185,7 +2185,7 @@ class Model47(AtmosphericModelBase):
         """
             Initialise an instance of the model.
         """
-        super().__init__(i_state_vector_start, n_state_vector_entries)
+        super().__init__(state_vector_start, n_state_vector_entries)
         
         # Define sub-slices of the state vector that correspond to
         # parameters of the model.
