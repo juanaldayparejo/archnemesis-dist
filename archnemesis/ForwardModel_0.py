@@ -1259,9 +1259,9 @@ class ForwardModel_0:
                 ipar = self.AtmosphereX.NVMR
             elif varident[0]>0:    #Gas VMR is to be retrieved
                 jvmr = np.nonzero( (np.array(self.AtmosphereX.ID)==varident[0]) & (np.array(self.AtmosphereX.ISO)==varident[1]) )[0]
-                assert len(jvmr)==1, 'Cannot have more than gas VMR retrieved at once'
+                assert len(jvmr)==1, 'Cannot have more than one gas VMR retrieved at once'
                 ipar = int(jvmr[0])
-            elif varident[0]<0:
+            elif varident[0]<0: # aerosol species density is to be retrieved
                 jcont = -int(varident[0])
                 ipar = self.AtmosphereX.NVMR + jcont
             return ipar
@@ -1329,6 +1329,8 @@ class ForwardModel_0:
         #Calculate atmospheric density
         rho = self.AtmosphereX.calc_rho() #kg/m3
 
+
+        # NOTE: instead of having two different versions of `xmap`, just use the multiple location version.
         #Initialising xmap
         if self.AtmosphereX.NLOCATIONS==1:
             # `xmap` is functional derivatives of state vector w.r.t profiles for each location
@@ -1372,8 +1374,8 @@ class ForwardModel_0:
 
 
             # Calculate state vector for the model
-            ix = self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, xmap)
-            
+            self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, xmap)
+            ix += self.Variables.models[ivar].n_state_vector_entries
 
 
         #Now check if any gas in the retrieval saturates
@@ -1421,7 +1423,8 @@ class ForwardModel_0:
                     raise ValueError('error in subprofretg :: Models 1000-1100 are meant to be used for models of atmospheric properties in multiple locations')
 
             # Patch state vector for the model
-            ix = self.Variables.models[ivar].patch_from_subprofretg(self, ix, ipar, ivar, xmap)
+            self.Variables.models[ivar].patch_from_subprofretg(self, ix, ipar, ivar, xmap)
+            ix += self.Variables.models[ivar].n_state_vector_entries
         
         return xmap
 
@@ -1464,7 +1467,8 @@ class ForwardModel_0:
         ix = 0
         for ivar in range(self.Variables.NVAR):
 
-            ix = self.Variables.models[ivar].calculate_from_subspecret(self, ix, ivar, SPECMOD, dSPECMOD)
+            self.Variables.models[ivar].calculate_from_subspecret(self, ix, ivar, SPECMOD, dSPECMOD)
+            ix += self.Variables.models[ivar].n_state_vector_entries
 
         return SPECMOD,dSPECMOD
 
