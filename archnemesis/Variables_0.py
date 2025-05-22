@@ -614,12 +614,12 @@ class Variables_0:
                         
                         print(f'Variables_0 :: read_apr :: varident {varident[i]}. Constructed model "{model.__name__}" (id={model.id})')
                         try:
-                            io_helper.push_out_width(io_helper.get_out_width() - 2)
+                            io_helper.OutWidth.push(io_helper.OutWidth.get() - 2)
                             self._models[-1].set_target_state_vector(lx, x0)
                             print(textwrap.indent(str(self._models[-1]), '  '))
                         finally:
                             self._models[-1].set_target_state_vector(None, None)
-                            io_helper.pop_out_width()
+                            io_helper.OutWidth.pop()
                         
                         ix += self._models[-1].n_state_vector_entries
                         

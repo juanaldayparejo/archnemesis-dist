@@ -19,7 +19,7 @@ import numpy as np
 from archnemesis.Scatter_0 import kk_new_sub
 from archnemesis.helpers.maths_helper import ngauss
 from archnemesis.enums import WaveUnit
-from archnemesis.helpers.io_helper import get_out_width
+from archnemesis.helpers.io_helper import OutWidth
 
 from .ModelParameterEntry import ModelParameterEntry
 from .ModelParameter import ModelParameter
@@ -64,7 +64,7 @@ class ModelBase(abc.ABC):
     @classmethod
     def to_string(cls):
         desc_wrapper_first = textwrap.TextWrapper(
-            width = get_out_width(),
+            width = OutWidth.get(),
             expand_tabs=True,
             tabsize=2,
             replace_whitespace=True,
@@ -72,7 +72,7 @@ class ModelBase(abc.ABC):
             subsequent_indent=' '*15
         )
         desc_wrapper_rest = textwrap.TextWrapper(
-            width = get_out_width(),
+            width = OutWidth.get(),
             expand_tabs=True,
             tabsize=2,
             replace_whitespace=True,
@@ -80,7 +80,7 @@ class ModelBase(abc.ABC):
             subsequent_indent=' '*15
         )
         
-        ds : list[str,...] = textwrap.dedent(cls.__doc__.strip('\n') if cls.__doc__ is not None else 'DESCRIPTION NOT FOUND').split('\n')
+        ds : list[str,...] = textwrap.dedent(cls.__doc__.strip('\n') if cls.__doc__ is not None else 'DESCRIPTION NOT FOUND').split('\n\n')
         
         docstr = textwrap.indent('\n'.join((
             desc_wrapper_first.fill(x) if i==0 else desc_wrapper_rest.fill(x) for i,x in enumerate(ds)
@@ -158,7 +158,7 @@ class ModelBase(abc.ABC):
             )
         )
         param_desc_wrapper_first = textwrap.TextWrapper(
-            width = get_out_width(),
+            width = OutWidth.get(),
             expand_tabs=True,
             tabsize=2,
             replace_whitespace=False,
@@ -166,7 +166,7 @@ class ModelBase(abc.ABC):
             subsequent_indent=' '*15
         )
         param_desc_wrapper_rest = textwrap.TextWrapper(
-            width = get_out_width(),
+            width = OutWidth.get(),
             expand_tabs=True,
             tabsize=2,
             replace_whitespace=False,
