@@ -2483,6 +2483,10 @@ class Model47(AtmosphericModelBase):
 
 
 class Model49(AtmosphericModelBase):
+    """
+        In this model, the atmospheric parameters are modelled as continuous profiles
+        in linear space. This parameterisation allows the retrieval of negative VMRs.
+    """
     id : int = 49
 
 
@@ -2496,7 +2500,7 @@ class Model49(AtmosphericModelBase):
 
                 Function defining the model parameterisation 49 in NEMESIS.
                 In this model, the atmospheric parameters are modelled as continuous profiles
-                 in linear space. This parameterisation allows the retrieval of negative VMRs.
+                in linear space. This parameterisation allows the retrieval of negative VMRs.
 
             INPUTS :
 
@@ -2653,6 +2657,12 @@ class Model49(AtmosphericModelBase):
 
 
 class Model50(AtmosphericModelBase):
+    """
+        In this model, the atmospheric parameters are modelled as continuous profiles
+        multiplied by a scaling factor in linear space. Each element of the state vector
+        corresponds to this scaling factor at each altitude level. This parameterisation
+        allows the retrieval of negative VMRs.
+    """
     id : int = 50
 
 
@@ -2823,6 +2833,10 @@ class Model50(AtmosphericModelBase):
 
 
 class Model51(AtmosphericModelBase):
+    """
+        In this model, the profile is scaled using a single factor with 
+        respect to a reference profile.
+    """
     id : int = 51
 
 
@@ -2939,6 +2953,14 @@ class Model51(AtmosphericModelBase):
 
 
 class Model110(AtmosphericModelBase):
+    """
+        In this model, the Venus cloud is parameterised using the model of Haus et al. (2016).
+        In this model, the cloud is made of a mixture of H2SO2+H2O droplets, with four different modes.
+        In this parametersiation, we include the Haus cloud model as it is, but we allow the altitude of the cloud
+        to vary according to the inputs.
+
+        The units of the aerosol density are in m-3, so the extinction coefficients must not be normalised.
+    """
     id : int = 110
 
 
@@ -3142,6 +3164,20 @@ class Model110(AtmosphericModelBase):
 
 
 class Model111(AtmosphericModelBase):
+    """
+        This is a parametersiation for the Venus cloud following the model of Haus et al. (2016),
+        but also includes a parametersiation for the SO2 profiles, whose mixing ratio is tightly linked to the
+        altitude of the cloud.
+
+        In this model, the cloud is made of a mixture of H2SO2+H2O droplets, with four different modes, and we allow the 
+        variation of the cloud altitude. The units of the aerosol density are in m-3, so the extinction coefficients must 
+        not be normalised.
+
+        In the case of the SO2 profile, it is tightly linked to the altitude of the cloud, as the mixing ratio
+        of these species greatly decreases within the cloud due to condensation and photolysis. This molecule is
+        modelled by defining its mixing ratio below and above the cloud, and the mixing ratio is linearly interpolated in
+        log-scale within the cloud.
+    """
     id : int = 111
 
 
@@ -3402,6 +3438,10 @@ class Model111(AtmosphericModelBase):
 
 
 class Model202(AtmosphericModelBase):
+    """
+        In this model, the telluric atmospheric profile is multiplied by a constant 
+        scaling factor
+    """
     id : int = 202
 
 
@@ -3521,6 +3561,12 @@ class Model202(AtmosphericModelBase):
 
 
 class Model1002(AtmosphericModelBase):
+    """ 
+        In this model, the atmospheric parameters are scaled using a single factor with 
+        respect to the vertical profiles in the reference atmosphere.
+        
+        The model is applied simultaneously in different planet locations
+    """
     id : int = 1002
 
 
@@ -3728,151 +3774,3 @@ class Model1002(AtmosphericModelBase):
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
-
-class PiecewiseGasVMR(AtmosphericModelBase):
-   """
-   Parameterises the gas volume mixing ratio as a piecewise function with `n_chunk` chunks.
-   The chunk values are retrieved.
-   """
-   id : int = 10
-   
-   def __init__(
-         self, 
-         i_state_vector_start : int, 
-         n_state_vector_entries : int,
-         n_chunk : int,
-         gas_id : int,
-         iso_id : int,
-      ):
-      # initialise the parent class
-      super().__init__(i_state_vector_start, n_state_vector_entries)
-      
-      # storing constants
-      self.n_chunk = n_chunk
-      self.gas_id = gas_id
-      self.iso_id = iso_id
-      
-      # define the model parameters, specifically how they are stored in the state vector
-      self.parameters : tuple[ModelParameter,...] = (
-         ModelParameter(
-            'chunk',
-            slice(None),
-            f'the {n_chunk} values of a piecewise function that define a volume mixing ratio for gas : {gas_id} isotope : {iso_id}',
-            'RATIO'
-         ), # NOTE: the comma here is required.
-      )
-   
-   
-   @classmethod
-   def calculate(
-         cls,
-         atm : "Atmosphere_0",
-         atm_profile_type : AtmosphericProfileType,
-         atm_profile_idx : int | None,
-         chunk : np.ndarray[['mparam'],float],
-      ):
-      # update profile values
-      temp = np.array(atm.VMR)
-      fidx = np.linspace(0,chunk.size,temp.size)
-      j=0
-      for i in range(chunk.size):
-         while fidx[j] < i+1:
-            temp[j, atm_profile_idx] = chunk[i]
-            j += 1
-      atm.edit_VMR(temp)
-      
-      # find the functional derivatives
-      xmap = np.zeros((chunk.size,atm.VMR.size[0]),float)
-      j=0
-      for i in range(chunk.size):
-         while fidx[j] < i+1:
-            xmap[i, j] = 1
-            j += 1
-
-      # return results
-      return atm, xmap
-   
-   
-   def from_apr_to_state_vector(
-         cls,
-         variables : "Variables_0",
-         f : IO,
-         varident : np.ndarray[[3],int],
-         varparam : np.ndarray[["mparam"],float],
-         ix : int,
-         lx : np.ndarray[["mx"],int],
-         x0 : np.ndarray[["mx"],float],
-         sx : np.ndarray[["mx","mx"],float],
-         inum : np.ndarray[["mx"],int],
-         npro : int,
-         nlocations : int,
-         runname : str,
-         sxminfac : float,
-      ) -> Self:
-      
-      # unpack values from VARIDENT
-      gas_id = varident[0]
-      assert gas_id > 0, f'model {cls.__name__} with id={cls.id} must have a gas ID as the first VARIDENT value'
-      iso_id = varident[1]
-      
-      # read in apriori parameters
-      # read number of chunks
-      n_chunk = int(f.readline().strip())
-      
-      # ensure we have at least 2 profile points per chunk
-      assert npro >= 2*n_chunk, f'{cls.__name__} id={cls.id} must have at most half as many chunks as there are points in a profile, have {n_chunk} vs {npro}'
-      
-      # create holder arrays
-      chunk = np.zeros((n_chunk,),float)
-      chunk_err = np.zeros((n_chunk,),float)
-
-      # read value and error of each chunk
-      for i in range(coeff.size):
-         chunk[i], chunk_err[i] = tuple(map(float, f.readline().strip().split()))
-      
-      # Packing the state vector and covariance matrix
-      ix_0 = ix # store the initial value
-      for i in range(n_chunk):
-         # store the log(chunk) values
-         lx[ix] = 1
-         inum[ix] = 1
-         x0[ix] = np.log(chunk[i])
-         
-         # store the chunk variance, must use relative errors as we are storing log(value)
-         sx[ix,ix] = (chunk_err[i]/chunk[i])**2
-         
-         ix += 1
-         
-      # return the constructed model instance
-      return cls(ix_0, ix-ix_0, n_chunk, gas_id, iso_id)
-   
-   
-   def calculate_from_subprofretg(
-         self,
-         forward_model : "ForwardModel_0",
-         ix : int,
-         ipar : int,
-         ivar : int,
-         xmap : np.ndarray,
-      ) -> None:
-      
-      # unpack parameters from state vector
-      chunk = self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
-
-      # get the profile type and index, and check the values
-      atm = forward_model.AtmosphereX
-      atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
-
-      assert atm_profile_type == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO, f'model {self.__class__.__name__} with id={self.id}. Only accepts gas volume mixing ratio profiles'
-
-      assert atm_profile_idx == atm.locate_gas(self.gas_id, self.iso_id), f'model {self.__class__.__name__} with id={self.id}. The two different ways of getting the gas_vmr_idx must agree'
-      
-      atm, xmap1 = self.calculate(
-         atm,
-         atm_profile_type,
-         atm_profile_idx,
-         chunk
-      )
-      
-      forward_model.AtmosphereX = atm
-      xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1

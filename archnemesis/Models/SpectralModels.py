@@ -366,7 +366,7 @@ class TemplateSpectralModel(SpectralModelBase):
 
 class Model231(SpectralModelBase):
     """
-        Multiplication of calculated spectrum by polynomial function (following polynomial of degree N).
+        Scaling of spectrum using a varying scaling factor (following a polynomial of degree N)
         
         The computed spectra is multiplied by `R = R0 * POL`, where the polynomial function POL depends on the wavelength and is given by:
         
@@ -516,6 +516,10 @@ class Model231(SpectralModelBase):
 
 # [JD] This uses forward_model.SpectroscopyX, whereas Model231 uses forward_model.Measurement, is this correct?
 class Model2310(SpectralModelBase):
+    """
+        Scaling of spectra using a varying scaling factor (following a polynomial of degree N)
+        in multiple spectral windows
+    """
     id : int = 2310
     
     
@@ -667,6 +671,12 @@ class Model2310(SpectralModelBase):
 
 
 class Model232(SpectralModelBase):
+    """
+        Continuum addition to transmission spectra using the angstrom coefficient
+
+        The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( - TAU0 * (WAVE/WAVE0)**-ALPHA )
+        Where the parameters to fit are TAU0 and ALPHA
+    """
     id : int = 232
     
     
@@ -795,6 +805,17 @@ class Model232(SpectralModelBase):
 
 
 class Model233(SpectralModelBase):
+    """
+        Continuum addition to transmission spectra using a variable angstrom coefficient (Schuster et al., 2006 JGR)
+
+        The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( -TAU_AERO )
+        Where the aerosol opacity is modelled following
+
+            np.log(TAU_AERO) = a0 + a1 * np.log(WAVE) + a2 * np.log(WAVE)**2.
+
+        The coefficient a2 accounts for a curvature in the angstrom coefficient used in model 232. Note that model
+        233 converges to model 232 when a2=0.
+    """
     id : int = 233
     
     
@@ -951,6 +972,10 @@ class Model233(SpectralModelBase):
 
 
 class Model667(SpectralModelBase):
+    """
+        In this model, the output spectrum is scaled using a dillusion factor to account
+        for strong temperature gradients in exoplanets
+    """
     id : int = 667
 
 

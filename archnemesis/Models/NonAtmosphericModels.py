@@ -370,6 +370,21 @@ class TemplateNonAtmosphericModel(NonAtmosphericModelBase):
 
 
 class Model228(NonAtmosphericModelBase):
+    """
+        In this model, the wavelength calibration of a given spectrum is performed, as well as the fit
+        of a double Gaussian ILS suitable for ACS MIR solar occultation observations
+
+        The wavelength calibration is performed such that the first wavelength or wavenumber is given by V0. 
+        Then the rest of the wavelengths of the next data points are calculated by calculating the wavelength
+        step between data points given by dV = C0 + C1*data_number + C2*data_number, where data_number 
+        is an array going from 0 to NCONV-1.
+
+        The ILS is fit using the approach of Alday et al. (2019, A&A). In this approach, the parameters to fit
+        the ILS are the Offset of the second gaussian with respect to the first one (P0), the FWHM of the main 
+        gaussian (P1), Relative amplitude of the second gaussian with respect to the gaussian at lowest wavenumber (P2)
+        , Relative amplitude of the second gaussian with respect to the gaussian at highest wavenumber (P3), and
+        a linear variation of the relative amplitude.
+    """
     id : int = 228
 
 
@@ -632,6 +647,10 @@ class Model228(NonAtmosphericModelBase):
 
 
 class Model229(NonAtmosphericModelBase):
+    """
+        In this model, the ILS of the measurement is defined from every convolution wavenumber
+        using the double-Gaussian parameterisation created for analysing ACS MIR spectra
+    """
     id : int = 229
 
 
@@ -899,6 +918,11 @@ class Model229(NonAtmosphericModelBase):
 
 
 class Model230(NonAtmosphericModelBase):
+    """
+        In this model, the ILS of the measurement is defined from every convolution wavenumber
+        using the double-Gaussian parameterisation created for analysing ACS MIR spectra.
+        However, we can define several spectral windows where the ILS is different
+    """
     id : int = 230
 
 
@@ -1426,6 +1450,11 @@ class Model444(NonAtmosphericModelBase):
 
 
 class Model446(NonAtmosphericModelBase):
+    """
+        In this model, we change the extinction coefficient and single scattering albedo 
+        of a given aerosol population based on its particle size, and based on the extinction 
+        coefficients tabulated in a look-up table
+    """
     id : int = 446
 
     def __init__(
@@ -1657,6 +1686,11 @@ class Model446(NonAtmosphericModelBase):
 
 
 class Model447(NonAtmosphericModelBase):
+    """
+        In this model, we fit the Doppler shift of the observation. Currently this Doppler shift
+        is common to all geometries, but in the future it will be updated so that each measurement
+        can have a different Doppler velocity (in order to retrieve wind speeds).
+    """
     id : int = 447
 
 
@@ -1754,6 +1788,10 @@ class Model447(NonAtmosphericModelBase):
 
 
 class Model500(NonAtmosphericModelBase):
+    """
+        This allows the retrieval of CIA opacity with a gaussian basis.
+        Assumes a constant P/T dependence.
+    """
     id : int = 500
 
 
@@ -1902,6 +1940,10 @@ class Model500(NonAtmosphericModelBase):
 
 
 class Model777(NonAtmosphericModelBase):
+    """
+        In this model, we apply a correction to the tangent heights listed on the 
+        Measurement class
+    """
     id : int = 777
 
 
@@ -2010,6 +2052,10 @@ class Model777(NonAtmosphericModelBase):
 
 
 class Model887(NonAtmosphericModelBase):
+    """
+        In this model, the cross-section spectrum of IDUST is changed given the parameters in 
+        the state vector
+    """
     id : int = 887
 
 
