@@ -1,5 +1,6 @@
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations #  for 3.9 compatability
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
@@ -8,6 +9,8 @@ from archnemesis.enums import (
     LayerIntegrationScheme,
     InterpolationMethod,
 )
+
+
 
 AVOGAD = 6.02214076e23
 """

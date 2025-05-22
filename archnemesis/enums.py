@@ -1,4 +1,6 @@
+from __future__ import annotations #  for 3.9 compatability
 from enum import IntEnum, IntFlag, auto
+
 
 
 class PlanetEnum(IntEnum):
@@ -346,3 +348,15 @@ class InterpolationMethod(IntEnum):
     QUADRATIC_SPLINE = 1
     CUBIC_SPLINE = 2
 
+
+class AtmosphericProfileType(IntEnum):
+    """
+    Defines the atmospheric profile type that a model parameterises
+    
+    Used as 'ipar' in 'Models.py', 'ForwardModel_0.py'
+    """
+    GAS_VOLUME_MIXING_RATIO = 0
+    TEMPERATURE = 1
+    AEROSOL_DENSITY = 2
+    PARA_H2_FRACTION = 3
+    FRACTIONAL_CLOUD_COVERAGE = 4

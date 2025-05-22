@@ -1,9 +1,11 @@
+from __future__ import annotations #  for 3.9 compatability
 from scipy.interpolate import interp1d
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 from numba import jit, njit
 from archnemesis.enums import WaveUnit, LowerBoundaryCondition
+
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-

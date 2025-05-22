@@ -7,12 +7,17 @@ Created on Tue Mar 16 17:27:12 2021
 
 Atmosphere Class.
 """
+from __future__ import annotations #  for 3.9 compatability
 from archnemesis import Data
 from archnemesis import *
 import numpy as np
 from scipy.special import legendre
 
-from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum
+from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileType
+
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 class Atmosphere_0:
     """
@@ -479,6 +484,56 @@ class Atmosphere_0:
         f.close()       
 
     ##################################################################################
+
+    def ipar_to_atm_profile_type(
+            self, 
+            ipar : int
+        ) -> tuple[AtmosphericProfileType, None|int]:
+        """
+            Decodes `ipar` from a magic number to a profile type and an index of that profile type
+            
+            ## ARGUMENTS ##
+            
+                ipar :: Atmospheric parameter to be changed
+                    (0 to NVMR-1) :: Gas VMR
+                    (NVMR) :: Temperature
+                    (NVMR+1 to NVMR+NDUST-1) :: Aerosol density
+                    (NVMR+NDUST) :: Para-H2
+                    (NVMR+NDUST+1) :: Fractional cloud coverage
+            
+            ## RETURNS ##
+            
+                atm_profile_type : AtmosphericProfileType
+                    An ENUM specifiying the type of the profile.
+                
+                atm_profile_idx : int | None
+                    An integer denoting which profile of `atm_profile_type` to select, or `None`
+                    if that profile type cannot have multiple entries.
+            
+            ## EXAMPLE ##
+            
+                (atm_profile_type, atm_profile_idx) = Atmosphere.ipar_to_atm_profile_type(ipar)
+                
+                
+        """
+        _lgr.debug(f'{ipar=}')
+        _lgr.debug(f'{self.NVMR=} {self.NDUST=}')
+        if ipar >=0 and ipar < self.NVMR:
+            return AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO, ipar
+        
+        if ipar == self.NVMR:
+            return AtmosphericProfileType.TEMPERATURE, 0
+        
+        if ipar > self.NVMR and ipar <= self.NVMR+self.NDUST:
+            return AtmosphericProfileType.AEROSOL_DENSITY, ipar - (self.NVMR+1)
+        
+        if ipar == self.NVMR+self.NDUST+1:
+            return AtmosphericProfileType.PARA_H2_FRACTION, None # only ever one of these profiles
+        
+        if ipar == self.NVMR+self.NDUST+2:
+            return AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE, None # only ever one of these profiles
+        
+        raise ValueError(f'Atmosphere_0 :: ipar_to_atm_profile_type :: {ipar=} is not a supported value')
 
     def edit_H(self, array):
         """
@@ -1596,7 +1651,7 @@ class Atmosphere_0:
             label1 = gas_info[str(self.ID[i])]['name']
             if self.ISO[i]!=0:
                 label1 = label1+' ('+str(self.ISO[i])+')'
-            ax3.semilogx(vmr[:,i],h/1.0e3,label=label1)
+            ax3.semilogx(vmr[:,i],h/1.0e3, label=label1)
         ax1.set_xlabel('Pressure (atm)')
         ax1.set_ylabel('Altitude (km)')
         ax2.set_xlabel('Temperature (K)')
@@ -1631,10 +1686,11 @@ class Atmosphere_0:
             fig,ax1 = plt.subplots(1,1,figsize=(3,4))
 
             for i in range(self.NDUST):
-                ax1.plot(dust[:,i],h/1.0e3)
+                ax1.plot(dust[:,i],h/1.0e3, label=f'aerosol species {i}')
             ax1.grid()
             ax1.set_xlabel('Aerosol density (particles m$^{-3}$)')
             ax1.set_ylabel('Altitude (km)')
+            legend = ax1.legend(loc='upper right', bbox_to_anchor=(1.0, 1.0))
             plt.tight_layout()
             if SavePlot is not None:
                 fig.savefig(SavePlot)

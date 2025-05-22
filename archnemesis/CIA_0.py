@@ -1,10 +1,13 @@
+from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
+from archnemesis.Data.path_data import *
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 from numba import jit
 
 from archnemesis.enums import Gas, ParaH2Ratio
+
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -234,18 +237,18 @@ class CIA_0:
         
         import h5py
 
-        f = h5py.File(runname+'.h5','r')
-
-        #Checking if Spectroscopy exists
-        e = "/CIA" in f
-        if e==False:
-            raise ValueError('error :: CIA is not defined in HDF5 file')
-        else:
-            self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
-            self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
-            self.INORMAL = ParaH2Ratio(np.int32(f.get('CIA/INORMAL')))
+        with h5py.File(runname+'.h5','r') as f:
+            #Checking if Spectroscopy exists
+            e = "/CIA" in f
+            if e==False:
+                raise ValueError('error :: CIA is not defined in HDF5 file')
+            else:
+                self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
+                self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
+                self.INORMAL = ParaH2Ratio(np.int32(f.get('CIA/INORMAL')))
     
-        f.close()
+        # Resolve archnemesis path if it has been indirected
+        self.CIADATA = archnemesis_resolve_path(self.CIADATA)
         
         #Reading the CIA table from the name specified
         self.read_ciatable(self.CIADATA+self.CIATABLE)
@@ -278,7 +281,10 @@ class CIA_0:
         #Write the directory where CIA tables are stored
         dt = h5py.special_dtype(vlen=str)
         CIADATA = ['']*1
-        CIADATA[0] = self.CIADATA
+        
+        # Indirect the archnemesis path so it works on other systems
+        CIADATA[0] = archnemesis_indirect_path(self.CIADATA)
+        
         dset = grp.create_dataset('CIADATA',data=CIADATA,dtype=dt)
         dset.attrs['title'] = "Path to directory where CIA table is stored"
         
@@ -567,7 +573,7 @@ class CIA_0:
             filename += '.h5'
         
         with h5py.File(filename, 'r') as f:
-            self.NPARA = np.int32(f.get('NPARA'))
+            self.NPARA = np.int32(f.get('NPARA', 1))
             self.NPAIR = np.int32(f.get('NPAIR'))
             self.NT = np.int32(f.get('NT'))
             self.NWAVE = np.int32(f.get('NWAVE'))
