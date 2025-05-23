@@ -700,9 +700,10 @@ class Measurement_0:
         self.edit_FLAT(flat)
         self.edit_FLON(flon)
         self.edit_WGEOM(wgeom)
-        self.edit_SOL_ANG(sol_ang)
-        #self.edit_TANHE(sol_ang)
         self.edit_EMISS_ANG(emiss_ang)
+        self.edit_SOL_ANG(sol_ang)
+        if self.EMISS_ANG.min()<0.0:
+            self.edit_TANHE(sol_ang)
         self.edit_AZI_ANG(azi_ang)
 
         self.calc_MeasurementVector()

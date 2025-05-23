@@ -610,6 +610,7 @@ class ForwardModel_0:
 
                 SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
 
+
         #Convolving the spectrum with the instrument line shape
         print('Convolving spectra and gradients with instrument line shape')
         if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
@@ -3531,7 +3532,6 @@ class ForwardModel_0:
             TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
             #Removing necessary data to save memory
             del k
-            self.SpectroscopyX.K = None
 
         elif self.SpectroscopyX.ILBL==SpectralCalculationMode.K_TABLES:    #K-table
             

@@ -1,0 +1,86 @@
+# TITL:	isotopes.dat
+#
+# DESC:	This file lists the gas IDs contained in the line data file, and 
+#       the corresponding Radtran Gas ID.
+#
+#       Each line also contains the Local ID of the isotopes listed in the
+#       associated gas_info*.dat file. I.e. isotope 2 of CO2 is, according
+#       to radtran 636 which is also listed as 636 in the Geisa84
+#       database. If an isotope is missing, a zero is put in that place.
+# 
+# FRMT: DBID, Rad_ID, Isotopes ...
+#
+# HIST:	N Teanby 5/1/05	modified from isotopes_g97.dat for G03 release
+#           N Teanby 19/4/06	added c6h6 (made up ids)
+#           N Teanby 12/3/07	added ch3cn (made up ids)
+#           C Nixon  21/3/10	added allene (made up ids)
+#           C Nixon  26/4/13	added dicyanoacetylene (made up ids)
+#           E Molter 9/9/15     added dcn and h13c15n
+#           X Thelen 05/11/15   added hc5n (made up ids)
+#           X Thelen 06/11/15   added ch3c3n, n-c3h7cn, and i-c3h7cn (made up ids)
+#           X Thelen 05/05/16   added c2h3cn, (made up id)
+#           X Thelen 04/08/18   added ch3nc, hnccc, hccnc (made up ids)
+#           X Thelen 04/11/18   added ch3cn isotopes, ch2cnh (made up ids)
+
+     1    1  161  181  171  162  182
+     2    2  626  636  628  627  638  637  828  728  838
+     3    3  666  668  686  667  676
+     4    4  446  456  546  448  447
+     5    5   26   36   28   27   38   37
+     6    6  211  311    0    0
+     7    7   66   68   67
+     8    8   46   56   48
+     9    9  626  646
+    10   10  646
+    11   11  411  511
+    12   28  131
+    13   12  146
+    14   13   61   81   62
+    15   14   19
+    16   15   15   17
+    17   16   19   11
+    18   17   17
+    19   18   56   76
+    20   19  622  624  632  822  623  634  0
+    21   20  126  136 128
+    22   27  226  236
+    23    6    0    0 212 312
+    24   26  221  231 222
+    25   32  211  311
+    26   33  411
+    27   23  124  134  125  224  135
+    28   34  221
+    29   29  224
+    30   30  211  311
+    31   31  124  134 125
+    32   21  165  167
+    33   22   44
+    34   24  215  217
+    35   25  166
+    36   36  121  131  141
+    37   35  261
+    38   37  269
+    39   38   29
+    40   42  341 231
+    41   44  166
+    42   43  564  764
+    43   48   11   12
+    44   47  211
+    45   41  181
+    46   45  6
+    47   46  4
+    48   49  221
+    49   50  241  341  234  251
+    50   51  221
+    51   52  224
+    53   53  214
+    55   55  124
+    56   57  241 341
+    58   59  142 143 152 242
+    60   60  241
+    61   61  241
+    62   62  241
+    63   63  241
+    64   64  142
+    65   65  124
+    66   66  214
