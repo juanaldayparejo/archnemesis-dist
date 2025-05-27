@@ -341,3 +341,25 @@ def test_multiple_scattering_cirs():
                            9.61232342e-11, 1.80943924e-10, 2.78555559e-10, 1.36275909e-10])
     
     assert np.allclose(calculation_cirsrad, expected_nemesis, rtol=5.0e-2), "Calculated values must be close to expected values"
+
+def test_solar_occultation_mars():  
+    '''
+    Mars solar occultation test
+    '''
+    test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Mars_solar_occultation/')
+    os.chdir(test_dir) #Changing directory to read files
+    runname = 'mars_solocc'
+    
+    #Reading the input files
+    Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval,Telluric = ans.Files.read_input_files_hdf5(runname)
+    
+    #Calculating forward model with CIRSrad
+    ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
+    SPECONV = ForwardModel.nemesisSOfm()
+    SPECONVg,dSPECONV = ForwardModel.nemesisSOfmg()
+    
+    #Reading the reference results
+    expected_speconv = np.load('reference_result.npy')
+    np.testing.assert_allclose(SPECONV, expected_speconv, rtol=1e-5, atol=1e-8)
+    np.testing.assert_allclose(SPECONVg, expected_speconv, rtol=1e-5, atol=1e-8)
+    
