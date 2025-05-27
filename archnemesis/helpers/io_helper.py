@@ -22,7 +22,7 @@ class OutWidth:
 		if f.isatty():
 			tty_cols = os.get_terminal_size().columns
 			if len(cls._set_out_width) != 0 and cls._set_out_width[-1] < tty_cols:
-				return cls._set_out_width
+				return cls._set_out_width[-1]
 			else:
 				return tty_cols
 		else:
