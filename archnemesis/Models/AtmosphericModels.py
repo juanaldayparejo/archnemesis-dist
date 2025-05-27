@@ -1081,7 +1081,7 @@ class Model2(AtmosphericModelBase):
         #**** model 2 - Simple scaling factor of reference profile *******
         #Read in scaling factor
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         x0[ix] = float(tmp[0])
         sx[ix,ix] = (float(tmp[1]))**2.
 
@@ -1285,7 +1285,7 @@ class Model3(AtmosphericModelBase):
         #**** model 3 - Exponential scaling factor of reference profile *******
         #Read in scaling factor
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         xfac = float(tmp[0])
         err = float(tmp[1])
 
@@ -1546,13 +1546,13 @@ class Model9(AtmosphericModelBase):
         #******** base height and fractional scale height. Below the knee
         #******** pressure the profile is set to zero - a simple
         #******** cloud in other words!
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         hknee = tmp[0]
         eknee = tmp[1]
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         xdeep = tmp[0]
         edeep = tmp[1]
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         xfsh = tmp[0]
         efsh = tmp[1]
 
@@ -1909,13 +1909,13 @@ class Model32(AtmosphericModelBase):
         #******** variable pressure level and fractional scale height.
         #******** Below the knee pressure the profile is set to drop exponentially.
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         pknee = tmp[0]
         eknee = tmp[1]
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         xdeep = tmp[0]
         edeep = tmp[1]
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         xfsh = tmp[0]
         efsh = tmp[1]
 
@@ -2168,13 +2168,13 @@ class Model45(AtmosphericModelBase):
         ix_0 = ix
         #******** Irwin CH4 model. Represented by tropospheric and stratospheric methane 
         #******** abundances, along with methane humidity. 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         tropo = tmp[0]
         etropo = tmp[1]
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         humid = tmp[0]
         ehumid = tmp[1]
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         strato = tmp[0]
         estrato = tmp[1]
 
@@ -2473,13 +2473,13 @@ class Model47(AtmosphericModelBase):
         #******** cloud profile is represented by a peak optical depth at a 
         #******** variable pressure level and a Gaussian profile with FWHM (in log pressure)
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         xdeep = tmp[0]
         edeep = tmp[1]
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         pknee = tmp[0]
         eknee = tmp[1]
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         xwid = tmp[0]
         ewid = tmp[1]
 
@@ -3010,10 +3010,10 @@ class Model51(AtmosphericModelBase):
         ) -> Self:
         ix_0 = ix
         #********* multiple of different profile ************************
-        prof = np.fromfile(f,sep=' ',count=2,dtype='int')
+        prof = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='int') # Use "!" as comment character in *.apr files
         profgas = prof[0]
         profiso = prof[1]
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         scale = tmp[0]
         escale = tmp[1]
 
@@ -3235,7 +3235,7 @@ class Model110(AtmosphericModelBase):
         if varident[0]>0:
             raise ValueError('error in read_apr model 110 :: VARIDENT[0] must be negative to be associated with the aerosols')
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #z_offset
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #z_offset
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
@@ -3493,14 +3493,14 @@ class Model111(AtmosphericModelBase):
         if varident[0]>0:
             raise ValueError('error in read_apr model 111 :: VARIDENT[0] must be negative to be associated with the aerosols')
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #z_offset
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #z_offset
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 1
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #SO2_deep
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #SO2_deep
         so2_deep = float(tmp[0])
         so2_deep_err = float(tmp[1])
         x0[ix] = np.log(so2_deep)
@@ -3509,7 +3509,7 @@ class Model111(AtmosphericModelBase):
         inum[ix] = 1
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #SO2_top
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #SO2_top
         so2_top = float(tmp[0])
         so2_top_err = float(tmp[1])
         x0[ix] = np.log(so2_top)
@@ -3641,7 +3641,7 @@ class Model202(AtmosphericModelBase):
         ) -> Self:
         ix_0 = ix
         #********* simple scaling of telluric atmospheric profile ************************
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         x0[ix] = float(tmp[0])
         sx[ix,ix] = (float(tmp[1]))**2.
         inum[ix] = 1
