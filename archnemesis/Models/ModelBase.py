@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, IO, Any
 from collections import namedtuple
 import textwrap
 import inspect
-import weakref
 
 if sys.version_info[0] <= 3 and sys.version_info[1] <= 10:
     from typing_extensions import Self
@@ -116,12 +115,6 @@ class ModelBase(abc.ABC):
                 
                 None
         """
-        # Create holders for targeting at a state vector
-        temp = np.array([1]) # need to give these something to reference, then delete it to get an 'empty' reference
-        self._log_flag_state_vector_target = weakref.ref(temp)
-        self._apriori_state_vector_target = weakref.ref(temp)
-        self._posterior_state_vector_target = weakref.ref(temp)
-        del temp
         
         # Store where the model parameters are positioned within the state vector
         self.state_vector_start = state_vector_start
@@ -138,34 +131,19 @@ class ModelBase(abc.ABC):
         return
     
     
-    def set_target_state_vector(
-            self,
-            log_flag_sv : None | np.ndarray,
-            apriori_sv : None | np.ndarray, 
-            posterior_sv : None | np.ndarray = None,
-        ):
-        temp = np.array([1])
-        if log_flag_sv is not None:
-            self._log_flag_state_vector_target = weakref.ref(log_flag_sv)
-        else: 
-            self._log_flag_state_vector_target = weakref.ref(temp)
+    def info(self, log_flag_state_vector = None, apriori_state_vector=None, posterior_state_vector=None)->str:
+        param_apriori_values = None
+        param_posterior_values = None
+        if log_flag_state_vector is not None and apriori_state_vector is not None:
+            param_apriori_values = self.get_parameter_values_from_state_vector(apriori_state_vector, log_flag_state_vector)
+            _lgr.debug(f'{param_apriori_values=}')
+        if log_flag_state_vector is not None and posterior_state_vector is not None:
+            param_posterior_values = self.get_parameter_values_from_state_vector(posterior_state_vector, log_flag_state_vector)
         
-        if apriori_sv is not None:
-            self._apriori_state_vector_target = weakref.ref(apriori_sv)
-        else:
-            self._apriori_state_vector_target = weakref.ref(temp)
-        
-        if posterior_sv is not None:
-            self._posterior_state_vector_target = weakref.ref(posterior_sv)
-        else:
-            self._posterior_state_vector_target = weakref.ref(temp)
-        
-        del temp
-        
-        return
-        
+        return self.__str__(param_apriori_values, param_posterior_values)
     
-    def __str__(self):
+    
+    def __str__(self, param_apriori_values = None, param_posterior_values = None) -> str:
         s = self.to_string()
         #attrs = tuple(filter(lambda x: not x.startswith('_') and x != "parameters", dir(self)))
         attrs = inspect.getmembers(self, lambda x: not inspect.ismethod(x))
@@ -192,13 +170,6 @@ class ModelBase(abc.ABC):
             subsequent_indent=' '*15
         )
         
-        param_apriori_values = None
-        param_posterior_values = None
-        if self._log_flag_state_vector_target() is not None and self._apriori_state_vector_target() is not None:
-            param_apriori_values = self.get_parameter_values_from_state_vector(self._apriori_state_vector_target(), self._log_flag_state_vector_target())
-            _lgr.debug(f'{param_apriori_values=}')
-        if self._log_flag_state_vector_target() is not None and self._posterior_state_vector_target() is not None:
-            param_posterior_values = self.get_parameter_values_from_state_vector(self._posterior_state_vector_target(), self._log_flag_state_vector_target())
         
         
         params_strs = [
