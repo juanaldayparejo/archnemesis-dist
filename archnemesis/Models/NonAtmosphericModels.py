@@ -561,56 +561,56 @@ class Model228(NonAtmosphericModelBase):
         ix_0 = ix
         #******** model for retrieving the ILS and Wavelength calibration in ACS MIR solar occultation observations
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #V0
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #V0
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 1
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #C0
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #C0
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 1
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #C1
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #C1
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 1
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #C2
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #C2
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 1
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #P0 - Offset of the second gaussian with respect to the first one (assumed spectrally constant)
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #P0 - Offset of the second gaussian with respect to the first one (assumed spectrally constant)
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 1
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #P1 - FWHM of the main gaussian (assumed to be constant in wavelength units)
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #P1 - FWHM of the main gaussian (assumed to be constant in wavelength units)
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 1
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #P2 - Relative amplitude of the second gaussian with respect to the gaussian at lowest wavenumber
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #P2 - Relative amplitude of the second gaussian with respect to the gaussian at lowest wavenumber
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 1
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #P3 - Relative amplitude of the second gaussian with respect to the gaussian at highest wavenumber (linear variation)
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #P3 - Relative amplitude of the second gaussian with respect to the gaussian at highest wavenumber (linear variation)
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
@@ -839,49 +839,49 @@ class Model229(NonAtmosphericModelBase):
         ix_0 = ix
         #******** model for retrieving the ILS in ACS MIR solar occultation observations
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #wavenumber offset at lowest wavenumber
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #wavenumber offset at lowest wavenumber
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 0
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #wavenumber offset at wavenumber in the middle
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #wavenumber offset at wavenumber in the middle
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 0
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #wavenumber offset at highest wavenumber
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #wavenumber offset at highest wavenumber
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 0
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #Offset of the second gaussian with respect to the first one (assumed spectrally constant)
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #Offset of the second gaussian with respect to the first one (assumed spectrally constant)
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 0
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #FWHM of the main gaussian (assumed to be constant in wavelength units)
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #FWHM of the main gaussian (assumed to be constant in wavelength units)
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 0
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #Relative amplitude of the second gaussian with respect to the gaussian at lowest wavenumber
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #Relative amplitude of the second gaussian with respect to the gaussian at lowest wavenumber
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 0
         ix = ix + 1
 
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')   #Relative amplitude of the second gaussian with respect to the gaussian at highest wavenumber (linear variation)
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #Relative amplitude of the second gaussian with respect to the gaussian at highest wavenumber (linear variation)
         x0[ix] = float(tmp[0])
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
