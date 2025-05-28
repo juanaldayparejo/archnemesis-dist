@@ -19,7 +19,7 @@ def is_diagonal(a : np.ndarray) -> bool:
     """
     
     # This is a bit of a hack, but should be pretty fast
-    diag_elements : np.ndarray = np.diagonal(a, offset=offset, axis1=axis1, axis2=axis2).copy()
+    diag_elements : np.ndarray = np.diagonal(a).copy()
     
     try:
         np.fill_diagonal(a, 0)
