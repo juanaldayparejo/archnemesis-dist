@@ -527,36 +527,36 @@ class CIA_0:
             
         with h5py.File(filename,'w') as f:
             #Writing the main dimensions
-            dset = f.create_dataset('NPARA',data=self.NPARA)
+            dset = h5py_helper.store_data(f, 'NPARA', data=self.NPARA)
             dset.attrs['title'] = "Number of para-H2 fractions listed in the CIA table"
             
-            dset = f.create_dataset('NPAIR',data=self.NPAIR)
+            dset = h5py_helper.store_data(f, 'NPAIR', data=self.NPAIR)
             dset.attrs['title'] = "Number of CIA pairs included in the look-up table"
 
-            dset = f.create_dataset('NWAVE',data=self.NWAVE)
+            dset = h5py_helper.store_data(f, 'NWAVE', data=self.NWAVE)
             dset.attrs['title'] = "Number of wavenumber points in the look-up table"
 
-            dset = f.create_dataset('NT',data=self.NT)
+            dset = h5py_helper.store_data(f, 'NT', data=self.NT)
             dset.attrs['title'] = "Number of temperatures at which the CIA cross sections are tabulated"
             
-            dset = f.create_dataset('IPAIRG1',data=self.IPAIRG1)
+            dset = h5py_helper.store_data(f, 'IPAIRG1', data=self.IPAIRG1)
             dset.attrs['title'] = "ID of the first gas of each CIA pair (e.g., N2-CO2; IPAIRG1 = N2 = 22)"
             
-            dset = f.create_dataset('IPAIRG2',data=self.IPAIRG2)
+            dset = h5py_helper.store_data(f, 'IPAIRG2', data=self.IPAIRG2)
             dset.attrs['title'] = "ID of the second gas of each CIA pair (e.g., N2-CO2; IPAIRG2 = CO2 = 2)"
             
-            dset = f.create_dataset('INORMALT',data=self.INORMALT)
+            dset = h5py_helper.store_data(f, 'INORMALT', data=self.INORMALT)
             dset.attrs['title'] = "Flag indicating whether the cross sections correspond to equilibrium or normal hydrogen"
             
-            dset = f.create_dataset('WAVEN',data=self.WAVEN)
+            dset = h5py_helper.store_data(f, 'WAVEN', data=self.WAVEN)
             dset.attrs['title'] = "Wavenumber"
             dset.attrs['units'] = "cm-1"
             
-            dset = f.create_dataset('TEMP',data=self.TEMP)
+            dset = h5py_helper.store_data(f, 'TEMP', data=self.TEMP)
             dset.attrs['title'] = "Temperature"
             dset.attrs['units'] = "K"
             
-            dset = f.create_dataset('K_CIA',data=self.K_CIA)
+            dset = h5py_helper.store_data(f, 'K_CIA', data=self.K_CIA)
             dset.attrs['title'] = "CIA cross sections"
             dset.attrs['units'] = "cm5 molecule-2"
         

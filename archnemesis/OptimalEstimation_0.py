@@ -285,46 +285,45 @@ class OptimalEstimation_0:
 
         if self.IRET==0:
             
-            dset = f.create_dataset('Retrieval/Output/OptimalEstimation/NY',data=self.NY)
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/NY', data=self.NY)
             dset.attrs['title'] = "Number of elements in measurement vector"
 
-            dset = f.create_dataset('Retrieval/Output/OptimalEstimation/Y',data=self.Y)
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/Y', data=self.Y)
             dset.attrs['title'] = "Measurement vector"
 
             assert is_diagonal(self.SE), f"Measurement vector covariance matrix must be diagonal"
 
-            dset = f.create_dataset('Retrieval/Output/OptimalEstimation/SE',data=np.sqrt(np.diagonal(self.SE)))
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/SE', data=np.sqrt(np.diagonal(self.SE)))
             dset.attrs['title'] = "Uncertainty in Measurement vector (is the square root of the diagonal of the Measurement covariance matrix, which is always a diagonal matrix)"
 
-            dset = f.create_dataset('Retrieval/Output/OptimalEstimation/YN',data=self.YN)
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/YN', data=self.YN)
             dset.attrs['title'] = "Modelled measurement vector"
             
             if write_cov==True:
 
-                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/NX',data=self.NX)
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/NX', data=self.NX)
                 dset.attrs['title'] = "Number of elements in state vector"
 
-                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/XN',data=self.XN)
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/XN', data=self.XN)
                 dset.attrs['title'] = "Retrieved state vector"
 
-                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/SX',data=self.ST)
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/SX', data=self.ST)
                 dset.attrs['title'] = "Retrieved covariance matrix"
 
-                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/XA',data=self.XA)
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/XA', data=self.XA)
                 dset.attrs['title'] = "A priori state vector"
 
-                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/SA',data=self.SA)
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/SA', data=self.SA)
                 dset.attrs['title'] = "A priori covariance matrix"
                 
-                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/KK',data=self.KK)
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/KK', data=self.KK)
                 dset.attrs['title'] = "Jacobian matrix"
                 
-                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/AA',data=self.AA)
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/AA', data=self.AA)
                 dset.attrs['title'] = "Averaging kernel"
                 
-                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/DD',data=self.DD)
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/DD', data=self.DD)
                 dset.attrs['title'] = "Gain matrix"
-
 
 
         #Writing the parameters in the same form as the input .apr file
@@ -339,8 +338,8 @@ class OptimalEstimation_0:
                 
                 xa1 = self.XA[ix]
                 ea1 = np.sqrt(abs(self.SA[ix,ix]))
-                xn1 = self.XN[ix]
-                en1 = np.sqrt(abs(self.ST[ix,ix]))
+                xn1 = self.XN[ix] if self.XN is not None else np.nan
+                en1 = np.sqrt(abs(self.ST[ix,ix])) if self.ST is not None else np.nan
                 if Variables.LX[ix]==1:
                     xa1 = np.exp(xa1)
                     ea1 = xa1*ea1
@@ -354,29 +353,31 @@ class OptimalEstimation_0:
 
                 ix = ix + 1
 
+        RETPARAM = None if np.any(np.isnan(RETPARAM)) else RETPARAM
+        RETERRPARAM = None if np.any(np.isnan(RETERRPARAM)) else RETERRPARAM
 
-        dset = f.create_dataset('Retrieval/Output/Parameters/NVAR',data=Variables.NVAR)
+        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/NVAR', data=Variables.NVAR)
         dset.attrs['title'] = "Number of retrieved model parameterisations"
 
-        dset = f.create_dataset('Retrieval/Output/Parameters/NXVAR',data=Variables.NXVAR)
+        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/NXVAR', data=Variables.NXVAR)
         dset.attrs['title'] = "Number of parameters associated with each model parameterisation"
 
-        dset = f.create_dataset('Retrieval/Output/Parameters/VARIDENT',data=Variables.VARIDENT)
+        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/VARIDENT', data=Variables.VARIDENT)
         dset.attrs['title'] = "Variable parameterisation ID"
 
-        dset = f.create_dataset('Retrieval/Output/Parameters/VARPARAM',data=Variables.VARPARAM)
+        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/VARPARAM', data=Variables.VARPARAM)
         dset.attrs['title'] = "Extra parameters required to model the parameterisations (not retrieved)"
 
-        dset = f.create_dataset('Retrieval/Output/Parameters/RETPARAM',data=RETPARAM)
+        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/RETPARAM', data=RETPARAM)
         dset.attrs['title'] = "Retrieved parameters required to model the parameterisations"
 
-        dset = f.create_dataset('Retrieval/Output/Parameters/RETERRPARAM',data=RETERRPARAM)
+        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/RETERRPARAM', data=RETERRPARAM)
         dset.attrs['title'] = "Uncertainty in the retrieved parameters required to model the parameterisations"
 
-        dset = f.create_dataset('Retrieval/Output/Parameters/APRPARAM',data=APRPARAM)
+        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/APRPARAM', data=APRPARAM)
         dset.attrs['title'] = "A priori parameters required to model the parameterisations"
 
-        dset = f.create_dataset('Retrieval/Output/Parameters/APRERRPARAM',data=APRERRPARAM)
+        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/APRERRPARAM', data=APRERRPARAM)
         dset.attrs['title'] = "Uncertainty in the a priori parameters required to model the parameterisations"
 
         f.close()

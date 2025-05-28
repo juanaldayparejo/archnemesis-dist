@@ -728,7 +728,7 @@ class Spectroscopy_0:
             f = h5py.File(filename+'.h5','w')
             
             #Writing the header information
-            dset = f.create_dataset('ILBL',data=self.ILBL)
+            dset = h5py_helper.store_data(f, 'ILBL', data=self.ILBL)
             dset.attrs['title'] = "Spectroscopy calculation type"
             if self.ILBL==SpectralCalculationMode.K_TABLES:
                 dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
@@ -737,29 +737,29 @@ class Spectroscopy_0:
             else:
                 raise ValueError('error :: ILBL must be 0 or 2')
                 
-            dset = f.create_dataset('ID',data=ID)
+            dset = h5py_helper.store_data(f, 'ID', data=ID)
             dset.attrs['title'] = "ID of the gaseous species"
 
-            dset = f.create_dataset('ISO',data=ISO)
+            dset = h5py_helper.store_data(f, 'ISO', data=ISO)
             dset.attrs['title'] = "Isotope ID of the gaseous species"
             
-            dset = f.create_dataset('WAVE',data=self.WAVE)
+            dset = h5py_helper.store_data(f, 'WAVE', data=self.WAVE)
             dset.attrs['title'] = "Spectral points at which the cross sections are defined"
             
-            dset = f.create_dataset('NP',data=self.NP)
+            dset = h5py_helper.store_data(f, 'NP', data=self.NP)
             dset.attrs['title'] = "Number of pressure levels at which the look-up table is tabulated"
             
-            dset = f.create_dataset('NT',data=self.NT)
+            dset = h5py_helper.store_data(f, 'NT', data=self.NT)
             dset.attrs['title'] = "Number of temperature levels at which the look-up table is tabulated"
             
-            dset = f.create_dataset('PRESS',data=self.PRESS)
+            dset = h5py_helper.store_data(f, 'PRESS', data=self.PRESS)
             dset.attrs['title'] = "Pressure levels at which the look-up table is tabulated / atm"
             
-            dset = f.create_dataset('TEMP',data=self.TEMP)
+            dset = h5py_helper.store_data(f, 'TEMP', data=self.TEMP)
             dset.attrs['title'] = "Temperature levels at which the look-up table is tabulated / K"
             
             #Writing the coefficients
-            dset = f.create_dataset('K',data=self.K[:,:,:,igas])
+            dset = h5py_helper.store_data(f, 'K', data=self.K[:,:,:,igas])
             dset.attrs['title'] = "Tabulated cross sections / cm2 multiplied by a factor of 1.0 x 10^20"
             
             f.close()
