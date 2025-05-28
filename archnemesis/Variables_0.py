@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from archnemesis import *
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
 from archnemesis.Models.AtmosphericModels import AtmosphericModelBase
-from archnemesis.enums import AtmosphericProfileType
+from archnemesis.enums import AtmosphericProfileType, Gas
 from archnemesis.helpers import io_helper
 
 import logging
@@ -545,7 +545,7 @@ class Variables_0:
         model_classification = None
         if varident[0] == 0:
             model_classification = ( AtmosphericModelBase, AtmosphericProfileType.TEMPERATURE)
-        elif (varident[0] > 0) and varident[0] <= ngas:
+        elif (varident[0] > 0) and varident[0] in Gas:
             model_classification = ( AtmosphericModelBase, AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO)
         elif (varident[0] < 0) and (-varident[0]) <= ndust:
             model_classification = ( AtmosphericModelBase, AtmosphericProfileType.AEROSOL_DENSITY)
