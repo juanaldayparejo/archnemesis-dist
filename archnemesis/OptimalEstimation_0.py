@@ -8,6 +8,7 @@ import pickle
 
 
 from archnemesis.enums import WaveUnit, SpectraUnit
+from archnemesis.helpers.maths_helper import is_diagonal
 
 
 import logging
@@ -290,12 +291,10 @@ class OptimalEstimation_0:
             dset = f.create_dataset('Retrieval/Output/OptimalEstimation/Y',data=self.Y)
             dset.attrs['title'] = "Measurement vector"
 
-            YERR = np.zeros(self.NY)
-            for i in range(self.NY):
-                YERR[i] = np.sqrt(self.SE[i,i])
+            assert is_diagonal(self.SE), f"Measurement vector covariance matrix must be diagonal"
 
-            dset = f.create_dataset('Retrieval/Output/OptimalEstimation/YERR',data=YERR)
-            dset.attrs['title'] = "Uncertainty in Measurement vector"
+            dset = f.create_dataset('Retrieval/Output/OptimalEstimation/SE',data=np.sqrt(np.diagonal(self.SE)))
+            dset.attrs['title'] = "Uncertainty in Measurement vector (is the square root of the diagonal of the Measurement covariance matrix, which is always a diagonal matrix)"
 
             dset = f.create_dataset('Retrieval/Output/OptimalEstimation/YN',data=self.YN)
             dset.attrs['title'] = "Modelled measurement vector"
@@ -316,9 +315,6 @@ class OptimalEstimation_0:
 
                 dset = f.create_dataset('Retrieval/Output/OptimalEstimation/SA',data=self.SA)
                 dset.attrs['title'] = "A priori covariance matrix"
-                
-                dset = f.create_dataset('Retrieval/Output/OptimalEstimation/SY',data=self.SE)
-                dset.attrs['title'] = "Measurement vector covariance matrix"
                 
                 dset = f.create_dataset('Retrieval/Output/OptimalEstimation/KK',data=self.KK)
                 dset.attrs['title'] = "Jacobian matrix"
@@ -402,9 +398,9 @@ class OptimalEstimation_0:
                 raise ValueError('error :: Retrieval is not defined in HDF5 file')
             else:
 
-                self.NITER = np.int32(f.get('Retrieval/NITER'))
-                self.IRET = np.int32(f.get('Retrieval/IRET'))
-                self.PHILIMIT = np.float64(f.get('Retrieval/PHILIMIT'))
+                self.NITER = h5py_helper.retrieve_data(f, 'Retrieval/NITER', np.int32)
+                self.IRET = h5py_helper.retrieve_data(f, 'Retrieval/IRET', np.int32)
+                self.PHILIMIT = h5py_helper.retrieve_data(f, 'Retrieval/PHILIMIT', np.float64)
 
                 #Checking if Retrieval already exists
                 if ('/Retrieval/Output' in f)==True:
@@ -422,7 +418,8 @@ class OptimalEstimation_0:
                     
                     self.YN = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/YN', np.array)
                     self.Y = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/Y', np.array)
-                    self.SE = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/SY', np.array)
+                    y_error = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/SE', np.array)
+                    self.SE = np.diagflat(y_error**2) if y_error is not None else None
 
 
     def edit_KK(self, KK_array):

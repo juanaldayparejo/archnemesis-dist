@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import os
 from numba import jit
 
+from archnemesis.helpers import h5py_helper
 from archnemesis.enums import Gas, ParaH2Ratio
 
 
@@ -245,7 +246,7 @@ class CIA_0:
             else:
                 self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
                 self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
-                self.INORMAL = ParaH2Ratio(np.int32(f.get('CIA/INORMAL')))
+                self.INORMAL = h5py_helper.retrieve_data(f, 'CIA/INORMAL', lambda x:  ParaH2Ratio(np.int32(x)))
     
         # Resolve archnemesis path if it has been indirected
         self.CIADATA = archnemesis_resolve_path(self.CIADATA)
@@ -574,19 +575,19 @@ class CIA_0:
         
         with h5py.File(filename, 'r') as f:
             self.NPARA = np.int32(f.get('NPARA', 1))
-            self.NPAIR = np.int32(f.get('NPAIR'))
-            self.NT = np.int32(f.get('NT'))
-            self.NWAVE = np.int32(f.get('NWAVE'))
+            self.NPAIR = h5py_helper.retrieve_data(f, 'NPAIR', np.int32)
+            self.NT = h5py_helper.retrieve_data(f, 'NT', np.int32)
+            self.NWAVE = h5py_helper.retrieve_data(f, 'NWAVE', np.int32)
                 
-            self.IPAIRG1 = np.array(f.get('IPAIRG1'))
-            self.IPAIRG2 = np.array(f.get('IPAIRG2'))
-            self.INORMALT = np.array(f.get('INORMALT'))
+            self.IPAIRG1 = h5py_helper.retrieve_data(f, 'IPAIRG1', np.array)
+            self.IPAIRG2 = h5py_helper.retrieve_data(f, 'IPAIRG2', np.array)
+            self.INORMALT = h5py_helper.retrieve_data(f, 'INORMALT', np.array)
             
-            self.WAVEN = np.array(f.get('WAVEN'))
-            self.TEMP = np.array(f.get('TEMP'))
+            self.WAVEN = h5py_helper.retrieve_data(f, 'WAVEN', np.array)
+            self.TEMP = h5py_helper.retrieve_data(f, 'TEMP', np.array)
             
             K_CIA = np.zeros((self.NPAIR,max(self.NPARA,1),self.NT,self.NWAVE)) # NPAIR x NPARA x NT x NWAVE
-            K_CIA[:,:,:,:] = np.array(f.get('K_CIA'))
+            K_CIA[:,:,:,:] = h5py_helper.retrieve_data(f, 'K_CIA', np.array)
             
             self.K_CIA = K_CIA
         

@@ -4,6 +4,8 @@ from __future__ import annotations #  for 3.9 compatability
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
+
+from archnemesis.helpers import h5py_helper
 from archnemesis.enums import (
     LayerType,
     LayerIntegrationScheme,
@@ -335,14 +337,14 @@ class Layer_0:
             raise ValueError('error :: Layer is not defined in HDF5 file')
         else:
 
-            self.NLAY = np.int32(f.get('Layer/NLAY'))
-            self.LAYTYP = LayerType(np.int32(f.get('Layer/LAYTYP')))
-            self.LAYINT = LayerIntegrationScheme(np.int32(f.get('Layer/LAYINT')))
-            self.LAYHT = np.float64(f.get('Layer/LAYHT'))
+            self.NLAY = h5py_helper.retrieve_data(f, 'Layer/NLAY', np.int32)
+            self.LAYTYP = h5py_helper.retrieve_data(f, 'Layer/LAYTYP', lambda x:  LayerType(np.int32(x)))
+            self.LAYINT = h5py_helper.retrieve_data(f, 'Layer/LAYINT', lambda x:  LayerIntegrationScheme(np.int32(x)))
+            self.LAYHT = h5py_helper.retrieve_data(f, 'Layer/LAYHT', np.float64)
             if self.LAYTYP==LayerType.BASE_PRESSURE:
-                self.P_base = np.array(f.get('Layer/P_base'))
+                self.P_base = h5py_helper.retrieve_data(f, 'Layer/P_base', np.array)
             if self.LAYTYP==LayerType.BASE_HEIGHT:
-                self.H_base = np.array(f.get('Layer/H_base'))
+                self.H_base = h5py_helper.retrieve_data(f, 'Layer/H_base', np.array)
 
         f.close()
 

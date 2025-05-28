@@ -7,6 +7,8 @@ import matplotlib as matplotlib
 import os
 from numba import jit
 
+from archnemesis.helpers import h5py_helper
+
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -573,48 +575,48 @@ class Measurement_0:
             raise ValueError('error :: Measurement is not defined in HDF5 file')
         else:
 
-            self.NGEOM = np.int32(f.get('Measurement/NGEOM'))
-            self.ISPACE = WaveUnit(np.int32(f.get('Measurement/ISPACE')))
-            self.IFORM = SpectraUnit(np.int32(f.get('Measurement/IFORM')))
-            self.LATITUDE = np.float64(f.get('Measurement/LATITUDE'))
-            self.LONGITUDE = np.float64(f.get('Measurement/LONGITUDE'))
-            self.NAV = np.array(f.get('Measurement/NAV'))
-            self.FLAT = np.array(f.get('Measurement/FLAT'))
-            self.FLON = np.array(f.get('Measurement/FLON'))
-            self.WGEOM = np.array(f.get('Measurement/WGEOM'))
-            self.EMISS_ANG = np.array(f.get('Measurement/EMISS_ANG'))
+            self.NGEOM = h5py_helper.retrieve_data(f, 'Measurement/NGEOM', np.int32)
+            self.ISPACE = h5py_helper.retrieve_data(f, 'Measurement/ISPACE', lambda x:  WaveUnit(np.int32(x)))
+            self.IFORM = h5py_helper.retrieve_data(f, 'Measurement/IFORM', lambda x:  SpectraUnit(np.int32(x)))
+            self.LATITUDE = h5py_helper.retrieve_data(f, 'Measurement/LATITUDE', np.float64)
+            self.LONGITUDE = h5py_helper.retrieve_data(f, 'Measurement/LONGITUDE', np.float64)
+            self.NAV = h5py_helper.retrieve_data(f, 'Measurement/NAV', np.array)
+            self.FLAT = h5py_helper.retrieve_data(f, 'Measurement/FLAT', np.array)
+            self.FLON = h5py_helper.retrieve_data(f, 'Measurement/FLON', np.array)
+            self.WGEOM = h5py_helper.retrieve_data(f, 'Measurement/WGEOM', np.array)
+            self.EMISS_ANG = h5py_helper.retrieve_data(f, 'Measurement/EMISS_ANG', np.array)
             
             if self.IFORM==SpectraUnit.Normalised_radiance:
                 if 'Measurement/VNORM' in f:
-                    self.VNORM = np.float64(f.get('Measurement/VNORM'))
+                    self.VNORM = h5py_helper.retrieve_data(f, 'Measurement/VNORM', np.float64)
             
             #Reading Doppler shift if exists
             if 'Measurement/V_DOPPLER' in f:
-                self.V_DOPPLER = np.float64(f.get('Measurement/V_DOPPLER'))
+                self.V_DOPPLER = h5py_helper.retrieve_data(f, 'Measurement/V_DOPPLER', np.float64)
 
             #Checking if there are any limb-viewing geometries
             if np.nanmin(self.EMISS_ANG)<0.0:
-                self.TANHE = np.array(f.get('Measurement/TANHE'))
+                self.TANHE = h5py_helper.retrieve_data(f, 'Measurement/TANHE', np.array)
 
             #Checking if there are any nadir-viewing / upward looking geometries
             if np.nanmax(self.EMISS_ANG) >= 0.0:
-                self.SOL_ANG = np.array(f.get('Measurement/SOL_ANG'))
-                self.AZI_ANG = np.array(f.get('Measurement/AZI_ANG'))
+                self.SOL_ANG = h5py_helper.retrieve_data(f, 'Measurement/SOL_ANG', np.array)
+                self.AZI_ANG = h5py_helper.retrieve_data(f, 'Measurement/AZI_ANG', np.array)
 
 
-            self.NCONV = np.array(f.get('Measurement/NCONV'))
-            self.WOFF = np.float64(f.get('Measurement/WOFF'))
-            self.VCONV = np.array(f.get('Measurement/VCONV')) + self.WOFF
-            self.MEAS = np.array(f.get('Measurement/MEAS'))
-            self.ERRMEAS = np.array(f.get('Measurement/ERRMEAS'))
+            self.NCONV = h5py_helper.retrieve_data(f, 'Measurement/NCONV', np.array)
+            self.WOFF = h5py_helper.retrieve_data(f, 'Measurement/WOFF', np.float64)
+            self.VCONV = h5py_helper.retrieve_data(f, 'Measurement/VCONV', np.array) + self.WOFF
+            self.MEAS = h5py_helper.retrieve_data(f, 'Measurement/MEAS', np.array)
+            self.ERRMEAS = h5py_helper.retrieve_data(f, 'Measurement/ERRMEAS', np.array)
 
-            self.FWHM = np.float64(f.get('Measurement/FWHM'))
+            self.FWHM = h5py_helper.retrieve_data(f, 'Measurement/FWHM', np.float64)
             if self.FWHM > 0.0:
-                self.ISHAPE = InstrumentLineshape(np.int32(f.get('Measurement/ISHAPE')))
+                self.ISHAPE = h5py_helper.retrieve_data(f, 'Measurement/ISHAPE', lambda x:  InstrumentLineshape(np.int32(x)))
             elif self.FWHM < 0.0:
-                self.NFIL = np.array(f.get('Measurement/NFIL'))
-                self.VFIL = np.array(f.get('Measurement/VFIL'))
-                self.AFIL = np.array(f.get('Measurement/AFIL'))
+                self.NFIL = h5py_helper.retrieve_data(f, 'Measurement/NFIL', np.array)
+                self.VFIL = h5py_helper.retrieve_data(f, 'Measurement/VFIL', np.array)
+                self.AFIL = h5py_helper.retrieve_data(f, 'Measurement/AFIL', np.array)
 
             
         f.close()

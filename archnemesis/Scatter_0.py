@@ -9,6 +9,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
+from archnemesis.helpers import h5py_helper
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
@@ -457,37 +459,37 @@ class Scatter_0:
             raise ValueError('error :: Scatter is not defined in HDF5 file')
         else:
 
-            self.NDUST = np.int32(f.get('Scatter/NDUST'))
-            self.ISPACE = WaveUnit(np.int32(f.get('Scatter/ISPACE')))
-            self.ISCAT = ScatteringCalculationMode(np.int32(f.get('Scatter/ISCAT')))
-            self.IRAY = RayleighScatteringMode(np.int32(f.get('Scatter/IRAY')))
-            self.IMIE = AerosolPhaseFunctionCalculationMode(np.int32(f.get('Scatter/IMIE')))
-            self.NMU = np.int32(f.get('Scatter/NMU'))
-            self.NF = np.int32(f.get('Scatter/NF'))
-            self.NPHI = np.int32(f.get('Scatter/NPHI'))
-            self.NWAVE = np.int32(f.get('Scatter/NWAVE'))
+            self.NDUST = h5py_helper.retrieve_data(f, 'Scatter/NDUST', np.int32)
+            self.ISPACE = h5py_helper.retrieve_data(f, 'Scatter/ISPACE', lambda x:  WaveUnit(np.int32(x)))
+            self.ISCAT = h5py_helper.retrieve_data(f, 'Scatter/ISCAT', lambda x:  ScatteringCalculationMode(np.int32(x)))
+            self.IRAY = h5py_helper.retrieve_data(f, 'Scatter/IRAY', lambda x:  RayleighScatteringMode(np.int32(x)))
+            self.IMIE = h5py_helper.retrieve_data(f, 'Scatter/IMIE', lambda x:  AerosolPhaseFunctionCalculationMode(np.int32(x)))
+            self.NMU = h5py_helper.retrieve_data(f, 'Scatter/NMU', np.int32)
+            self.NF = h5py_helper.retrieve_data(f, 'Scatter/NF', np.int32)
+            self.NPHI = h5py_helper.retrieve_data(f, 'Scatter/NPHI', np.int32)
+            self.NWAVE = h5py_helper.retrieve_data(f, 'Scatter/NWAVE', np.int32)
             
             if self.NDUST>0:
 
-                self.WAVE = np.array(f.get('Scatter/WAVE'))
-                self.KEXT = np.array(f.get('Scatter/KEXT'))
-                self.SGLALB = np.array(f.get('Scatter/SGLALB'))
+                self.WAVE = h5py_helper.retrieve_data(f, 'Scatter/WAVE', np.array)
+                self.KEXT = h5py_helper.retrieve_data(f, 'Scatter/KEXT', np.array)
+                self.SGLALB = h5py_helper.retrieve_data(f, 'Scatter/SGLALB', np.array)
                 self.KSCA = self.SGLALB * self.KEXT
                 self.KABS = self.KEXT - self.KSCA
 
                 if self.ISCAT>0:
 
                     if self.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:  #H-G phase function
-                        self.G1 = np.array(f.get('Scatter/G1'))
-                        self.G2 = np.array(f.get('Scatter/G2'))
-                        self.F = np.array(f.get('Scatter/F'))
+                        self.G1 = h5py_helper.retrieve_data(f, 'Scatter/G1', np.array)
+                        self.G2 = h5py_helper.retrieve_data(f, 'Scatter/G2', np.array)
+                        self.F = h5py_helper.retrieve_data(f, 'Scatter/F', np.array)
                     elif self.IMIE == AerosolPhaseFunctionCalculationMode.MIE_THEORY:  #Explicit phase function
-                        self.NTHETA = np.int32(f.get('Scatter/NTHETA'))
-                        self.THETA = np.array(f.get('Scatter/THETA'))
-                        self.PHASE = np.array(f.get('Scatter/PHASE'))
+                        self.NTHETA = h5py_helper.retrieve_data(f, 'Scatter/NTHETA', np.int32)
+                        self.THETA = h5py_helper.retrieve_data(f, 'Scatter/THETA', np.array)
+                        self.PHASE = h5py_helper.retrieve_data(f, 'Scatter/PHASE', np.array)
                     elif self.IMIE == AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:  #Phase function from Legendre polynomials
-                        self.NLPOL = np.int32(f.get('Scatter/NLPOL'))
-                        self.WLPOL = np.array(f.get('Scatter/WLPOL'))
+                        self.NLPOL = h5py_helper.retrieve_data(f, 'Scatter/NLPOL', np.int32)
+                        self.WLPOL = h5py_helper.retrieve_data(f, 'Scatter/WLPOL', np.array)
 
         self.calc_GAUSS_LOBATTO()
 

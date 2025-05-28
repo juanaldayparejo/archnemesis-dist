@@ -15,10 +15,11 @@ from archnemesis.Models import Models, ModelBase, ModelParameterEntry
 from archnemesis.Models.AtmosphericModels import AtmosphericModelBase
 from archnemesis.enums import AtmosphericProfileType, Gas
 from archnemesis.helpers import io_helper
+from archnemesis.helpers import h5py_helper
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -591,7 +592,7 @@ class Variables_0:
             raise ValueError('error :: Variables is not defined in HDF5 file')
         else:
 
-            self.NVAR = np.int32(f.get('Scatter/NVAR'))
+            self.NVAR = h5py_helper.retrieve_data(f, 'Scatter/NVAR', np.int32)
             
     ################################################################################################################
 

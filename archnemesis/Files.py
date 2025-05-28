@@ -12,6 +12,7 @@ from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 from copy import copy
 
+from archnemesis.helpers import h5py_helper
 from archnemesis.enums import (
     PlanetEnum, AtmosphericProfileFormatEnum, InstrumentLineshape, WaveUnit, SpectraUnit,
     SpectralCalculationMode, LowerBoundaryCondition, ScatteringCalculationMode, AerosolPhaseFunctionCalculationMode,
@@ -271,15 +272,14 @@ def read_retparam_hdf5(runname):
             raise ValueError('error :: Retrieval/Output/Parameters is not defined in HDF5 file')
             return None
 
-
-        NVAR = np.int32(f.get('Retrieval/Output/Parameters/NVAR'))
-        NXVAR = np.array(f.get('Retrieval/Output/Parameters/NXVAR'))
-        VARIDENT = np.array(f.get('Retrieval/Output/Parameters/VARIDENT'))
-        VARPARAM = np.array(f.get('Retrieval/Output/Parameters/VARPARAM'))
-        RETPARAM = np.array(f.get('Retrieval/Output/Parameters/RETPARAM'))
-        RETERRPARAM = np.array(f.get('Retrieval/Output/Parameters/RETERRPARAM'))
-        APRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRPARAM'))
-        APRERRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRERRPARAM'))
+        NVAR = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/NVAR', np.int32)
+        NXVAR = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/NXVAR', np.array)
+        VARIDENT = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/VARIDENT', np.array)
+        VARPARAM = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/VARPARAM', np.array)
+        RETPARAM = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/RETPARAM', np.array)
+        RETERRPARAM = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/RETERRPARAM', np.array)
+        APRPARAM = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/APRPARAM', np.array)
+        APRERRPARAM = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/APRERRPARAM', np.array)
 
 
     return NVAR,NXVAR,VARIDENT,VARPARAM,APRPARAM,APRERRPARAM,RETPARAM,RETERRPARAM
@@ -322,7 +322,7 @@ def read_bestfit_hdf5(runname):
             raise ValueError('error :: Retrieval/Output/OptimalEstimation/YN is not defined in HDF5 file')
             return None
         
-        YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
+        YN = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/YN', np.array)
  
     #Writing the measurement vector in same format as in Measurement
     Measurement = Measurement_0()

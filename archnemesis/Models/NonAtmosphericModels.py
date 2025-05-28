@@ -1,7 +1,7 @@
 from __future__ import annotations #  for 3.9 compatability
 
 from .ModelBase import *
-
+from archnemesis.helpers import h5py_helper
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -1541,14 +1541,14 @@ class Model446(NonAtmosphericModelBase):
         #Reading the look-up table file
         f = h5py.File(lookupfile,'r')
 
-        NWAVE = np.int32(f.get('NWAVE'))
-        NSIZE = np.int32(f.get('NSIZE'))
+        NWAVE = h5py_helper.retrieve_data(f, 'NWAVE', np.int32)
+        NSIZE = h5py_helper.retrieve_data(f, 'NSIZE', np.int32)
 
-        WAVE = np.array(f.get('WAVE'))
-        REFF = np.array(f.get('REFF'))
+        WAVE = h5py_helper.retrieve_data(f, 'WAVE', np.array)
+        REFF = h5py_helper.retrieve_data(f, 'REFF', np.array)
 
-        KEXT = np.array(f.get('KEXT'))      #(NWAVE,NSIZE)
-        SGLALB = np.array(f.get('SGLALB'))  #(NWAVE,NSIZE)
+        KEXT = h5py_helper.retrieve_data(f, 'KEXT', np.array)      #(NWAVE,NSIZE)
+        SGLALB = h5py_helper.retrieve_data(f, 'SGLALB', np.array)  #(NWAVE,NSIZE)
 
         f.close()
 

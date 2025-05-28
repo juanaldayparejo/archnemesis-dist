@@ -6,6 +6,7 @@ import os
 from numba import jit, njit
 from archnemesis.enums import WaveUnit, LowerBoundaryCondition
 
+from archnemesis.helpers import h5py_helper
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -477,41 +478,41 @@ class Surface_0:
             self.GALB = 0.0
         else:
             self.GASGIANT = False
-            self.ISPACE = WaveUnit(np.int32(f.get('Surface/ISPACE')))
-            self.LOWBC = LowerBoundaryCondition(np.int32(f.get('Surface/LOWBC')))
-            self.NLOCATIONS = np.int32(f.get('Surface/NLOCATIONS'))
+            self.ISPACE = h5py_helper.retrieve_data(f, 'Surface/ISPACE', lambda x:  WaveUnit(np.int32(x)))
+            self.LOWBC = h5py_helper.retrieve_data(f, 'Surface/LOWBC', lambda x:  LowerBoundaryCondition(np.int32(x)))
+            self.NLOCATIONS = h5py_helper.retrieve_data(f, 'Surface/NLOCATIONS', np.int32)
 
-            self.VEM = np.array(f.get('Surface/VEM'))
+            self.VEM = h5py_helper.retrieve_data(f, 'Surface/VEM', np.array)
             self.NEM = len(self.VEM)
             if self.NLOCATIONS==1:
-                self.TSURF = np.float64(f.get('Surface/TSURF'))
-                self.LATITUDE = np.float64(f.get('Surface/LATITUDE'))
-                self.LONGITUDE = np.float64(f.get('Surface/LONGITUDE'))
+                self.TSURF = h5py_helper.retrieve_data(f, 'Surface/TSURF', np.float64)
+                self.LATITUDE = h5py_helper.retrieve_data(f, 'Surface/LATITUDE', np.float64)
+                self.LONGITUDE = h5py_helper.retrieve_data(f, 'Surface/LONGITUDE', np.float64)
             else:
-                self.TSURF = np.array(f.get('Surface/TSURF'))
-                self.LATITUDE = np.array(f.get('Surface/LATITUDE'))
-                self.LONGITUDE = np.array(f.get('Surface/LONGITUDE'))
+                self.TSURF = h5py_helper.retrieve_data(f, 'Surface/TSURF', np.array)
+                self.LATITUDE = h5py_helper.retrieve_data(f, 'Surface/LATITUDE', np.array)
+                self.LONGITUDE = h5py_helper.retrieve_data(f, 'Surface/LONGITUDE', np.array)
 
-            self.EMISSIVITY = np.array(f.get('Surface/EMISSIVITY'))
+            self.EMISSIVITY = h5py_helper.retrieve_data(f, 'Surface/EMISSIVITY', np.array)
 
             if self.LOWBC==LowerBoundaryCondition.LAMBERTIAN:
-                self.GALB = np.array(f.get('Surface/GALB'))
+                self.GALB = h5py_helper.retrieve_data(f, 'Surface/GALB', np.array)
 
             if self.LOWBC==LowerBoundaryCondition.HAPKE:
-                self.SGLALB = np.array(f.get('Surface/SGLALB'))
-                self.BS0 = np.array(f.get('Surface/BS0'))
-                self.hs = np.array(f.get('Surface/hs'))
-                self.BC0 = np.array(f.get('Surface/BC0'))
-                self.hc = np.array(f.get('Surface/hc'))
-                self.K = np.array(f.get('Surface/K'))
-                self.ROUGHNESS = np.array(f.get('Surface/ROUGHNESS'))
-                self.G1 = np.array(f.get('Surface/G1'))
-                self.G2 = np.array(f.get('Surface/G2'))
-                self.F = np.array(f.get('Surface/F'))
+                self.SGLALB = h5py_helper.retrieve_data(f, 'Surface/SGLALB', np.array)
+                self.BS0 = h5py_helper.retrieve_data(f, 'Surface/BS0', np.array)
+                self.hs = h5py_helper.retrieve_data(f, 'Surface/hs', np.array)
+                self.BC0 = h5py_helper.retrieve_data(f, 'Surface/BC0', np.array)
+                self.hc = h5py_helper.retrieve_data(f, 'Surface/hc', np.array)
+                self.K = h5py_helper.retrieve_data(f, 'Surface/K', np.array)
+                self.ROUGHNESS = h5py_helper.retrieve_data(f, 'Surface/ROUGHNESS', np.array)
+                self.G1 = h5py_helper.retrieve_data(f, 'Surface/G1', np.array)
+                self.G2 = h5py_helper.retrieve_data(f, 'Surface/G2', np.array)
+                self.F = h5py_helper.retrieve_data(f, 'Surface/F', np.array)
                 
             if self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
-                self.ALBEDO = np.array(f.get('Surface/ALBEDO'))
-                self.ROUGHNESS = np.array(f.get('Surface/ROUGHNESS'))
+                self.ALBEDO = h5py_helper.retrieve_data(f, 'Surface/ALBEDO', np.array)
+                self.ROUGHNESS = h5py_helper.retrieve_data(f, 'Surface/ROUGHNESS', np.array)
 
         self.assess()
 

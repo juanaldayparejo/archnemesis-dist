@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import os
 from numba import jit, njit
 
-
+from archnemesis.helpers import h5py_helper
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -1563,15 +1563,15 @@ def read_header_lta_hdf5(filename):
     else:
         f = h5py.File(filename+'.h5','r')
 
-    ilbl = np.int32(f.get('ILBL'))
+    ilbl = h5py_helper.retrieve_data(f, 'ILBL', np.int32)
     if ilbl==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-        wave = np.array(f.get('WAVE'))
-        npress = np.int32(f.get('NP'))
-        ntemp = np.int32(f.get('NT'))
-        gasID = np.int32(f.get('ID'))
-        isoID = np.int32(f.get('ISO'))
-        presslevels = np.array(f.get('PRESS'))
-        templevels = np.array(f.get('TEMP'))
+        wave = h5py_helper.retrieve_data(f, 'WAVE', np.array)
+        npress = h5py_helper.retrieve_data(f, 'NP', np.int32)
+        ntemp = h5py_helper.retrieve_data(f, 'NT', np.int32)
+        gasID = h5py_helper.retrieve_data(f, 'ID', np.int32)
+        isoID = h5py_helper.retrieve_data(f, 'ISO', np.int32)
+        presslevels = h5py_helper.retrieve_data(f, 'PRESS', np.array)
+        templevels = h5py_helper.retrieve_data(f, 'TEMP', np.array)
     else:
         raise ValueError('error in read_header_lta_hdf5 :: the defined ilbl in the look-up table must be 2')
     
