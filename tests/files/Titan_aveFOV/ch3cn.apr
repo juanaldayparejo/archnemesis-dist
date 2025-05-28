@@ -1,0 +1,4 @@
+******** any header info you like. One line only ********
+1 	    	! number of variable profiles (vmr,T, or cont)
+50 1 3           ! CH3CN (scaling profile in .ref)
+1. 1.

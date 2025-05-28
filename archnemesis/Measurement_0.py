@@ -708,8 +708,10 @@ class Measurement_0:
         self.edit_FLAT(flat)
         self.edit_FLON(flon)
         self.edit_WGEOM(wgeom)
-        self.edit_SOL_ANG(sol_ang)
         self.edit_EMISS_ANG(emiss_ang)
+        self.edit_SOL_ANG(sol_ang)
+        if self.EMISS_ANG.min()<0.0:
+            self.edit_TANHE(sol_ang)
         self.edit_AZI_ANG(azi_ang)
 
         self.calc_MeasurementVector()
@@ -1822,11 +1824,12 @@ class Measurement_0:
                 raise ValueError('error in conv :: IGEOM=All with FWHM>0 has not yet been implemented')
 
             elif self.FWHM==0.0:
-
+                
                 #Channel Integrator mode where the k-tables have been previously
                 #tabulated INCLUDING the filter profile. In which case all we
                 #need do is just transfer the outputs
-                yout[:,:] = ModSpec[:]
+                s = scipy.interpolate.interp1d(Wave,ModSpec,axis=0)
+                yout[:,:] = s(self.VCONV[0:self.NCONV[IG],IG])
 
             elif self.FWHM<0.0:
 
@@ -2009,8 +2012,11 @@ class Measurement_0:
                 #Channel Integrator mode where the k-tables have been previously
                 #tabulated INCLUDING the filter profile. In which case all we
                 #need do is just transfer the outputs
-                yout[:,:] = ModSpec[:]
-                gradout[:,:,:] = ModGrad[:,:,:]
+                s = scipy.interpolate.interp1d(Wave,ModSpec,axis=0)
+                yout[:,:] = s(self.VCONV[0:self.NCONV[IG],IG])
+                
+                s = scipy.interpolate.interp1d(Wave,ModGrad,axis=0)
+                gradout[:,:,:] = s(self.VCONV[0:self.NCONV[IG],IG])
 
             elif self.FWHM<0.0:
 

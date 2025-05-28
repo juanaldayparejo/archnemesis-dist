@@ -33,6 +33,10 @@ Created on Tue Mar 29 17:27:12 2021
 Model variables Class.
 """
 
+class AprReadError(RuntimeError):
+    """
+    Something has gone wrong when reading a *.apr file
+    """
 
 
 class Variables_0:
@@ -625,6 +629,8 @@ class Variables_0:
         
         from archnemesis import Scatter_0
         
+        apr_read_warning_msg = ''
+        
         if self._models is not None:
             _lgr.warning(f'Already have models for {runname}, will overwrite them as we read the *.apr file.')
         self._models = []
@@ -660,12 +666,46 @@ class Variables_0:
             inum = np.zeros([mx],dtype='int')
             
             #Reading data
+            i = 0
             ix = 0
-        
-            for i in range(nvar):
-                s = f.readline().split()
-                for j in range(3):
-                    varident[i,j] = int(s[j])
+            keep_reading = True
+            
+            while keep_reading:
+            
+            
+                a = f.readline()
+                
+                
+                if a.strip() == '':
+                    # If we have read an empty line
+                    if i >= nvar:
+                        # if we are past the expected number of VARIDENT entries, we are happy and should stop
+                        keep_reading = False
+                        break
+                    else:
+                        # if we are not past the expected number of VARIDENT entries, we are sad
+                        keep_reading = False
+                        raise AprReadError(f'Expected {nvar} entries in {f.name} but only read {i} before encountering an empty line.')
+                else:
+                    # We have read a non-empty line
+                    if i >= nvar:
+                        # If we are reading past the expected number of VARIDENT entries, we are concerned
+                        _lgr.warning(f'Expected {nvar} entries in {f.name}, but have found an {i+1}^th entry. Increasing number of variables, extending arrays, and continuing to read file...')
+                        # Enlarge arrays where required
+                        nvar += 1
+                        varident = np.concatenate((varident, np.zeros([1,3],dtype='int')), axis=0)
+                        varparam = np.concatenate((varparam, np.zeros([1,mparam])), axis=0)
+                
+                
+                
+                s = a.strip().split()
+                if len(s) < 3:
+                    raise AprReadError(f'VARIDENT entry must have at least 3 components, but {i}^th entry "{a}" has {len(s)}')
+                
+                try:
+                    varident[i,:] = tuple(map(int, s[:3]))
+                except Exception as e:
+                    raise AprReadError(f'VARIDENT entry MUST be three (3) integers on a single line, other information beyond that is ignored (as a comment)') from e
 
 
                 found_model_for_varident = False
@@ -673,27 +713,31 @@ class Variables_0:
                 for model in Models:
                     if model.is_varident_valid(varident[i]):
                         found_model_for_varident = True
-                        self._models.append(
-                            model.from_apr_to_state_vector(
-                                self, 
-                                f, 
-                                varident[i], 
-                                varparam[i], 
-                                ix, 
-                                lx, 
-                                x0, 
-                                sx,
-                                inum, 
-                                npro, 
-                                ngas,
-                                ndust,
-                                nlocations,
-                                runname,
-                                sxminfac
-                            )
-                        )
                         
-                        print(f'Variables_0 :: read_apr :: varident {varident[i]}. Constructed model "{model.__name__}" (id={model.id})')
+                        try:
+                            self._models.append(
+                                model.from_apr_to_state_vector(
+                                    self, 
+                                    f, 
+                                    varident[i], 
+                                    varparam[i], 
+                                    ix, 
+                                    lx, 
+                                    x0, 
+                                    sx,
+                                    inum, 
+                                    npro, 
+                                    ngas,
+                                    ndust,
+                                    nlocations,
+                                    runname,
+                                    sxminfac
+                                )
+                            )
+                        except Exception as e:
+                            raise AprReadError(f'Failed to read {i}^th model entry (with VARIDENT={varident[i]})') from e
+                        
+                        print(f'\nVariables_0 :: read_apr :: varident {varident[i]}. Constructed model "{model.__name__}" (id={model.id})')
                         try:
                             io_helper.OutWidth.push(io_helper.OutWidth.get() - 2)
                             print(textwrap.indent(str(self._models[-1].info(lx,x0)), '  '))
@@ -701,12 +745,12 @@ class Variables_0:
                             io_helper.OutWidth.pop()
                         
                         ix += self._models[-1].n_state_vector_entries
-                        
-                        print(f'{varident[i] = } {ix=}')
 
                 
                 if not found_model_for_varident:
-                    raise ValueError(f'Variables_0 :: read_apr :: no model found for varident {varident[i]}')
+                    raise AprReadError(f'Variables_0 :: read_apr :: no model found for varident {varident[i]}')
+                
+                i += 1
 
         nx = ix
         lx1 = np.zeros(nx,dtype='int32')
@@ -732,6 +776,5 @@ class Variables_0:
         self.NUM = inum1
         self.calc_DSTEP()
         self.calc_FIX()
-        
         
         ################################################################################################################

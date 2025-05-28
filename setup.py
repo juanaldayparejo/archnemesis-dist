@@ -14,5 +14,6 @@ setup(name='archnemesis',
             'pygrib',
             'joblib',
             'h5py',
-            'basemap'],
+            'basemap',
+            'pytest'],
       )

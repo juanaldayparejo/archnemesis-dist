@@ -1046,7 +1046,7 @@ class Model667(SpectralModelBase):
         ) -> Self:
         ix_0 = ix
         #******** dilution factor to account for thermal gradients thorughout exoplanet
-        tmp = np.fromfile(f,sep=' ',count=2,dtype='float')
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         xfac = float(tmp[0])
         xfacerr = float(tmp[1])
         x0[ix] = xfac
