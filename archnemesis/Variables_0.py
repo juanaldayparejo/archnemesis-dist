@@ -545,7 +545,7 @@ class Variables_0:
         model_classification = None
         if varident[0] == 0:
             model_classification = ( AtmosphericModelBase, AtmosphericProfileType.TEMPERATURE)
-        elif (varident[0] > 0) and varident[0] in Gas:
+        elif (varident[0] > 0) and int(varident[0]) in Gas:
             model_classification = ( AtmosphericModelBase, AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO)
         elif (varident[0] < 0) and (-varident[0]) <= ndust:
             model_classification = ( AtmosphericModelBase, AtmosphericProfileType.AEROSOL_DENSITY)
