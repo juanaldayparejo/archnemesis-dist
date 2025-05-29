@@ -1291,7 +1291,7 @@ class ForwardModel_0:
         """
         
         ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, YNtot = inp
-        _lgr.info(f'Calculating forward model {ifm+1}/{nfm}',flush=True)
+        _lgr.info(f'Calculating forward model {ifm+1}/{nfm}')
         original_stdout = sys.stdout  # Store the original stdout
         try:
             sys.stdout = open(os.devnull, 'w')  # Redirect stdout
@@ -1311,7 +1311,7 @@ class ForwardModel_0:
         finally:
             sys.stdout.close()  # Close the devnull
             sys.stdout = original_stdout  # Restore the original stdout
-            _lgr.info(f'Calculated forward model {ifm+1}/{nfm}',flush=True)
+            _lgr.info(f'Calculated forward model {ifm+1}/{nfm}')
             
         return YNtot
     
