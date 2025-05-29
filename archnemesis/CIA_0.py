@@ -9,6 +9,9 @@ from numba import jit
 from archnemesis.helpers import h5py_helper
 from archnemesis.enums import Gas, ParaH2Ratio
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -210,10 +213,10 @@ class CIA_0:
         
         from archnemesis.Data.gas_data import gas_info
         
-        print('Wavelength range :: ',self.WAVEN.min(),self.WAVEN.max(),'cm-1')
-        print('Temperature range :: ',self.TEMP.min(),self.TEMP.max(),'K')
-        print('Number of CIA pairs :: ',self.NPAIR)
-        print('Pairs included in CIA class :: ')
+        _lgr.info(f'Wavelength range ::  {(self.WAVEN.min(),self.WAVEN.max())}')
+        _lgr.info(f'Temperature range ::  {(self.TEMP.min(),self.TEMP.max())}')
+        _lgr.info(f'Number of CIA pairs ::  {(self.NPAIR)}')
+        _lgr.info('Pairs included in CIA class :: ')
         for i in range(self.NPAIR):
             
             gasname1 = gas_info[str(self.IPAIRG1[i])]['name']
@@ -223,7 +226,7 @@ class CIA_0:
             if self.INORMALT[i]== ParaH2Ratio.NORMAL:
                 label = label + " ('normal')"
                 
-            print(label)
+            _lgr.info(label)
 
 
 

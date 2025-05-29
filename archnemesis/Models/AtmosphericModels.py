@@ -3606,8 +3606,8 @@ class Model202(AtmosphericModelBase):
                 if((telluric.Atmosphere.ID[j]==varid1) & (telluric.Atmosphere.ISO[j]==varid2)):
                     jvmr = j
             if jvmr==-1:
-                print('Required ID :: ',varid1,varid2)
-                print('Avaiable ID and ISO :: ',telluric.Atmosphere.ID,telluric.Atmosphere.ISO)
+                _lgr.info(f'Required ID ::  {(varid1,varid2)}')
+                _lgr.info(f'Avaiable ID and ISO ::  {(telluric.Atmosphere.ID,telluric.Atmosphere.ISO)}')
                 raise ValueError('error in model 202 :: The required gas is not found in Telluric atmosphere')
 
             xref[:] = telluric.Atmosphere.VMR[:,jvmr]

@@ -575,7 +575,7 @@ class OptimalEstimation_0:
 
         phi2 = f
 
-        print('calc_phiret: phi1, phi2 = ' + str(phi1) + ', ' + str(phi2) + ')')
+        _lgr.info('calc_phiret: phi1, phi2 = ' + str(phi1) + ', ' + str(phi2) + ')')
         self.PHI = phi1 + phi2
 
     def assess(self):
@@ -611,15 +611,15 @@ class OptimalEstimation_0:
         sum2 = sum2/self.NY
         sum3 = sum3/self.NY
   
-        print('Assess:')
-        print('Average of diagonal elements of Kk*Sx*Kt : '+str(sum1))
-        print('Average of diagonal elements of Se : '+str(sum2))
-        print('Ratio = '+str(sum1/sum2))
-        print('Average of Kk*Sx*Kt/Se element ratio : '+str(sum3))
+        _lgr.info('Assess:')
+        _lgr.info('Average of diagonal elements of Kk*Sx*Kt : '+str(sum1))
+        _lgr.info('Average of diagonal elements of Se : '+str(sum2))
+        _lgr.info('Ratio = '+str(sum1/sum2))
+        _lgr.info('Average of Kk*Sx*Kt/Se element ratio : '+str(sum3))
         if sum3 > 10.0:
-            print('******************* ASSESS WARNING *****************')
-            print('Insufficient constraint. Solution likely to be exact')
-            print('****************************************************')
+            _lgr.info('******************* ASSESS WARNING *****************')
+            _lgr.info('Insufficient constraint. Solution likely to be exact')
+            _lgr.info('****************************************************')
 
     def calc_next_xn(self):
         """
@@ -739,7 +739,7 @@ class OptimalEstimation_0:
                     str4='Transmission'
                     xfac=1.0
                 else:
-                    print('warning in .mre :: IFORM not defined. Default=0')
+                    _lgr.warning(' in .mre :: IFORM not defined. Default=0')
                     str4='Radiances expressed as nW cm-2 sr-1 cm' 
                     xfac=1.0e9
 
@@ -764,7 +764,7 @@ class OptimalEstimation_0:
                     str4='Transmission'
                     xfac=1.0
                 else:
-                    print('warning in .mre :: IFORM not defined. Default=0')
+                    _lgr.warning(' in .mre :: IFORM not defined. Default=0')
                     str4='Radiances expressed as uW cm-2 sr-1 um-1' 
                     xfac=1.0e6
 
@@ -1179,7 +1179,7 @@ def coreretOE(
     phi_history = np.full((NITER+1,), fill_value=np.nan)
     chisq_history = np.full((NITER+1,), fill_value=np.nan)
 
-    print(f'coreretOE :: Starting OptimalEstimation retrieval with NITER={OptimalEstimation.NITER} PHILIMIT={OptimalEstimation.PHILIMIT} NCORES={OptimalEstimation.NCORES}')
+    _lgr.info(f'coreretOE :: Starting OptimalEstimation retrieval with NITER={OptimalEstimation.NITER} PHILIMIT={OptimalEstimation.PHILIMIT} NCORES={OptimalEstimation.NCORES}')
 
     #Opening .itr file
     #################################################################
@@ -1193,7 +1193,7 @@ def coreretOE(
     #################################################################
 
     ForwardModel = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables,Telluric=Telluric)
-    print('nemesis :: Calculating Jacobian matrix KK')
+    _lgr.info('nemesis :: Calculating Jacobian matrix KK')
     YN,KK = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
     
     OptimalEstimation.edit_YN(YN)
@@ -1202,17 +1202,17 @@ def coreretOE(
     #Calculate gain matrix and average kernels
     #################################################################
 
-    print('nemesis :: Calculating gain matrix')
+    _lgr.info('nemesis :: Calculating gain matrix')
     OptimalEstimation.calc_gain_matrix()
 
     #Calculate initial value of cost function phi
     #################################################################
 
-    print('nemesis :: Calculating cost function')
+    _lgr.info('nemesis :: Calculating cost function')
     OptimalEstimation.calc_phiret()
 
     OPHI = OptimalEstimation.PHI
-    print('chisq/ny = '+str(OptimalEstimation.CHISQ))
+    _lgr.info('chisq/ny = '+str(OptimalEstimation.CHISQ))
     
     phi_history[0] = OPHI
     chisq_history[0] = OptimalEstimation.CHISQ
@@ -1235,7 +1235,7 @@ def coreretOE(
 
     for it in range(OptimalEstimation.NITER):
 
-        print('nemesis :: Iteration '+str(it)+'/'+str(OptimalEstimation.NITER))
+        _lgr.info('nemesis :: Iteration '+str(it)+'/'+str(OptimalEstimation.NITER))
 
         #Writing into .itr file
         ####################################
@@ -1254,7 +1254,7 @@ def coreretOE(
         #Calculating next state vector
         #######################################
 
-        print('nemesis :: Calculating next iterated state vector')
+        _lgr.info('nemesis :: Calculating next iterated state vector')
         X_OUT = OptimalEstimation.calc_next_xn()
         #  x_out(nx) is the next iterated value of xn using classical N-L
         #  optimal estimation. However, we want to apply a braking parameter
@@ -1270,7 +1270,7 @@ def coreretOE(
                 #Check to see if log numbers have gone out of range
                 if Variables.LX[j]==1:
                     if((XN1[j]>85.) or (XN1[j]<-85.)):
-                        print('nemesis :: log(number gone out of range) --- increasing brake')
+                        _lgr.info('nemesis :: log(number gone out of range) --- increasing brake')
                         alambda = alambda * 10.
                         check_marquardt_brake = True
                         if alambda>1.e30:
@@ -1304,7 +1304,7 @@ def coreretOE(
             ForwardModel1.subprofretg()
 
             #if(len(np.where(Atmosphere1.VMR<0.0))>0):
-            #    print('nemesisSO :: VMR has gone negative --- increasing brake')
+            #    _lgr.info('nemesisSO :: VMR has gone negative --- increasing brake')
             #    alambda = alambda * 10.
             #    check_marquardt_brake = True
             #    continue
@@ -1312,7 +1312,7 @@ def coreretOE(
             #iwhere = np.where(Atmosphere1.T<0.0)
             iwhere = np.where(ForwardModel1.AtmosphereX.T<0.0)
             if(len(iwhere[0])>0):
-                print('nemesis :: Temperature has gone negative --- increasing brake')
+                _lgr.info('nemesis :: Temperature has gone negative --- increasing brake')
                 alambda = alambda * 10.
                 check_marquardt_brake = True
                 continue
@@ -1322,7 +1322,7 @@ def coreretOE(
         #Put output spectrum into temporary spectrum yn1 with
         #temporary kernel matrix kk1. Does it improve the fit? 
         Variables.edit_XN(XN1)
-        print('nemesis :: Calculating Jacobian matrix KK')
+        _lgr.info('nemesis :: Calculating Jacobian matrix KK')
 
         ForwardModel = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Telluric=Telluric,Variables=Variables)
         YN1,KK1 = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
@@ -1332,11 +1332,11 @@ def coreretOE(
         OptimalEstimation1.edit_XN(XN1)
         OptimalEstimation1.edit_KK(KK1)
         OptimalEstimation1.calc_phiret()
-        print('chisq/ny = '+str(OptimalEstimation1.CHISQ))
+        _lgr.info('chisq/ny = '+str(OptimalEstimation1.CHISQ))
 
         #Does the trial solution fit the data better?
         if (OptimalEstimation1.PHI <= OPHI):
-            print('Successful iteration. Updating xn,yn and kk')
+            _lgr.info('Successful iteration. Updating xn,yn and kk')
             OptimalEstimation.edit_XN(XN1)
             OptimalEstimation.edit_YN(YN1)
             OptimalEstimation.edit_KK(KK1)
@@ -1351,9 +1351,9 @@ def coreretOE(
             #Has the solution converged?
             tphi = 100.0*(OPHI-OptimalEstimation.PHI)/OPHI
             if (tphi>=0.0 and tphi<=OptimalEstimation.PHILIMIT and alambda<1.0):
-                print('phi, phlimit : '+str(tphi)+','+str(OptimalEstimation.PHILIMIT))
-                print('Phi has converged')
-                print('Terminating retrieval')
+                _lgr.info('phi, phlimit : '+str(tphi)+','+str(OptimalEstimation.PHILIMIT))
+                _lgr.info('Phi has converged')
+                _lgr.info('Terminating retrieval')
                 break
             else:
                 OPHI=OptimalEstimation.PHI
@@ -1366,7 +1366,7 @@ def coreretOE(
         phi_history[it+1] = OptimalEstimation.PHI
         chisq_history[it+1] = OptimalEstimation.CHISQ
     
-    print(f'coreretOE :: Completed Optimal Estimation retrieval. Showing phi and chisq evolution')
+    _lgr.info(f'coreretOE :: Completed Optimal Estimation retrieval. Showing phi and chisq evolution')
     with open(f'phi_chisq.txt', 'w') as f:
         w_iter = max(4, int(np.ceil(np.log10(NITER))))
         fmt = f'{{:0{w_iter}}} | {{:09.3E}} | {{:09.3E}}\n'
@@ -1374,11 +1374,11 @@ def coreretOE(
             +' | phi      '
             +' | chisq    \n'
         )
-        print(f'\t{head}')
+        _lgr.info(f'\t{head}')
         f.write(head)
         for i,(p,c) in enumerate(zip(phi_history, chisq_history)):
             line = fmt.format(i, p, c)
-            print(f'\t{line}')
+            _lgr.info(f'\t{line}')
             f.write(line)
             
 

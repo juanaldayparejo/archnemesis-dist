@@ -12,7 +12,9 @@ from archnemesis.enums import (
     InterpolationMethod,
 )
 
-
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 AVOGAD = 6.02214076e23
 """
@@ -231,30 +233,30 @@ class Layer_0:
         Print summary information about the class in the screen
         """
         
-        print('Number of layers :: ',self.NLAY)
+        _lgr.info(f'Number of layers ::  {(self.NLAY)}')
 
         if self.LAYTYP==LayerType.EQUAL_PRESSURE:
-            print('Layers calculated by equal changes in pressure')
+            _lgr.info('Layers calculated by equal changes in pressure')
         elif self.LAYTYP==LayerType.EQUAL_LOG_PRESSURE:
-            print('Layers calculated by equal changes in log pressure')
+            _lgr.info('Layers calculated by equal changes in log pressure')
         elif self.LAYTYP==LayerType.EQUAL_HEIGHT:
-            print('Layers calculated by equal changes in altitude')
+            _lgr.info('Layers calculated by equal changes in altitude')
         elif self.LAYTYP==LayerType.EQUAL_PATH_LENGTH:
-            print('Layers calculated by equal changes in line-of-sight path intervals')
+            _lgr.info('Layers calculated by equal changes in line-of-sight path intervals')
         elif self.LAYTYP==LayerType.BASE_PRESSURE:
-            print('Layers calculated by specified base pressures')
+            _lgr.info('Layers calculated by specified base pressures')
         elif self.LAYTYP==LayerType.BASE_HEIGHT:
-            print('Layers calculated by specified base altitudes')
+            _lgr.info('Layers calculated by specified base altitudes')
 
         if self.LAYINT==LayerIntegrationScheme.MID_PATH:
-            print('Layer properties calculated at the middle of the layer')
+            _lgr.info('Layer properties calculated at the middle of the layer')
         elif self.LAYINT==LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE:
-            print('Layer properties calculated through mass weighted averages')
+            _lgr.info('Layer properties calculated through mass weighted averages')
             
         if self.BASEH is not None:
-            print('BASEH(km)','BASEP(bar)','DELH(km)','P(bar)','T(K)','TOTAM(m-2)','DUST_TOTAM(m-2)')
+            _lgr.info(f"BASEH(km) {('BASEP(bar)','DELH(km)','P(bar)','T(K)','TOTAM(m-2)','DUST_TOTAM(m-2)')}")
             for i in range(self.NLAY):
-                print(self.BASEH[i]/1.0e3,self.BASEP[i]/1.0e5,self.DELH[i]/1.0e3,self.PRESS[i]/1.0e5,self.TEMP[i],np.sum(self.AMOUNT[i,:]),np.sum(self.CONT[i,:]))
+                _lgr.info(self.BASEH[i]/1.0e3,self.BASEP[i]/1.0e5,self.DELH[i]/1.0e3,self.PRESS[i]/1.0e5,self.TEMP[i],np.sum(self.AMOUNT[i,:]),np.sum(self.CONT[i,:]))
 
 
     ####################################################################################################
@@ -1397,7 +1399,7 @@ def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
     """
 
     if LAYHT<H[0]:
-        print('Warning from layer_split() :: LAYHT < H(0). Resetting LAYHT')
+        _lgr.warning(' from layer_split() :: LAYHT < H(0). Resetting LAYHT')
         LAYHT = H[0]
 
     if LAYTYP == LayerType.EQUAL_PRESSURE: # split by equal pressure intervals

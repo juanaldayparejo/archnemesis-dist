@@ -6,6 +6,11 @@ Data reference files.
 Contains the parameters describing different planets.
 """
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
+
 planet_info = {
     "1": {
         "name": "Mercury",

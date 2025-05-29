@@ -5,6 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
 def is_diagonal(a : np.ndarray) -> bool:
     """
     Tests if array `a` is diagonal or not.

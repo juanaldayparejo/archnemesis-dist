@@ -14,6 +14,10 @@ look_up(gas_name):
     look up information about a molecule using the RADTRAN data base.
 """
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
 def Calc_mmw(VMR, ID, ISO=0):
     NGAS = len(ID)
     MMW = 0

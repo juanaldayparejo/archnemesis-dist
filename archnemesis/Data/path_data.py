@@ -1,4 +1,9 @@
 
+
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
 ARCHNEMESIS_PATH_PLACEHOLDER='ARCHNEMESIS_PATH/'
 
 def archnemesis_path():

@@ -93,7 +93,7 @@ class Models(metaclass = _ModelPrinterMixin):
         
         __str__() -> str
         __repr__() -> str
-            Returns the same information as `info()`, but enables you to write `print(Models)`
+            Returns the same information as `info()`, but enables you to write `_lgr.info(Models)`
             as syntactic sugar
         
         __iter__() -> Iterator[ModelBase]
@@ -101,7 +101,7 @@ class Models(metaclass = _ModelPrinterMixin):
             Example:
                 ```
                 for model_class in Models:
-                    print(model_class.parameters)
+                    _lgr.info(model_class.parameters)
                 ```
         
         __getitem__(id) -> ModelBase
@@ -122,7 +122,7 @@ class Models(metaclass = _ModelPrinterMixin):
     
     @classmethod
     def display(cls, id) -> None:
-        print(cls[id].to_string())
+        _lgr.info(cls[id].to_string())
     
     @classmethod
     def as_string(cls, id) -> str:

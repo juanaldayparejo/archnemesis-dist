@@ -4,6 +4,10 @@ import sys, os
 import dataclasses as dc
 from typing import IO
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
 _default_out_width = 80
 _set_out_width = []
 

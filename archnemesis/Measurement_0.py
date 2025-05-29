@@ -308,11 +308,11 @@ class Measurement_0:
 
         #Defining spectral resolution
         if self.FWHM > 0.0:
-            print('Spectral resolution of the measurement (FWHM) :: ',self.FWHM)
+            _lgr.info(f'Spectral resolution of the measurement (FWHM) ::  {(self.FWHM)}')
         elif self.FWHM < 0.0:
-            print('Instrument line shape defined in .fil file')
+            _lgr.info('Instrument line shape defined in .fil file')
         else:
-            print('Spectral resolution of the measurement is account for in the k-tables')
+            _lgr.info('Spectral resolution of the measurement is account for in the k-tables')
 
         wavelength_unit = 'um'
         wavenumber_unit = 'cm^-1'
@@ -322,12 +322,12 @@ class Measurement_0:
         wavelength_str = lambda x: str(to_wavelength(x))+' '+wavelength_unit
 
         #Defining geometries
-        print('Field-of-view centered at :: ','Latitude',self.LATITUDE,'- Longitude',self.LONGITUDE)
-        print('There are ',self.NGEOM,'geometries in the measurement vector')
+        _lgr.info(f'Field-of-view centered at ::  {('Latitude',self.LATITUDE,'- Longitude',self.LONGITUDE)}')
+        _lgr.info(f'There are  {(self.NGEOM,'geometries in the measurement vector')}')
         for i in range(self.NGEOM):
-            print('')
-            print('GEOMETRY '+str(i+1))
-            print('Minimum wavelength/wavenumber :: '
+            _lgr.info('')
+            _lgr.info('GEOMETRY '+str(i+1))
+            _lgr.info('Minimum wavelength/wavenumber :: '
                 +wavelength_str(self.VCONV[0,i])
                 +'/'
                 +wavenumber_str(self.VCONV[0,i])
@@ -337,30 +337,30 @@ class Measurement_0:
                 +wavenumber_str(self.VCONV[self.NCONV[i]-1,i])
             )
             if self.NAV[i]>1:
-                print(self.NAV[i],' averaging points')
+                _lgr.info(self.NAV[i],' averaging points')
                 for j in range(self.NAV[i]):
                 
                     if self.EMISS_ANG[i,j]<0.0:
                         if isinstance(self.TANHE,np.ndarray)==True:
-                            print('Averaging point',j+1,' - Weighting factor ',self.WGEOM[i,j])
-                            print('Limb-viewing or solar occultation measurement. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])
+                            _lgr.info(f'Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}')
+                            _lgr.info(f'Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])}')
                         else:
-                            print('Averaging point',j+1,' - Weighting factor ',self.WGEOM[i,j])
-                            print('Limb-viewing or solar occultation measurement. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])
+                            _lgr.info(f'Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}')
+                            _lgr.info(f'Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])}')
                     
                     else:
-                        print('Averaging point',j+1,' - Weighting factor ',self.WGEOM[i,j])
-                        print('Nadir-viewing geometry. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])
+                        _lgr.info(f'Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}')
+                        _lgr.info(f'Nadir-viewing geometry. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])}')
 
             else:
                 j = 0
                 if self.EMISS_ANG[i,j]<0.0:
                     if isinstance(self.TANHE,np.ndarray)==True:
-                        print('Limb-viewing or solar occultation measurement. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])
+                        _lgr.info(f'Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])}')
                     else:
-                        print('Limb-viewing or solar occultation measurement. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])
+                        _lgr.info(f'Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])}')
                 else:
-                    print('Nadir-viewing geometry. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])
+                    _lgr.info(f'Nadir-viewing geometry. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])}')
 
             
     #################################################################################################################
@@ -1614,7 +1614,7 @@ class Measurement_0:
         #Correcting the wavelengths for Doppler shift
         if apply_doppler is True:
             if self.V_DOPPLER!=0.0:
-                print('nemesis :: Correcting for Doppler shift of ',self.V_DOPPLER,'km/s')        
+                _lgr.info(f'nemesis :: Correcting for Doppler shift of  {(self.V_DOPPLER,'km/s')}')        
             wavemin = self.invert_doppler_shift(wavemin)
             wavemax = self.invert_doppler_shift(wavemax)
         
@@ -2110,8 +2110,8 @@ class Measurement_0:
                     fpy1 = interpolate.CubicSpline(wave,grad[:,IX])
                     fpy.append(fpy1)
 
-                print(fpy)
-                print('error in convg :: This part of the programme has not been tested yet')
+                _lgr.info(fpy)
+                _lgr.info('error in convg :: This part of the programme has not been tested yet')
                 raise ValueError()
                 
                 for ICONV in range(self.NCONV[IGEOM]):

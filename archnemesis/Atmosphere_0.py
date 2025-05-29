@@ -293,29 +293,29 @@ class Atmosphere_0:
         from archnemesis.Data.planet_data import planet_info
 
         data = planet_info[str(int(self.IPLANET))]
-        print('Planet :: '+data['name'])
-        print('Number of profiles :: ',self.NLOCATIONS)
-        print('Latitude of profiles :: ',self.LATITUDE)
-        print('Number of altitude points :: ',self.NP)
-        print('Minimum/maximum heights (km) :: ',self.H.min()/1.0e3,self.H.max()/1.0e3)
-        print('Maximum/minimum pressure (atm) :: ',self.P.max()/101325.,self.P.min()/101325.)
-        print('Maximum/minimum temperature (K)', self.T.max(),self.T.min())
+        _lgr.info('Planet :: '+data['name'])
+        _lgr.info(f'Number of profiles ::  {(self.NLOCATIONS)}')
+        _lgr.info(f'Latitude of profiles ::  {(self.LATITUDE)}')
+        _lgr.info(f'Number of altitude points ::  {(self.NP)}')
+        _lgr.info(f'Minimum/maximum heights (km) ::  {(self.H.min()/1.0e3,self.H.max()/1.0e3)}')
+        _lgr.info(f'Maximum/minimum pressure (atm) ::  {(self.P.max()/101325.,self.P.min()/101325.)}')
+        _lgr.info(f'Maximum/minimum temperature (K) {( self.T.max(),self.T.min())}')
         if self.GRAV is not None:
-            print('Maximum/minimum gravity (m/s2) :: ',np.round(self.GRAV.max(),2),np.round(self.GRAV.min(),2))
+            _lgr.info(f'Maximum/minimum gravity (m/s2) ::  {(np.round(self.GRAV.max(),2),np.round(self.GRAV.min(),2))}')
         if self.MOLWT is not None:
-            print('Maximum/minimum molecular weight :: ',self.MOLWT.max(),self.MOLWT.min())
-        print('Number of gaseous species :: ',self.NVMR)
+            _lgr.info(f'Maximum/minimum molecular weight ::  {(self.MOLWT.max(),self.MOLWT.min())}')
+        _lgr.info(f'Number of gaseous species ::  {(self.NVMR)}')
         gasname = ['']*self.NVMR
         for i in range(self.NVMR):
             gasname1 = gas_info[str(self.ID[i])]['name']
             if self.ISO[i]!=0:
                 gasname1 = gasname1+' ('+str(self.ISO[i])+')'
             gasname[i] = gasname1
-        print('Gaseous species :: ',gasname)
+        _lgr.info(f'Gaseous species ::  {(gasname)}')
         if self.DUST is not None:
-            print('Number of aerosol populations :: ', self.NDUST)
+            _lgr.info(f'Number of aerosol populations ::  {( self.NDUST)}')
         else:
-            print('Number of aerosol populations :: ', 0)
+            _lgr.info(f'Number of aerosol populations ::  {( 0)}')
 
     ##################################################################################
 
@@ -1152,11 +1152,11 @@ class Atmosphere_0:
         igas = igas[0]
 
         if len(igas)>1:
-            print('warning in Atmosphere.remove_gas() :: Two gases with same Gas ID and Iso ID. Removing the second one by default')
+            _lgr.warning(' in Atmosphere.remove_gas() :: Two gases with same Gas ID and Iso ID. Removing the second one by default')
             igas = igas[1]
 
         if len(igas)==0:
-            print('error in Atmosphere.remove_gas() :: Gas ID and Iso ID not found in reference atmosphere')
+            _lgr.info('error in Atmosphere.remove_gas() :: Gas ID and Iso ID not found in reference atmosphere')
         else:
 
             self.NVMR = self.NVMR - 1
@@ -1496,7 +1496,7 @@ class Atmosphere_0:
             xscale = rho * 1000.
         else:
             xscale = 1.
-            print('warning :: reading aerosol.ref file but density is not define. Units of Atmosphere_0.DUST are in particles per gram of atmosphere')
+            _lgr.warning(' :: reading aerosol.ref file but density is not define. Units of Atmosphere_0.DUST are in particles per gram of atmosphere')
             
 
         f = open('aerosol.ref','w')
@@ -1586,7 +1586,7 @@ class Atmosphere_0:
                 for (gas_id, iso_id), (vp, svpflag) in self.SVP.items():
                     file.write(f"{gas_id} {iso_id} {vp:.6g} {svpflag}\n")
         except Exception as e:
-            print(f"Error writing to {self.runname}.vpf: {e}")
+            _lgr.info(f"Error writing to {self.runname}.vpf: {e}")
 
     
     ##################################################################################
@@ -1701,7 +1701,7 @@ class Atmosphere_0:
 
         else:
 
-            print('warning :: there are no aerosol populations defined in Atmosphere')
+            _lgr.warning(' :: there are no aerosol populations defined in Atmosphere')
             
     ##################################################################################
             

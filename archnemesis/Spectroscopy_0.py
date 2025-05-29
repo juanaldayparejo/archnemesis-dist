@@ -15,6 +15,11 @@ from numba import jit, njit
 
 from archnemesis.helpers import h5py_helper
 
+
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
@@ -181,50 +186,50 @@ class Spectroscopy_0:
         from archnemesis.Data import gas_info
 
         if self.ILBL==SpectralCalculationMode.K_TABLES:
-            print('Calculation type ILBL :: ',self.ILBL,' (k-distribution)')
-            print('Number of radiatively-active gaseous species :: ',self.NGAS)
+            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (k-distribution)")}')
+            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
             gasname = ['']*self.NGAS
             for i in range(self.NGAS):
                 gasname1 = gas_info[str(self.ID[i])]['name']
                 if self.ISO[i]!=0:
                     gasname1 = gasname1+' ('+str(self.ISO[i])+')'
                 gasname[i] = gasname1
-            print('Gaseous species :: ',gasname)
+            _lgr.info(f'Gaseous species ::  {(gasname)}')
 
-            print('Number of g-ordinates :: ',self.NG)
+            _lgr.info(f'Number of g-ordinates ::  {(self.NG)}')
 
-            print('Number of spectral points :: ',self.NWAVE)
-            print('Wavelength range :: ',self.WAVE.min(),'-',self.WAVE.max())
-            print('Step size :: ',self.WAVE[1]-self.WAVE[0])
+            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
+            _lgr.info(f'Wavelength range ::  {(self.WAVE.min(),"-",self.WAVE.max())}')
+            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
 
-            print('Spectral resolution of the k-tables (FWHM) :: ',self.FWHM)
+            _lgr.info(f'Spectral resolution of the k-tables (FWHM) ::  {(self.FWHM)}')
 
-            print('Number of temperature levels :: ',self.NT)
-            print('Temperature range :: ',self.TEMP.min(),'-',self.TEMP.max(),'K')
+            _lgr.info(f'Number of temperature levels ::  {(self.NT)}')
+            _lgr.info(f'Temperature range ::  {(self.TEMP.min(),"-",self.TEMP.max())}')
 
-            print('Number of pressure levels :: ',self.NP)
-            print('Pressure range :: ',self.PRESS.min(),'-',self.PRESS.max(),'atm')
+            _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
+            _lgr.info(f'Pressure range ::  {(self.PRESS.min(),"-",self.PRESS.max())}')
 
         elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            print('Calculation type ILBL :: ',self.ILBL,' (line-by-line)')
-            print('Number of radiatively-active gaseous species :: ',self.NGAS)
+            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (line-by-line)")}')
+            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
             gasname = ['']*self.NGAS
             for i in range(self.NGAS):
                 gasname1 = gas_info[str(self.ID[i])]['name']
                 if self.ISO[i]!=0:
                     gasname1 = gasname1+' ('+str(self.ISO[i])+')'
                 gasname[i] = gasname1
-            print('Gaseous species :: ',gasname)
+            _lgr.info(f'Gaseous species ::  {(gasname)}')
 
-            print('Number of spectral points :: ',self.NWAVE)
-            print('Wavelength range :: ',self.WAVE.min(),'-',self.WAVE.max())
-            print('Step size :: ',self.WAVE[1]-self.WAVE[0])
+            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
+            _lgr.info(f'Wavelength range ::  {(self.WAVE.min(),"-",self.WAVE.max())}')
+            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
 
-            print('Number of temperature levels :: ',self.NT)
-            print('Temperature range :: ',self.TEMP.min(),'-',self.TEMP.max(),'K')
+            _lgr.info(f'Number of temperature levels ::  {(self.NT)}')
+            _lgr.info(f'Temperature range ::  {(self.TEMP.min(),"-",self.TEMP.max())}')
 
-            print('Number of pressure levels :: ',self.NP)
-            print('Pressure range :: ',self.PRESS.min(),'-',self.PRESS.max(),'atm')
+            _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
+            _lgr.info(f'Pressure range ::  {(self.PRESS.min(),"-",self.PRESS.max())}')
 
 
     ######################################################################################################

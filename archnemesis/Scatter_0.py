@@ -11,6 +11,10 @@ import os
 
 from archnemesis.helpers import h5py_helper
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
@@ -1082,9 +1086,9 @@ class Scatter_0:
         #Integrating phase function
         total = 2 * np.pi * np.trapz(phase, -np.cos(Theta/180.*np.pi),axis=1)
         
-        print('Normalisation of phase function should be 1.0')
-        print('Minimum integral of phase function is ',total.min())
-        print('Maximum integral of phase function is ',total.max())
+        _lgr.info('Normalisation of phase function should be 1.0')
+        _lgr.info(f'Minimum integral of phase function is  {(total.min())}')
+        _lgr.info(f'Maximum integral of phase function is  {(total.max())}')
         
     ###########################################################################################################################
     
@@ -1322,9 +1326,9 @@ class Scatter_0:
         
         #Checking that the normalisation is correct (should be 1)    
         total = 2 * np.pi * np.trapz(phas, -np.cos(self.THETA/180.*np.pi),axis=1)
-        print('Normalisation of phase function should be 1.0')
-        print('Minimum integral of phase function is ',total.min())
-        print('Maximum integral of phase function is ',total.max())
+        _lgr.info('Normalisation of phase function should be 1.0')
+        _lgr.info(f'Minimum integral of phase function is {total.min()}')
+        _lgr.info(f'Maximum integral of phase function is {total.max()}')
         
         #Updating the parameters in the class
         #########################################################################################

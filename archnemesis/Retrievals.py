@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 import time
 
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
 def retrieval_nemesis(
         runname,
         legacy_files=False,
@@ -99,5 +103,5 @@ def retrieval_nemesis(
 
     #Finishing pogram
     end = time.time()
-    print('Model run OK')
-    print(' Elapsed time (s) = '+str(end-start))
+    _lgr.info('Model run OK')
+    _lgr.info(' Elapsed time (s) = '+str(end-start))

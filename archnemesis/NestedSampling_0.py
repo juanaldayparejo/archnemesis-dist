@@ -5,13 +5,18 @@ try:
     import pymultinest
     from pymultinest.solve import solve
 except ImportError:
-    print('PyMultiNest is not installed. Please download this before attempting to run retrievals with nested sampling. Instructions on installation can be found here: http://johannesbuchner.github.io/PyMultiNest/install.html')
+    _lgr.info('PyMultiNest is not installed. Please download this before attempting to run retrievals with nested sampling. Instructions on installation can be found here: http://johannesbuchner.github.io/PyMultiNest/install.html')
     pymultinest = None
     solve = None
 import os
 import corner
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
 
 class NestedSampling_0:
     
@@ -83,7 +88,7 @@ class NestedSampling_0:
         a = pymultinest.Analyzer(n_params=len(self.parameters), outputfiles_basename=self.prefix)
         s = a.get_stats()
 
-        print('Creating marginal plot ...')
+        _lgr.info('Creating marginal plot ...')
 
         # Extract data and weights
         data_array = a.get_data()
@@ -208,7 +213,7 @@ class NestedSampling_0:
             # If not positive definite, add a small value to the diagonal
             epsilon = 1e-10
             covariance_matrix += epsilon * np.eye(len(self.parameters))
-            print("Covariance matrix was not positive definite. Added small epsilon to diagonal.")
+            _lgr.info("Covariance matrix was not positive definite. Added small epsilon to diagonal.")
 
         # Generate Gaussian samples using the covariance matrix
         num_gaussian_samples = 100000
@@ -328,7 +333,7 @@ def coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
                                                              NestedSampling.XA[i] + 5*NestedSampling.XA_ERR[i]) + \
                                                              NestedSampling.XA[i] - 5*NestedSampling.XA_ERR[i])
         else:  
-            print('DISTRIBUTION ID NOT DEFINED!', flush = True)
+            _lgr.info(f'DISTRIBUTION ID NOT DEFINED!')
 
     # Making the retrieval folder
     NestedSampling.prefix = NS_prefix
@@ -349,11 +354,11 @@ def coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
 
     #Print parameters
     if rank == 0:
-        print()
-        print('Evidence: %(logZ).1f +- %(logZerr).1f' % NestedSampling.result)
-        print()
-        print('Parameter values:')
+        _lgr.info()
+        _lgr.info('Evidence: %(logZ).1f +- %(logZerr).1f' % NestedSampling.result)
+        _lgr.info()
+        _lgr.info('Parameter values:')
         for name, col in zip(NestedSampling.parameters, NestedSampling.result['samples'].transpose()):
-            print('%15s : %.3f +- %.3f' % (name, col.mean(), col.std()))
+            _lgr.info('%15s : %.3f +- %.3f' % (name, col.mean(), col.std()))
     comm.barrier()
     return NestedSampling

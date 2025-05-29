@@ -1,7 +1,9 @@
 from __future__ import annotations #  for 3.9 compatability
 from enum import IntEnum, IntFlag, auto
 
-
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 class PlanetEnum(IntEnum):
     """
