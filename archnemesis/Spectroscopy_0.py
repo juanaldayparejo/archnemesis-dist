@@ -199,16 +199,16 @@ class Spectroscopy_0:
             _lgr.info(f'Number of g-ordinates ::  {(self.NG)}')
 
             _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
-            _lgr.info(f'Wavelength range ::  {(self.WAVE.min(),"-",self.WAVE.max())}')
+            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
             _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
 
             _lgr.info(f'Spectral resolution of the k-tables (FWHM) ::  {(self.FWHM)}')
 
             _lgr.info(f'Number of temperature levels ::  {(self.NT)}')
-            _lgr.info(f'Temperature range ::  {(self.TEMP.min(),"-",self.TEMP.max())}')
+            _lgr.info(f"Temperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}")
 
             _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
-            _lgr.info(f'Pressure range ::  {(self.PRESS.min(),"-",self.PRESS.max())}')
+            _lgr.info(f"Pressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}")
 
         elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
             _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (line-by-line)")}')
@@ -222,14 +222,14 @@ class Spectroscopy_0:
             _lgr.info(f'Gaseous species ::  {(gasname)}')
 
             _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
-            _lgr.info(f'Wavelength range ::  {(self.WAVE.min(),"-",self.WAVE.max())}')
+            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
             _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
 
             _lgr.info(f'Number of temperature levels ::  {(self.NT)}')
-            _lgr.info(f'Temperature range ::  {(self.TEMP.min(),"-",self.TEMP.max())}')
+            _lgr.info(f"Temperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}")
 
             _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
-            _lgr.info(f'Pressure range ::  {(self.PRESS.min(),"-",self.PRESS.max())}')
+            _lgr.info(f"Pressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}")
 
 
     ######################################################################################################

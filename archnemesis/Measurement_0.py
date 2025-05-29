@@ -308,7 +308,7 @@ class Measurement_0:
 
         #Defining spectral resolution
         if self.FWHM > 0.0:
-            _lgr.info(f'Spectral resolution of the measurement (FWHM) ::  {(self.FWHM)}')
+            _lgr.info(f"Spectral resolution of the measurement (FWHM) ::  {(self.FWHM)}")
         elif self.FWHM < 0.0:
             _lgr.info('Instrument line shape defined in .fil file')
         else:
@@ -322,8 +322,8 @@ class Measurement_0:
         wavelength_str = lambda x: str(to_wavelength(x))+' '+wavelength_unit
 
         #Defining geometries
-        _lgr.info(f'Field-of-view centered at ::  {('Latitude',self.LATITUDE,'- Longitude',self.LONGITUDE)}')
-        _lgr.info(f'There are  {(self.NGEOM,'geometries in the measurement vector')}')
+        _lgr.info(f"Field-of-view centered at ::  {('Latitude',self.LATITUDE,'- Longitude',self.LONGITUDE)}")
+        _lgr.info(f"There are  {(self.NGEOM,'geometries in the measurement vector')}")
         for i in range(self.NGEOM):
             _lgr.info('')
             _lgr.info('GEOMETRY '+str(i+1))
@@ -342,25 +342,25 @@ class Measurement_0:
                 
                     if self.EMISS_ANG[i,j]<0.0:
                         if isinstance(self.TANHE,np.ndarray)==True:
-                            _lgr.info(f'Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}')
-                            _lgr.info(f'Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])}')
+                            _lgr.info(f"Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}")
+                            _lgr.info(f"Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])}")
                         else:
-                            _lgr.info(f'Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}')
-                            _lgr.info(f'Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])}')
+                            _lgr.info(f"Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}")
+                            _lgr.info(f"Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])}")
                     
                     else:
-                        _lgr.info(f'Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}')
-                        _lgr.info(f'Nadir-viewing geometry. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])}')
+                        _lgr.info(f"Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}")
+                        _lgr.info(f"Nadir-viewing geometry. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])}")
 
             else:
                 j = 0
                 if self.EMISS_ANG[i,j]<0.0:
                     if isinstance(self.TANHE,np.ndarray)==True:
-                        _lgr.info(f'Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])}')
+                        _lgr.info(f"Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])}")
                     else:
-                        _lgr.info(f'Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])}')
+                        _lgr.info(f"Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])}")
                 else:
-                    _lgr.info(f'Nadir-viewing geometry. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])}')
+                    _lgr.info(f"Nadir-viewing geometry. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])}")
 
             
     #################################################################################################################
@@ -1614,7 +1614,7 @@ class Measurement_0:
         #Correcting the wavelengths for Doppler shift
         if apply_doppler is True:
             if self.V_DOPPLER!=0.0:
-                _lgr.info(f'nemesis :: Correcting for Doppler shift of  {(self.V_DOPPLER,'km/s')}')        
+                _lgr.info(f"nemesis :: Correcting for Doppler shift of  {(self.V_DOPPLER,'km/s')}")        
             wavemin = self.invert_doppler_shift(wavemin)
             wavemax = self.invert_doppler_shift(wavemax)
         
@@ -2350,7 +2350,7 @@ class Measurement_0:
         cbar_ticksx = np.linspace(0, 1, num=n)  # Adjust the number of ticks as needed
         cbar_ticks = np.linspace(cmin, cmax, num=n)  # Adjust the number of ticks as needed
         cbar2.set_ticks(cbar_ticksx)
-        cbar2.set_ticklabels([f'{tick:.2f}' for tick in cbar_ticks])  # Adjust the formatting as needed
+        cbar2.set_ticklabels([f"{tick:.2f}" for tick in cbar_ticks])  # Adjust the formatting as needed
 
         
         plt.tight_layout()

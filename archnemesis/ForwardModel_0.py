@@ -1206,7 +1206,7 @@ class ForwardModel_0:
         
             for ISPEC in range(self.Atmosphere.NLOCATIONS):
                 
-                _lgr.info(f'nemesisMAPfm :: Calculating spectrum {(ISPEC,'of ',self.Atmosphere.NLOCATIONS)}')
+                _lgr.info(f"nemesisMAPfm :: Calculating spectrum {(ISPEC,'of ',self.Atmosphere.NLOCATIONS)}")
                 SPEC[:,ISPEC] = calc_spectrum_location(ISPEC,self.Atmosphere,self.Surface,self.Measurement,self.Scatter,self.Spectroscopy,self.CIA,self.Stellar,self.Variables,self.Layer)
                 
         else:            #Parallel computation of the forward models
@@ -2965,7 +2965,7 @@ class ForwardModel_0:
         #Calculating the total optical depth for the aerosols
         TAUDUST1 = np.clip(np.nan_to_num(TAUDUST1),0,1e20)
         
-        _lgr.info(f'CIRSrad :: Aerosol optical depths at  {(self.SpectroscopyX.WAVE[0],' :: ',np.sum(TAUDUST1[0,:,:],axis=0))}')
+        _lgr.info(f"CIRSrad :: Aerosol optical depths at  {(self.SpectroscopyX.WAVE[0],' :: ',np.sum(TAUDUST1[0,:,:],axis=0))}")
         
         #Adding the opacity by the different dust populations
         TAUDUST = np.sum(TAUDUST1,2)  #(NWAVE,NLAYER) Absorption + Scattering
@@ -3121,7 +3121,7 @@ class ForwardModel_0:
         elif PathCalc.MULTIPLE_SCATTERING in IMODM: #Multiple scattering calculation
 
             _lgr.info('CIRSrad :: Performing multiple scattering calculation')
-            _lgr.info(f'CIRSrad :: NF =  {(self.ScatterX.NF,'; NMU = ',self.ScatterX.NMU,'; NPHI = ',self.ScatterX.NPHI)}')
+            _lgr.info(f"CIRSrad :: NF =  {(self.ScatterX.NF,'; NMU = ',self.ScatterX.NMU,'; NPHI = ',self.ScatterX.NPHI)}")
 
 
             #Calculating the solar flux at the top of the atmosphere
@@ -3402,7 +3402,7 @@ class ForwardModel_0:
             dTAUSCA[:,Atmosphere.NVMR+1+i,:] = dTAUSCA[:,Atmosphere.NVMR+1+i,:] + dTAUCLSCAT[:,:,i]
 
         #Calculating the total optical depth for the aerosols
-        _lgr.info(f'CIRSrad :: Aerosol optical depths at  {(self.SpectroscopyX.WAVE[0],' :: ',np.sum(TAUDUST1[0,:,:],axis=0))}')
+        _lgr.info(f"CIRSrad :: Aerosol optical depths at  {(self.SpectroscopyX.WAVE[0],' :: ',np.sum(TAUDUST1[0,:,:],axis=0))}")
 
         #Calculating the gaseous line opacity in each layer
         ########################################################################################################
@@ -3906,8 +3906,8 @@ class ForwardModel_0:
         from scipy import interpolate
 
         if (WAVEC.min() < Scatter.WAVE.min()) & (WAVEC.max() > Scatter.WAVE.min()):
-            _lgr.info(f'spectral range for calculation =  {(WAVEC.min(),"-",WAVEC.max())}')
-            _lgr.info(f'spectra range for optical properties =  {(Scatter.WAVE.min(),"-",Scatter.WAVE.max())}')
+            _lgr.info(f"spectral range for calculation =  {(WAVEC.min(),'-',WAVEC.max())}")
+            _lgr.info(f"spectra range for optical properties =  {(Scatter.WAVE.min(),'-',Scatter.WAVE.max())}")
             raise ValueError('error calc_tau_dust :: Spectral range for calculation is outside of range in which the Aerosol properties are defined')
         
         # Calculating the opacity at each vertical layer for each dust population
