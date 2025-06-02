@@ -81,7 +81,7 @@ def push_packagewide_level(log_level : int, mode : str = 'exact', _lgr : logging
     """
     global _logger_levels
     
-    _logger_levels[_lgr.name] = _logger_levels.get(_lgr.name, []).append(_logger_levels.level)
+    _logger_levels[_lgr.name] = _logger_levels.get(_lgr.name, []).append(_lgr.level)
     if mode == 'exact':
         _lgr.setLevel(log_level)
     elif mode == 'max':
