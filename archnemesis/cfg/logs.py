@@ -81,7 +81,11 @@ def push_packagewide_level(log_level : int, mode : str = 'exact', _lgr : logging
     """
     global _logger_levels
     
-    _logger_levels[_lgr.name] = _logger_levels.get(_lgr.name, []).append(_lgr.level)
+    level_stack = _logger_levels.get(_lgr.name, list())
+    level_stack.append(_lgr.level)
+    _logger_levels[_lgr.name] = level_stack
+    
+    
     if mode == 'exact':
         _lgr.setLevel(log_level)
     elif mode == 'max':
@@ -104,8 +108,8 @@ def push_packagewide_level(log_level : int, mode : str = 'exact', _lgr : logging
 def pop_packagewide_level(_lgr : logging.Logger = pkg_lgr) -> None:
     global _logger_levels
     
-    level_stack = _logger_levels.get(_lgr.name, [])
-    if len(level_stack) !=0:
+    level_stack = _logger_levels.get(_lgr.name, list())
+    if len(level_stack) != 0:
         _lgr.setLevel(level_stack.pop(-1))
     
     if sys.version_info >= (3,12):
