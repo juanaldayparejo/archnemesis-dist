@@ -111,6 +111,7 @@ def pop_packagewide_level(_lgr : logging.Logger = pkg_lgr) -> None:
     level_stack = _logger_levels.get(_lgr.name, list())
     if len(level_stack) != 0:
         _lgr.setLevel(level_stack.pop(-1))
+        _logger_levels[_lgr.name] = level_stack
     
     if sys.version_info >= (3,12):
         for child_lgr in _lgr.getChildren():
