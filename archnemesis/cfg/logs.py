@@ -99,10 +99,10 @@ def push_packagewide_level(log_level : int, mode : str = 'exact', _lgr : logging
     
     if sys.version_info >= (3,12):
         for child_lgr in _lgr.getChildren():
-            set_packagewide_level(log_level, mode, child_lgr)
+            push_packagewide_level(log_level, mode, child_lgr)
     else:
         for name, child_lgr in ((name, l) for name, l in logging.root.manager.loggerDict.items() if ((not isinstance(l, logging.PlaceHolder)) and name.startswith(_lgr.name) and (len(name[len(_lgr.name):].split('.'))==2))) :
-            set_packagewide_level(log_level, mode, child_lgr)
+            push_packagewide_level(log_level, mode, child_lgr)
 
 
 def pop_packagewide_level(_lgr : logging.Logger = pkg_lgr) -> None:
