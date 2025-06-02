@@ -1308,11 +1308,11 @@ class ForwardModel_0:
         
         # Find the method to use when modelling the spectrum
         if nemesisSO:
-            spec_model_method = self.nemesisSOfm()
+            spec_model_method = self.nemesisSOfm
         elif nemesisL:
-            spec_model_method = self.nemesisLfm()
+            spec_model_method = self.nemesisLfm
         else:
-            spec_model_method = self.nemesisfm()
+            spec_model_method = self.nemesisfm
         
         
         # Check we actually found a method
