@@ -46,7 +46,7 @@ class AtmosphericModelBase(ModelBase):
         """
         Patches values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
         """
-        _lgr.info(f'Model id {self.id} method "patch_from_subprofretg" does nothing...')
+        _lgr.debug(f'Model id {self.id} method "patch_from_subprofretg" does nothing...')
     
     
     def calculate_from_subspecret(
@@ -60,7 +60,7 @@ class AtmosphericModelBase(ModelBase):
         """
         Updated spectra based upon values of model parameters in the state vector. Called from ForwardModel_0::subspecret.
         """
-        _lgr.info(f'Model id {self.id} method "calculate_from_subspecret" does nothing...')
+        _lgr.debug(f'Model id {self.id} method "calculate_from_subspecret" does nothing...')
     
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
