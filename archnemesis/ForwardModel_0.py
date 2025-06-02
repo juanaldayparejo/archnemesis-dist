@@ -1333,7 +1333,7 @@ class ForwardModel_0:
             SPECMOD = spec_model_method()
         finally:
             # Stop disabling logging levels
-            logging.disable(logging.UNSET)
+            logging.disable(logging.NOTSET)
         
         
         
