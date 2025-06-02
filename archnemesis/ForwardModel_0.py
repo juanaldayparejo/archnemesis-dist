@@ -1289,29 +1289,65 @@ class ForwardModel_0:
             MODIFICATION HISTORY : Joe Penn (9/07/2024)
 
         """
-        
+        # Unpack input tuple
         ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, YNtot = inp
+        # ifm - index of forward model
+        # nfm - number of forward models
+        # xnx - array holding state vectors for all parallel forward models
+        # ixrun - seems to be the number of state vector entries for this forward model (unsure about this)
+        # nemesisSO - boolean flag to perform solar occultation forward model
+        # nemesisL - boolean flag to perform limb forward model
+        # YNtot - modelled spectra for all parallel forward models
+        
+        # define variables
+        spec_model_method = None
+        SPECMOD = None
+        
+        
+        # Find the method to use when modelling the spectrum
+        if nemesisSO:
+            spec_model_method = self.nemesisSOfm()
+        elif nemesisL:
+            spec_model_method = self.nemesisLfm()
+        else:
+            spec_model_method = self.nemesisfm()
+        
+        
+        # Check we actually found a method
+        if spec_model_method is None:
+            raise RuntimeError(f'Could not determine method to use when calculating forward model.')
+        
+        
         _lgr.info(f'Calculating forward model {ifm+1}/{nfm}')
-        original_stdout = sys.stdout  # Store the original stdout
+        
+        # load state vector with state for this specific forward model
+        self.Variables.XN = xnx[:, ixrun[ifm]]
+        
+        
+        # Put as little as possible in here so we only have to handle a small subset of state adjustment
         try:
-            sys.stdout = open(os.devnull, 'w')  # Redirect stdout
-            self.Variables.XN = xnx[:, ixrun[ifm]]
-            if nemesisSO:
-                SPECMOD = self.nemesisSOfm()
-            elif nemesisL:
-                SPECMOD = self.nemesisLfm()
-            else:
-                SPECMOD = self.nemesisfm()
+            # Turn off warning and below logging so we are not flooded with output
+            logging.disable(logging.WARN)
             
-            #Re-shaping calculated spectrum into the shape of the measurement vector
+            # model the spectrum
+            SPECMOD = spec_model_method()
+        finally:
+            # Stop disabling logging levels
+            logging.disable(logging.UNSET)
+        
+        
+        
+        if SPECMOD is not None:
+            #Only Re-shape calculated spectrum into the shape of the measurement vector if the calculation completed
             ik = 0
             for igeom in range(self.Measurement.NGEOM):
                 YNtot[ik:ik+self.Measurement.NCONV[igeom],ifm] = SPECMOD[0:self.Measurement.NCONV[igeom],igeom]
                 ik += self.Measurement.NCONV[igeom]
-        finally:
-            sys.stdout.close()  # Close the devnull
-            sys.stdout = original_stdout  # Restore the original stdout
+            
             _lgr.info(f'Calculated forward model {ifm+1}/{nfm}')
+        else:
+            # If calculation failed, throw an error.
+            raise RuntimeError(f'Something went wrong when calculating forward model {ifm+1}/{nfm}. Modelled spectra was not calculated.')
             
         return YNtot
     
