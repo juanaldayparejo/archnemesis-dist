@@ -1289,6 +1289,8 @@ class ForwardModel_0:
             MODIFICATION HISTORY : Joe Penn (9/07/2024)
 
         """
+        import archnemesis.cfg.logs
+        
         # Unpack input tuple
         ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, YNtot = inp
         # ifm - index of forward model
@@ -1327,13 +1329,13 @@ class ForwardModel_0:
         # Put as little as possible in here so we only have to handle a small subset of state adjustment
         try:
             # Turn off warning and below logging so we are not flooded with output
-            logging.disable(logging.WARN)
+            ans.cfg.logs.push_packagewide_level(logging.ERROR)
             
             # model the spectrum
             SPECMOD = spec_model_method()
         finally:
             # Stop disabling logging levels
-            logging.disable(logging.NOTSET)
+            ans.cfg.logs.pop_packagewide_level()
         
         
         
