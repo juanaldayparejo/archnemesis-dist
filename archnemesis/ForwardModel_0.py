@@ -1329,13 +1329,13 @@ class ForwardModel_0:
         # Put as little as possible in here so we only have to handle a small subset of state adjustment
         try:
             # Turn off warning and below logging so we are not flooded with output
-            ans.cfg.logs.push_packagewide_level(logging.ERROR)
+            archnemesis.cfg.logs.push_packagewide_level(logging.ERROR)
             
             # model the spectrum
             SPECMOD = spec_model_method()
         finally:
             # Stop disabling logging levels
-            ans.cfg.logs.pop_packagewide_level()
+            archnemesis.cfg.logs.pop_packagewide_level()
         
         
         
