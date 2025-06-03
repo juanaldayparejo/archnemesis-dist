@@ -219,9 +219,6 @@ class Variables_0:
                     first2 = False
                     p_tbl_col_widths = [max(len(_1), _2) for _1,_2 in zip(p_str[i][-1], p_tbl_col_widths)]
         
-        print(f'{len(p_tbl_col_widths)=}')
-        print(f'{len(p_str)=} {[len(x) for x in p_str]=} {[[len(x) for x in y ]for y in p_str]=}')
-        
         for i in range(len(p_str)):
             for j in range(len(p_str[i])):
                 p_str[i][j] = ' | '.join((x.ljust(p_tbl_col_widths[k], ' ') for k,x in enumerate(p_str[i][j])))
