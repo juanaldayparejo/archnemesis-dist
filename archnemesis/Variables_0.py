@@ -184,6 +184,53 @@ class Variables_0:
             for model in self.models
         )
     
+    def model_parameters_as_string(self):
+        """
+        Returns a string of the model parameters (formatted as a table)
+        """
+        mp = self.model_parameters
+        
+        # print parameters to a string
+        p_hdr = ('model id', 'parameter name', 'apriori value', 'posterior value', 'apriori error')
+        p_tbl_col_widths = [len(x) for x in p_hdr]
+        p_str = []
+        for i in range(len(mp)+1):
+            if i==0:
+                p_str.append([p_hdr])
+                continue
+            else:
+                p_str.append([])
+            first1 = True
+            for p_name, p_val in mp[i-1].items():
+                is_log = self.LX[p_val.sv_slice] == 1
+                apriori_error = np.sqrt(np.diag(self.SA[p_val.sv_slice,p_val.sv_slice]))
+                apriori_error = np.where(is_log, apriori_error*p_val.apriori_value, apriori_error)
+                more_than_one_entry = len(p_val.apriori_value) > 1
+                for j, (fix, a, b, s) in enumerate(zip(p_val.is_fixed, p_val.apriori_value, p_val.posterior_value, apriori_error)):
+                    
+                    p_str[i].append((
+                        f'{p_val.model_id}' if first1 else '---', 
+                        p_name+f'[{j}]' if more_than_one_entry else p_name, 
+                        f'{a:07.2E}', 
+                        'FIXED' if fix else f'{b:07.2E}',
+                        'FIXED' if fix else f'{s:07.2E}'
+                    ))
+                    first1 = False
+                    first2 = False
+                    p_tbl_col_widths = [max(len(_1), _2) for _1,_2 in zip(p_str[i][-1], p_tbl_col_widths)]
+        
+        print(f'{len(p_tbl_col_widths)=}')
+        print(f'{len(p_str)=} {[len(x) for x in p_str]=} {[[len(x) for x in y ]for y in p_str]=}')
+        
+        for i in range(len(p_str)):
+            for j in range(len(p_str[i])):
+                p_str[i][j] = ' | '.join((x.ljust(p_tbl_col_widths[k], ' ') for k,x in enumerate(p_str[i][j])))
+            p_str[i] = '\n'.join(p_str[i])
+        
+        p_str = ('\n' + ('-|-'.join(('-'*w for w in p_tbl_col_widths))) + '\n').join(p_str)
+        
+        return p_str
+    
     def plot_model_parameters(
             self, 
             plot_dir : None | str = None, 
@@ -199,6 +246,8 @@ class Variables_0:
             show : bool = False
                 if True will show the plot interactively
         """
+        print(self.model_parameters_as_string())
+        
         mp = self.model_parameters
         
         _lgr.debug('all model parameters:')
