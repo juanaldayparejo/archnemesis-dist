@@ -184,19 +184,29 @@ class Variables_0:
             for model in self.models
         )
     
-    def model_parameters_as_string(self):
+    
+    def model_parameters_as_string(
+            self,
+        ) -> str:
         """
         Returns a string of the model parameters (formatted as a table)
         """
         mp = self.model_parameters
         
-        # print parameters to a string
-        p_hdr = ('model id', 'parameter name', 'apriori value', 'posterior value', 'apriori error')
-        p_tbl_col_widths = [len(x) for x in p_hdr]
+        
+        # General header for output, not part of the table, but used for explanatory information
+        p_hdr = '\n'.join((
+            'i - index of model parameter in the state vector',
+        )) + '\n'
+        
+        # Header for the table, i.e. column labels
+        p_tbl_hdr = ('i', 'model id', 'parameter name', 'apriori value', 'posterior value', 'apriori error')
+        p_tbl_col_widths = [len(x) for x in p_tbl_hdr]
+        p_tbl_full_col_width = None
         p_str = []
         for i in range(len(mp)+1):
             if i==0:
-                p_str.append([p_hdr])
+                p_str.append([p_tbl_hdr])
                 continue
             else:
                 p_str.append([])
@@ -209,6 +219,7 @@ class Variables_0:
                 for j, (fix, a, b, s) in enumerate(zip(p_val.is_fixed, p_val.apriori_value, p_val.posterior_value, apriori_error)):
                     
                     p_str[i].append((
+                        f'{p_val.sv_slice.start+j}',
                         f'{p_val.model_id}' if first1 else '---', 
                         p_name+f'[{j}]' if more_than_one_entry else p_name, 
                         f'{a:07.2E}', 
@@ -219,14 +230,23 @@ class Variables_0:
                     first2 = False
                     p_tbl_col_widths = [max(len(_1), _2) for _1,_2 in zip(p_str[i][-1], p_tbl_col_widths)]
         
+        tbl_sec_sep = '|-' + ('-|-'.join(('-'*w for w in p_tbl_col_widths))) + '-|'
+        p_tbl_full_col_width = len(tbl_sec_sep)
+        
         for i in range(len(p_str)):
             for j in range(len(p_str[i])):
-                p_str[i][j] = ' | '.join((x.ljust(p_tbl_col_widths[k], ' ') for k,x in enumerate(p_str[i][j])))
+                p_str[i][j] = '| ' + (' | '.join((x.ljust(p_tbl_col_widths[k], ' ') for k,x in enumerate(p_str[i][j])))) + ' |'
             p_str[i] = '\n'.join(p_str[i])
         
-        p_str = ('\n' + ('-|-'.join(('-'*w for w in p_tbl_col_widths))) + '\n').join(p_str)
+        p_str = (f'\n{tbl_sec_sep}\n').join(p_str)
         
-        return p_str
+        return '\n'.join((
+            p_hdr,
+            '-'*p_tbl_full_col_width,
+            p_str,
+            '-'*p_tbl_full_col_width,
+        ))
+    
     
     def plot_model_parameters(
             self, 
@@ -364,9 +384,8 @@ class Variables_0:
             plt.show()
         
         return
-        
-        
-        
+    
+    
     def edit_VARIDENT(self, VARIDENT_array):
         """
         Edit the Variable IDs
