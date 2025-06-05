@@ -5,7 +5,7 @@ try:
     import pymultinest
     from pymultinest.solve import solve
 except ImportError:
-    _lgr.info('PyMultiNest is not installed. Please download this before attempting to run retrievals with nested sampling. Instructions on installation can be found here: http://johannesbuchner.github.io/PyMultiNest/install.html')
+    _lgr.critical('PyMultiNest is not installed. Please download this before attempting to run retrievals with nested sampling. Instructions on installation can be found here: http://johannesbuchner.github.io/PyMultiNest/install.html')
     pymultinest = None
     solve = None
 import os

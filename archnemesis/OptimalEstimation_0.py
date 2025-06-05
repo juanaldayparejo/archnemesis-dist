@@ -100,10 +100,6 @@ class OptimalEstimation_0:
             instance.edit_KK(kk_array)
         
         return chisq, phi, yn_prev_array, instance
-            
-            
-                
-                
 
 
     def __init__(self, IRET=0, NITER=1, NX=1, NY=1, PHILIMIT=0.1, NCORES=1):
@@ -191,6 +187,10 @@ class OptimalEstimation_0:
         self.XA = None #(NX)
         self.SA = None #(NX,NX)
         self.XN = None #(NX)
+        
+        # Output values, will be calculated when Optimal Estimation is performed
+        self.PHI = None
+        self.CHISQ = None
 
     def assess_input(self):
         """
@@ -284,6 +284,12 @@ class OptimalEstimation_0:
         #####################################################################
 
         if self.IRET==0:
+            
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/PHI', data=self.PHI)
+            dset.attrs['title'] = "'Cost' of retrieved state vector (calculated by cost function, is a balance of fitting modelled spectra and similarity of retrieved state vector to apriori values)."
+            
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/CHISQ', data=self.CHISQ)
+            dset.attrs['title'] = "Goodness of fit between modelled spectra and measured spectra"
             
             dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/NY', data=self.NY)
             dset.attrs['title'] = "Number of elements in measurement vector"
@@ -1178,6 +1184,18 @@ def coreretOE(
 
     phi_history = np.full((NITER+1,), fill_value=np.nan)
     chisq_history = np.full((NITER+1,), fill_value=np.nan)
+    state_vector_history = np.full((NITER+1, OptimalEstimation.NX), fill_value=np.nan)
+    
+    progress_file = f'progress.txt'
+    progress_w_iter = max(4, int(np.ceil(np.log10(NITER))))
+    progress_fmt = f'{{:0{progress_w_iter}}} | {{:09.3E}} | {{:09.3E}} | {{}}\n'
+    progress_head = ('iter' + ('' if progress_w_iter <= 4 else ' '*(progress_w_iter-4))
+        +' | phi      '
+        +' | chisq    '
+        +' | state vector '
+        +'\n'
+    )
+    
 
     _lgr.info(f'coreretOE :: Starting OptimalEstimation retrieval with NITER={OptimalEstimation.NITER} PHILIMIT={OptimalEstimation.PHILIMIT} NCORES={OptimalEstimation.NCORES}')
 
@@ -1216,7 +1234,15 @@ def coreretOE(
     
     phi_history[0] = OPHI
     chisq_history[0] = OptimalEstimation.CHISQ
+    state_vector_history[0,:] = OptimalEstimation.XN
     
+    progress_line = progress_fmt.format(0, OPHI, OptimalEstimation.CHISQ, OptimalEstimation.XN)
+    _lgr.info(f'\t{progress_head}')
+    _lgr.info(f'\t{progress_line}')
+            
+    with open(progress_file, 'w') as f:
+        f.write(progress_head)
+        f.write(progress_line)
 
     #Assessing whether retrieval is going to be OK
     #################################################################
@@ -1365,19 +1391,29 @@ def coreretOE(
         
         phi_history[it+1] = OptimalEstimation.PHI
         chisq_history[it+1] = OptimalEstimation.CHISQ
+        state_vector_history[it+1,:] = OptimalEstimation.XN
+        
+        progress_line = progress_fmt.format(it+1, OptimalEstimation.PHI, OptimalEstimation.CHISQ, OptimalEstimation.XN)
+        _lgr.info(f'\t{progress_head}')
+        _lgr.info(f'\t{progress_line}')
+                
+        with open(progress_file, 'a') as f:
+            f.write(progress_line)
     
     _lgr.info(f'coreretOE :: Completed Optimal Estimation retrieval. Showing phi and chisq evolution')
     with open(f'phi_chisq.txt', 'w') as f:
         w_iter = max(4, int(np.ceil(np.log10(NITER))))
-        fmt = f'{{:0{w_iter}}} | {{:09.3E}} | {{:09.3E}}\n'
+        fmt = f'{{:0{w_iter}}} | {{:09.3E}} | {{:09.3E}} | {{}}\n'
         head = ('iter' + ('' if w_iter <= 4 else ' '*(w_iter-4))
             +' | phi      '
-            +' | chisq    \n'
+            +' | chisq    '
+            +' | state vector '
+            +'\n'
         )
         _lgr.info(f'\t{head}')
         f.write(head)
-        for i,(p,c) in enumerate(zip(phi_history, chisq_history)):
-            line = fmt.format(i, p, c)
+        for i,(p,c,sv) in enumerate(zip(phi_history, chisq_history, state_vector_history)):
+            line = fmt.format(i, p, c, sv)
             _lgr.info(f'\t{line}')
             f.write(line)
             
