@@ -411,6 +411,8 @@ class OptimalEstimation_0:
 
                 #Checking if Retrieval already exists
                 if ('/Retrieval/Output' in f)==True:
+                    self.PHI = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/PHI', np.float64)
+                    self.CHISQ = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/CHISQ', np.float64)
 
                     self.NX = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/NX', np.int32)
                     self.NY = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/NY', np.int32)
