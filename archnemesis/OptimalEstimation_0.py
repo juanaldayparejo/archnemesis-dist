@@ -1395,7 +1395,7 @@ def coreretOE(
         chisq_history[it+1] = OptimalEstimation.CHISQ
         state_vector_history[it+1,:] = OptimalEstimation.XN
         
-        progress_line = progress_fmt.format(it+1, OptimalEstimation.PHI, OptimalEstimation.CHISQ, OptimalEstimation.XN)
+        progress_line = progress_fmt.format(it+1, OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))
         _lgr.info(f'\t{progress_head}')
         _lgr.info(f'\t{progress_line}')
                 
@@ -1415,7 +1415,7 @@ def coreretOE(
         _lgr.info(f'\t{head}')
         f.write(head)
         for i,(p,c,sv) in enumerate(zip(phi_history, chisq_history, state_vector_history)):
-            line = fmt.format(i, p, c, sv)
+            line = fmt.format(i, p, c, ' '.join((f'{x:09.3E}' for x in sv)))
             _lgr.info(f'\t{line}')
             f.write(line)
             
