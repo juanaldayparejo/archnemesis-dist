@@ -7,10 +7,12 @@ Created on 25 Sep 2024
 
 Telluric Class.
 """
+from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 import numpy as np
 
 from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnit, SpectralCalculationMode
+
 
 class Telluric_0:
     """

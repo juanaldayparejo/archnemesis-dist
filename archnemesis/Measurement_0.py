@@ -1,3 +1,4 @@
+from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 from archnemesis.enums import InstrumentLineshape, WaveUnit, SpectraUnit
 import numpy as np
@@ -5,6 +6,13 @@ import matplotlib.pyplot as plt
 import matplotlib as matplotlib
 import os
 from numba import jit
+
+
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.WARN)
+
+
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -1859,21 +1867,9 @@ class Measurement_0:
                     idown = 1
 
                 #Re-shaping the spectrum
-                nwave = nwave1 + iup + idown
-                wave = np.zeros(nwave)
-                y = np.zeros(nwave)
-                if((idown==1) & (iup==1)):
-                    wave[:] = wave1[:]
-                    y[:] = y1[:]
-                elif((idown==1) & (iup==0)):
-                    wave[0:nwave] = wave1[0:nwave1-1]
-                    y[0:nwave] = y1[0:nwave1-1]
-                elif((idown==0) & (iup==1)):
-                    wave[0:nwave] = wave1[1:nwave1]
-                    y[0:nwave] = y1[1:nwave1]
-                else:
-                    wave[0:nwave] = wave1[1:nwave1-1]
-                    y[0:nwave] = y1[1:nwave1-1]
+                nwave = self.NWAVE + iup + idown
+                wave = wave1[1-idown:nwave_max-(1-iup)]
+                y = y1[1-idown:nwave_max-(1-iup)]
 
                 #Checking if .fwh file exists (indicating that FWHM varies with wavelength)
                 ifwhm = 0
@@ -2412,13 +2408,14 @@ class Measurement_0:
             ax2 = plt.subplot2grid((2,3),(0,1),rowspan=1,colspan=2)
             ax2.fill_between(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom]-self.ERRMEAS[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom]+self.ERRMEAS[0:self.NCONV[igeom],igeom],alpha=0.3)
             ax2.plot(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom])
-
+            ax2.set_title('Spectra linear scale')
             ax2.grid()
 
             #Plotting the spectra in log scale
             ax3 = plt.subplot2grid((2,3),(1,1),rowspan=1,colspan=2,sharex=ax2)
             ax3.fill_between(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom]-self.ERRMEAS[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom]+self.ERRMEAS[0:self.NCONV[igeom],igeom],alpha=0.3)
             ax3.plot(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom])
+            ax3.set_title('Spectra log scale')
             ax3.set_yscale('log')
 
             if np.mean(self.VCONV)>30.:
