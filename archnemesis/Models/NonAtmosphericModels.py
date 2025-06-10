@@ -1695,15 +1695,6 @@ class Model447(NonAtmosphericModelBase):
 
 
     @classmethod
-    def is_varident_valid(
-            cls,
-            varident : np.ndarray[[3],int],
-        ) -> bool:
-        _lgr.warning(f'Model id = {cls.id} is not implemented yet, so it will never be chosen as a valid model')
-        return False
-
-
-    @classmethod
     def calculate(cls, Measurement,v_doppler):
 
         """
@@ -2194,3 +2185,98 @@ class Model887(NonAtmosphericModelBase):
         ) -> None:
         raise NotImplementedError
 
+
+class Model999(NonAtmosphericModelBase):
+    """
+        In this model, the temperature of the surface is defined.
+    """
+    id : int = 999 
+        
+    @classmethod
+    def calculate(cls, Surface, tsurf):
+
+        """
+            FUNCTION NAME : model999()
+
+            DESCRIPTION :
+
+                Function defining the model parameterisation 999 in NEMESIS.
+                In this model, we fit the surface temperature.
+
+            INPUTS :
+
+                Surface :: Python class defining the surface
+                tsurf :: Surface temperature (K)
+
+            OPTIONAL INPUTS: none
+
+            OUTPUTS :
+
+                Surface :: Updated measurement class with the surface temperature
+
+            CALLING SEQUENCE:
+
+                Surface = model999(Surface,tsurf)
+
+            MODIFICATION HISTORY : Juan Alday (25/05/2025)
+
+        """
+
+        Surface.TSURF = tsurf
+
+        return Surface
+
+
+    @classmethod
+    def from_apr_to_state_vector(
+            cls,
+            variables : "Variables_0",
+            f : IO,
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            lx : np.ndarray[["mx"],int],
+            x0 : np.ndarray[["mx"],float],
+            sx : np.ndarray[["mx","mx"],float],
+            inum : np.ndarray[["mx"],int],
+            npro : int,
+            nlocations : int,
+            runname : str,
+            sxminfac : float,
+        ) -> Self:
+        ix_0 = ix
+        #******** model for retrieving the Surface temperature
+
+        #Read the surface temperature and its uncertainty
+        s = f.readline().split()
+        tsurf = float(s[0])     #K
+        tsurf_err = float(s[1]) #K
+
+        #Filling the state vector and a priori covariance matrix with the surface temperature
+        lx[ix] = 0   #linear scale
+        x0[ix] = tsurf
+        sx[ix,ix] = (tsurf_err)**2.
+        inum[ix] = 0  #analytical gradient
+
+        ix = ix + 1
+
+        return cls(ix_0, ix-ix_0)
+
+
+    def calculate_from_subprofretg(
+            self,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ipar : int,
+            ivar : int,
+            xmap : np.ndarray,
+        ) -> None:
+        #Model 999. Retrieval of surface temperature
+        #***************************************************************
+
+        tsurf = forward_model.Variables.XN[ix]
+
+        forward_model.SurfaceX = self.calculate(forward_model.SurfaceX,tsurf)
+
+        ipar = -1
+        ix = ix + forward_model.Variables.NXVAR[ivar]

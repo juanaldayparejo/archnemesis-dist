@@ -632,6 +632,7 @@ class Variables_0:
                 found_model_for_varident = False
                 
                 for model in Models:
+                    
                     if model.is_varident_valid(varident[i]):
                         found_model_for_varident = True
                         
@@ -662,6 +663,13 @@ class Variables_0:
                             print(textwrap.indent(str(self._models[-1].info(lx,x0)), '  '))
                         finally:
                             io_helper.OutWidth.pop()
+                        
+                        if varident[i][2]==999:  #Retrieval of surface temperature
+                            jsurf = ix
+                        elif varident[i][2]==666: #Retrieval of pressure at a givent tangent height
+                            jpre = ix
+                        elif varident[i][2]==777: #Retrieval of tangent height at a given pressure level
+                            jtan = ix
                         
                         ix += self._models[-1].n_state_vector_entries
 
