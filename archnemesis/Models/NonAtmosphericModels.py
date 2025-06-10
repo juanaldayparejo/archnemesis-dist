@@ -2192,6 +2192,26 @@ class Model999(NonAtmosphericModelBase):
     """
     id : int = 999 
         
+    def __init__(
+            self, 
+            state_vector_start : int, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model
+        self.parameters = (
+            ModelParameter('surface temperature', slice(0,1), 'Surface Temperature','K'),
+        )
+        
+        
     @classmethod
     def calculate(cls, Surface, tsurf):
 
