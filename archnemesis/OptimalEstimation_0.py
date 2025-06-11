@@ -579,8 +579,9 @@ class OptimalEstimation_0:
         # (ln[(yn + e)/(y+e)]/N)^2
         sai = np.linalg.inv(self.SA)
         e = np.diag(self.SE)
-        a = (np.log(self.YN[:self.NY] + e) - np.log(self.Y[:self.NY] + e)) / self.NY
-        self.CHISQ = (a.T @ a)
+        a = (np.log(self.YN[:self.NY] + e) - np.log(self.Y[:self.NY] + e))
+        phi1 = a.T @ a
+        self.CHISQ = phi1 / self.NY
 
         # Calculating xn-xa
         d = self.XN[:self.NX] - self.XA[:self.NX]
