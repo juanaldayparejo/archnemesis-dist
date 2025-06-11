@@ -363,3 +363,27 @@ def test_solar_occultation_mars():
     np.testing.assert_allclose(SPECONV, expected_speconv, rtol=1e-5, atol=1e-8)
     np.testing.assert_allclose(SPECONVg, expected_speconv, rtol=1e-5, atol=1e-8)
     
+def test_titan_avefov():  
+    '''
+    Titan test where several geometry across the planet are averaged
+    '''
+    test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Titan_aveFOV/')
+    os.chdir(test_dir) #Changing directory to read files
+    runname = 'ch3cn'
+    
+    #Reading the input files
+    Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
+    
+    #Calculating forward model with CIRSrad
+    ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
+    SPECONV = ForwardModel.nemesisfm()
+    SPECONVg,dSPECONV = ForwardModel.nemesisfmg()
+    
+    #Reading the file from NEMESIS
+    lat,lon,ngeom,ny,wave1,expected_speconv,specmeas1,specerrmeas,nx,Var,aprprof,aprerr,retprof,reterr = ans.read_mre(runname)
+    expected_speconv *= 1.0e-9
+    
+    #Comparing the forward models
+    np.testing.assert_allclose(SPECONV, expected_speconv, rtol=1e-5, atol=1e-8)
+    np.testing.assert_allclose(SPECONVg, expected_speconv, rtol=1e-5, atol=1e-8)
+    
