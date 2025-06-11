@@ -10,6 +10,7 @@
 from __future__ import annotations #  for 3.9 compatability
 
 from archnemesis import *
+from archnemesis.Models import Models, ModelBase, ModelParameterEntry
 from copy import copy
 
 from archnemesis.enums import (
@@ -577,10 +578,6 @@ def read_mre(runname,MakePlot=False):
 
     """
 
-    #Opening .ref file for getting number of altitude levels
-    Atmosphere = Atmosphere_0(runname=runname)
-    Atmosphere.read_ref()
-    
     #Opening file
     f = open(runname+'.mre','r')
 
@@ -623,6 +620,7 @@ def read_mre(runname,MakePlot=False):
         nvar = int(s[2])
 
     nxvar = np.zeros([nvar],dtype='int')
+    
     Var = Variables_0()
     Var.NVAR = nvar
     aprprof1 = np.zeros([nx,nvar])
@@ -631,7 +629,9 @@ def read_mre(runname,MakePlot=False):
     reterr1 = np.zeros([nx,nvar])
     varident = np.zeros([nvar,3],dtype='int')
     varparam = np.zeros([nvar,5])
+    
     for i in range(nvar):
+        
         # 1) Read until we find the line that starts with "Variable"
         line = f.readline()
         while line and not line.strip().startswith('Variable'):
@@ -653,29 +653,31 @@ def read_mre(runname,MakePlot=False):
         if len(parts) != 5:
             raise ValueError(f"Expected 5 floats for varparam, got: {parts}")
         varparam[i, :] = np.array(parts, dtype=float)
-
+            
         # 4) The next line is typically the header for data lines ("i, ix, xa ...")
         #    We just read it and ignore.
         f.readline()
 
-        # 5) Initialize the Variables_0 object
-        Var1 = Variables_0()
-        Var1.NVAR = 1
-        Var1.edit_VARIDENT(varident[i, :])
-        Var1.edit_VARPARAM(varparam[i, :])
-        Var1.calc_NXVAR(Atmosphere.NP)
-        nxvar = Var1.NXVAR[0]  # how many lines of data to read
-
-        # 6) Now read each profile line for this variable
+        # 5) Now read each profile line for this variable
         #    We know the data lines each have 6 columns.
-        for j in range(nxvar):
-            line_pos = f.tell()
-            line = f.readline().strip()
+        varlines = []
+        while True:
+            pos = f.tell()  # Remember position before reading
+            line = f.readline()
+            if not line:
+                break
+            if line.strip().startswith('Variable'):
+                f.seek(pos)  # Rewind so this line will be read again later
+                break
+            varlines.append(line)
+        nxvar[i] = len(varlines)        
+
+        for j in range(len(varlines)):
+            line = varlines[j]
             parts = line.split()
             # If something is off, backtrack and break
             if len(parts) != 6:
-                f.seek(line_pos)
-                break
+                raise ValueError('error in read_mre :: something is off when reading the retrieved parameters')
             aprprof1[j, i] = float(parts[2])
             aprerr1[j, i]  = float(parts[3])
             retprof1[j, i] = float(parts[4])
@@ -683,7 +685,7 @@ def read_mre(runname,MakePlot=False):
 
     Var.edit_VARIDENT(varident)
     Var.edit_VARPARAM(varparam)
-    Var.calc_NXVAR(Atmosphere.NP)
+    Var.NXVAR = nxvar
 
     aprprof = np.zeros([Var.NXVAR.max(),nvar])
     aprerr = np.zeros([Var.NXVAR.max(),nvar])

@@ -648,10 +648,35 @@ class Model228(NonAtmosphericModelBase):
 
 class Model229(NonAtmosphericModelBase):
     """
-        In this model, the ILS of the measurement is defined from every convolution wavenumber
-        using the double-Gaussian parameterisation created for analysing ACS MIR spectra
+        Model for representing the double-Gaussian parameterisation of the instrument lineshape for
+        retrievals from the Atmospheric Chemistry Suite aboard the ExoMars Trace Gas Orbiter
     """
     id : int = 229
+    
+    def __init__(
+            self, 
+            state_vector_start : int = 0, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int = 7,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model
+        self.parameters = (
+            ModelParameter('A0', slice(0,1), 'Wavenumber offset of main at lowest wavenumber','cm-1'),
+            ModelParameter('A1', slice(1,2), 'Wavenumber offset of main at wavenumber in the middle','cm-1'),
+            ModelParameter('A2', slice(2,3), 'Wavenumber offset of main at highest wavenumber','cm-1'),
+            ModelParameter('DELDG', slice(3,4), 'Offset of the second gaussian with respect to the first one (assumed spectrally constant)','cm-1'),
+            ModelParameter('FWHM', slice(4,5), 'FWHM of the main gaussian at lowest wavenumber (assumed to be constat in wavelength units)','cm-1'),
+            ModelParameter('AMP1', slice(5,6), 'Relative amplitude of the second gaussian with respect to the gaussian at lowest wavenumber'),
+            ModelParameter('AMP2', slice(6,7), 'Relative amplitude of the second gaussian with respect to the gaussian at highest wavenumber (linear var)'),
+        )
 
 
     @classmethod
@@ -887,7 +912,6 @@ class Model229(NonAtmosphericModelBase):
         lx[ix] = 0
         inum[ix] = 0
         ix = ix + 1
-
 
         return cls(ix_0, ix-ix_0)
 
@@ -2194,10 +2218,10 @@ class Model999(NonAtmosphericModelBase):
         
     def __init__(
             self, 
-            state_vector_start : int, 
+            state_vector_start : int = 0, 
             #   Index of the state vector where parameters from this model start
             
-            n_state_vector_entries : int,
+            n_state_vector_entries : int = 1,
             #   Number of parameters for this model stored in the state vector
         ):
         """
