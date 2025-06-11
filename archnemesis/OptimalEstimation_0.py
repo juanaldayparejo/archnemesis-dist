@@ -553,7 +553,11 @@ class OptimalEstimation_0:
         Calculate the retrieval cost function to be minimized in the optimal estimation
         framework, which combines departure from a priori and closeness to spectrum.
         """
-
+        
+        
+        
+        """
+        # Getting (yn-y)^2/sigma_y^2
         # Calculating yn-y
         b = self.YN[:self.NY] - self.Y[:self.NY]
         bt = b.T
@@ -570,6 +574,12 @@ class OptimalEstimation_0:
 
         phi1 = c
         self.CHISQ = phi1 / self.NY
+        """
+        # NOTE: Trying an alternative function
+        # ln[(yn + e)/(y+e)]/N
+        e = np.diag(self.SE)
+        a = (np.log(self.YN[:self.NY] + e) - np.log(self.Y[:self.NY] + e)) / self.NY
+        self.CHISQ = (a.T @ a)
 
         # Calculating xn-xa
         d = self.XN[:self.NX] - self.XA[:self.NX]
