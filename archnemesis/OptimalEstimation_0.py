@@ -581,7 +581,7 @@ class OptimalEstimation_0:
         e = np.diag(self.SE)
         yn = self.YN[:self.NY]
         y = self.Y[:self.NY]
-        a = ((yn+e)/(y+e))
+        a = ((yn+e)/(y+e)) - 1
         phi1 = a.T @ a
         self.CHISQ = phi1 / self.NY
 
