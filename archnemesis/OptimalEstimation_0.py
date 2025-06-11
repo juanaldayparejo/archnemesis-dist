@@ -582,6 +582,7 @@ class OptimalEstimation_0:
         yn = self.YN[:self.NY]
         y = self.Y[:self.NY]
         a = np.log((yn+e)/(y+e))
+        print(f'{a=}')
         phi1 = a.T @ a
         self.CHISQ = phi1 / self.NY
 
