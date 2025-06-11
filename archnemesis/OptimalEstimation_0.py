@@ -576,7 +576,8 @@ class OptimalEstimation_0:
         self.CHISQ = phi1 / self.NY
         """
         # NOTE: Trying an alternative function
-        # ln[(yn + e)/(y+e)]/N
+        # (ln[(yn + e)/(y+e)]/N)^2
+        sai = np.linalg.inv(self.SA)
         e = np.diag(self.SE)
         a = (np.log(self.YN[:self.NY] + e) - np.log(self.Y[:self.NY] + e)) / self.NY
         self.CHISQ = (a.T @ a)
