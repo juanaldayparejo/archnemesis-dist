@@ -599,6 +599,10 @@ class OptimalEstimation_0:
 
         _lgr.warning(f'calc_phiret: {measurement_diff_cost=}, {apriori_diff_cost=}, chisq={self.CHISQ}, {measurement_diff_cost+apriori_diff_cost=}')
         self.PHI = measurement_diff_cost + apriori_diff_cost
+        
+        assert not np.isnan(self.PHI), "PHI cannot be NAN"
+        assert not np.isnan(self.CHISQ), "CHISQ cannot be NAN"
+        
 
     def assess(self):
         """
