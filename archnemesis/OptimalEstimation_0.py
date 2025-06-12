@@ -1,6 +1,6 @@
 from __future__ import annotations #  for 3.9 compatability
 
-import sys.float_info
+import sys
 
 from archnemesis import *
 import numpy as np
