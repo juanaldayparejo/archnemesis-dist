@@ -1,4 +1,7 @@
 from __future__ import annotations #  for 3.9 compatability
+
+import sys.float_info
+
 from archnemesis import *
 import numpy as np
 import matplotlib.pyplot as plt
@@ -553,53 +556,49 @@ class OptimalEstimation_0:
         Calculate the retrieval cost function to be minimized in the optimal estimation
         framework, which combines departure from a priori and closeness to spectrum.
         """
+        # Calculate values for later
+        
+        # Use this to minimise difference in `y`
+        #b = self.YN[:self.NY] - self.Y[:self.NY]
+        
+        # Use this to minimise difference in `log(y)`
+        yn = self.YN[:self.NY]
+        y = self.Y[:self.NY]
+        # If anything is less than zero, find it and boost it upwards so we don't get
+        # caught out with logging
+        y_min = min(np.min(yn), np.min(y))
+        if y_min <= 0:
+            yn += (sys.float_info.epsilon - y_min)
+            y += (sys.float_info.epsilon - y_min)
+        b = np.log(yn) - np.log(y)
         
         
-        
-        """
-        # Getting (yn-y)^2/sigma_y^2
-        # Calculating yn-y
-        b = self.YN[:self.NY] - self.Y[:self.NY]
-        bt = b.T
-
-        # Calculating inverse of sa and se
+        d = self.XN[:self.NX] - self.XA[:self.NX]
         sai = np.linalg.inv(self.SA)
         sei_inv = np.diag(1.0 / np.diag(self.SE))
+        
+        ## Getting (yn-y)^2/sigma_y^2 ##
+        
 
         # Multiplying se_inv*b
         a = sei_inv @ b
 
         # Multiplying bt*a so that (yn-y)^T * se_inv * (yn-y)
-        c = bt @ a
+        measurement_diff_cost = b.T @ a
 
-        phi1 = c
-        self.CHISQ = phi1 / self.NY
-        """
-        # NOTE: Trying an alternative function
-        # (ln[(yn + e)/(y+e)]/N)^2
-        sai = np.linalg.inv(self.SA)
-        e = np.diag(self.SE)
-        yn = self.YN[:self.NY]
-        y = self.Y[:self.NY]
-        a = np.log((yn+e)/(y+e))*(e/y)
-        print(f'{a=}')
-        phi1 = a.T @ a
-        self.CHISQ = phi1 / self.NY
+        self.CHISQ = measurement_diff_cost / self.NY
+        
 
-        # Calculating xn-xa
-        d = self.XN[:self.NX] - self.XA[:self.NX]
-        dt = d.T
+        ## Getting (xn - x)^2/sigma_x^2 ##
 
         # Multiply sa_inv*d
         e = sai @ d
 
         # Multiply dt*e so that (xn-xa)^T * sa_inv * (xn-xa)
-        f = dt @ e
+        apriori_diff_cost = d.T @ e
 
-        phi2 = f
-
-        _lgr.info('calc_phiret: phi1, phi2 = ' + str(phi1) + ', ' + str(phi2) + ')')
-        self.PHI = phi1 + phi2
+        _lgr.warning(f'calc_phiret: {measurement_diff_cost=}, {apriori_diff_cost=}, chisq={self.CHISQ}, {measurement_diff_cost+apriori_diff_cost=}')
+        self.PHI = measurement_diff_cost + apriori_diff_cost
 
     def assess(self):
         """
