@@ -1023,6 +1023,10 @@ class Scatter_0:
         """
         Writing the coefficients of the Legendre polynomials into a pickle file
         """
+        
+        if not hasattr(self,"WPOL"):
+            _lgr.warning(f'Not writing lpphase.dat (Solar Occultation) file as self.WPOL attribute is not present')
+            return
 
         import pickle
 

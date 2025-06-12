@@ -559,20 +559,7 @@ class OptimalEstimation_0:
         # Calculate values for later
         
         # Use this to minimise difference in `y`
-        #b = self.YN[:self.NY] - self.Y[:self.NY]
-        
-        # Use this to minimise difference in `log(y)`
-        yn = self.YN[:self.NY]
-        y = self.Y[:self.NY]
-        # If anything is less than zero, find it and boost it upwards so we don't get
-        # caught out with logging
-        y_min = min(np.min(yn), np.min(y))
-        if y_min <= 0:
-            yn += (sys.float_info.epsilon - y_min)
-            y += (sys.float_info.epsilon - y_min)
-        b = np.log(yn) - np.log(y)
-        
-        
+        b = self.YN[:self.NY] - self.Y[:self.NY]
         d = self.XN[:self.NX] - self.XA[:self.NX]
         sai = np.linalg.inv(self.SA)
         sei_inv = np.diag(1.0 / np.diag(self.SE))

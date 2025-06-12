@@ -216,6 +216,9 @@ class Measurement_0:
         self.VFIL = None  #np.zeros(NFIL,NCONV)
         self.AFIL = None  #np.zeros(NFIL,NCONV)
         
+        self.SUBOBS_LAT = 0.0 # sub observer latitude, optional
+        self.SUBOBS_LON = 0.0 # sub observer longintude, optional
+        
         # private attributes
         self._ishape = None
         self._ispace = None
@@ -822,6 +825,10 @@ class Measurement_0:
         Write the .spx file for a solar occultation measurement
         """
 
+        if self.TANHE is None:
+            _lgr.warning(f'Not writing *.spx (Solar Occultation) file as self.TANHE is NONE')
+            return
+
         fspx = open(self.runname+'.spx','w')
         fspx.write('%7.5f \t %7.5f \t %7.5f \t %i \n' % (self.FWHM,self.LATITUDE,self.LONGITUDE,self.NGEOM))
 
@@ -949,6 +956,10 @@ class Measurement_0:
         Write the .fil file to see what the Instrument Lineshape for each convolution wavenumber 
         (Only valid if FWHM<0.0)
         """
+        
+        if self.NFIL is None:
+            _lgr.warning(f'Not writing *.fil file as self.NFIL is NONE')
+            return
 
         f = open(self.runname+'.fil','w')
         f.write("%i \n" %  (self.NCONV[IGEOM]))
@@ -2374,6 +2385,10 @@ class Measurement_0:
         from mpl_toolkits.basemap import Basemap
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+        subobs_lat = self.SUBOBS_LAT if subobs_lat is None else subobs_lat
+        subobs_lon = self.SUBOBS_LON if subobs_lon is None else subobs_lon
+
+
         #Making a figure for each geometry
         for igeom in range(self.NGEOM):
 
@@ -2381,13 +2396,8 @@ class Measurement_0:
 
             #Plotting the geometry
             ax1 = plt.subplot2grid((2,3),(0,0),rowspan=2,colspan=1)
-            if((subobs_lat!=None) & (subobs_lon!=None)):
-                map = Basemap(projection='ortho', resolution=None,
-                    lat_0=subobs_lat, lon_0=subobs_lon)
-            else:
-                map = Basemap(projection='ortho', resolution=None,
-                    lat_0=self.LATITUDE, lon_0=self.LONGITUDE)
-
+            map = Basemap(projection='ortho', resolution=None,
+                lat_0=subobs_lat, lon_0=subobs_lon)
             
             lats = map.drawparallels(np.linspace(-90, 90, 13))
             lons = map.drawmeridians(np.linspace(-180, 180, 13))

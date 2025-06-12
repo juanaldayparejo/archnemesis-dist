@@ -1541,6 +1541,8 @@ class Atmosphere_0:
         """
         Writes the para-h2 fraction profile to parah2.ref.
         """
+        if self.PARAH2 is None:
+            return
        
         if self.NLOCATIONS!=1:
             raise ValueError('error :: write_parah2 only works if NLOCATIONS=1')
