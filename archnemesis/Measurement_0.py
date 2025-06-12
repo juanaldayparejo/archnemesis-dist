@@ -384,6 +384,7 @@ class Measurement_0:
             del f['Measurement']   #Deleting the Measurement information that was previously written in the file
 
         grp = f.create_group("Measurement")
+        
 
         #Writing the latitude/longitude at the centre of FOV
         dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
@@ -392,6 +393,15 @@ class Measurement_0:
 
         dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
         dset.attrs['title'] = "Longitude at centre of FOV"
+        dset.attrs['units'] = 'degrees'
+        
+        # Write optional sub observer lat/lon so we can plot the measurement easily
+        dset = grp.create_dataset('SUBOBS_LAT',data=self.SUBOBS_LAT)
+        dset.attrs['title'] = "Latitude at point directly below the observer (optional)"
+        dset.attrs['units'] = 'degrees'
+
+        dset = grp.create_dataset('SUBOBS_LON',data=self.SUBOBS_LON)
+        dset.attrs['title'] = "Longitude at point directly below the observer (optional)"
         dset.attrs['units'] = 'degrees'
         
         #Writing the Doppler velocity
@@ -583,6 +593,8 @@ class Measurement_0:
             self.IFORM = h5py_helper.retrieve_data(f, 'Measurement/IFORM', lambda x:  SpectraUnit(np.int32(x)))
             self.LATITUDE = h5py_helper.retrieve_data(f, 'Measurement/LATITUDE', np.float64)
             self.LONGITUDE = h5py_helper.retrieve_data(f, 'Measurement/LONGITUDE', np.float64)
+            self.SUBOBS_LAT = h5py_helper.retrieve_data(f, 'Measurement/SUBOBS_LAT', np.float64)
+            self.SUBOBS_LON = h5py_helper.retrieve_data(f, 'Measurement/SUBOBS_LON', np.float64)
             self.NAV = h5py_helper.retrieve_data(f, 'Measurement/NAV', np.array)
             self.FLAT = h5py_helper.retrieve_data(f, 'Measurement/FLAT', np.array)
             self.FLON = h5py_helper.retrieve_data(f, 'Measurement/FLON', np.array)
