@@ -1,6 +1,6 @@
 # archNEMESIS
 
-[![DOI](https://img.shields.io/badge/version-v1.0.0-red)](https://doi.org/10.5281/zenodo.14746548)
+[![DOI](https://img.shields.io/badge/version-v1.0.1-red)](https://doi.org/10.5281/zenodo.15123560)
 [![Documentation](https://img.shields.io/badge/readthedocs-latest-blue)](https://archnemesis.readthedocs.io)
 [![GitHub](https://img.shields.io/badge/github-code-green)](https://github.com/juanaldayparejo/archnemesis-dist)
 [![archNEMESIS](https://img.shields.io/badge/archNEMESIS-reference-yellow)](https://doi.org/10.48550/arXiv.2501.16452)
@@ -58,6 +58,17 @@ If archNEMESIS has been significant in your research, we suggest citing the foll
 
 - NEMESIS reference publication:
    - Irwin, P. G. J., Teanby, N. A., De Kok, R., Fletcher, L. N., Howett, C. J. A., Tsang, C. C. C., ... & Parrish, P. D. (2008). The NEMESIS planetary atmosphere radiative transfer and retrieval tool. *Journal of Quantitative Spectroscopy and Radiative Transfer*, 109(6), 1136-1150. doi: [10.1016/j.jqsrt.2007.11.006](https://doi.org/10.1016/j.jqsrt.2007.11.006).
+
+## Support 
+
+If you have questions, suggestions, or encounter issues, you can:
+
+- Open an issue on the [GitHub Issues page](https://github.com/juanaldayparejo/archnemesis-dist/issues)
+- Ask questions on the [GitHub Discussions tab](https://github.com/juanaldayparejo/archnemesis-dist/discussions)
+- Join our [Discord](https://discord.gg/Te43qbrVFK) channel.
+- Contact the maintainer via email: juan.alday@open.ac.uk
+
+Please note: This is a research software package maintained as time allows. While we aim to respond in a timely manner (i.e., within a week), we cannot guarantee a fixed response time.
 
 ## Revision history
 
