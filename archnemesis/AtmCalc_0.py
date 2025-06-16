@@ -129,6 +129,7 @@ class AtmCalc_0:
             -------
 
         """
+        _lgr.info(f'Sent to AtmCalc_0', stacklevel=2)
         _lgr.info(f'AtmCalc_0 :: {path_observer_pointing=}, {BOTLAY=}, {ANGLE=}, {EMISS_ANG=}, {SOL_ANG=}, {AZI_ANG=}, {IPZEN=}, {path_calc=}')
         
         #parameters
@@ -180,6 +181,7 @@ class AtmCalc_0:
 
         if self.path_observer_pointing == PathObserverPointing.DISK:
             self.path_observer_height = np.inf
+            raise NotImplementedError(f'{PathObserverPointing.DISK} is not implemented yet. Intended to be observer pointing towards the disk (i.e. looking down from above). At the moment that case is covered by {PathObserverPointing.LIMB} with `self.ANGLE` set to greater than 90 degrees')
             
         elif self.path_observer_pointing == PathObserverPointing.LIMB:
             self.path_observer_height = np.inf
@@ -194,6 +196,9 @@ class AtmCalc_0:
         
         else:
             raise ValueError(f'error in AtmCalc_0 :: path observer pointing "{self.path_observer_pointing}" not recognised')
+        
+        
+        _lgr.debug(f'AtmCalc_0 :: {self.path_observer_pointing=}, {self.BOTLAY=}, {self.ANGLE=}, {self.EMISS_ANG=}, {self.SOL_ANG=}, {self.AZI_ANG=}, {self.IPZEN=}, {self.path_calc=}, {self.path_observer_height=}')
         
         assert self.path_observer_height in (0.0, np.inf), f'error in AtmCalc_0 :: path observer height must be 0 or np.inf. Other values such as {self.path_observer_height} are not implemented yet'
 
@@ -259,7 +264,7 @@ class AtmCalc_0:
                     raise ValueError('error in AtmCalc_0.py file :: SPHSINGLE and LIMB not catered for')  
             else:
                 if self.ANGLE != 0.0:
-                    _lgr.warning(' in AtmCalc_0.py file :: ANGLE must be 0.0 for scattering calculations - resetting')    
+                    _lgr.warning(' in AtmCalc_0.py file :: ANGLE must be 0.0 for scattering calculations - resetting')
                     self.ANGLE = 0.0
 
         if PathCalc.HEMISPHERE in self.path_calc:

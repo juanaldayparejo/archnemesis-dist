@@ -3160,6 +3160,7 @@ class ForwardModel_0:
 
             _lgr.info('CIRSrad :: Performing multiple scattering calculation')
             _lgr.info(f"CIRSrad :: NF =  {(self.ScatterX.NF,'; NMU = ',self.ScatterX.NMU,'; NPHI = ',self.ScatterX.NPHI)}")
+            _lgr.debug(f'{self.PathX.EMISS_ANG=} {self.PathX.SOL_ANG=} {self.PathX.AZI_ANG=}')
 
 
             #Calculating the solar flux at the top of the atmosphere
@@ -4199,12 +4200,14 @@ class ForwardModel_0:
         IRAY = Scatter.IRAY
         IMIE = Scatter.IMIE
         NCONT = Scatter.NDUST
+        _lgr.debug(f'{MU=} {WTMU=} {NF=} {NPHI=} {NTHETA=} {IRAY=} {IMIE=} {NCONT=}')
 
         # Path parameters
         VWAVES = WAVE
         SOL_ANGS = Path.SOL_ANG
         EMISS_ANGS = Path.EMISS_ANG
         AZI_ANGS = Path.AZI_ANG
+        _lgr.debug(f'{VWAVES=} {SOL_ANGS=} {EMISS_ANGS=} {AZI_ANGS=}')
 
         # Surface parameters
         RADGROUND = np.zeros((NWAVE,Scatter.NMU))
@@ -4224,6 +4227,8 @@ class ForwardModel_0:
             BRDF_matrix = self.calc_brdf_matrix(WAVEC=WAVE, Surface=Surface, Scatter=Scatter)  #(NWAVE,NMU,NMU,NF+1)
         else:
             BRDF_matrix = np.zeros((NWAVE, Scatter.NMU, Scatter.NMU, Scatter.NF+1))
+        
+        _lgr.debug(f'{RADGROUND=} {ALBEDO=} {EMISSIVITY=} {LOWBC=}')
 
         # Layers
         BB = np.zeros(Layer.TAURAY.shape)  #Blackbody in each layer
@@ -4231,6 +4236,7 @@ class ForwardModel_0:
             BB[:,ilay] = planck(Measurement.ISPACE, WAVE, Layer.TEMP[ilay])
         TAU = Layer.TAUTOT
         TAURAY = Layer.TAURAY
+        _lgr.debug(f'{BB=} {TAU=} {TAURAY=}')
 
         # Calculate the fraction of each aerosol scattering
         FRAC = np.zeros((NWAVE, Layer.NLAY, NCONT))
@@ -4241,6 +4247,7 @@ class ForwardModel_0:
                 Layer.TAUSCAT[iiscat[0], iiscat[1]]
             ).T
         FRAC = np.transpose(FRAC, (0, 2, 1))  #(NWAVE,NCONT,NLAY)
+        _lgr.debug(f'{FRAC=}')
 
         # Single scattering albedo
         OMEGA = np.zeros((NWAVE, NG, Layer.NLAY))
@@ -4250,7 +4257,8 @@ class ForwardModel_0:
                 (Layer.TAURAY[iin[0], iin[2]] + Layer.TAUSCAT[iin[0], iin[2]]) /
                 Layer.TAUTOT[iin[0], iin[1], iin[2]]
             )
-
+        _lgr.debug(f'{OMEGA=}')
+        
         # Phase function
         PHASE_ARRAY = np.zeros((Scatter.NDUST, NWAVE, 2, NTHETA))
         if Scatter.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:
@@ -4262,6 +4270,7 @@ class ForwardModel_0:
             PHASE_ARRAY[:, :, 0, :] = np.transpose(Scatter.calc_phase(Scatter.THETA, WAVE), (2, 0, 1))
             
         PHASE_ARRAY[:, :, 1, :] = np.cos(Scatter.THETA * np.pi / 180)
+        _lgr.debug(f'{PHASE_ARRAY=}')
         
         # Core function call
         SPEC = scloud11wave_core(
