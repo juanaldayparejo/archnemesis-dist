@@ -207,6 +207,31 @@ class ForwardModel_0:
 
     ###############################################################################################
 
+    def select_nemesis_fm(
+            self,
+            nemesisSO : bool = False,
+            nemesisL : bool = False,
+            analytical_gradient : bool = False,
+        ) -> Callable[[],np.ndarray] | Callable[[],tuple[np.ndarray,np.ndarray]]:
+        """
+        Selects the correct method to calculate the nemesis forward model based on passed flags.
+        """
+        method = None
+        
+        
+        if nemesisSO:
+            method = self.nemesisSOfmg if analytical_gradient else self.nemesisSOfm
+        elif nemesisL:
+            method = self.nemesisLfmg if analytical_gradient else self.nemesisLfm
+        else:
+            method = self.nemesisfmg if analytical_gradient else self.nemesisfm
+        
+        if method is None:
+            raise RuntimeError('Could not select method to use when calculating nemesis forward model.')
+        
+        return method
+        
+
     def nemesisfm(self):
 
         """
@@ -1302,23 +1327,11 @@ class ForwardModel_0:
         # YNtot - modelled spectra for all parallel forward models
         
         # define variables
-        spec_model_method = None
         SPECMOD = None
         
         
         # Find the method to use when modelling the spectrum
-        if nemesisSO:
-            spec_model_method = self.nemesisSOfm
-        elif nemesisL:
-            spec_model_method = self.nemesisLfm
-        else:
-            spec_model_method = self.nemesisfm
-        
-        
-        # Check we actually found a method
-        if spec_model_method is None:
-            raise RuntimeError(f'Could not determine method to use when calculating forward model.')
-        
+        nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, analytical_gradient=False)
         
         _lgr.info(f'Calculating forward model {ifm+1}/{nfm}')
         
@@ -1332,7 +1345,7 @@ class ForwardModel_0:
             archnemesis.cfg.logs.push_packagewide_level(logging.ERROR)
             
             # model the spectrum
-            SPECMOD = spec_model_method()
+            SPECMOD = nemesis_method()
         finally:
             # Stop disabling logging levels
             archnemesis.cfg.logs.pop_packagewide_level()
@@ -1436,13 +1449,9 @@ class ForwardModel_0:
         if len(ian1)>0:
 
             _lgr.info('Calculating analytical part of the Jacobian :: Calling nemesisfmg ')
+            nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, analytical_gradient=True)
 
-            if nemesisSO==True:
-                SPECMOD,dSPECMOD = self.nemesisSOfmg()
-            elif nemesisL==True:
-                SPECMOD,dSPECMOD = self.nemesisLfmg()
-            else:
-                SPECMOD,dSPECMOD = self.nemesisfmg()
+            SPECMOD,dSPECMOD = nemesis_method()
                 
             #Re-shaping the arrays to create the measurement vector and Jacobian matrix
             YN = np.zeros(self.Measurement.NY)
