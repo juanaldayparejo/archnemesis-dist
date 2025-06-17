@@ -1404,8 +1404,6 @@ class ForwardModel_0:
         # Making some calculations for storing all the arrays
         #################################################################################
 
-        nproc = self.Variables.NX+1 #Number of times we need to run the forward model
-
         #Constructing state vector after perturbation of each of the elements and storing in matrix
 
         self.Variables.calc_DSTEP() #Calculating the step size for the perturbation of each element
@@ -1413,7 +1411,6 @@ class ForwardModel_0:
         #nxn = self.Variables.NX+1
         xnx = np.zeros([self.Variables.NX,self.Variables.NX+1], dtype=float)
         
-        # The above seems to be identical to this
         xnx[:,0] = self.Variables.XN
         xnx[:,1:] = np.repeat(self.Variables.XN[:,None], self.Variables.NX, axis=1) + np.diag(self.Variables.DSTEP)
         zeros_mask = xnx[:,1:] == 0

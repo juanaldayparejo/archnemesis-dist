@@ -1297,7 +1297,7 @@ def coreretOE(
         check_marquardt_brake = True
         while check_marquardt_brake: #We continue in this while loop until we do not find problems with the state vector
             
-            if alamda > 1E30:
+            if alambda > 1E30:
                 raise ValueError('error in nemesis :: Death spiral in braking parameters - stopping')
             
             check_marquardt_brake = False
