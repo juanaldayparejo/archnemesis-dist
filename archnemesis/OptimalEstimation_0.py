@@ -1199,7 +1199,7 @@ def coreretOE(
     progress_head = ('iter' + ('' if progress_w_iter <= 4 else ' '*(progress_w_iter-4))
         +' | phi      '
         +' | chisq    '
-        +' | state vector '
+        +' | state vector (unlogged) '
         +'\n'
     )
     
@@ -1243,7 +1243,7 @@ def coreretOE(
     chisq_history[0] = OptimalEstimation.CHISQ
     state_vector_history[0,:] = OptimalEstimation.XN
     
-    progress_line = progress_fmt.format(0, OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))
+    progress_line = progress_fmt.format(0, OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in np.where(Variables.LX==0, OptimalEstimation.XN, np.exp(OptimalEstimation.XN)))))
     _lgr.info(f'\t{progress_head}')
     _lgr.info(f'\t{progress_line}')
             
@@ -1296,59 +1296,32 @@ def coreretOE(
 
         check_marquardt_brake = True
         while check_marquardt_brake: #We continue in this while loop until we do not find problems with the state vector
-    
-            for j in range(OptimalEstimation.NX):
-                XN1[j] = OptimalEstimation.XN[j] + (X_OUT[j]-OptimalEstimation.XN[j])/(1.0+alambda)
-                
-                #Check to see if log numbers have gone out of range
-                if Variables.LX[j]==1:
-                    if((XN1[j]>85.) or (XN1[j]<-85.)):
-                        _lgr.info('nemesis :: log(number gone out of range) --- increasing brake')
-                        alambda = alambda * 10.
-                        check_marquardt_brake = True
-                        if alambda>1.e30:
-                            raise ValueError('error in nemesis :: Death spiral in braking parameters - stopping')
-                        break
-                    else:
-                        check_marquardt_brake = False
-                else:
-                    check_marquardt_brake = False
-                    pass
-                        
-            if check_marquardt_brake==True: # [JD] If I am reading this correctly, anything in the loop after this line is skipped.
-                continue
-                        
-            #Check to see if any VMRs or other parameters have gone negative.
-            Variables1 = deepcopy(Variables)
-            Variables1.XN = XN1
-
-            ForwardModel1 = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Telluric=Telluric,Variables=Variables1)
-            #Variables1 = copy(Variables)
-            #Variables1.XN = XN1
-            #Measurement1 = copy(Measurement)
-            #Atmosphere1 = copy(Atmosphere)
-            #Scatter1 = copy(Scatter)
-            #Stellar1 = copy(Stellar)
-            #Surface1 = copy(Surface)
-            #Spectroscopy1 = copy(Spectroscopy)
-            #Layer1 = copy(Layer)
-            #flagh2p = False
-            #xmap = subprofretg(runname,Variables1,Measurement1,Atmosphere1,Spectroscopy1,Scatter1,Stellar1,Surface1,Layer1,flagh2p)
-            ForwardModel1.subprofretg()
-
-            #if(len(np.where(Atmosphere1.VMR<0.0))>0):
-            #    _lgr.info('nemesisSO :: VMR has gone negative --- increasing brake')
-            #    alambda = alambda * 10.
-            #    check_marquardt_brake = True
-            #    continue
             
-            #iwhere = np.where(Atmosphere1.T<0.0)
-            iwhere = np.where(ForwardModel1.AtmosphereX.T<0.0)
-            if(len(iwhere[0])>0):
-                _lgr.info('nemesis :: Temperature has gone negative --- increasing brake')
-                alambda = alambda * 10.
+            if alamda > 1E30:
+                raise ValueError('error in nemesis :: Death spiral in braking parameters - stopping')
+            
+            check_marquardt_brake = False
+            
+            XN1 = OptimalEstimation.XN + (X_OUT-OptimalEstimation.XN)/(1.0+alambda)
+            
+            if np.any(((XN1 > 85) | (XN1 < -85)) & (Variables.LX==1)):
+                _lgr.info('nemesis :: log(number gone out of range) --- increasing brake')
+                alambda *= 10
                 check_marquardt_brake = True
-                continue
+            
+            else:
+                #Check to see if any VMRs or other parameters have gone negative.
+                Variables1 = deepcopy(Variables)
+                Variables1.XN = XN1
+
+                ForwardModel1 = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Telluric=Telluric,Variables=Variables1)
+                ForwardModel1.subprofretg()
+
+                if np.any(ForwardModel1.AtmosphereX.T < 0.0):
+                    _lgr.info('nemesis :: Temperature has gone negative --- increasing brake')
+                    alambda *= 10
+                    check_marquardt_brake = True
+
 
 
         #Calculate test spectrum using trial state vector xn1. 
@@ -1373,7 +1346,7 @@ def coreretOE(
             OptimalEstimation.edit_XN(XN1)
             OptimalEstimation.edit_YN(YN1)
             OptimalEstimation.edit_KK(KK1)
-            Variables.edit_XN(XN1)
+            Variables.edit_XN(XN1) # This seems to be superflous as the same operation happens about 19 lines above
 
             #Now calculate the gain matrix and averaging kernels
             OptimalEstimation.calc_gain_matrix()
@@ -1394,13 +1367,13 @@ def coreretOE(
 
         else:
             #Leave xn and kk alone and try again with more braking
-            alambda = alambda*10.0  #increase Marquardt brake
+            alambda *= 10.0  #increase Marquardt brake
         
         phi_history[it+1] = OptimalEstimation.PHI
         chisq_history[it+1] = OptimalEstimation.CHISQ
         state_vector_history[it+1,:] = OptimalEstimation.XN
         
-        progress_line = progress_fmt.format(it+1, OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))
+        progress_line = progress_fmt.format(0, OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in np.where(Variables.LX==0, OptimalEstimation.XN, np.exp(OptimalEstimation.XN)))))
         _lgr.info(f'\t{progress_head}')
         _lgr.info(f'\t{progress_line}')
                 
@@ -1414,13 +1387,13 @@ def coreretOE(
         head = ('iter' + ('' if w_iter <= 4 else ' '*(w_iter-4))
             +' | phi      '
             +' | chisq    '
-            +' | state vector '
+            +' | state vector (unlogged) '
             +'\n'
         )
         _lgr.info(f'\t{head}')
         f.write(head)
         for i,(p,c,sv) in enumerate(zip(phi_history, chisq_history, state_vector_history)):
-            line = fmt.format(i, p, c, ' '.join((f'{x:09.3E}' for x in sv)))
+            line = fmt.format(i, p, c, ' '.join((f'{x:09.3E}' for x in np.where(Variables.LX==0,sv,np.exp(sv)))))
             _lgr.info(f'\t{line}')
             f.write(line)
             

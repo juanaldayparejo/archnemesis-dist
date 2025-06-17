@@ -1412,17 +1412,7 @@ class ForwardModel_0:
         
         #nxn = self.Variables.NX+1
         xnx = np.zeros([self.Variables.NX,self.Variables.NX+1], dtype=float)
-        """
-        for i in range(self.Variables.NX+1):
-            if i==0:   #First element is the normal state vector
-                xnx[0:self.Variables.NX,i] = self.Variables.XN[0:self.Variables.NX]
-            else:      #Perturbation of each element
-                xnx[0:self.Variables.NX,i] = self.Variables.XN[0:self.Variables.NX]
-                #xnx[i-1,i] = Variables.XN[i-1]*1.05
-                xnx[i-1,i] = self.Variables.XN[i-1] + self.Variables.DSTEP[i-1]
-                if self.Variables.XN[i-1]==0.0:
-                    xnx[i-1,i] = 0.05
-        """
+        
         # The above seems to be identical to this
         xnx[:,0] = self.Variables.XN
         xnx[:,1:] = np.repeat(self.Variables.XN[:,None], self.Variables.NX, axis=1) + np.diag(self.Variables.DSTEP)
