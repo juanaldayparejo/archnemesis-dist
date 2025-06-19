@@ -1,8 +1,8 @@
 archNEMESIS
 ===========
 
-.. image:: https://img.shields.io/badge/version-v1.0.0-red
-  :target: https://doi.org/10.5281/zenodo.14746548
+.. image:: https://img.shields.io/badge/version-v1.0.1-red
+  :target: https://doi.org/10.5281/zenodo.15123560
 
 .. image:: https://img.shields.io/badge/readthedocs-lates-blue
    :target: https://archnemesis.readthedocs.io
@@ -41,7 +41,17 @@ The latest version of code has to be downloaded from `Github <https://github.com
 
    git clone https://github.com/juanaldayparejo/archnemesis-dist.git
  
-Then, we need to get into the package folder using:
+
+Before installing archNEMESIS, we recommend users to create and load a new python `virtual environment <https://docs.python.org/3/library/venv.html>`_ for a clean install:
+
+.. code-block:: bash
+
+   python -m venv name_of_virtual_environment/
+
+   source name_of_virtual_environment/bin/activate
+
+
+Then, we need to get into the archNEMESIS package folder using:
 
 .. code-block:: bash
 
