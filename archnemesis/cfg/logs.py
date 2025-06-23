@@ -20,6 +20,16 @@ pkg_lgr.addHandler(pkg_stream_hdlr)
 
 _logger_levels : dict[str,list[int]] = dict()
 
+
+def get_all_logger_decendents(_lgr):
+    """
+    Generator that iterates over all decendents of `_lgr` including `_lgr` itself.
+    """
+    yield _lgr
+    
+    for name, child_lgr in ((name, l) for name, l in logging.root.manager.loggerDict.items() if ((not isinstance(l, logging.PlaceHolder)) and name.startswith(_lgr.name) and (len(name[len(_lgr.name):].split('.'))>=2))) :
+        yield child_lgr
+
 def set_packagewide_level(log_level : int, mode : str = 'exact', _lgr : logging.Logger = pkg_lgr):
     """
     Sets the logging level for the whole package at once.
@@ -40,23 +50,23 @@ def set_packagewide_level(log_level : int, mode : str = 'exact', _lgr : logging.
     ## RETURNS ##
         None
     """
-    if mode == 'exact':
-        _lgr.setLevel(log_level)
-    elif mode == 'max':
-        if _lgr.level > log_level:
-            _lgr.setLevel(log_level)
-    elif mode == 'min':
-        if _lgr.level < log_level:
-            _lgr.setLevel(log_level)
-    else:
-        raise ValueError(f'{__name__}.set_packagewide_level(...): Unknown mode "{mode}", should be one of ("exact", "min", "max")')
+    for decendent_lgr in get_all_logger_decendents(_lgr):
     
-    if sys.version_info >= (3,12):
-        for child_lgr in _lgr.getChildren():
-            set_packagewide_level(log_level, mode, child_lgr)
-    else:
-        for name, child_lgr in ((name, l) for name, l in logging.root.manager.loggerDict.items() if ((not isinstance(l, logging.PlaceHolder)) and name.startswith(_lgr.name) and (len(name[len(_lgr.name):].split('.'))==2))) :
-            set_packagewide_level(log_level, mode, child_lgr)
+        if mode == 'exact':
+            #print(f'Setting logger "{decendent_lgr.name}" to {log_level}')
+            decendent_lgr.setLevel(log_level)
+        elif mode == 'max':
+            if decendent_lgr.level > log_level:
+                #print(f'Setting logger "{decendent_lgr.name}" to {log_level}')
+                decendent_lgr.setLevel(log_level)
+        elif mode == 'min':
+            if decendent_lgr.level < log_level:
+                #print(f'Setting logger "{decendent_lgr.name}" to {log_level}')
+                decendent_lgr.setLevel(log_level)
+        else:
+            raise ValueError(f'{__name__}.set_packagewide_level(...): Unknown mode "{mode}", should be one of ("exact", "min", "max")')
+
+
 
 
 def push_packagewide_level(log_level : int, mode : str = 'exact', _lgr : logging.Logger = pkg_lgr):
@@ -81,41 +91,32 @@ def push_packagewide_level(log_level : int, mode : str = 'exact', _lgr : logging
     """
     global _logger_levels
     
-    level_stack = _logger_levels.get(_lgr.name, list())
-    level_stack.append(_lgr.level)
-    _logger_levels[_lgr.name] = level_stack
-    
-    
-    if mode == 'exact':
-        _lgr.setLevel(log_level)
-    elif mode == 'max':
-        if _lgr.level > log_level:
-            _lgr.setLevel(log_level)
-    elif mode == 'min':
-        if _lgr.level < log_level:
-            _lgr.setLevel(log_level)
-    else:
-        raise ValueError(f'{__name__}.set_packagewide_level(...): Unknown mode "{mode}", should be one of ("exact", "min", "max")')
-    
-    if sys.version_info >= (3,12):
-        for child_lgr in _lgr.getChildren():
-            push_packagewide_level(log_level, mode, child_lgr)
-    else:
-        for name, child_lgr in ((name, l) for name, l in logging.root.manager.loggerDict.items() if ((not isinstance(l, logging.PlaceHolder)) and name.startswith(_lgr.name) and (len(name[len(_lgr.name):].split('.'))==2))) :
-            push_packagewide_level(log_level, mode, child_lgr)
+    for decendent_lgr in get_all_logger_decendents(_lgr):
+        level_stack = _logger_levels.get(decendent_lgr.name, list())
+        level_stack.append(decendent_lgr.level)
+        _logger_levels[decendent_lgr.name] = level_stack
+        
+        if mode == 'exact':
+            #print(f'Setting logger "{decendent_lgr.name}" to {log_level}')
+            decendent_lgr.setLevel(log_level)
+        elif mode == 'max':
+            if decendent_lgr.level > log_level:
+                #print(f'Setting logger "{decendent_lgr.name}" to {log_level}')
+                decendent_lgr.setLevel(log_level)
+        elif mode == 'min':
+            if decendent_lgr.level < log_level:
+                #print(f'Setting logger "{decendent_lgr.name}" to {log_level}')
+                decendent_lgr.setLevel(log_level)
+        else:
+            raise ValueError(f'{__name__}.set_packagewide_level(...): Unknown mode "{mode}", should be one of ("exact", "min", "max")')
 
 
 def pop_packagewide_level(_lgr : logging.Logger = pkg_lgr) -> None:
     global _logger_levels
     
-    level_stack = _logger_levels.get(_lgr.name, list())
-    if len(level_stack) != 0:
-        _lgr.setLevel(level_stack.pop(-1))
-        _logger_levels[_lgr.name] = level_stack
+    for decendent_lgr in get_all_logger_decendents(_lgr):
     
-    if sys.version_info >= (3,12):
-        for child_lgr in _lgr.getChildren():
-            pop_packagewide_level(child_lgr)
-    else:
-        for name, child_lgr in ((name, l) for name, l in logging.root.manager.loggerDict.items() if ((not isinstance(l, logging.PlaceHolder)) and name.startswith(_lgr.name) and (len(name[len(_lgr.name):].split('.'))==2))) :
-            pop_packagewide_level(child_lgr)
+        level_stack = _logger_levels.get(decendent_lgr.name, list())
+        if len(level_stack) != 0:
+            decendent_lgr.setLevel(level_stack.pop(-1))
+            _logger_levels[decendent_lgr.name] = level_stack
