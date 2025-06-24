@@ -403,6 +403,7 @@ class ModelBase(abc.ABC):
         return parameters
     
     
+    
     def set_parameters_to_state_vector(
             self,
             parameter_entries : dict[str,ModelParameterEntry],

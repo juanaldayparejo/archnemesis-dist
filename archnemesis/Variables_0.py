@@ -173,6 +173,12 @@ class Variables_0:
     def model_parameters(self) -> tuple[dict[str,ModelParameterEntry],...]:
         """
         Returns a tuple of dictionaries that contain the values of the parameters of the models in the state vector
+        
+        
+        ## RETURNS ##
+        
+        all_model_parameters : tuple[dict[str, ModelParameterEntry], ...]
+            A tuple of dictionaries that map model parameter names to the "ModelParameterEntry" for that parameter.
         """
         return tuple(
             model.get_parameters_from_state_vector(
