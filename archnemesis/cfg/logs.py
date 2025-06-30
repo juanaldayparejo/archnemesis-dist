@@ -89,7 +89,7 @@ def push_packagewide_level(log_level : int, mode : str = 'exact', _lgr : logging
     ## RETURNS ##
         None
     """
-    global _logger_levels
+    #global _logger_levels
     
     for decendent_lgr in get_all_logger_decendents(_lgr):
         level_stack = _logger_levels.get(decendent_lgr.name, list())
@@ -112,7 +112,7 @@ def push_packagewide_level(log_level : int, mode : str = 'exact', _lgr : logging
 
 
 def pop_packagewide_level(_lgr : logging.Logger = pkg_lgr) -> None:
-    global _logger_levels
+    #global _logger_levels
     
     for decendent_lgr in get_all_logger_decendents(_lgr):
     

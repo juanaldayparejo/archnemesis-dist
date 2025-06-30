@@ -7,6 +7,10 @@ import numpy as np
 
 import archnemesis as ans
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.INFO)
+
 def ensure_equal_type(a, b):
     # 'a' and 'b' are not neccesarily the same types at this point
     type_a = type(a)

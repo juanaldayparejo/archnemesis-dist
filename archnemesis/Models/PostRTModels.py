@@ -69,7 +69,7 @@ class PostRTModelBase(ModelBase):
         raise NotImplementedError(f'calculate_from_subspecret should be implemented for all Spectral models')
 
 
-class TemplateSpectralModel(PostRTModelBase):
+class TemplatePostRTModel(PostRTModelBase):
     """
         This docstring acts as the description for the model, REPLACE THIS.
     """
