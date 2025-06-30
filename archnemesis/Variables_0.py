@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 
 from archnemesis import *
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
-from archnemesis.Models.AtmosphericModels import AtmosphericModelBase
 from archnemesis.enums import AtmosphericProfileType, Gas
 from archnemesis.helpers import io_helper
 from archnemesis.helpers import h5py_helper
@@ -155,18 +154,18 @@ class Variables_0:
         return self._models
     
     @property
-    def gas_vmr_models(self) -> Iterable[AtmosphericModelBase]:
+    def gas_vmr_models(self) -> Iterable[ModelBase]:
         """
         Returns an iterable of models that deal with gas volume mixing ratios
         """
-        return filter(lambda model: isinstance(model, AtmosphericModelBase) and model.target == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO, self.models)
+        return filter(lambda model: hasattr(model, 'target') and model.target == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO, self.models)
     
     @property
-    def aerosol_density_models(self) -> Iterable[AtmosphericModelBase]:
+    def aerosol_density_models(self) -> Iterable[ModelBase]:
         """
         Returns an iterable of models that deal with aerosol densities
         """
-        return filter(lambda model: isinstance(model, AtmosphericModelBase) and model.target == AtmosphericProfileType.AEROSOL_DENSITY, self.models)
+        return filter(lambda model: hasattr(model, 'target') and model.target == AtmosphericProfileType.AEROSOL_DENSITY, self.models)
     
     
     @property
@@ -616,15 +615,15 @@ class Variables_0:
         """
         model_classification = None
         if varident[0] == 0:
-            model_classification = ( AtmosphericModelBase, AtmosphericProfileType.TEMPERATURE)
+            model_classification = ( ModelBase, AtmosphericProfileType.TEMPERATURE)
         elif (varident[0] > 0) and int(varident[0]) in iter(Gas):
-            model_classification = ( AtmosphericModelBase, AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO)
+            model_classification = ( ModelBase, AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO)
         elif (varident[0] < 0) and (-varident[0]) <= ndust:
-            model_classification = ( AtmosphericModelBase, AtmosphericProfileType.AEROSOL_DENSITY)
+            model_classification = ( ModelBase, AtmosphericProfileType.AEROSOL_DENSITY)
         elif (varident[0] < 0) and (-varident[0]) == ndust + 1:
-            model_classification = ( AtmosphericModelBase, AtmosphericProfileType.PARA_H2_FRACTION)
+            model_classification = ( ModelBase, AtmosphericProfileType.PARA_H2_FRACTION)
         elif (varident[0] < 0) and (-varident[0]) == ndust + 2:
-            model_classification = ( AtmosphericModelBase, AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE)
+            model_classification = ( ModelBase, AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE)
         else:
             # Other models are classified by their ID number
             model_id_parent_classes = Models[varident[2]].__bases__

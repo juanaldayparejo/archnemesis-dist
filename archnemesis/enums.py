@@ -357,6 +357,7 @@ class AtmosphericProfileType(IntEnum):
     
     Used as 'ipar' in 'Models.py', 'ForwardModel_0.py'
     """
+    NOT_PRESENT = -1
     GAS_VOLUME_MIXING_RATIO = 0
     TEMPERATURE = 1
     AEROSOL_DENSITY = 2
