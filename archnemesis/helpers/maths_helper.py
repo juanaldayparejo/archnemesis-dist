@@ -5,6 +5,35 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
+def is_diagonal(a : np.ndarray) -> bool:
+    """
+    Tests if array `a` is diagonal or not.
+    
+    ## ARGUMENTS ##
+        a : np.ndarray
+            The array to test for diagonalness
+
+    ## RETURNS ##
+        is_diagonal : bool
+            True if `a` is diagonal, false otherwise
+    """
+    
+    # This is a bit of a hack, but should be pretty fast
+    diag_elements : np.ndarray = np.diagonal(a).copy()
+    
+    try:
+        np.fill_diagonal(a, 0)
+        result : bool = np.all(a == 0)
+    finally:
+        np.fill_diagonal(a, diag_elements)
+    
+    return result
+
+
 def ngauss(npx,x,ng,iamp,imean,ifwhm,MakePlot=False):
 
 

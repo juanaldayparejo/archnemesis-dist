@@ -39,6 +39,6 @@ class ModelParameterEntry:
     model_id : int # ID number of the model this is a parameter for
     name : str # Name of the parameter
     sv_slice : slice # slice of state vector that contains the values for this parameter
-    is_fixed : bool # flag to indicate if the parameter is fixed or can the apriori_value and posterior_value be different?
+    is_fixed : np.ndarray[['m'],bool] # flag to indicate if the parameter is fixed or can the apriori_value and posterior_value be different?
     apriori_value : np.ndarray[['m'],float] # value before retrievel
     posterior_value : np.ndarray[['m'],float] # value after retrieval

@@ -1,7 +1,9 @@
 from __future__ import annotations #  for 3.9 compatability
 from enum import IntEnum, IntFlag, auto
 
-
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 class PlanetEnum(IntEnum):
     """
@@ -355,6 +357,7 @@ class AtmosphericProfileType(IntEnum):
     
     Used as 'ipar' in 'Models.py', 'ForwardModel_0.py'
     """
+    NOT_PRESENT = -1
     GAS_VOLUME_MIXING_RATIO = 0
     TEMPERATURE = 1
     AEROSOL_DENSITY = 2

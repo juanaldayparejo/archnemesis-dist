@@ -5,17 +5,20 @@ import os
 import os.path
 import textwrap
 import sys
+from typing import Type, Iterable
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from archnemesis import *
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
+from archnemesis.enums import AtmosphericProfileType, Gas
 from archnemesis.helpers import io_helper
+from archnemesis.helpers import h5py_helper
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -141,9 +144,9 @@ class Variables_0:
     ################################################################################################################
 
     @property
-    def models(self) -> np.ndarray[['NVAR'], ModelBase]:
+    def models(self) -> list[ModelBase]:
         """
-        Returns a numpy array filled with the models whose parameters are in the state vector
+        Returns a list filled with the models whose parameters are in the state vector
         """
         
         if self._models is None:
@@ -151,9 +154,30 @@ class Variables_0:
         return self._models
     
     @property
+    def gas_vmr_models(self) -> Iterable[ModelBase]:
+        """
+        Returns an iterable of models that deal with gas volume mixing ratios
+        """
+        return filter(lambda model: hasattr(model, 'target') and model.target == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO, self.models)
+    
+    @property
+    def aerosol_density_models(self) -> Iterable[ModelBase]:
+        """
+        Returns an iterable of models that deal with aerosol densities
+        """
+        return filter(lambda model: hasattr(model, 'target') and model.target == AtmosphericProfileType.AEROSOL_DENSITY, self.models)
+    
+    
+    @property
     def model_parameters(self) -> tuple[dict[str,ModelParameterEntry],...]:
         """
         Returns a tuple of dictionaries that contain the values of the parameters of the models in the state vector
+        
+        
+        ## RETURNS ##
+        
+        all_model_parameters : tuple[dict[str, ModelParameterEntry], ...]
+            A tuple of dictionaries that map model parameter names to the "ModelParameterEntry" for that parameter.
         """
         return tuple(
             model.get_parameters_from_state_vector(
@@ -164,6 +188,70 @@ class Variables_0:
             )
             for model in self.models
         )
+    
+    
+    def model_parameters_as_string(
+            self,
+        ) -> str:
+        """
+        Returns a string of the model parameters (formatted as a table)
+        """
+        mp = self.model_parameters
+        
+        
+        # General header for output, not part of the table, but used for explanatory information
+        p_hdr = '\n'.join((
+            'i - index of model parameter in the state vector',
+        )) + '\n'
+        
+        # Header for the table, i.e. column labels
+        p_tbl_hdr = ('i', 'model id', 'parameter name', 'apriori value', 'posterior value', 'apriori error')
+        p_tbl_col_widths = [len(x) for x in p_tbl_hdr]
+        p_tbl_full_col_width = None
+        p_str = []
+        for i in range(len(mp)+1):
+            if i==0:
+                p_str.append([p_tbl_hdr])
+                continue
+            else:
+                p_str.append([])
+            first1 = True
+            for p_name, p_val in mp[i-1].items():
+                is_log = self.LX[p_val.sv_slice] == 1
+                apriori_error = np.sqrt(np.diag(self.SA[p_val.sv_slice,p_val.sv_slice]))
+                apriori_error = np.where(is_log, apriori_error*p_val.apriori_value, apriori_error)
+                more_than_one_entry = len(p_val.apriori_value) > 1
+                for j, (fix, a, b, s) in enumerate(zip(p_val.is_fixed, p_val.apriori_value, p_val.posterior_value, apriori_error)):
+                    
+                    p_str[i].append((
+                        f'{p_val.sv_slice.start+j}',
+                        f'{p_val.model_id}' if first1 else '---', 
+                        p_name+f'[{j}]' if more_than_one_entry else p_name, 
+                        f'{a:07.2E}', 
+                        'FIXED' if fix else f'{b:07.2E}',
+                        'FIXED' if fix else f'{s:07.2E}'
+                    ))
+                    first1 = False
+                    first2 = False
+                    p_tbl_col_widths = [max(len(_1), _2) for _1,_2 in zip(p_str[i][-1], p_tbl_col_widths)]
+        
+        tbl_sec_sep = '|-' + ('-|-'.join(('-'*w for w in p_tbl_col_widths))) + '-|'
+        p_tbl_full_col_width = len(tbl_sec_sep)
+        
+        for i in range(len(p_str)):
+            for j in range(len(p_str[i])):
+                p_str[i][j] = '| ' + (' | '.join((x.ljust(p_tbl_col_widths[k], ' ') for k,x in enumerate(p_str[i][j])))) + ' |'
+            p_str[i] = '\n'.join(p_str[i])
+        
+        p_str = (f'\n{tbl_sec_sep}\n').join(p_str)
+        
+        return '\n'.join((
+            p_hdr,
+            '-'*p_tbl_full_col_width,
+            p_str,
+            '-'*p_tbl_full_col_width,
+        ))
+    
     
     def plot_model_parameters(
             self, 
@@ -180,6 +268,8 @@ class Variables_0:
             show : bool = False
                 if True will show the plot interactively
         """
+        print(self.model_parameters_as_string())
+        
         mp = self.model_parameters
         
         _lgr.debug('all model parameters:')
@@ -299,9 +389,8 @@ class Variables_0:
             plt.show()
         
         return
-        
-        
-        
+    
+    
     def edit_VARIDENT(self, VARIDENT_array):
         """
         Edit the Variable IDs
@@ -488,6 +577,63 @@ class Variables_0:
 
     ################################################################################################################
 
+    @staticmethod
+    def classify_model_type_from_varident(
+            varident : np.ndarray[[3],int],
+            ngas : int,
+            ndust : int
+        ) -> tuple[Type, None | AtmosphericProfileType]:
+        """
+        Works out the type of model (and subtype if applicable) identified by a VARIDENT triplet.
+        
+        ## ARGUMENTS ##
+            
+            varident : np.ndarray[[3],int]
+                Three integers that identify a model
+                
+            ngas : int
+                The number of gases present in the reference atmosphere
+            
+            ndust : int
+                The number of aerosol species present in the reference atmosphere
+            
+        ## RETURNS ##
+        
+            model_classification : tuple[Type, None | AtmosphericProfileType]
+                A tuple containing values that classify the model. From broadest scope to narrowest.
+                Currently the tuple has the elements (in order):
+                    
+                    ModelClass : Type
+                        A subclass of archnemesis.Models.ModelBase.ModelBase that denotes the broadest
+                        classification of the model. This broadly corresponds to the retrieval component
+                        that the model interacts with (e.g. Atmosphere_0, Scatter_0, Measurement_0).
+                    
+                    ParameterisedTarget : None | AtmosphericProfileType
+                        The part of the retrieval component that the model parameterises (and therefore
+                        alters). This is 'None' when unknown, or an ENUM corresponding to an attribute
+                        of the retrieval component that the model parameterises.
+        """
+        model_classification = None
+        if varident[0] == 0:
+            model_classification = ( ModelBase, AtmosphericProfileType.TEMPERATURE)
+        elif (varident[0] > 0) and int(varident[0]) in iter(Gas):
+            model_classification = ( ModelBase, AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO)
+        elif (varident[0] < 0) and (-varident[0]) <= ndust:
+            model_classification = ( ModelBase, AtmosphericProfileType.AEROSOL_DENSITY)
+        elif (varident[0] < 0) and (-varident[0]) == ndust + 1:
+            model_classification = ( ModelBase, AtmosphericProfileType.PARA_H2_FRACTION)
+        elif (varident[0] < 0) and (-varident[0]) == ndust + 2:
+            model_classification = ( ModelBase, AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE)
+        else:
+            # Other models are classified by their ID number
+            model_id_parent_classes = Models[varident[2]].__bases__
+            assert len(model_id_parent_classes) == 1, "Only support single inheritance of model classes for now"
+            model_classification = (model_id_parent_classes[0],None)
+        
+        return model_classification
+    
+    ################################################################################################################
+
     def read_hdf5(self,runname,npro):
         """
         Read the Variables field of the HDF5 file, which contains information about the variables and
@@ -516,11 +662,11 @@ class Variables_0:
             raise ValueError('error :: Variables is not defined in HDF5 file')
         else:
 
-            self.NVAR = np.int32(f.get('Scatter/NVAR'))
+            self.NVAR = h5py_helper.retrieve_data(f, 'Scatter/NVAR', np.int32)
             
     ################################################################################################################
 
-    def read_apr(self,runname,npro,nlocations=1):
+    def read_apr(self,runname,npro,ngas,ndust,nlocations=1):
         """
         Read the .apr file, which contains information about the variables and
         parametrisations that are to be retrieved, as well as their a priori values.
@@ -537,8 +683,12 @@ class Variables_0:
 
         @param runname: str
             Name of the Nemesis run
-        @param NPRO: int
+        @param npro: int
             Number of altitude levels in the reference atmosphere
+        @param ngas: int
+            Number of gasses in the reference atmosphere
+        @param ndust: int
+            Number of aerosol species in the reference atmosphere
             
         Optional inputs
         ----------------
@@ -638,7 +788,7 @@ class Variables_0:
                         
                         try:
                             self._models.append(
-                                    model.from_apr_to_state_vector(
+                                model.from_apr_to_state_vector(
                                     self, 
                                     f, 
                                     varident[i], 
@@ -649,6 +799,8 @@ class Variables_0:
                                     sx,
                                     inum, 
                                     npro, 
+                                    ngas,
+                                    ndust,
                                     nlocations,
                                     runname,
                                     sxminfac
@@ -657,10 +809,10 @@ class Variables_0:
                         except Exception as e:
                             raise AprReadError(f'Failed to read {i}^th model entry (with VARIDENT={varident[i]})') from e
                         
-                        print(f'\nVariables_0 :: read_apr :: varident {varident[i]}. Constructed model "{model.__name__}" (id={model.id})')
+                        _lgr.info(f'\nVariables_0 :: read_apr :: varident {varident[i]}. Constructed model "{model.__name__}" (id={model.id})')
                         try:
                             io_helper.OutWidth.push(io_helper.OutWidth.get() - 2)
-                            print(textwrap.indent(str(self._models[-1].info(lx,x0)), '  '))
+                            _lgr.info(textwrap.indent(str(self._models[-1].info(lx,x0)), '  '))
                         finally:
                             io_helper.OutWidth.pop()
                         

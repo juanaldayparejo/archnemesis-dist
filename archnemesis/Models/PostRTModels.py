@@ -1,5 +1,9 @@
 from __future__ import annotations #  for 3.9 compatability
 
+"""
+Contains models that alter the replica after radiative transfer has been calculated
+"""
+
 from .ModelBase import *
 
 
@@ -9,7 +13,7 @@ _lgr.setLevel(logging.DEBUG)
 
 
 
-class SpectralModelBase(ModelBase):
+class PostRTModelBase(ModelBase):
     """
     Abstract base class of all parameterised models used by ArchNemesis that interact with the calculated spectrum in the forward model.
     """
@@ -34,7 +38,7 @@ class SpectralModelBase(ModelBase):
         """
         Patches values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
         """
-        _lgr.info(f'Model id {self.id} method "patch_from_subprofretg" does nothing...')
+        _lgr.debug(f'Model id {self.id} method "patch_from_subprofretg" does nothing...')
     
     
     def calculate_from_subprofretg(
@@ -48,7 +52,7 @@ class SpectralModelBase(ModelBase):
         """
         Updated values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
         """
-        _lgr.info(f'Model id {self.id} method "calculate_from_subprofretg" does nothing...')
+        _lgr.debug(f'Model id {self.id} method "calculate_from_subprofretg" does nothing...')
     
     
     ## Abstract methods below this line, subclasses must implement all of these methods ##
@@ -65,7 +69,7 @@ class SpectralModelBase(ModelBase):
         raise NotImplementedError(f'calculate_from_subspecret should be implemented for all Spectral models')
 
 
-class TemplateSpectralModel(SpectralModelBase):
+class TemplatePostRTModel(PostRTModelBase):
     """
         This docstring acts as the description for the model, REPLACE THIS.
     """
@@ -211,6 +215,8 @@ class TemplateSpectralModel(SpectralModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -364,7 +370,7 @@ class TemplateSpectralModel(SpectralModelBase):
         return
 
 
-class Model231(SpectralModelBase):
+class Model231(PostRTModelBase):
     """
         Scaling of spectrum using a varying scaling factor (following a polynomial of degree N)
         
@@ -461,6 +467,8 @@ class Model231(SpectralModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -515,7 +523,7 @@ class Model231(SpectralModelBase):
 
 
 # [JD] This uses forward_model.SpectroscopyX, whereas Model231 uses forward_model.Measurement, is this correct?
-class Model2310(SpectralModelBase):
+class Model2310(PostRTModelBase):
     """
         Scaling of spectra using a varying scaling factor (following a polynomial of degree N)
         in multiple spectral windows
@@ -579,6 +587,8 @@ class Model2310(SpectralModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -670,7 +680,7 @@ class Model2310(SpectralModelBase):
         )
 
 
-class Model232(SpectralModelBase):
+class Model232(PostRTModelBase):
     """
         Continuum addition to transmission spectra using the angstrom coefficient
 
@@ -722,6 +732,8 @@ class Model232(SpectralModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -804,7 +816,7 @@ class Model232(SpectralModelBase):
             _lgr.warning(f'It looks like there is no calculation for NGEOM=1 for model id = {self.id}')
 
 
-class Model233(SpectralModelBase):
+class Model233(PostRTModelBase):
     """
         Continuum addition to transmission spectra using a variable angstrom coefficient (Schuster et al., 2006 JGR)
 
@@ -864,6 +876,8 @@ class Model233(SpectralModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,
@@ -971,7 +985,7 @@ class Model233(SpectralModelBase):
             )
 
 
-class Model667(SpectralModelBase):
+class Model667(PostRTModelBase):
     """
         In this model, the output spectrum is scaled using a dillusion factor to account
         for strong temperature gradients in exoplanets
@@ -1028,6 +1042,8 @@ class Model667(SpectralModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
             sxminfac : float,

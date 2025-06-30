@@ -7,6 +7,8 @@ import matplotlib as matplotlib
 import os
 from numba import jit
 
+from archnemesis.helpers import h5py_helper
+
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -214,6 +216,9 @@ class Measurement_0:
         self.VFIL = None  #np.zeros(NFIL,NCONV)
         self.AFIL = None  #np.zeros(NFIL,NCONV)
         
+        self.SUBOBS_LAT = 0.0 # sub observer latitude, optional
+        self.SUBOBS_LON = 0.0 # sub observer longintude, optional
+        
         # private attributes
         self._ishape = None
         self._ispace = None
@@ -306,11 +311,11 @@ class Measurement_0:
 
         #Defining spectral resolution
         if self.FWHM > 0.0:
-            print('Spectral resolution of the measurement (FWHM) :: ',self.FWHM)
+            _lgr.info(f"Spectral resolution of the measurement (FWHM) ::  {(self.FWHM)}")
         elif self.FWHM < 0.0:
-            print('Instrument line shape defined in .fil file')
+            _lgr.info('Instrument line shape defined in .fil file')
         else:
-            print('Spectral resolution of the measurement is account for in the k-tables')
+            _lgr.info('Spectral resolution of the measurement is account for in the k-tables')
 
         wavelength_unit = 'um'
         wavenumber_unit = 'cm^-1'
@@ -320,12 +325,12 @@ class Measurement_0:
         wavelength_str = lambda x: str(to_wavelength(x))+' '+wavelength_unit
 
         #Defining geometries
-        print('Field-of-view centered at :: ','Latitude',self.LATITUDE,'- Longitude',self.LONGITUDE)
-        print('There are ',self.NGEOM,'geometries in the measurement vector')
+        _lgr.info(f"Field-of-view centered at ::  {('Latitude',self.LATITUDE,'- Longitude',self.LONGITUDE)}")
+        _lgr.info(f"There are  {(self.NGEOM,'geometries in the measurement vector')}")
         for i in range(self.NGEOM):
-            print('')
-            print('GEOMETRY '+str(i+1))
-            print('Minimum wavelength/wavenumber :: '
+            _lgr.info('')
+            _lgr.info('GEOMETRY '+str(i+1))
+            _lgr.info('Minimum wavelength/wavenumber :: '
                 +wavelength_str(self.VCONV[0,i])
                 +'/'
                 +wavenumber_str(self.VCONV[0,i])
@@ -335,30 +340,30 @@ class Measurement_0:
                 +wavenumber_str(self.VCONV[self.NCONV[i]-1,i])
             )
             if self.NAV[i]>1:
-                print(self.NAV[i],' averaging points')
+                _lgr.info(self.NAV[i],' averaging points')
                 for j in range(self.NAV[i]):
                 
                     if self.EMISS_ANG[i,j]<0.0:
                         if isinstance(self.TANHE,np.ndarray)==True:
-                            print('Averaging point',j+1,' - Weighting factor ',self.WGEOM[i,j])
-                            print('Limb-viewing or solar occultation measurement. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])
+                            _lgr.info(f"Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}")
+                            _lgr.info(f"Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])}")
                         else:
-                            print('Averaging point',j+1,' - Weighting factor ',self.WGEOM[i,j])
-                            print('Limb-viewing or solar occultation measurement. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])
+                            _lgr.info(f"Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}")
+                            _lgr.info(f"Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])}")
                     
                     else:
-                        print('Averaging point',j+1,' - Weighting factor ',self.WGEOM[i,j])
-                        print('Nadir-viewing geometry. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])
+                        _lgr.info(f"Averaging point {(j+1,' - Weighting factor ',self.WGEOM[i,j])}")
+                        _lgr.info(f"Nadir-viewing geometry. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])}")
 
             else:
                 j = 0
                 if self.EMISS_ANG[i,j]<0.0:
                     if isinstance(self.TANHE,np.ndarray)==True:
-                        print('Limb-viewing or solar occultation measurement. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])
+                        _lgr.info(f"Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.TANHE[i,j])}")
                     else:
-                        print('Limb-viewing or solar occultation measurement. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])
+                        _lgr.info(f"Limb-viewing or solar occultation measurement. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Tangent height :: ',self.SOL_ANG[i,j])}")
                 else:
-                    print('Nadir-viewing geometry. Latitude :: ',self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])
+                    _lgr.info(f"Nadir-viewing geometry. Latitude ::  {(self.FLAT[i,j],' - Longitude :: ',self.FLON[i,j],' - Emission angle :: ',self.EMISS_ANG[i,j],' - Solar Zenith Angle :: ',self.SOL_ANG[i,j],' - Azimuth angle :: ',self.AZI_ANG[i,j])}")
 
             
     #################################################################################################################
@@ -379,6 +384,7 @@ class Measurement_0:
             del f['Measurement']   #Deleting the Measurement information that was previously written in the file
 
         grp = f.create_group("Measurement")
+        
 
         #Writing the latitude/longitude at the centre of FOV
         dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
@@ -387,6 +393,15 @@ class Measurement_0:
 
         dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
         dset.attrs['title'] = "Longitude at centre of FOV"
+        dset.attrs['units'] = 'degrees'
+        
+        # Write optional sub observer lat/lon so we can plot the measurement easily
+        dset = grp.create_dataset('SUBOBS_LAT',data=self.SUBOBS_LAT)
+        dset.attrs['title'] = "Latitude at point directly below the observer (optional)"
+        dset.attrs['units'] = 'degrees'
+
+        dset = grp.create_dataset('SUBOBS_LON',data=self.SUBOBS_LON)
+        dset.attrs['title'] = "Longitude at point directly below the observer (optional)"
         dset.attrs['units'] = 'degrees'
         
         #Writing the Doppler velocity
@@ -573,48 +588,50 @@ class Measurement_0:
             raise ValueError('error :: Measurement is not defined in HDF5 file')
         else:
 
-            self.NGEOM = np.int32(f.get('Measurement/NGEOM'))
-            self.ISPACE = WaveUnit(np.int32(f.get('Measurement/ISPACE')))
-            self.IFORM = SpectraUnit(np.int32(f.get('Measurement/IFORM')))
-            self.LATITUDE = np.float64(f.get('Measurement/LATITUDE'))
-            self.LONGITUDE = np.float64(f.get('Measurement/LONGITUDE'))
-            self.NAV = np.array(f.get('Measurement/NAV'))
-            self.FLAT = np.array(f.get('Measurement/FLAT'))
-            self.FLON = np.array(f.get('Measurement/FLON'))
-            self.WGEOM = np.array(f.get('Measurement/WGEOM'))
-            self.EMISS_ANG = np.array(f.get('Measurement/EMISS_ANG'))
+            self.NGEOM = h5py_helper.retrieve_data(f, 'Measurement/NGEOM', np.int32)
+            self.ISPACE = h5py_helper.retrieve_data(f, 'Measurement/ISPACE', lambda x:  WaveUnit(np.int32(x)))
+            self.IFORM = h5py_helper.retrieve_data(f, 'Measurement/IFORM', lambda x:  SpectraUnit(np.int32(x)))
+            self.LATITUDE = h5py_helper.retrieve_data(f, 'Measurement/LATITUDE', np.float64)
+            self.LONGITUDE = h5py_helper.retrieve_data(f, 'Measurement/LONGITUDE', np.float64)
+            self.SUBOBS_LAT = h5py_helper.retrieve_data(f, 'Measurement/SUBOBS_LAT', np.float64)
+            self.SUBOBS_LON = h5py_helper.retrieve_data(f, 'Measurement/SUBOBS_LON', np.float64)
+            self.NAV = h5py_helper.retrieve_data(f, 'Measurement/NAV', np.array)
+            self.FLAT = h5py_helper.retrieve_data(f, 'Measurement/FLAT', np.array)
+            self.FLON = h5py_helper.retrieve_data(f, 'Measurement/FLON', np.array)
+            self.WGEOM = h5py_helper.retrieve_data(f, 'Measurement/WGEOM', np.array)
+            self.EMISS_ANG = h5py_helper.retrieve_data(f, 'Measurement/EMISS_ANG', np.array)
             
             if self.IFORM==SpectraUnit.Normalised_radiance:
                 if 'Measurement/VNORM' in f:
-                    self.VNORM = np.float64(f.get('Measurement/VNORM'))
+                    self.VNORM = h5py_helper.retrieve_data(f, 'Measurement/VNORM', np.float64)
             
             #Reading Doppler shift if exists
             if 'Measurement/V_DOPPLER' in f:
-                self.V_DOPPLER = np.float64(f.get('Measurement/V_DOPPLER'))
+                self.V_DOPPLER = h5py_helper.retrieve_data(f, 'Measurement/V_DOPPLER', np.float64)
 
             #Checking if there are any limb-viewing geometries
             if np.nanmin(self.EMISS_ANG)<0.0:
-                self.TANHE = np.array(f.get('Measurement/TANHE'))
+                self.TANHE = h5py_helper.retrieve_data(f, 'Measurement/TANHE', np.array)
 
             #Checking if there are any nadir-viewing / upward looking geometries
             if np.nanmax(self.EMISS_ANG) >= 0.0:
-                self.SOL_ANG = np.array(f.get('Measurement/SOL_ANG'))
-                self.AZI_ANG = np.array(f.get('Measurement/AZI_ANG'))
+                self.SOL_ANG = h5py_helper.retrieve_data(f, 'Measurement/SOL_ANG', np.array)
+                self.AZI_ANG = h5py_helper.retrieve_data(f, 'Measurement/AZI_ANG', np.array)
 
 
-            self.NCONV = np.array(f.get('Measurement/NCONV'))
-            self.WOFF = np.float64(f.get('Measurement/WOFF'))
-            self.VCONV = np.array(f.get('Measurement/VCONV')) + self.WOFF
-            self.MEAS = np.array(f.get('Measurement/MEAS'))
-            self.ERRMEAS = np.array(f.get('Measurement/ERRMEAS'))
+            self.NCONV = h5py_helper.retrieve_data(f, 'Measurement/NCONV', np.array)
+            self.WOFF = h5py_helper.retrieve_data(f, 'Measurement/WOFF', np.float64)
+            self.VCONV = h5py_helper.retrieve_data(f, 'Measurement/VCONV', np.array) + self.WOFF
+            self.MEAS = h5py_helper.retrieve_data(f, 'Measurement/MEAS', np.array)
+            self.ERRMEAS = h5py_helper.retrieve_data(f, 'Measurement/ERRMEAS', np.array)
 
-            self.FWHM = np.float64(f.get('Measurement/FWHM'))
+            self.FWHM = h5py_helper.retrieve_data(f, 'Measurement/FWHM', np.float64)
             if self.FWHM > 0.0:
-                self.ISHAPE = InstrumentLineshape(np.int32(f.get('Measurement/ISHAPE')))
+                self.ISHAPE = h5py_helper.retrieve_data(f, 'Measurement/ISHAPE', lambda x:  InstrumentLineshape(np.int32(x)))
             elif self.FWHM < 0.0:
-                self.NFIL = np.array(f.get('Measurement/NFIL'))
-                self.VFIL = np.array(f.get('Measurement/VFIL'))
-                self.AFIL = np.array(f.get('Measurement/AFIL'))
+                self.NFIL = h5py_helper.retrieve_data(f, 'Measurement/NFIL', np.array)
+                self.VFIL = h5py_helper.retrieve_data(f, 'Measurement/VFIL', np.array)
+                self.AFIL = h5py_helper.retrieve_data(f, 'Measurement/AFIL', np.array)
 
             
         f.close()
@@ -820,6 +837,10 @@ class Measurement_0:
         Write the .spx file for a solar occultation measurement
         """
 
+        if self.TANHE is None:
+            _lgr.warning(f'Not writing *.spx (Solar Occultation) file as self.TANHE is NONE')
+            return
+
         fspx = open(self.runname+'.spx','w')
         fspx.write('%7.5f \t %7.5f \t %7.5f \t %i \n' % (self.FWHM,self.LATITUDE,self.LONGITUDE,self.NGEOM))
 
@@ -947,6 +968,10 @@ class Measurement_0:
         Write the .fil file to see what the Instrument Lineshape for each convolution wavenumber 
         (Only valid if FWHM<0.0)
         """
+        
+        if self.NFIL is None:
+            _lgr.warning(f'Not writing *.fil file as self.NFIL is NONE')
+            return
 
         f = open(self.runname+'.fil','w')
         f.write("%i \n" %  (self.NCONV[IGEOM]))
@@ -1612,7 +1637,7 @@ class Measurement_0:
         #Correcting the wavelengths for Doppler shift
         if apply_doppler is True:
             if self.V_DOPPLER!=0.0:
-                print('nemesis :: Correcting for Doppler shift of ',self.V_DOPPLER,'km/s')        
+                _lgr.info(f"nemesis :: Correcting for Doppler shift of  {(self.V_DOPPLER,'km/s')}")        
             wavemin = self.invert_doppler_shift(wavemin)
             wavemax = self.invert_doppler_shift(wavemax)
         
@@ -2108,8 +2133,8 @@ class Measurement_0:
                     fpy1 = interpolate.CubicSpline(wave,grad[:,IX])
                     fpy.append(fpy1)
 
-                print(fpy)
-                print('error in convg :: This part of the programme has not been tested yet')
+                _lgr.info(fpy)
+                _lgr.info('error in convg :: This part of the programme has not been tested yet')
                 raise ValueError()
                 
                 for ICONV in range(self.NCONV[IGEOM]):
@@ -2348,7 +2373,7 @@ class Measurement_0:
         cbar_ticksx = np.linspace(0, 1, num=n)  # Adjust the number of ticks as needed
         cbar_ticks = np.linspace(cmin, cmax, num=n)  # Adjust the number of ticks as needed
         cbar2.set_ticks(cbar_ticksx)
-        cbar2.set_ticklabels([f'{tick:.2f}' for tick in cbar_ticks])  # Adjust the formatting as needed
+        cbar2.set_ticklabels([f"{tick:.2f}" for tick in cbar_ticks])  # Adjust the formatting as needed
 
         
         plt.tight_layout()
@@ -2372,6 +2397,10 @@ class Measurement_0:
         from mpl_toolkits.basemap import Basemap
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+        subobs_lat = self.SUBOBS_LAT if subobs_lat is None else subobs_lat
+        subobs_lon = self.SUBOBS_LON if subobs_lon is None else subobs_lon
+
+
         #Making a figure for each geometry
         for igeom in range(self.NGEOM):
 
@@ -2379,13 +2408,8 @@ class Measurement_0:
 
             #Plotting the geometry
             ax1 = plt.subplot2grid((2,3),(0,0),rowspan=2,colspan=1)
-            if((subobs_lat!=None) & (subobs_lon!=None)):
-                map = Basemap(projection='ortho', resolution=None,
-                    lat_0=subobs_lat, lon_0=subobs_lon)
-            else:
-                map = Basemap(projection='ortho', resolution=None,
-                    lat_0=self.LATITUDE, lon_0=self.LONGITUDE)
-
+            map = Basemap(projection='ortho', resolution=None,
+                lat_0=subobs_lat, lon_0=subobs_lon)
             
             lats = map.drawparallels(np.linspace(-90, 90, 13))
             lons = map.drawmeridians(np.linspace(-180, 180, 13))

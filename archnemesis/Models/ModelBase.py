@@ -403,6 +403,73 @@ class ModelBase(abc.ABC):
         return parameters
     
     
+    
+    def set_parameters_to_state_vector(
+            self,
+            parameter_entries : dict[str,ModelParameterEntry],
+            #   A dictionary that maps parameter names to the "ModelParameterEntry" associated with that parameter.
+            
+            state_vector_log : np.ndarray[['nx'],int],
+            #   Array of 'log' flags for each entry in either state vector (they share these flags)
+            #   if the flag is non-zero the value stored in both state vectors is the exponential
+            #   logarithm of the 'real' value.
+            
+            apriori_state_vector : np.ndarray[['nx'],float],
+            #   The complete apriori state vector with 'nx' entries
+            
+            posterior_state_vector : np.ndarray[['nx'],float] | None = None,
+            #   The complete posterior state vector with 'nx' entries
+            
+            
+            
+        ) -> dict[str, ModelParameterEntry]:
+        """
+            Retrieve parameters from state vector as a dictionary of name : value pairs
+            
+            ## ARGUMENTS ##
+                
+                model_parameter_entries : dict[str, ModelParameterEntry]
+                    A dictionary that maps parameter names to the "ModelParameterEntry" associated with that parameter.
+                    
+                apriori_state_vector : np.ndarray[['nx'],float]
+                    The complete apriori state vector with 'nx' entries
+                
+                posterior_state_vector : np.ndarray[['nx'],float]
+                    The complete posterior state vector with 'nx' entries
+                
+                state_vector_log : np.ndarray[['nx'],int]
+                    Array of 'log' flags for each entry in either state vector (they share these flags)
+                    if the flag is non-zero the value stored in both state vectors is the exponential
+                    logarithm of the 'real' value.
+                
+                state_vector_fix : np.ndarray[['nx'],int]
+                    Array of the 'fix' flags for each entry in either state vector (they share these flags)
+                    if the flag is non-zero, the value stored in both state vectors is not retrieved, and
+                    therefore should be the same in each of the apriori/posterior state vectors.
+            
+            ## RETURNS ##
+        """
+        
+        assert self.state_vector_slice.step is None or self.state_vector_slice.step == 1, "A step larger than 1 is not supported when slicing a state vector"
+        
+        for p in self.parameters:
+            
+            self.set_value_to_state_vector(
+                parameter_entries[p.name].apriori_value,
+                apriori_state_vector,
+                state_vector_log,
+                p.slice
+            )
+            
+            if posterior_state_vector is not None:
+                self.set_value_to_state_vector(
+                    parameter_entries[p.name].posterior_value,
+                    posterior_state_vector,
+                    state_vector_log,
+                    p.slice
+                )
+        return
+    
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
     @classmethod
@@ -468,6 +535,12 @@ class ModelBase(abc.ABC):
             npro : int, 
             #   Number of altitude levels defined for the atmosphere component
             
+            ngas : int,
+            #   Number of gas volume mixing ratio profiles defined for the reference atmosphere
+            
+            ndust : int,
+            #   Number of aerosol species density profiles define for the reference atmosphere
+
             nlocations : int, 
             #   Number of locations defined for the atmosphere component
             
@@ -519,6 +592,12 @@ class ModelBase(abc.ABC):
                 npro : int
                     Number of altitude levels defined for the atmosphere component of the retrieval setup.
                 
+                ngas : int,
+                    Number of gas volume mixing ratio profiles defined for the reference atmosphere
+                
+                ndust : int,
+                    Number of aerosol species density profiles define for the reference atmosphere
+                
                 n_locations : int
                     Number of locations defined for the atmosphere component of the retrieval setup.
                 
@@ -536,6 +615,7 @@ class ModelBase(abc.ABC):
                 instance : Self
                     A constructed instance of the model class that has parameters set from information in the *.apr file
         """
+        
         ...
     
     

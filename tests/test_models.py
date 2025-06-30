@@ -2,14 +2,14 @@ import pytest
 import archnemesis as ans
 import numpy as np
 
-from archnemesis.Models import Models
+from archnemesis.Models import _get_all_model_classes
 
 def test_model_classes_have_unique_id_numbers():
     """
     All model classes should have a unique ID number.
     """
     seen_id_numbers = dict()
-    for model_class in Models:
+    for model_class in _get_all_model_classes():
         seen_id_numbers[model_class.id] = (*seen_id_numbers.get(model_class.id, tuple()), model_class)
     
     for id, model_classes in seen_id_numbers.items():
@@ -24,7 +24,7 @@ def test_model_classes_have_no_abstract_methods():
     
     model_instances = []
     
-    for model_class in Models:
+    for model_class in _get_all_model_classes():
         assert len(model_class.__abstractmethods__) == 0, f'Model id {model_class.id} must not have any abstract methods left (must be a concrete class). Has abstract methods: {tuple(model_class.__abstractmethods__)}'
 
 

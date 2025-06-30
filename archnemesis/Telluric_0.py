@@ -13,6 +13,9 @@ import numpy as np
 
 from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnit, SpectralCalculationMode
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 class Telluric_0:
     """
@@ -579,7 +582,7 @@ def extract_grib_parameter(filename,parameter,latitude,longitude):
     
     # Loop through GRIB messages and extract parameter data for each pressure level
     for grb in grbs:
-        #print(grb.name)
+        #_lgr.info(grb.name)
         if grb.name == parameter:  # Ensure it's the parameter we want
             if latitudes is None and longitudes is None:
                 # Get latitude and longitude grids (these will be the same for each level)

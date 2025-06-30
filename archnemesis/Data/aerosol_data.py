@@ -14,6 +14,10 @@ Then copy-paste the array to the dictionary
 
 import numpy as np
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
 def print_id_names():
     '''
     Function to print all the IDs and the names of the aerosols in the dictionary

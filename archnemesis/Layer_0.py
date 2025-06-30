@@ -4,13 +4,17 @@ from __future__ import annotations #  for 3.9 compatability
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
+
+from archnemesis.helpers import h5py_helper
 from archnemesis.enums import (
     LayerType,
     LayerIntegrationScheme,
     InterpolationMethod,
 )
 
-
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 AVOGAD = 6.02214076e23
 """
@@ -229,30 +233,30 @@ class Layer_0:
         Print summary information about the class in the screen
         """
         
-        print('Number of layers :: ',self.NLAY)
+        _lgr.info(f'Number of layers ::  {(self.NLAY)}')
 
         if self.LAYTYP==LayerType.EQUAL_PRESSURE:
-            print('Layers calculated by equal changes in pressure')
+            _lgr.info('Layers calculated by equal changes in pressure')
         elif self.LAYTYP==LayerType.EQUAL_LOG_PRESSURE:
-            print('Layers calculated by equal changes in log pressure')
+            _lgr.info('Layers calculated by equal changes in log pressure')
         elif self.LAYTYP==LayerType.EQUAL_HEIGHT:
-            print('Layers calculated by equal changes in altitude')
+            _lgr.info('Layers calculated by equal changes in altitude')
         elif self.LAYTYP==LayerType.EQUAL_PATH_LENGTH:
-            print('Layers calculated by equal changes in line-of-sight path intervals')
+            _lgr.info('Layers calculated by equal changes in line-of-sight path intervals')
         elif self.LAYTYP==LayerType.BASE_PRESSURE:
-            print('Layers calculated by specified base pressures')
+            _lgr.info('Layers calculated by specified base pressures')
         elif self.LAYTYP==LayerType.BASE_HEIGHT:
-            print('Layers calculated by specified base altitudes')
+            _lgr.info('Layers calculated by specified base altitudes')
 
         if self.LAYINT==LayerIntegrationScheme.MID_PATH:
-            print('Layer properties calculated at the middle of the layer')
+            _lgr.info('Layer properties calculated at the middle of the layer')
         elif self.LAYINT==LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE:
-            print('Layer properties calculated through mass weighted averages')
+            _lgr.info('Layer properties calculated through mass weighted averages')
             
         if self.BASEH is not None:
-            print('BASEH(km)','BASEP(bar)','DELH(km)','P(bar)','T(K)','TOTAM(m-2)','DUST_TOTAM(m-2)')
+            _lgr.info(f"BASEH(km) {('BASEP(bar)','DELH(km)','P(bar)','T(K)','TOTAM(m-2)','DUST_TOTAM(m-2)')}")
             for i in range(self.NLAY):
-                print(self.BASEH[i]/1.0e3,self.BASEP[i]/1.0e5,self.DELH[i]/1.0e3,self.PRESS[i]/1.0e5,self.TEMP[i],np.sum(self.AMOUNT[i,:]),np.sum(self.CONT[i,:]))
+                _lgr.info(self.BASEH[i]/1.0e3,self.BASEP[i]/1.0e5,self.DELH[i]/1.0e3,self.PRESS[i]/1.0e5,self.TEMP[i],np.sum(self.AMOUNT[i,:]),np.sum(self.CONT[i,:]))
 
 
     ####################################################################################################
@@ -267,59 +271,72 @@ class Layer_0:
         self.assess()
 
         #Writing the information into the HDF5 file
-        f = h5py.File(runname+'.h5','a')
-        #Checking if Layer already exists
-        if ('/Layer' in f)==True:
-            del f['Layer']   #Deleting the Layer information that was previously written in the file
+        with h5py.File(runname+'.h5', 'a') as f:
+            #Checking if Layer already exists
+            if ('/Layer' in f)==True:
+                del f['Layer']   #Deleting the Layer information that was previously written in the file
 
-        grp = f.create_group("Layer")
+            grp = f.create_group("Layer")
 
-        #Writing the layering type
-        dset = grp.create_dataset('LAYTYP',data=int(self.LAYTYP))
-        dset.attrs['title'] = "Layer splitting calculation type"
-        if self.LAYTYP==LayerType.EQUAL_PRESSURE:
-            dset.attrs['type'] = 'Split layers by equal changes in pressure'
-        elif self.LAYTYP==LayerType.EQUAL_LOG_PRESSURE:
-            dset.attrs['type'] = 'Split layers by equal changes in log-pressure'
-        elif self.LAYTYP==LayerType.EQUAL_HEIGHT:
-            dset.attrs['type'] = 'Split layers by equal changes in height'
-        elif self.LAYTYP==LayerType.EQUAL_PATH_LENGTH: 
-            dset.attrs['type'] = 'Split layers by equal changes in path length (at LAYANG)'
-        elif self.LAYTYP==LayerType.BASE_PRESSURE:
-            dset.attrs['type'] = 'Split layers by defining base pressure of each layer'
-        elif self.LAYTYP==LayerType.BASE_HEIGHT:
-            dset.attrs['type'] = 'Split layers by defining base altitude of each layer'
+            #Writing the layering type
+            dset = h5py_helper.store_data(grp, 'LAYTYP', int(self.LAYTYP))
+            dset.attrs['title'] = "Layer splitting calculation type"
+            if self.LAYTYP==LayerType.EQUAL_PRESSURE:
+                dset.attrs['type'] = 'Split layers by equal changes in pressure'
+            elif self.LAYTYP==LayerType.EQUAL_LOG_PRESSURE:
+                dset.attrs['type'] = 'Split layers by equal changes in log-pressure'
+            elif self.LAYTYP==LayerType.EQUAL_HEIGHT:
+                dset.attrs['type'] = 'Split layers by equal changes in height'
+            elif self.LAYTYP==LayerType.EQUAL_PATH_LENGTH: 
+                dset.attrs['type'] = 'Split layers by equal changes in path length (at LAYANG)'
+            elif self.LAYTYP==LayerType.BASE_PRESSURE:
+                dset.attrs['type'] = 'Split layers by defining base pressure of each layer'
+            elif self.LAYTYP==LayerType.BASE_HEIGHT:
+                dset.attrs['type'] = 'Split layers by defining base altitude of each layer'
 
-        #Writing the layering integration type
-        dset = grp.create_dataset('LAYINT',data=int(self.LAYINT))
-        dset.attrs['title'] = "Layer integration calculation type"
-        if self.LAYINT==LayerIntegrationScheme.MID_PATH:
-            dset.attrs['type'] = 'Layer properties calculated at mid-point between layer boundaries'
-        if self.LAYINT==LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE:
-            dset.attrs['type'] = 'Layer properties calculated by weighting in terms of atmospheric mass (i.e. Curtis-Godson path)'
-    
-        #Writing the number of layers
-        dset = grp.create_dataset('NLAY',data=self.NLAY)
-        dset.attrs['title'] = "Number of layers"
-
-        #Writing the altitude of bottom layer
-        dset = grp.create_dataset('LAYHT',data=self.LAYHT)
-        dset.attrs['title'] = "Altitude at base of bottom layer"
-        dset.attrs['units'] = "m"
-
-        #Writing the base properties of the layers in special cases
-        if self.LAYTYP==LayerType.BASE_PRESSURE:
-            dset = grp.create_dataset('P_base',data=self.P_base)
-            dset.attrs['title'] = "Pressure at the base of each layer"
-            dset.attrs['units'] = "Pressure / Pa"
+            #Writing the layering integration type
+            dset = h5py_helper.store_data(grp, 'LAYINT', int(self.LAYINT))
+            dset.attrs['title'] = "Layer integration calculation type"
+            if self.LAYINT==LayerIntegrationScheme.MID_PATH:
+                dset.attrs['type'] = 'Layer properties calculated at mid-point between layer boundaries'
+            if self.LAYINT==LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE:
+                dset.attrs['type'] = 'Layer properties calculated by weighting in terms of atmospheric mass (i.e. Curtis-Godson path)'
         
-        if self.LAYTYP==LayerType.BASE_HEIGHT:
-            dset = grp.create_dataset('H_base',data=self.H_base)
+            #Writing the number of layers
+            dset = h5py_helper.store_data(grp, 'NLAY', self.NLAY)
+            dset.attrs['title'] = "Number of layers"
+
+            #Writing the altitude of bottom layer
+            dset = h5py_helper.store_data(grp, 'LAYHT', self.LAYHT)
+            dset.attrs['title'] = "Altitude at base of bottom layer"
+            dset.attrs['units'] = "m"
+
+            #Writing the base properties of the layers in special cases
+            if self.LAYTYP==LayerType.BASE_PRESSURE:
+                dset = h5py_helper.store_data(grp, 'P_base', self.P_base)
+                dset.attrs['title'] = "User defined pressure at the base of each layer"
+                dset.attrs['units'] = "Pressure / Pa"
+            
+            if self.LAYTYP==LayerType.BASE_HEIGHT:
+                dset = h5py_helper.store_data(grp, 'H_base', self.H_base)
+                dset.attrs['title'] = "User defined altitude at the base of each layer"
+                dset.attrs['units'] = "Altitude / m"
+            
+            dset = h5py_helper.store_data(grp, 'BASEH', self.BASEH)
             dset.attrs['title'] = "Altitude at the base of each layer"
             dset.attrs['units'] = "Altitude / m"
-
-    ####################################################################################################
-
+            
+            dset = h5py_helper.store_data(grp, 'BASEP', self.BASEP)
+            dset.attrs['title'] = "Altitude at the base of each layer"
+            dset.attrs['units'] = "Pressure / Pa"
+            
+            dset = h5py_helper.store_data(grp, 'TAUTOT', self.TAUTOT)
+            dset.attrs['title'] = 'Total opacity of each wavelength at each G-ordinate at each layer. NOTE: G-ordinate is an interval of cumulative fraction of absorption coefficient (see correlated-k approximation)'
+            dset.attrs['units'] = 'cm^{-2}'
+        
+        return
+    
+    
     def read_hdf5(self,runname):
         """
         Read the Layer properties from an HDF5 file
@@ -327,24 +344,25 @@ class Layer_0:
 
         import h5py
 
-        f = h5py.File(runname+'.h5','r')
+        with h5py.File(runname+'.h5', 'r') as f:
+            #Checking if Surface exists
+            e = "/Layer" in f
+            if e==False:
+                raise ValueError('error :: Layer is not defined in HDF5 file')
+            else:
 
-        #Checking if Surface exists
-        e = "/Layer" in f
-        if e==False:
-            raise ValueError('error :: Layer is not defined in HDF5 file')
-        else:
+                self.NLAY = h5py_helper.retrieve_data(f, 'Layer/NLAY', np.int32, default=20)
+                self.LAYTYP = h5py_helper.retrieve_data(f, 'Layer/LAYTYP', lambda x:  LayerType(np.int32(x)), default=LayerType.EQUAL_LOG_PRESSURE)
+                self.LAYINT = h5py_helper.retrieve_data(f, 'Layer/LAYINT', lambda x:  LayerIntegrationScheme(np.int32(x)), default=LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE)
+                self.LAYHT = h5py_helper.retrieve_data(f, 'Layer/LAYHT', np.float64)
+                if self.LAYTYP==LayerType.BASE_PRESSURE:
+                    self.P_base = h5py_helper.retrieve_data(f, 'Layer/P_base', np.array)
+                if self.LAYTYP==LayerType.BASE_HEIGHT:
+                    self.H_base = h5py_helper.retrieve_data(f, 'Layer/H_base', np.array)
+                self.BASEH = h5py_helper.retrieve_data(f, 'Layer/BASEH', np.array)
+                self.BASEP = h5py_helper.retrieve_data(f, 'Layer/BASEP', np.array)
+                self.TAUTOT = h5py_helper.retrieve_data(f, 'Layer/TAUTOT', np.array)
 
-            self.NLAY = np.int32(f.get('Layer/NLAY'))
-            self.LAYTYP = LayerType(np.int32(f.get('Layer/LAYTYP')))
-            self.LAYINT = LayerIntegrationScheme(np.int32(f.get('Layer/LAYINT')))
-            self.LAYHT = np.float64(f.get('Layer/LAYHT'))
-            if self.LAYTYP==LayerType.BASE_PRESSURE:
-                self.P_base = np.array(f.get('Layer/P_base'))
-            if self.LAYTYP==LayerType.BASE_HEIGHT:
-                self.H_base = np.array(f.get('Layer/H_base'))
-
-        f.close()
 
     ####################################################################################################
  
@@ -1395,7 +1413,7 @@ def layer_split(RADIUS, H, P, LAYANG=0.0, LAYHT=0.0, NLAY=20,
     """
 
     if LAYHT<H[0]:
-        print('Warning from layer_split() :: LAYHT < H(0). Resetting LAYHT')
+        _lgr.warning(' from layer_split() :: LAYHT < H(0). Resetting LAYHT')
         LAYHT = H[0]
 
     if LAYTYP == LayerType.EQUAL_PRESSURE: # split by equal pressure intervals

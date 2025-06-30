@@ -7,11 +7,15 @@ import numpy as np
 
 import archnemesis as ans
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.INFO)
+
 def ensure_equal_type(a, b):
     # 'a' and 'b' are not neccesarily the same types at this point
     type_a = type(a)
     type_b = type(b)
-    print(f'\t{type_a} vs {type_b}')
+    _lgr.info(f'\t{type_a} vs {type_b}')
     are_types_same = type_a is type_b
     casting_rules_compared = False
     is_fwd_safe_casting_possible = False
@@ -22,7 +26,7 @@ def ensure_equal_type(a, b):
     if (type_a == np.ndarray) and (type_b == np.ndarray):
         type_a = a.dtype
         type_b = b.dtype
-        print(f'\tnp.ndarray[{type_a}] vs np.ndarray[{type_b}]')
+        _lgr.info(f'\tnp.ndarray[{type_a}] vs np.ndarray[{type_b}]')
         are_types_same = type_a is type_b
     
     if (
@@ -34,17 +38,17 @@ def ensure_equal_type(a, b):
                 or type_b in (int,float,complex)
             )
         ):
-        print(f'\tTypes are number-like, so we can compare casting rules...')
+        _lgr.info(f'\tTypes are number-like, so we can compare casting rules...')
         casting_rules_compared = True
         is_fwd_safe_casting_possible = np.can_cast(type_a, type_b, "safe")
         is_bkwd_safe_casting_possible = np.can_cast(type_b, type_a, "safe")
         is_fwd_samekind_casting_possible = np.can_cast(type_a, type_b, "same_kind")
         is_bkwd_samekind_casting_possible = np.can_cast(type_b, type_a, "same_kind")
     
-    print(f'\tTypes are identical: {are_types_same}')
+    _lgr.info(f'\tTypes are identical: {are_types_same}')
     if casting_rules_compared:
-        print(f'\tSafe casting possible: fwd {is_fwd_safe_casting_possible}, bkwd {is_bkwd_safe_casting_possible}') 
-        print(f'\tSame-kind casting possible: fwd {is_fwd_samekind_casting_possible}, bkwd {is_bkwd_samekind_casting_possible}')
+        _lgr.info(f'\tSafe casting possible: fwd {is_fwd_safe_casting_possible}, bkwd {is_bkwd_safe_casting_possible}') 
+        _lgr.info(f'\tSame-kind casting possible: fwd {is_fwd_samekind_casting_possible}, bkwd {is_bkwd_samekind_casting_possible}')
 
     return are_types_same, casting_rules_compared, is_fwd_safe_casting_possible, is_bkwd_safe_casting_possible, is_fwd_samekind_casting_possible, is_bkwd_samekind_casting_possible
 
@@ -94,11 +98,11 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_paramters():
     
     for example_path in os.listdir(example_dir):
         if example_path in examples_to_ignore:
-            print(f'Ignoring example "{example_path}". Reason: {examples_to_ignore[example_path]}')
+            _lgr.info(f'Ignoring example "{example_path}". Reason: {examples_to_ignore[example_path]}')
             continue
             
         current_example_dir = os.path.join(example_dir, example_path)
-        print(f'Looking for example with LEGACY input files at {current_example_dir}')
+        _lgr.info(f'Looking for example with LEGACY input files at {current_example_dir}')
         if not os.path.isdir(current_example_dir): # skip files, only enter directories
             continue
         
@@ -138,8 +142,8 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_paramters():
         
         try:
             ###### PERFORM TEST ######
-            print('#'*40)
-            print(f'In directory "{current_example_dir}", performing input file format consistency test...')
+            _lgr.info('#'*40)
+            _lgr.info(f'In directory "{current_example_dir}", performing input file format consistency test...')
         
             # Read LEGACY format
             Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
@@ -173,19 +177,19 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_paramters():
 
             # Loop over instances and compare their ALL_CAPS attributes
             for old_format, new_format in pairs:
-                print(f'\nTesting integrity of {old_format.__class__.__name__}')
+                _lgr.info(f'\nTesting integrity of {old_format.__class__.__name__}')
                 # assume that everything in all caps should be identical
                 of_attrs = tuple(item for item in filter(lambda x: x.isupper(), old_format.__dict__.keys()))
                 nf_attrs = tuple(item for item in filter(lambda x: x.isupper(), new_format.__dict__.keys()))
 
                 assert len(of_attrs) == len(nf_attrs), f'For example at "{current_example_dir}", class must have same number of attributes regardless of input format'
                 
-                print(f'{of_attrs=}')
-                print(f'{nf_attrs=}')
+                _lgr.info(f'{of_attrs=}')
+                _lgr.info(f'{nf_attrs=}')
                 assert all(x==y for x,y in zip(of_attrs, nf_attrs)), f"For example at '{current_example_dir}', class must have same attribute names regardless of input format"
 
                 for k in of_attrs:
-                    print(f'Testing attribute {old_format.__class__.__name__}.{k}:')
+                    _lgr.info(f'Testing attribute {old_format.__class__.__name__}.{k}:')
                     o_attr = getattr(old_format, k)
                     n_attr = getattr(new_format, k)
 
@@ -227,7 +231,7 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_paramters():
                             pass
                         elif is_fwd_samekind_casting_possible and is_bkwd_samekind_casting_possible:
                             msg = f"Types change when using different input format. They are the same kind, but safe casting is not always possible {type(o_attr)} and {type(n_attr)}"
-                            print(f'WARNING: {msg}')
+                            _lgr.info(f'WARNING: {msg}')
                             #raise RuntimeWarning(msg)
                         else:
                             assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class must have attributes that are at least the same kind of type regardless of input format"
@@ -235,7 +239,7 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_paramters():
                         # types are not the same and we didn't compare casting rules
                         assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class attributes must have identical types if they are not numerical regardless of input format"
                     
-                    #print(f'\t{o_attr} == {n_attr}')            
+                    #_lgr.info(f'\t{o_attr} == {n_attr}')            
                     assert ensure_equal_value(o_attr, n_attr), f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class must have same values regardless of input format: {o_attr} != {n_attr}"
 
             ###### END TEST ######

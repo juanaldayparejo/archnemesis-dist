@@ -6,6 +6,9 @@ import numpy as np
 
 from archnemesis.enums import ZenithAngleOrigin, PathObserverPointing, PathCalc
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 """
 Object to calculate the atmospheric paths
@@ -126,7 +129,8 @@ class AtmCalc_0:
             -------
 
         """
-        print(f'AtmCalc_0 :: {path_observer_pointing=}, {BOTLAY=}, {ANGLE=}, {EMISS_ANG=}, {SOL_ANG=}, {AZI_ANG=}, {IPZEN=}, {path_calc=}')
+        _lgr.info(f'Sent to AtmCalc_0', stacklevel=2)
+        _lgr.info(f'AtmCalc_0 :: {path_observer_pointing=}, {BOTLAY=}, {ANGLE=}, {EMISS_ANG=}, {SOL_ANG=}, {AZI_ANG=}, {IPZEN=}, {path_calc=}')
         
         #parameters
         self.path_observer_pointing = path_observer_pointing
@@ -177,6 +181,7 @@ class AtmCalc_0:
 
         if self.path_observer_pointing == PathObserverPointing.DISK:
             self.path_observer_height = np.inf
+            raise NotImplementedError(f'{PathObserverPointing.DISK} is not implemented yet. Intended to be observer pointing towards the disk (i.e. looking down from above). At the moment that case is covered by {PathObserverPointing.LIMB} with `self.ANGLE` set to greater than 90 degrees')
             
         elif self.path_observer_pointing == PathObserverPointing.LIMB:
             self.path_observer_height = np.inf
@@ -192,6 +197,9 @@ class AtmCalc_0:
         else:
             raise ValueError(f'error in AtmCalc_0 :: path observer pointing "{self.path_observer_pointing}" not recognised')
         
+        
+        _lgr.debug(f'AtmCalc_0 :: {self.path_observer_pointing=}, {self.BOTLAY=}, {self.ANGLE=}, {self.EMISS_ANG=}, {self.SOL_ANG=}, {self.AZI_ANG=}, {self.IPZEN=}, {self.path_calc=}, {self.path_observer_height=}')
+        
         assert self.path_observer_height in (0.0, np.inf), f'error in AtmCalc_0 :: path observer height must be 0 or np.inf. Other values such as {self.path_observer_height} are not implemented yet'
 
         #Checking incompatible flags and resetting them 
@@ -201,52 +209,52 @@ class AtmCalc_0:
                 and PathCalc.ABSORBTION in self.path_calc
             ):
             self.path_calc &= ~PathCalc.ABSORBTION
-            print('warning in AtmCalc_0.py file :: Cannot use absorption for thermal calcs - resetting')
+            _lgr.warning(' in AtmCalc_0.py file :: Cannot use absorption for thermal calcs - resetting')
 
         if (PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL in self.path_calc 
                 and PathCalc.MULTIPLE_SCATTERING in self.path_calc
             ):
             self.path_calc &= ~PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL
-            print('warning in AtmCalc_0.py file :: Cannot use SINGLE and SCATTER - resetting')
+            _lgr.warning(' in AtmCalc_0.py file :: Cannot use SINGLE and SCATTER - resetting')
 
         if (PathCalc.SINGLE_SCATTERING_SPHERICAL in self.path_calc 
                 and PathCalc.MULTIPLE_SCATTERING in self.path_calc
             ):
             self.path_calc &= ~PathCalc.SINGLE_SCATTERING_SPHERICAL
-            print('warning in AtmCalc_0.py file :: Cannot use SPHSINGLE and SCATTER - resetting')
+            _lgr.warning(' in AtmCalc_0.py file :: Cannot use SPHSINGLE and SCATTER - resetting')
 
         if (PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE in self.path_calc 
                 and PathCalc.BROADENING in self.path_calc
             ):
             self.path_calc &= ~PathCalc.BROADENING
-            print('warning in AtmCalc_0.py file :: Cannot use BINBB and BROAD - resetting')
+            _lgr.warning(' in AtmCalc_0.py file :: Cannot use BINBB and BROAD - resetting')
 
         if PathCalc.THERMAL_EMISSION in self.path_calc:
             if PathCalc.BROADENING in self.path_calc:
                 self.path_calc &= ~PathCalc.BROADENING
-                print('warning in AtmCalc_0.py file :: THERM requires BROAD disabled - resetting')
+                _lgr.warning(' in AtmCalc_0.py file :: THERM requires BROAD disabled - resetting')
             
             if PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE in self.path_calc:
                 self.path_calc &= ~PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE
-                print('warning in AtmCalc_0.py file :: THERM requires BINBB disabled - resetting')
+                _lgr.warning(' in AtmCalc_0.py file :: THERM requires BINBB disabled - resetting')
             
         if (((PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL | PathCalc.SINGLE_SCATTERING_SPHERICAL | PathCalc.MULTIPLE_SCATTERING) & self.path_calc) 
                 and PathCalc.THERMAL_EMISSION in self.path_calc
             ):
             self.path_calc &= ~PathCalc.THERMAL_EMISSION
-            print('THERM not required. Scattering includes emission')
+            _lgr.info('THERM not required. Scattering includes emission')
 
         if (PathCalc.HEMISPHERE in self.path_calc
                 and PathCalc.THERMAL_EMISSION not in self.path_calc
             ):
             self.path_calc |= PathCalc.THERMAL_EMISSION
-            print('warning in AtmCalc_0.py file :: HEMISPHERE assumes THERM - resetting')
+            _lgr.warning(' in AtmCalc_0.py file :: HEMISPHERE assumes THERM - resetting')
 
         if (((PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL | PathCalc.SINGLE_SCATTERING_SPHERICAL | PathCalc.MULTIPLE_SCATTERING) & self.path_calc) 
                 and PathCalc.CURTIS_GODSON in self.path_calc
             ):
             self.path_calc &= ~PathCalc.CURTIS_GODSON
-            print('warning in AtmCalc_0.py file :: Cannot use CG and SCATTER - resetting')
+            _lgr.warning(' in AtmCalc_0.py file :: Cannot use CG and SCATTER - resetting')
 
         if (PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL | PathCalc.SINGLE_SCATTERING_SPHERICAL | PathCalc.MULTIPLE_SCATTERING) & self.path_calc:
             if self.path_observer_pointing == PathObserverPointing.LIMB:
@@ -256,7 +264,7 @@ class AtmCalc_0:
                     raise ValueError('error in AtmCalc_0.py file :: SPHSINGLE and LIMB not catered for')  
             else:
                 if self.ANGLE != 0.0:
-                    print('warning in AtmCalc_0.py file :: ANGLE must be 0.0 for scattering calculations - resetting')    
+                    _lgr.warning(' in AtmCalc_0.py file :: ANGLE must be 0.0 for scattering calculations - resetting')
                     self.ANGLE = 0.0
 
         if PathCalc.HEMISPHERE in self.path_calc:
@@ -264,7 +272,7 @@ class AtmCalc_0:
                 raise ValueError('error in AtmCalc_0.py file :: cannot do HEMISPHERE and LIMB')  
             else:
                 if self.ANGLE != 0.0:
-                    print('warning in AtmCalc_0.py file :: ANGLE must be 0.0 for HEMISPHERE - resetting') 
+                    _lgr.warning(' in AtmCalc_0.py file :: ANGLE must be 0.0 for HEMISPHERE - resetting') 
                     self.ANGLE = 0.0
         
         

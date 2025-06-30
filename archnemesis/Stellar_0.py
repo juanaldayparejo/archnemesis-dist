@@ -7,7 +7,11 @@ import matplotlib.pyplot as plt
 import os
 import h5py
 
+from archnemesis.helpers import h5py_helper
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -269,12 +273,12 @@ class Stellar_0:
             self.SOLEXIST = False
         else:
             self.SOLEXIST = True
-            self.ISPACE = WaveUnit(np.int32(f.get('Stellar/ISPACE')))
-            self.DIST = np.float64(f.get('Stellar/DIST'))
-            self.RADIUS = np.float64(f.get('Stellar/RADIUS'))
-            self.NWAVE = np.int32(f.get('Stellar/NWAVE'))
-            self.WAVE = np.array(f.get('Stellar/WAVE'))
-            self.SOLSPEC = np.array(f.get('Stellar/SOLSPEC'))
+            self.ISPACE = h5py_helper.retrieve_data(f, 'Stellar/ISPACE', lambda x:  WaveUnit(np.int32(x)))
+            self.DIST = h5py_helper.retrieve_data(f, 'Stellar/DIST', np.float64)
+            self.RADIUS = h5py_helper.retrieve_data(f, 'Stellar/RADIUS', np.float64)
+            self.NWAVE = h5py_helper.retrieve_data(f, 'Stellar/NWAVE', np.int32)
+            self.WAVE = h5py_helper.retrieve_data(f, 'Stellar/WAVE', np.array)
+            self.SOLSPEC = h5py_helper.retrieve_data(f, 'Stellar/SOLSPEC', np.array)
 
         f.close()
 

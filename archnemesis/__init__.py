@@ -1,5 +1,7 @@
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
+from . import cfg
+
 from .Spectroscopy_0 import *
 from .Scatter_0 import *
 from .Surface_0 import *

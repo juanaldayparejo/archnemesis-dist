@@ -6,8 +6,12 @@ import matplotlib.pyplot as plt
 import os
 from numba import jit
 
+from archnemesis.helpers import h5py_helper
 from archnemesis.enums import Gas, ParaH2Ratio
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -209,10 +213,10 @@ class CIA_0:
         
         from archnemesis.Data.gas_data import gas_info
         
-        print('Wavelength range :: ',self.WAVEN.min(),self.WAVEN.max(),'cm-1')
-        print('Temperature range :: ',self.TEMP.min(),self.TEMP.max(),'K')
-        print('Number of CIA pairs :: ',self.NPAIR)
-        print('Pairs included in CIA class :: ')
+        _lgr.info(f'Wavelength range ::  {(self.WAVEN.min(),self.WAVEN.max())}')
+        _lgr.info(f'Temperature range ::  {(self.TEMP.min(),self.TEMP.max())}')
+        _lgr.info(f'Number of CIA pairs ::  {(self.NPAIR)}')
+        _lgr.info('Pairs included in CIA class :: ')
         for i in range(self.NPAIR):
             
             gasname1 = gas_info[str(self.IPAIRG1[i])]['name']
@@ -222,7 +226,7 @@ class CIA_0:
             if self.INORMALT[i]== ParaH2Ratio.NORMAL:
                 label = label + " ('normal')"
                 
-            print(label)
+            _lgr.info(label)
 
 
 
@@ -245,7 +249,7 @@ class CIA_0:
             else:
                 self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
                 self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
-                self.INORMAL = ParaH2Ratio(np.int32(f.get('CIA/INORMAL')))
+                self.INORMAL = h5py_helper.retrieve_data(f, 'CIA/INORMAL', lambda x:  ParaH2Ratio(np.int32(x)))
     
         # Resolve archnemesis path if it has been indirected
         self.CIADATA = archnemesis_resolve_path(self.CIADATA)
@@ -526,36 +530,36 @@ class CIA_0:
             
         with h5py.File(filename,'w') as f:
             #Writing the main dimensions
-            dset = f.create_dataset('NPARA',data=self.NPARA)
+            dset = h5py_helper.store_data(f, 'NPARA', data=self.NPARA)
             dset.attrs['title'] = "Number of para-H2 fractions listed in the CIA table"
             
-            dset = f.create_dataset('NPAIR',data=self.NPAIR)
+            dset = h5py_helper.store_data(f, 'NPAIR', data=self.NPAIR)
             dset.attrs['title'] = "Number of CIA pairs included in the look-up table"
 
-            dset = f.create_dataset('NWAVE',data=self.NWAVE)
+            dset = h5py_helper.store_data(f, 'NWAVE', data=self.NWAVE)
             dset.attrs['title'] = "Number of wavenumber points in the look-up table"
 
-            dset = f.create_dataset('NT',data=self.NT)
+            dset = h5py_helper.store_data(f, 'NT', data=self.NT)
             dset.attrs['title'] = "Number of temperatures at which the CIA cross sections are tabulated"
             
-            dset = f.create_dataset('IPAIRG1',data=self.IPAIRG1)
+            dset = h5py_helper.store_data(f, 'IPAIRG1', data=self.IPAIRG1)
             dset.attrs['title'] = "ID of the first gas of each CIA pair (e.g., N2-CO2; IPAIRG1 = N2 = 22)"
             
-            dset = f.create_dataset('IPAIRG2',data=self.IPAIRG2)
+            dset = h5py_helper.store_data(f, 'IPAIRG2', data=self.IPAIRG2)
             dset.attrs['title'] = "ID of the second gas of each CIA pair (e.g., N2-CO2; IPAIRG2 = CO2 = 2)"
             
-            dset = f.create_dataset('INORMALT',data=self.INORMALT)
+            dset = h5py_helper.store_data(f, 'INORMALT', data=self.INORMALT)
             dset.attrs['title'] = "Flag indicating whether the cross sections correspond to equilibrium or normal hydrogen"
             
-            dset = f.create_dataset('WAVEN',data=self.WAVEN)
+            dset = h5py_helper.store_data(f, 'WAVEN', data=self.WAVEN)
             dset.attrs['title'] = "Wavenumber"
             dset.attrs['units'] = "cm-1"
             
-            dset = f.create_dataset('TEMP',data=self.TEMP)
+            dset = h5py_helper.store_data(f, 'TEMP', data=self.TEMP)
             dset.attrs['title'] = "Temperature"
             dset.attrs['units'] = "K"
             
-            dset = f.create_dataset('K_CIA',data=self.K_CIA)
+            dset = h5py_helper.store_data(f, 'K_CIA', data=self.K_CIA)
             dset.attrs['title'] = "CIA cross sections"
             dset.attrs['units'] = "cm5 molecule-2"
         
@@ -574,19 +578,19 @@ class CIA_0:
         
         with h5py.File(filename, 'r') as f:
             self.NPARA = np.int32(f.get('NPARA', 1))
-            self.NPAIR = np.int32(f.get('NPAIR'))
-            self.NT = np.int32(f.get('NT'))
-            self.NWAVE = np.int32(f.get('NWAVE'))
+            self.NPAIR = h5py_helper.retrieve_data(f, 'NPAIR', np.int32)
+            self.NT = h5py_helper.retrieve_data(f, 'NT', np.int32)
+            self.NWAVE = h5py_helper.retrieve_data(f, 'NWAVE', np.int32)
                 
-            self.IPAIRG1 = np.array(f.get('IPAIRG1'))
-            self.IPAIRG2 = np.array(f.get('IPAIRG2'))
-            self.INORMALT = np.array(f.get('INORMALT'))
+            self.IPAIRG1 = h5py_helper.retrieve_data(f, 'IPAIRG1', np.array)
+            self.IPAIRG2 = h5py_helper.retrieve_data(f, 'IPAIRG2', np.array)
+            self.INORMALT = h5py_helper.retrieve_data(f, 'INORMALT', np.array)
             
-            self.WAVEN = np.array(f.get('WAVEN'))
-            self.TEMP = np.array(f.get('TEMP'))
+            self.WAVEN = h5py_helper.retrieve_data(f, 'WAVEN', np.array)
+            self.TEMP = h5py_helper.retrieve_data(f, 'TEMP', np.array)
             
             K_CIA = np.zeros((self.NPAIR,max(self.NPARA,1),self.NT,self.NWAVE)) # NPAIR x NPARA x NT x NWAVE
-            K_CIA[:,:,:,:] = np.array(f.get('K_CIA'))
+            K_CIA[:,:,:,:] = h5py_helper.retrieve_data(f, 'K_CIA', np.array)
             
             self.K_CIA = K_CIA
         

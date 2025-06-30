@@ -13,7 +13,12 @@ import matplotlib.pyplot as plt
 import os
 from numba import jit, njit
 
+from archnemesis.helpers import h5py_helper
 
+
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -181,50 +186,50 @@ class Spectroscopy_0:
         from archnemesis.Data import gas_info
 
         if self.ILBL==SpectralCalculationMode.K_TABLES:
-            print('Calculation type ILBL :: ',self.ILBL,' (k-distribution)')
-            print('Number of radiatively-active gaseous species :: ',self.NGAS)
+            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (k-distribution)")}')
+            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
             gasname = ['']*self.NGAS
             for i in range(self.NGAS):
                 gasname1 = gas_info[str(self.ID[i])]['name']
                 if self.ISO[i]!=0:
                     gasname1 = gasname1+' ('+str(self.ISO[i])+')'
                 gasname[i] = gasname1
-            print('Gaseous species :: ',gasname)
+            _lgr.info(f'Gaseous species ::  {(gasname)}')
 
-            print('Number of g-ordinates :: ',self.NG)
+            _lgr.info(f'Number of g-ordinates ::  {(self.NG)}')
 
-            print('Number of spectral points :: ',self.NWAVE)
-            print('Wavelength range :: ',self.WAVE.min(),'-',self.WAVE.max())
-            print('Step size :: ',self.WAVE[1]-self.WAVE[0])
+            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
+            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
+            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
 
-            print('Spectral resolution of the k-tables (FWHM) :: ',self.FWHM)
+            _lgr.info(f'Spectral resolution of the k-tables (FWHM) ::  {(self.FWHM)}')
 
-            print('Number of temperature levels :: ',self.NT)
-            print('Temperature range :: ',self.TEMP.min(),'-',self.TEMP.max(),'K')
+            _lgr.info(f'Number of temperature levels ::  {(self.NT)}')
+            _lgr.info(f"Temperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}")
 
-            print('Number of pressure levels :: ',self.NP)
-            print('Pressure range :: ',self.PRESS.min(),'-',self.PRESS.max(),'atm')
+            _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
+            _lgr.info(f"Pressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}")
 
         elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            print('Calculation type ILBL :: ',self.ILBL,' (line-by-line)')
-            print('Number of radiatively-active gaseous species :: ',self.NGAS)
+            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (line-by-line)")}')
+            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
             gasname = ['']*self.NGAS
             for i in range(self.NGAS):
                 gasname1 = gas_info[str(self.ID[i])]['name']
                 if self.ISO[i]!=0:
                     gasname1 = gasname1+' ('+str(self.ISO[i])+')'
                 gasname[i] = gasname1
-            print('Gaseous species :: ',gasname)
+            _lgr.info(f'Gaseous species ::  {(gasname)}')
 
-            print('Number of spectral points :: ',self.NWAVE)
-            print('Wavelength range :: ',self.WAVE.min(),'-',self.WAVE.max())
-            print('Step size :: ',self.WAVE[1]-self.WAVE[0])
+            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
+            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
+            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
 
-            print('Number of temperature levels :: ',self.NT)
-            print('Temperature range :: ',self.TEMP.min(),'-',self.TEMP.max(),'K')
+            _lgr.info(f'Number of temperature levels ::  {(self.NT)}')
+            _lgr.info(f"Temperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}")
 
-            print('Number of pressure levels :: ',self.NP)
-            print('Pressure range :: ',self.PRESS.min(),'-',self.PRESS.max(),'atm')
+            _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
+            _lgr.info(f"Pressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}")
 
 
     ######################################################################################################
@@ -274,41 +279,38 @@ class Spectroscopy_0:
         #Assessing that everything is correct
         self.assess()
 
-        f = h5py.File(runname+'.h5','a')
-        
-        if inside_telluric is False:
-            #Checking if Spectroscopy already exists
-            if ('/Spectroscopy' in f)==True:
-                del f['Spectroscopy']   #Deleting the Spectroscopy information that was previously written in the file
+        with h5py.File(runname+'.h5','a') as f:
+            if inside_telluric is False:
+                #Checking if Spectroscopy already exists
+                if ('/Spectroscopy' in f)==True:
+                    del f['Spectroscopy']   #Deleting the Spectroscopy information that was previously written in the file
 
-            grp = f.create_group("Spectroscopy")
-        else:
-            #The Spectroscopy class must be inserted inside the Telluric class
-            if ('/Telluric/Spectroscopy' in f)==True:
-                del f['Telluric/Spectroscopy']   #Deleting the Spectroscopy information that was previously written in the file
+                grp = f.create_group("Spectroscopy")
+            else:
+                #The Spectroscopy class must be inserted inside the Telluric class
+                if ('/Telluric/Spectroscopy' in f)==True:
+                    del f['Telluric/Spectroscopy']   #Deleting the Spectroscopy information that was previously written in the file
 
-            grp = f.create_group("Telluric/Spectroscopy")
+                grp = f.create_group("Telluric/Spectroscopy")
 
-        #Writing the main dimensions
-        dset = grp.create_dataset('NGAS',data=self.NGAS)
-        dset.attrs['title'] = "Number of radiatively active gases in atmosphere"
+            #Writing the main dimensions
+            dset = grp.create_dataset('NGAS',data=self.NGAS)
+            dset.attrs['title'] = "Number of radiatively active gases in atmosphere"
 
-        dset = grp.create_dataset('ILBL',data=int(self.ILBL))
-        dset.attrs['title'] = "Spectroscopy calculation type"
-        if self.ILBL==SpectralCalculationMode.K_TABLES:
-            dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
-        elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
-        else:
-            raise ValueError('error :: ILBL must be 0 or 2')
+            dset = grp.create_dataset('ILBL',data=int(self.ILBL))
+            dset.attrs['title'] = "Spectroscopy calculation type"
+            if self.ILBL==SpectralCalculationMode.K_TABLES:
+                dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
+            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
+            else:
+                raise ValueError('error :: ILBL must be 0 or 2')
 
-        if self.NGAS>0:
-            if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
-                dt = h5py.special_dtype(vlen=str)
-                dset = grp.create_dataset('LOCATION',data=self.LOCATION,dtype=dt)
-                dset.attrs['title'] = "Location of the pre-tabulated tables"
-
-        f.close()
+            if self.NGAS>0:
+                if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
+                    dt = h5py.special_dtype(vlen=str)
+                    dset = grp.create_dataset('LOCATION',data=self.LOCATION,dtype=dt)
+                    dset.attrs['title'] = "Location of the pre-tabulated tables"
 
     ######################################################################################################
     def read_hdf5(self,runname,inside_telluric=False):
@@ -320,37 +322,32 @@ class Spectroscopy_0:
         """
 
         import h5py
-
-        f = h5py.File(runname+'.h5','r')
         
-        if inside_telluric is True:
-            name = '/Telluric/Spectroscopy'
-        else:
-            name = '/Spectroscopy'
+        with h5py.File(runname+'.h5','r') as f:
+            if inside_telluric is True:
+                name = '/Telluric/Spectroscopy'
+            else:
+                name = '/Spectroscopy'
 
-        #Checking if Spectroscopy exists
-        e = name in f
-        if e==False:
-            f.close()
-            raise ValueError('error :: Spectroscopy is not defined in HDF5 file')
-        else:
-            self.NGAS = np.int32(f.get(name+'/NGAS'))
-            self.ILBL = SpectralCalculationMode(np.int32(f.get(name+'/ILBL')))
-
-            if self.NGAS>0:
-                LOCATION1 = f.get(name+'/LOCATION')
-                LOCATION = ['']*self.NGAS
-                for igas in range(self.NGAS):
-                    LOCATION[igas] = LOCATION1[igas].decode('ascii')
-                self.LOCATION = LOCATION
-                
-                #Reading the header information
-                self.read_header()
-                
+            #Checking if Spectroscopy exists
+            e = name in f
+            if e==False:
                 f.close()
+                raise ValueError('error :: Spectroscopy is not defined in HDF5 file')
+            else:
+                self.NGAS = np.int32(f.get(name+'/NGAS'))
+                self.ILBL = SpectralCalculationMode(np.int32(f.get(name+'/ILBL')))
 
-            f.close()
-
+                if self.NGAS>0:
+                    LOCATION1 = f.get(name+'/LOCATION')
+                    LOCATION = ['']*self.NGAS
+                    for igas in range(self.NGAS):
+                        LOCATION[igas] = LOCATION1[igas].decode('ascii')
+                    self.LOCATION = LOCATION
+                    
+                    #Reading the header information
+                    self.read_header()
+                    
     ######################################################################################################
     def read_lls(self, runname):
         """
@@ -728,7 +725,7 @@ class Spectroscopy_0:
             f = h5py.File(filename+'.h5','w')
             
             #Writing the header information
-            dset = f.create_dataset('ILBL',data=self.ILBL)
+            dset = h5py_helper.store_data(f, 'ILBL', data=self.ILBL)
             dset.attrs['title'] = "Spectroscopy calculation type"
             if self.ILBL==SpectralCalculationMode.K_TABLES:
                 dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
@@ -737,29 +734,29 @@ class Spectroscopy_0:
             else:
                 raise ValueError('error :: ILBL must be 0 or 2')
                 
-            dset = f.create_dataset('ID',data=ID)
+            dset = h5py_helper.store_data(f, 'ID', data=ID)
             dset.attrs['title'] = "ID of the gaseous species"
 
-            dset = f.create_dataset('ISO',data=ISO)
+            dset = h5py_helper.store_data(f, 'ISO', data=ISO)
             dset.attrs['title'] = "Isotope ID of the gaseous species"
             
-            dset = f.create_dataset('WAVE',data=self.WAVE)
+            dset = h5py_helper.store_data(f, 'WAVE', data=self.WAVE)
             dset.attrs['title'] = "Spectral points at which the cross sections are defined"
             
-            dset = f.create_dataset('NP',data=self.NP)
+            dset = h5py_helper.store_data(f, 'NP', data=self.NP)
             dset.attrs['title'] = "Number of pressure levels at which the look-up table is tabulated"
             
-            dset = f.create_dataset('NT',data=self.NT)
+            dset = h5py_helper.store_data(f, 'NT', data=self.NT)
             dset.attrs['title'] = "Number of temperature levels at which the look-up table is tabulated"
             
-            dset = f.create_dataset('PRESS',data=self.PRESS)
+            dset = h5py_helper.store_data(f, 'PRESS', data=self.PRESS)
             dset.attrs['title'] = "Pressure levels at which the look-up table is tabulated / atm"
             
-            dset = f.create_dataset('TEMP',data=self.TEMP)
+            dset = h5py_helper.store_data(f, 'TEMP', data=self.TEMP)
             dset.attrs['title'] = "Temperature levels at which the look-up table is tabulated / K"
             
             #Writing the coefficients
-            dset = f.create_dataset('K',data=self.K[:,:,:,igas])
+            dset = h5py_helper.store_data(f, 'K', data=self.K[:,:,:,igas])
             dset.attrs['title'] = "Tabulated cross sections / cm2 multiplied by a factor of 1.0 x 10^20"
             
             f.close()
@@ -1563,15 +1560,15 @@ def read_header_lta_hdf5(filename):
     else:
         f = h5py.File(filename+'.h5','r')
 
-    ilbl = np.int32(f.get('ILBL'))
+    ilbl = h5py_helper.retrieve_data(f, 'ILBL', np.int32)
     if ilbl==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-        wave = np.array(f.get('WAVE'))
-        npress = np.int32(f.get('NP'))
-        ntemp = np.int32(f.get('NT'))
-        gasID = np.int32(f.get('ID'))
-        isoID = np.int32(f.get('ISO'))
-        presslevels = np.array(f.get('PRESS'))
-        templevels = np.array(f.get('TEMP'))
+        wave = h5py_helper.retrieve_data(f, 'WAVE', np.array)
+        npress = h5py_helper.retrieve_data(f, 'NP', np.int32)
+        ntemp = h5py_helper.retrieve_data(f, 'NT', np.int32)
+        gasID = h5py_helper.retrieve_data(f, 'ID', np.int32)
+        isoID = h5py_helper.retrieve_data(f, 'ISO', np.int32)
+        presslevels = h5py_helper.retrieve_data(f, 'PRESS', np.array)
+        templevels = h5py_helper.retrieve_data(f, 'TEMP', np.array)
     else:
         raise ValueError('error in read_header_lta_hdf5 :: the defined ilbl in the look-up table must be 2')
     

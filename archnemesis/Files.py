@@ -13,12 +13,16 @@ from archnemesis import *
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
 from copy import copy
 
+from archnemesis.helpers import h5py_helper
 from archnemesis.enums import (
     PlanetEnum, AtmosphericProfileFormatEnum, InstrumentLineshape, WaveUnit, SpectraUnit,
     SpectralCalculationMode, LowerBoundaryCondition, ScatteringCalculationMode, AerosolPhaseFunctionCalculationMode,
     ParaH2Ratio, RayleighScatteringMode
 )
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
 
 
 ###############################################################################################
@@ -210,7 +214,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #################################################################
 
     Variables = Variables_0()
-    Variables.read_apr(runname,Atmosphere.NP,nlocations=Atmosphere.NLOCATIONS)
+    Variables.read_apr(runname, Atmosphere.NP, Atmosphere.NVMR, Atmosphere.NDUST, Atmosphere.NLOCATIONS)
     Variables.XN = copy(Variables.XA)
     Variables.SX = copy(Variables.SA)
 
@@ -269,15 +273,14 @@ def read_retparam_hdf5(runname):
             raise ValueError('error :: Retrieval/Output/Parameters is not defined in HDF5 file')
             return None
 
-
-        NVAR = np.int32(f.get('Retrieval/Output/Parameters/NVAR'))
-        NXVAR = np.array(f.get('Retrieval/Output/Parameters/NXVAR'))
-        VARIDENT = np.array(f.get('Retrieval/Output/Parameters/VARIDENT'))
-        VARPARAM = np.array(f.get('Retrieval/Output/Parameters/VARPARAM'))
-        RETPARAM = np.array(f.get('Retrieval/Output/Parameters/RETPARAM'))
-        RETERRPARAM = np.array(f.get('Retrieval/Output/Parameters/RETERRPARAM'))
-        APRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRPARAM'))
-        APRERRPARAM = np.array(f.get('Retrieval/Output/Parameters/APRERRPARAM'))
+        NVAR = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/NVAR', np.int32)
+        NXVAR = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/NXVAR', np.array)
+        VARIDENT = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/VARIDENT', np.array)
+        VARPARAM = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/VARPARAM', np.array)
+        RETPARAM = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/RETPARAM', np.array)
+        RETERRPARAM = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/RETERRPARAM', np.array)
+        APRPARAM = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/APRPARAM', np.array)
+        APRERRPARAM = h5py_helper.retrieve_data(f, 'Retrieval/Output/Parameters/APRERRPARAM', np.array)
 
 
     return NVAR,NXVAR,VARIDENT,VARPARAM,APRPARAM,APRERRPARAM,RETPARAM,RETERRPARAM
@@ -320,7 +323,7 @@ def read_bestfit_hdf5(runname):
             raise ValueError('error :: Retrieval/Output/OptimalEstimation/YN is not defined in HDF5 file')
             return None
         
-        YN = np.array(f.get('Retrieval/Output/OptimalEstimation/YN'))
+        YN = h5py_helper.retrieve_data(f, 'Retrieval/Output/OptimalEstimation/YN', np.array)
  
     #Writing the measurement vector in same format as in Measurement
     Measurement = Measurement_0()
@@ -396,6 +399,7 @@ def read_input_files(runname):
     #Initialise Atmosphere class and read file (.ref, aerosol.ref)
     ##############################################################
 
+    _lgr.info(f'Reading atmospheric files...')
     Atm = Atmosphere_0(runname=runname)
 
     #Read gaseous atmosphere
@@ -526,9 +530,9 @@ def read_input_files(runname):
 
     #Reading .apr file and Variables Class
     #################################################################
-
+    _lgr.info(f'Reading .apr file')
     Variables = Variables_0()
-    Variables.read_apr(runname,Atm.NP)
+    Variables.read_apr(runname, Atm.NP, Atm.NVMR, Atm.NDUST, Atm.NLOCATIONS)
     Variables.XN = copy(Variables.XA)
     Variables.SX = copy(Variables.SA)
 
