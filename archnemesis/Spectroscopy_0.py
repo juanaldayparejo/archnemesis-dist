@@ -279,41 +279,38 @@ class Spectroscopy_0:
         #Assessing that everything is correct
         self.assess()
 
-        f = h5py.File(runname+'.h5','a')
-        
-        if inside_telluric is False:
-            #Checking if Spectroscopy already exists
-            if ('/Spectroscopy' in f)==True:
-                del f['Spectroscopy']   #Deleting the Spectroscopy information that was previously written in the file
+        with h5py.File(runname+'.h5','a') as f:
+            if inside_telluric is False:
+                #Checking if Spectroscopy already exists
+                if ('/Spectroscopy' in f)==True:
+                    del f['Spectroscopy']   #Deleting the Spectroscopy information that was previously written in the file
 
-            grp = f.create_group("Spectroscopy")
-        else:
-            #The Spectroscopy class must be inserted inside the Telluric class
-            if ('/Telluric/Spectroscopy' in f)==True:
-                del f['Telluric/Spectroscopy']   #Deleting the Spectroscopy information that was previously written in the file
+                grp = f.create_group("Spectroscopy")
+            else:
+                #The Spectroscopy class must be inserted inside the Telluric class
+                if ('/Telluric/Spectroscopy' in f)==True:
+                    del f['Telluric/Spectroscopy']   #Deleting the Spectroscopy information that was previously written in the file
 
-            grp = f.create_group("Telluric/Spectroscopy")
+                grp = f.create_group("Telluric/Spectroscopy")
 
-        #Writing the main dimensions
-        dset = grp.create_dataset('NGAS',data=self.NGAS)
-        dset.attrs['title'] = "Number of radiatively active gases in atmosphere"
+            #Writing the main dimensions
+            dset = grp.create_dataset('NGAS',data=self.NGAS)
+            dset.attrs['title'] = "Number of radiatively active gases in atmosphere"
 
-        dset = grp.create_dataset('ILBL',data=int(self.ILBL))
-        dset.attrs['title'] = "Spectroscopy calculation type"
-        if self.ILBL==SpectralCalculationMode.K_TABLES:
-            dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
-        elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
-        else:
-            raise ValueError('error :: ILBL must be 0 or 2')
+            dset = grp.create_dataset('ILBL',data=int(self.ILBL))
+            dset.attrs['title'] = "Spectroscopy calculation type"
+            if self.ILBL==SpectralCalculationMode.K_TABLES:
+                dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
+            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
+            else:
+                raise ValueError('error :: ILBL must be 0 or 2')
 
-        if self.NGAS>0:
-            if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
-                dt = h5py.special_dtype(vlen=str)
-                dset = grp.create_dataset('LOCATION',data=self.LOCATION,dtype=dt)
-                dset.attrs['title'] = "Location of the pre-tabulated tables"
-
-        f.close()
+            if self.NGAS>0:
+                if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
+                    dt = h5py.special_dtype(vlen=str)
+                    dset = grp.create_dataset('LOCATION',data=self.LOCATION,dtype=dt)
+                    dset.attrs['title'] = "Location of the pre-tabulated tables"
 
     ######################################################################################################
     def read_hdf5(self,runname,inside_telluric=False):
@@ -325,37 +322,32 @@ class Spectroscopy_0:
         """
 
         import h5py
-
-        f = h5py.File(runname+'.h5','r')
         
-        if inside_telluric is True:
-            name = '/Telluric/Spectroscopy'
-        else:
-            name = '/Spectroscopy'
+        with h5py.File(runname+'.h5','r') as f:
+            if inside_telluric is True:
+                name = '/Telluric/Spectroscopy'
+            else:
+                name = '/Spectroscopy'
 
-        #Checking if Spectroscopy exists
-        e = name in f
-        if e==False:
-            f.close()
-            raise ValueError('error :: Spectroscopy is not defined in HDF5 file')
-        else:
-            self.NGAS = np.int32(f.get(name+'/NGAS'))
-            self.ILBL = SpectralCalculationMode(np.int32(f.get(name+'/ILBL')))
-
-            if self.NGAS>0:
-                LOCATION1 = f.get(name+'/LOCATION')
-                LOCATION = ['']*self.NGAS
-                for igas in range(self.NGAS):
-                    LOCATION[igas] = LOCATION1[igas].decode('ascii')
-                self.LOCATION = LOCATION
-                
-                #Reading the header information
-                self.read_header()
-                
+            #Checking if Spectroscopy exists
+            e = name in f
+            if e==False:
                 f.close()
+                raise ValueError('error :: Spectroscopy is not defined in HDF5 file')
+            else:
+                self.NGAS = np.int32(f.get(name+'/NGAS'))
+                self.ILBL = SpectralCalculationMode(np.int32(f.get(name+'/ILBL')))
 
-            f.close()
-
+                if self.NGAS>0:
+                    LOCATION1 = f.get(name+'/LOCATION')
+                    LOCATION = ['']*self.NGAS
+                    for igas in range(self.NGAS):
+                        LOCATION[igas] = LOCATION1[igas].decode('ascii')
+                    self.LOCATION = LOCATION
+                    
+                    #Reading the header information
+                    self.read_header()
+                    
     ######################################################################################################
     def read_lls(self, runname):
         """

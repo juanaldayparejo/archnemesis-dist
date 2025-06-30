@@ -3150,35 +3150,6 @@ class ForwardModel_0:
         
                 #Changing the units of the spectra
                 SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
-            
-
-        elif PathCalc.MULTIPLE_SCATTERING in IMODM: #Multiple scattering calculation
-
-            _lgr.info('CIRSrad :: Performing multiple scattering calculation')
-            _lgr.info(f"CIRSrad :: NF =  {(self.ScatterX.NF,'; NMU = ',self.ScatterX.NMU,'; NPHI = ',self.ScatterX.NPHI)}")
-            _lgr.debug(f'{self.PathX.EMISS_ANG=} {self.PathX.SOL_ANG=} {self.PathX.AZI_ANG=}')
-
-
-            #Calculating the solar flux at the top of the atmosphere
-            solar = np.zeros(self.SpectroscopyX.NWAVE)
-            if self.StellarX.SOLEXIST==True:
-                self.StellarX.calc_solar_flux()
-                f = interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
-                solar[:] = f(self.SpectroscopyX.WAVE)  #W cm-2 (cm-1)-1 or W cm-2 um-1 
-
-            #Defining the units of the output spectrum
-            xfac = 1.
-            if self.MeasurementX.IFORM==SpectraUnit.FluxRatio:
-                xfac=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2.
-                f = interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLSPEC)
-                solpspec = f(self.SpectroscopyX.WAVE)  #Stellar power spectrum (W (cm-1)-1 or W um-1)
-                xfac = xfac / solpspec
-            elif self.MeasurementX.IFORM==SpectraUnit.Integrated_spectral_power:
-                xfac=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2. 
-            
-            #Calculating the radiance
-            SPECOUT = self.scloud11wave(self.SpectroscopyX.WAVE,self.ScatterX,self.SurfaceX,self.LayerX,self.MeasurementX,self.PathX, solar)
-
 
         elif PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL in IMODM: #Single scattering calculation
 
@@ -3262,7 +3233,6 @@ class ForwardModel_0:
         
                 #Changing the units of the spectra
                 SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
-                
 
         elif (PathCalc.DOWNWARD_FLUX | PathCalc.MULTIPLE_SCATTERING) in IMODM: #Downwards flux (bottom) calculation (scattering)
 
@@ -3303,6 +3273,33 @@ class ForwardModel_0:
 
                 #Getting the downward flux at the bottom layer 
                 SPECOUT[:,:,ipath] = fdown[:,:,0]*xfac
+
+        elif PathCalc.MULTIPLE_SCATTERING in IMODM: #Multiple scattering calculation
+
+            _lgr.info('CIRSrad :: Performing multiple scattering calculation')
+            _lgr.info(f"CIRSrad :: NF =  {(self.ScatterX.NF,'; NMU = ',self.ScatterX.NMU,'; NPHI = ',self.ScatterX.NPHI)}")
+            _lgr.debug(f'{self.PathX.EMISS_ANG=} {self.PathX.SOL_ANG=} {self.PathX.AZI_ANG=}')
+
+
+            #Calculating the solar flux at the top of the atmosphere
+            solar = np.zeros(self.SpectroscopyX.NWAVE)
+            if self.StellarX.SOLEXIST==True:
+                self.StellarX.calc_solar_flux()
+                f = interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
+                solar[:] = f(self.SpectroscopyX.WAVE)  #W cm-2 (cm-1)-1 or W cm-2 um-1 
+
+            #Defining the units of the output spectrum
+            xfac = 1.
+            if self.MeasurementX.IFORM==SpectraUnit.FluxRatio:
+                xfac=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2.
+                f = interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLSPEC)
+                solpspec = f(self.SpectroscopyX.WAVE)  #Stellar power spectrum (W (cm-1)-1 or W um-1)
+                xfac = xfac / solpspec
+            elif self.MeasurementX.IFORM==SpectraUnit.Integrated_spectral_power:
+                xfac=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2. 
+            
+            #Calculating the radiance
+            SPECOUT = self.scloud11wave(self.SpectroscopyX.WAVE,self.ScatterX,self.SurfaceX,self.LayerX,self.MeasurementX,self.PathX, solar)
 
         else:
             raise NotImplementedError(f'error in CIRSrad :: Calculation type "{IMODM}" not included in CIRSrad')
@@ -3353,22 +3350,9 @@ class ForwardModel_0:
         from scipy import interpolate
         #from NemesisPy import nemesisf
         from copy import copy
+        
 
-        #Initialise some arrays
-        ###################################
-
-        #Initialise the inputs
-        Measurement=self.MeasurementX
-        Atmosphere=self.AtmosphereX
-        Spectroscopy=self.SpectroscopyX
-        Scatter=self.ScatterX
-        Stellar=self.StellarX
-        Surface=self.SurfaceX
-        CIA=self.CIAX
-        Layer=self.LayerX
-        Path=self.PathX
-
-        #Calculating the vertical opacity of each layer
+        #Calculating the vertical opacity of each self.LayerX
         ######################################################
         ######################################################
         ######################################################
@@ -3384,8 +3368,8 @@ class ForwardModel_0:
 
 
         #Defining the matrices where the derivatives will be stored
-        dTAUCON = np.zeros((Spectroscopy.NWAVE,Atmosphere.NVMR+2+Scatter.NDUST,Layer.NLAY)) #(NWAVE,NLAY,NGAS+2+NDUST)
-        dTAUSCA = np.zeros((Spectroscopy.NWAVE,Atmosphere.NVMR+2+Scatter.NDUST,Layer.NLAY)) #(NWAVE,NLAY,NGAS+2+NDUST)
+        dTAUCON = np.zeros((self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST,self.LayerX.NLAY)) #(NWAVE,NLAY,NGAS+2+NDUST)
+        dTAUSCA = np.zeros((self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST,self.LayerX.NLAY)) #(NWAVE,NLAY,NGAS+2+NDUST)
 
         #Calculating the continuum absorption by gaseous species
         #################################################################################################################
@@ -3394,32 +3378,32 @@ class ForwardModel_0:
 
         #To be done
 
-        #Calculating the vertical opacity by CIA
+        #Calculating the vertical opacity by self.CIAX
         #################################################################################################################
 
-        if CIA==None:
-            TAUCIA = np.zeros((Spectroscopy.NWAVE,Layer.NLAY))
-            dTAUCIA = np.zeros((Spectroscopy.NWAVE,Layer.NLAY,7))
-            _lgr.info('CIRSrad :: CIA not included in calculations')
+        if self.CIAX==None:
+            TAUCIA = np.zeros((self.SpectroscopyX.NWAVE,self.LayerX.NLAY))
+            dTAUCIA = np.zeros((self.SpectroscopyX.NWAVE,self.LayerX.NLAY,7))
+            _lgr.info('CIRSrad :: self.CIAX not included in calculations')
         else:
-            _lgr.info('CIRSradg :: Calculating CIA opacity')
+            _lgr.info('CIRSradg :: Calculating self.CIAX opacity')
             TAUCIA,dTAUCIA = self.calc_tau_cia() #(NWAVE,NLAY);(NWAVE,NLAY,NVMR+2)
-            Layer.TAUCIA = TAUCIA
+            self.LayerX.TAUCIA = TAUCIA
 
-            dTAUCON[:,0:Atmosphere.NVMR,:] = dTAUCON[:,0:Atmosphere.NVMR,:] + np.transpose(np.transpose(dTAUCIA[:,:,0:Atmosphere.NVMR],axes=(2,0,1)) / (Layer.TOTAM.T),axes=(1,0,2)) #dTAUCIA/dAMOUNT (m2)
-            dTAUCON[:,Atmosphere.NVMR,:] = dTAUCON[:,Atmosphere.NVMR,:] + dTAUCIA[:,:,Atmosphere.NVMR]  #dTAUCIA/dT
+            dTAUCON[:,0:self.AtmosphereX.NVMR,:] = dTAUCON[:,0:self.AtmosphereX.NVMR,:] + np.transpose(np.transpose(dTAUCIA[:,:,0:self.AtmosphereX.NVMR],axes=(2,0,1)) / (self.LayerX.TOTAM.T),axes=(1,0,2)) #dTAUCIA/dAMOUNT (m2)
+            dTAUCON[:,self.AtmosphereX.NVMR,:] = dTAUCON[:,self.AtmosphereX.NVMR,:] + dTAUCIA[:,:,self.AtmosphereX.NVMR]  #dTAUCIA/dT
 
             flagh2p = False
             if flagh2p==True:
-                dTAUCON[:,Atmosphere.NVMR+1+Scatter.NDUST,:] = dTAUCON[:,Atmosphere.NVMR+1+Scatter.NDUST,:] + dTAUCIA[:,:,6]  #dTAUCIA/dPARA-H2
+                dTAUCON[:,self.AtmosphereX.NVMR+1+self.ScatterX.NDUST,:] = dTAUCON[:,self.AtmosphereX.NVMR+1+self.ScatterX.NDUST,:] + dTAUCIA[:,:,6]  #dTAUCIA/dPARA-H2
 
         #Calculating the vertical opacity by Rayleigh scattering
         #################################################################################################################
 
         TAURAY,dTAURAY = self.calc_tau_rayleigh()
-        Layer.TAURAY = TAURAY
+        self.LayerX.TAURAY = TAURAY
 
-        for i in range(Atmosphere.NVMR):
+        for i in range(self.AtmosphereX.NVMR):
             dTAUCON[:,i,:] = dTAUCON[:,i,:] + dTAURAY[:,:] #dTAURAY/dAMOUNT (m2)
 
         #Calculating the vertical opacity by aerosols from the extinction coefficient and single scattering albedo
@@ -3432,79 +3416,81 @@ class ForwardModel_0:
         TAUDUST = np.sum(TAUDUST1,2)  #(NWAVE,NLAYER)
         TAUSCAT = np.sum(TAUCLSCAT,2)  #(NWAVE,NLAYER)
 
-        for i in range(Scatter.NDUST):
-            dTAUCON[:,Atmosphere.NVMR+1+i,:] = dTAUCON[:,Atmosphere.NVMR+1+i,:] + dTAUDUST1[:,:,i]  #dTAUDUST/dAMOUNT (m2)
-            dTAUSCA[:,Atmosphere.NVMR+1+i,:] = dTAUSCA[:,Atmosphere.NVMR+1+i,:] + dTAUCLSCAT[:,:,i]
+        for i in range(self.ScatterX.NDUST):
+            dTAUCON[:,self.AtmosphereX.NVMR+1+i,:] = dTAUCON[:,self.AtmosphereX.NVMR+1+i,:] + dTAUDUST1[:,:,i]  #dTAUDUST/dAMOUNT (m2)
+            dTAUSCA[:,self.AtmosphereX.NVMR+1+i,:] = dTAUSCA[:,self.AtmosphereX.NVMR+1+i,:] + dTAUCLSCAT[:,:,i]
 
         #Calculating the total optical depth for the aerosols
         _lgr.info(f"CIRSrad :: Aerosol optical depths at  {(self.SpectroscopyX.WAVE[0],' :: ',np.sum(TAUDUST1[0,:,:],axis=0))}")
 
-        #Calculating the gaseous line opacity in each layer
+        #Calculating the gaseous line opacity in each self.LayerX
         ########################################################################################################
 
         _lgr.info('CIRSradg :: Calculating GAS opacity')
-        if Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
+        if self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
 
-            TAUGAS = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Layer.NLAY,Spectroscopy.NGAS])  #Vertical opacity of each gas in each layer
-            dTAUGAS = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Atmosphere.NVMR+2+Scatter.NDUST,Layer.NLAY])
+            TAUGAS = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.LayerX.NLAY,self.SpectroscopyX.NGAS])  #Vertical opacity of each gas in each self.LayerX
+            dTAUGAS = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST,self.LayerX.NLAY])
 
-            #Calculating the cross sections for each gas in each layer
-            k,dkdT = Spectroscopy.calc_klblg(Layer.NLAY,Layer.PRESS/101325.,Layer.TEMP)
+            #Calculating the cross sections for each gas in each self.LayerX
+            k,dkdT = self.SpectroscopyX.calc_klblg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP)
 
-            for i in range(Spectroscopy.NGAS):
-                IGAS = np.where( (Atmosphere.ID==Spectroscopy.ID[i]) & (Atmosphere.ISO==Spectroscopy.ISO[i]) )
+            for i in range(self.SpectroscopyX.NGAS):
+                IGAS = np.where( (self.AtmosphereX.ID==self.SpectroscopyX.ID[i]) & (self.AtmosphereX.ISO==self.SpectroscopyX.ISO[i]) )
                 IGAS = IGAS[0]
 
-                #Calculating vertical column density in each layer
-                VLOSDENS = Layer.AMOUNT[:,IGAS].T * 1.0e-20   #m-2
+                #Calculating vertical column density in each self.LayerX
+                VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-20   #m-2
 
-                #Calculating vertical opacity for each gas in each layer
+                #Calculating vertical opacity for each gas in each self.LayerX
                 TAUGAS[:,0,:,i] = k[:,:,i] * 1.0e-4 * VLOSDENS
                 dTAUGAS[:,0,IGAS[0],:] = k[:,:,i] * 1.0e-4 * 1.0e-20  #dTAUGAS/dAMOUNT (m2)
-                dTAUGAS[:,0,Atmosphere.NVMR,:] = dTAUGAS[:,0,Atmosphere.NVMR,:] + dkdT[:,:,i] * 1.0e-4 * VLOSDENS #dTAUGAS/dT
+                dTAUGAS[:,0,self.AtmosphereX.NVMR,:] = dTAUGAS[:,0,self.AtmosphereX.NVMR,:] + dkdT[:,:,i] * 1.0e-4 * VLOSDENS #dTAUGAS/dT
 
-            #Combining the gaseous opacity in each layer
+            #Combining the gaseous opacity in each self.LayerX
             TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
 
-        elif Spectroscopy.ILBL == SpectralCalculationMode.K_TABLES:    #K-table
+        elif self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:    #K-table
 
-            dTAUGAS = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Atmosphere.NVMR+2+Scatter.NDUST,Layer.NLAY])
+            dTAUGAS = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST,self.LayerX.NLAY])
 
-            #Calculating the k-coefficients for each gas in each layer
-            k_gas,dkgasdT = Spectroscopy.calc_kg(Layer.NLAY,Layer.PRESS/101325.,Layer.TEMP) # (NWAVE,NG,NLAY,NGAS)
+            #Calculating the k-coefficients for each gas in each self.LayerX
+            k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP) # (NWAVE,NG,NLAY,NGAS)
             
-            f_gas = np.zeros([Spectroscopy.NGAS,Layer.NLAY])
-            utotl = np.zeros(Layer.NLAY)
-            for i in range(Spectroscopy.NGAS):
-                IGAS = np.where( (Atmosphere.ID==Spectroscopy.ID[i]) & (Atmosphere.ISO==Spectroscopy.ISO[i]) )[0][0]
-                f_gas[i,:] = Layer.AMOUNT[:,IGAS] * 1.0e-4 * 1.0e-20  #Vertical column density of the radiatively active gases in cm-2
+            f_gas = np.zeros([self.SpectroscopyX.NGAS,self.LayerX.NLAY])
+            utotl = np.zeros(self.LayerX.NLAY)
+            for i in range(self.SpectroscopyX.NGAS):
+                IGAS = np.where( (self.AtmosphereX.ID==self.SpectroscopyX.ID[i]) & (self.AtmosphereX.ISO==self.SpectroscopyX.ISO[i]) )[0][0]
+                f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * 1.0e-4 * 1.0e-20  #Vertical column density of the radiatively active gases in cm-2
 
-            #Combining the k-distributions of the different gases in each layer, as well as their gradients
-            k_layer,dk_layer = k_overlapg(Spectroscopy.DELG,k_gas,dkgasdT,f_gas)
+            #Combining the k-distributions of the different gases in each self.LayerX, as well as their gradients
+            k_layer,dk_layer = k_overlapg(self.SpectroscopyX.DELG,k_gas,dkgasdT,f_gas)
 
-            #Calculating the opacity of each layer
+            #Calculating the opacity of each self.LayerX
             TAUGAS = k_layer #(NWAVE,NG,NLAY)
 
-            #Calculating the gradients of each layer and for each gas
-            for i in range(Spectroscopy.NGAS):
-                IGAS = np.where( (Atmosphere.ID==Spectroscopy.ID[i]) & (Atmosphere.ISO==Spectroscopy.ISO[i]) )
+            #Calculating the gradients of each self.LayerX and for each gas
+            for i in range(self.SpectroscopyX.NGAS):
+                IGAS = np.where( (self.AtmosphereX.ID==self.SpectroscopyX.ID[i]) & (self.AtmosphereX.ISO==self.SpectroscopyX.ISO[i]) )
                 IGAS = IGAS[0]
                 dTAUGAS[:,:,IGAS[0],:] = dk_layer[:,:,:,i] * 1.0e-4 * 1.0e-20  #dTAU/dAMOUNT (m2)
 
-            dTAUGAS[:,:,Atmosphere.NVMR,:] = dk_layer[:,:,:,Spectroscopy.NGAS] #dTAU/dT
+            dTAUGAS[:,:,self.AtmosphereX.NVMR,:] = dk_layer[:,:,:,self.SpectroscopyX.NGAS] #dTAU/dT
 
         else:
             raise NotImplementedError(f'error in CIRSrad :: ILBL must be either {SpectralCalculationMode(0)} or {SpectralCalculationMode(2)}')
-
-        #Combining the different kinds of opacity in each layer
+        
+        #Combining the different kinds of opacity in each self.LayerX
         ########################################################################################################
 
         _lgr.info('CIRSradg :: Calculating TOTAL opacity')
         TAUTOT = np.zeros(TAUGAS.shape) #(NWAVE,NG,NLAY)
         dTAUTOT = np.zeros(dTAUGAS.shape) #(NWAVE,NG,NVMR+2+NDUST,NLAY)
-        for ig in range(Spectroscopy.NG):
+        for ig in range(self.SpectroscopyX.NG):
             TAUTOT[:,ig,:] = TAUGAS[:,ig,:] + TAUCIA[:,:] + TAUDUST[:,:] + TAURAY[:,:]
             dTAUTOT[:,ig,:,:] = (dTAUGAS[:,ig,:,:] + dTAUCON[:,:,:]) #dTAU/dAMOUNT (m2) or dTAU/dK (K-1)
+        
+        self.LayerX.TAUTOT = TAUTOT
         del TAUGAS,TAUCIA,TAUDUST,TAURAY
         del dTAUGAS,dTAUCON
 
@@ -3512,8 +3498,8 @@ class ForwardModel_0:
         #################################################################################################################
 
         _lgr.info('CIRSradg :: Calculating TOTAL line-of-sight opacity')
-        TAUTOT_LAYINC = TAUTOT[:,:,Path.LAYINC[:,:]] * Path.SCALE[:,:]  #(NWAVE,NG,NLAYIN,NPATH)
-        dTAUTOT_LAYINC = dTAUTOT[:,:,:,Path.LAYINC[:,:]] * Path.SCALE[:,:] #(NWAVE,NG,NGAS+2+NDUST,NLAYIN,NPATH)
+        TAUTOT_LAYINC = TAUTOT[:,:,self.PathX.LAYINC[:,:]] * self.PathX.SCALE[:,:]  #(NWAVE,NG,NLAYIN,NPATH)
+        dTAUTOT_LAYINC = dTAUTOT[:,:,:,self.PathX.LAYINC[:,:]] * self.PathX.SCALE[:,:] #(NWAVE,NG,NGAS+2+NDUST,NLAYIN,NPATH)
 
         #Step through the different number of paths and calculate output spectrum
         ############################################################################
@@ -3544,23 +3530,23 @@ class ForwardModel_0:
         #		28	(Atm) Single scattering approximation (spherical)
 
         
-        IMODM = np.unique(Path.IMOD)
-        assert IMODM.size == 1, 'CIRSradg :: More than one calculation type in the same path. This is not supported yet'
+        IMODM = np.unique(self.PathX.IMOD)
+        assert IMODM.size == 1, 'CIRSradg :: More than one calculation type in the same self.PathX. This is not supported yet'
 
         IMODM = PathCalc(IMODM[0]) #Convert to PathCalc enum
 
         _lgr.info(f'CIRSradg :: IMODM = {IMODM!r}')
  
-        SPECOUT = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Path.NPATH])
-        dSPECOUT = np.zeros([Spectroscopy.NWAVE,Spectroscopy.NG,Atmosphere.NVMR+2+Scatter.NDUST,Path.NLAYIN.max(),Path.NPATH])
-        dTSURF = np.zeros((Spectroscopy.NWAVE,Spectroscopy.NG,Path.NPATH))
+        SPECOUT = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.PathX.NPATH])
+        dSPECOUT = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST,self.PathX.NLAYIN.max(),self.PathX.NPATH])
+        dTSURF = np.zeros((self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.PathX.NPATH))
 
         if not (PathCalc.ABSORBTION 
                 | PathCalc.THERMAL_EMISSION 
             ) & IMODM:  #Pure transmission spectrum
 
             _lgr.info('CIRSradg :: Calculating TRANSMISSION')
-            #Calculating the total opacity over the path
+            #Calculating the total opacity over the self.PathX
             TAUTOT_PATH = np.sum(TAUTOT_LAYINC,2) #(NWAVE,NG,NPATH)
             del TAUTOT_LAYINC
 
@@ -3568,15 +3554,15 @@ class ForwardModel_0:
             SPECOUT = np.exp(-(TAUTOT_PATH))  #(NWAVE,NG,NPATH)
             #del TAUTOT_PATH
 
-            xfac = np.ones(Spectroscopy.NWAVE)
-            if Measurement.IFORM==SpectraUnit.Atmospheric_transmission:  #If IFORM=4 we should multiply the transmission by solar flux
-                Stellar.calc_solar_flux()
+            xfac = np.ones(self.SpectroscopyX.NWAVE)
+            if self.MeasurementX.IFORM==SpectraUnit.Atmospheric_transmission:  #If IFORM=4 we should multiply the transmission by solar flux
+                self.StellarX.calc_solar_flux()
                 #Interpolating to the calculation wavelengths
-                f = interpolate.interp1d(Stellar.WAVE,Stellar.SOLFLUX)
-                solflux = f(Spectroscopy.WAVE)
+                f = interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
+                solflux = f(self.SpectroscopyX.WAVE)
                 xfac = solflux
-                for ipath in range(Path.NPATH):
-                    for ig in range(Spectroscopy.NG):
+                for ipath in range(self.PathX.NPATH):
+                    for ig in range(self.SpectroscopyX.NG):
                         SPECOUT[:,ig,ipath] = SPECOUT[:,ig,ipath] * xfac
 
 
@@ -3588,7 +3574,7 @@ class ForwardModel_0:
 
         elif PathCalc.ABSORBTION in IMODM: #Absorption spectrum (useful for small transmissions)
             _lgr.info('CIRSradg :: Calculating ABSORPTION')
-            #Calculating the total opacity over the path
+            #Calculating the total opacity over the self.PathX
             TAUTOT_PATH = np.sum(TAUTOT_LAYINC,2) #(NWAVE,NG,NPATH)
 
             #Absorption spectrum (useful for small transmissions)
@@ -3598,27 +3584,27 @@ class ForwardModel_0:
         elif PathCalc.THERMAL_EMISSION in IMODM: #Thermal emission from planet
             _lgr.info('CIRSradg :: Calculating THERMAL_EMISSION')
             #Defining the units of the output spectrum
-            xfac = np.ones(Spectroscopy.NWAVE)
-            if Measurement.IFORM==SpectraUnit.FluxRatio:
-                xfac*=np.pi*4.*np.pi*((Atmosphere.RADIUS)*1.0e2)**2.
-                f = interpolate.interp1d(Stellar.WAVE,Stellar.SOLSPEC)
-                solpspec = f(Spectroscopy.WAVE)  #Stellar power spectrum (W (cm-1)-1 or W um-1)
+            xfac = np.ones(self.SpectroscopyX.NWAVE)
+            if self.MeasurementX.IFORM==SpectraUnit.FluxRatio:
+                xfac*=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2.
+                f = interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLSPEC)
+                solpspec = f(self.SpectroscopyX.WAVE)  #self.StellarX power spectrum (W (cm-1)-1 or W um-1)
                 xfac = xfac / solpspec
 
-            #Interpolating the emissivity of the surface to the calculation wavelengths
-            if Surface.TSURF>0.0:
-                f = interpolate.interp1d(Surface.VEM,Surface.EMISSIVITY)
-                EMISSIVITY = f(Spectroscopy.WAVE)
+            #Interpolating the emissivity of the self.SurfaceX to the calculation wavelengths
+            if self.SurfaceX.TSURF>0.0:
+                f = interpolate.interp1d(self.SurfaceX.VEM,self.SurfaceX.EMISSIVITY)
+                EMISSIVITY = f(self.SpectroscopyX.WAVE)
             else:
-                EMISSIVITY = np.zeros(Spectroscopy.NWAVE)
+                EMISSIVITY = np.zeros(self.SpectroscopyX.NWAVE)
                 
             #Calculating the spectra
-            for ipath in range(Path.NPATH):
-                NLAYIN = Path.NLAYIN[ipath]
-                EMTEMP = Path.EMTEMP[0:NLAYIN,ipath]
-                EMPRESS = Layer.PRESS[Path.LAYINC[0:NLAYIN,ipath]]
+            for ipath in range(self.PathX.NPATH):
+                NLAYIN = self.PathX.NLAYIN[ipath]
+                EMTEMP = self.PathX.EMTEMP[0:NLAYIN,ipath]
+                EMPRESS = self.LayerX.PRESS[self.PathX.LAYINC[0:NLAYIN,ipath]]
                 
-                SPECOUT[:,:,ipath],dSPECOUT[:,:,:,0:NLAYIN,ipath],dTSURF[:,:,ipath] = calc_thermal_emission_spectrumg(Measurement.ISPACE,Spectroscopy.WAVE,TAUTOT_LAYINC[:,:,0:NLAYIN,ipath],dTAUTOT_LAYINC[:,:,:,0:NLAYIN,ipath],Atmosphere.NVMR,EMTEMP,EMPRESS,Surface.TSURF,EMISSIVITY)
+                SPECOUT[:,:,ipath],dSPECOUT[:,:,:,0:NLAYIN,ipath],dTSURF[:,:,ipath] = calc_thermal_emission_spectrumg(self.MeasurementX.ISPACE,self.SpectroscopyX.WAVE,TAUTOT_LAYINC[:,:,0:NLAYIN,ipath],dTAUTOT_LAYINC[:,:,:,0:NLAYIN,ipath],self.AtmosphereX.NVMR,EMTEMP,EMPRESS,self.SurfaceX.TSURF,EMISSIVITY)
         
                 #Changing the units of the spectra and gradients
                 SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
@@ -3627,9 +3613,9 @@ class ForwardModel_0:
 
         #Now integrate over g-ordinates
         _lgr.info('CIRSradg :: Integrading over g-ordinates')
-        SPECOUT = np.tensordot(SPECOUT, Spectroscopy.DELG, axes=([1],[0])) #NWAVE,NPATH
-        dSPECOUT = np.tensordot(dSPECOUT, Spectroscopy.DELG, axes=([1],[0])) #(WAVE,NGAS+2+NDUST,NLAYIN,NPATH)
-        dTSURF = np.tensordot(dTSURF, Spectroscopy.DELG, axes=([1],[0])) #NWAVE,NPATH
+        SPECOUT = np.tensordot(SPECOUT, self.SpectroscopyX.DELG, axes=([1],[0])) #NWAVE,NPATH
+        dSPECOUT = np.tensordot(dSPECOUT, self.SpectroscopyX.DELG, axes=([1],[0])) #(WAVE,NGAS+2+NDUST,NLAYIN,NPATH)
+        dTSURF = np.tensordot(dTSURF, self.SpectroscopyX.DELG, axes=([1],[0])) #NWAVE,NPATH
         
         return SPECOUT,np.nan_to_num(dSPECOUT),dTSURF
 
