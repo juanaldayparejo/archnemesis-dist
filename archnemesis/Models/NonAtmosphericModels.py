@@ -652,10 +652,35 @@ class Model228(NonAtmosphericModelBase):
 
 class Model229(NonAtmosphericModelBase):
     """
-        In this model, the ILS of the measurement is defined from every convolution wavenumber
-        using the double-Gaussian parameterisation created for analysing ACS MIR spectra
+        Model for representing the double-Gaussian parameterisation of the instrument lineshape for
+        retrievals from the Atmospheric Chemistry Suite aboard the ExoMars Trace Gas Orbiter
     """
     id : int = 229
+    
+    def __init__(
+            self, 
+            state_vector_start : int = 0, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int = 7,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model
+        self.parameters = (
+            ModelParameter('A0', slice(0,1), 'Wavenumber offset of main at lowest wavenumber','cm-1'),
+            ModelParameter('A1', slice(1,2), 'Wavenumber offset of main at wavenumber in the middle','cm-1'),
+            ModelParameter('A2', slice(2,3), 'Wavenumber offset of main at highest wavenumber','cm-1'),
+            ModelParameter('DELDG', slice(3,4), 'Offset of the second gaussian with respect to the first one (assumed spectrally constant)','cm-1'),
+            ModelParameter('FWHM', slice(4,5), 'FWHM of the main gaussian at lowest wavenumber (assumed to be constat in wavelength units)','cm-1'),
+            ModelParameter('AMP1', slice(5,6), 'Relative amplitude of the second gaussian with respect to the gaussian at lowest wavenumber'),
+            ModelParameter('AMP2', slice(6,7), 'Relative amplitude of the second gaussian with respect to the gaussian at highest wavenumber (linear var)'),
+        )
 
 
     @classmethod
@@ -893,7 +918,6 @@ class Model229(NonAtmosphericModelBase):
         lx[ix] = 0
         inum[ix] = 0
         ix = ix + 1
-
 
         return cls(ix_0, ix-ix_0)
 
@@ -1707,15 +1731,6 @@ class Model447(NonAtmosphericModelBase):
 
 
     @classmethod
-    def is_varident_valid(
-            cls,
-            varident : np.ndarray[[3],int],
-        ) -> bool:
-        _lgr.warning(f'Model id = {cls.id} is not implemented yet, so it will never be chosen as a valid model')
-        return False
-
-
-    @classmethod
     def calculate(cls, Measurement,v_doppler):
 
         """
@@ -2214,3 +2229,118 @@ class Model887(NonAtmosphericModelBase):
         ) -> None:
         raise NotImplementedError
 
+
+class Model999(NonAtmosphericModelBase):
+    """
+        In this model, the temperature of the surface is defined.
+    """
+    id : int = 999 
+        
+    def __init__(
+            self, 
+            state_vector_start : int = 0, 
+            #   Index of the state vector where parameters from this model start
+            
+            n_state_vector_entries : int = 1,
+            #   Number of parameters for this model stored in the state vector
+        ):
+        """
+            Initialise an instance of the model.
+        """
+        super().__init__(state_vector_start, n_state_vector_entries)
+        
+        # Define sub-slices of the state vector that correspond to
+        # parameters of the model
+        self.parameters = (
+            ModelParameter('surface temperature', slice(0,1), 'Surface Temperature','K'),
+        )
+        
+        
+    @classmethod
+    def calculate(cls, Surface, tsurf):
+
+        """
+            FUNCTION NAME : model999()
+
+            DESCRIPTION :
+
+                Function defining the model parameterisation 999 in NEMESIS.
+                In this model, we fit the surface temperature.
+
+            INPUTS :
+
+                Surface :: Python class defining the surface
+                tsurf :: Surface temperature (K)
+
+            OPTIONAL INPUTS: none
+
+            OUTPUTS :
+
+                Surface :: Updated measurement class with the surface temperature
+
+            CALLING SEQUENCE:
+
+                Surface = model999(Surface,tsurf)
+
+            MODIFICATION HISTORY : Juan Alday (25/05/2025)
+
+        """
+
+        Surface.TSURF = tsurf
+
+        return Surface
+
+
+    @classmethod
+    def from_apr_to_state_vector(
+            cls,
+            variables : "Variables_0",
+            f : IO,
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            lx : np.ndarray[["mx"],int],
+            x0 : np.ndarray[["mx"],float],
+            sx : np.ndarray[["mx","mx"],float],
+            inum : np.ndarray[["mx"],int],
+            npro : int,
+            nlocations : int,
+            runname : str,
+            sxminfac : float,
+        ) -> Self:
+        ix_0 = ix
+        #******** model for retrieving the Surface temperature
+
+        #Read the surface temperature and its uncertainty
+        s = f.readline().split()
+        tsurf = float(s[0])     #K
+        tsurf_err = float(s[1]) #K
+
+        #Filling the state vector and a priori covariance matrix with the surface temperature
+        lx[ix] = 0   #linear scale
+        x0[ix] = tsurf
+        sx[ix,ix] = (tsurf_err)**2.
+        inum[ix] = 0  #analytical gradient
+
+        ix = ix + 1
+
+        return cls(ix_0, ix-ix_0)
+
+
+    def calculate_from_subprofretg(
+            self,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ipar : int,
+            ivar : int,
+            xmap : np.ndarray,
+        ) -> None:
+        #Model 999. Retrieval of surface temperature
+        #***************************************************************
+
+        tsurf = forward_model.Variables.XN[ix]
+
+        forward_model.SurfaceX = self.calculate(forward_model.SurfaceX,tsurf)
+
+        ipar = -1
+        ix = ix + forward_model.Variables.NXVAR[ivar]

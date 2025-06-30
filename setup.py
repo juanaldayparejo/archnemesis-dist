@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='archnemesis',
-      version='1.0.0',
+      version='1.0.3',
       description='Python implementation of the NEMESIS radiative transfer and retrieval code',
       packages=['archnemesis'],
       install_requires=[
