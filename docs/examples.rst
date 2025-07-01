@@ -1,3 +1,8 @@
+Here, we include several jupyter notebooks that demonstrate the functionalities of archNEMESIS. These examples cover a range of topics, including reference classes, forward models, and retrievals. Each section provides practical examples to help users understand how to utilise archNEMESIS effectively.
+The majority of the examples include all the necessary files to run the notebooks, but some of them require additional heavy data files (e.g., line-by-line and correlated-k look-up tables) that are available upon request. The examples are designed to be self-contained and easy to follow, making it simple for users to get started with archNEMESIS.
+
+The source input files and notebooks for each specific example can be found in the `docs/examples` folder of the archNEMESIS repository. 
+
 Reference classes
 ------------------
 
