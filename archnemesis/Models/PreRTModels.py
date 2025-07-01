@@ -18,7 +18,8 @@ _lgr.setLevel(logging.DEBUG)
 
 class PreRTModelBase(ModelBase):
     """
-    Abstract base class of all parameterised models used by ArchNemesis that interact with the Atmosphere component.
+    Abstract base class of all parameterised models used by ArchNemesis that interact 
+    with Components before the radiative transfer calculation is performed.
     """
     
     def __init__(
