@@ -1,4 +1,6 @@
-# archNEMESIS
+<p align="center">
+  <img src="https://raw.githubusercontent.com/juanaldayparejo/archnemesis-dist/main/docs/images/archnemesis_logo_black_background.png" alt="archNEMESIS logo" width="400"/>
+</p>
 
 [![DOI](https://img.shields.io/badge/version-v1.0.1-red)](https://doi.org/10.5281/zenodo.15123560)
 [![Documentation](https://img.shields.io/badge/readthedocs-latest-blue)](https://archnemesis.readthedocs.io)
