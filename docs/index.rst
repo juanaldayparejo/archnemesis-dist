@@ -1,5 +1,10 @@
-archNEMESIS
-===========
+.. raw:: html
+
+   <p align="center">
+     <img src="https://raw.githubusercontent.com/juanaldayparejo/archnemesis-dist/main/docs/images/archnemesis_logo_white_background.png" alt="archNEMESIS logo" width="400"/>
+   </p>
+
+=========================
 
 .. image:: https://img.shields.io/badge/version-v1.0.1-red
   :target: https://doi.org/10.5281/zenodo.15123560
