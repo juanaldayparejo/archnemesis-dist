@@ -26,11 +26,13 @@ setup(
       'scipy',
       'pymultinest',
       'cdsapi',
-      'pygrib',
       'joblib',
       'h5py',
       'basemap',
       'pytest'],
+    extras_require={
+        'grib': ['pygrib']
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
