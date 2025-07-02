@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 from pathlib import Path
 
 this_directory = Path(__file__).parent
@@ -18,7 +18,8 @@ setup(
         "Tracker": "https://github.com/juanaldayparejo/archnemesis-dist/issues",
         "DockerHub": "https://hub.docker.com/r/juanaldayparejo/archnemesis",
     },
-    packages=["archnemesis"],
+    #packages=["archnemesis"],
+    packages=find_packages(),  #automatically include all subpackages like archnemesis.cfg
     install_requires=[
       'numpy',
       'matplotlib',
@@ -31,7 +32,8 @@ setup(
       'basemap',
       'pytest'],
     extras_require={
-        'grib': ['pygrib']
+        'grib': ['pygrib'],
+        'docs': ['sphinx', 'sphinx_rtd_theme']
     },
     classifiers=[
         "Programming Language :: Python :: 3",
