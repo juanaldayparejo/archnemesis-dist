@@ -57,27 +57,6 @@ We recommend doing this inside a clean Python virtual environment:
 This will install the latest stable release of the package along with its dependencies.
 It is the recommended method if you just want to use the library without editing the source code.
 
-Installing via DockerHub
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-A pre-built Docker image is available at:
-
-`https://hub.docker.com/r/juanaldayparejo/archnemesis <https://hub.docker.com/r/juanaldayparejo/archnemesis>`_
-
-To run archNEMESIS in an isolated Docker container (no local setup needed):
-
-.. code-block:: bash
-
-   docker pull juanaldayparejo/archnemesis:latest
-   docker run --rm juanaldayparejo/archnemesis:latest
-
-To run it interactively (e.g., with command-line input):
-
-.. code-block:: bash
-
-   docker run -it --rm juanaldayparejo/archnemesis:latest
-
-You can also mount local files if needed using `-v`.
 
 Installing from GitHub (developer mode)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

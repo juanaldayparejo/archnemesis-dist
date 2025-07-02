@@ -73,27 +73,6 @@ pip install archnemesis
 This will install the latest stable release of the package along with its dependencies.
 It is the recommended method if you just want to use the library without editing the source code.
 
-
-### Installing via Docker Hub
-
-A pre-built Docker image is available in [Docker Hub](https://hub.docker.com/r/juanaldayparejo/archnemesis).
-
-To run archNEMESIS in an isolated Docker container (no local setup needed):
-
-```bash
-docker pull juanaldayparejo/archnemesis:latest
-docker run --rm juanaldayparejo/archnemesis:latest
-```
-
-To run it interactively (e.g., with command-line input):
-
-```bash
-docker run -it --rm juanaldayparejo/archnemesis:latest
-```
-
-You can also mount local files if needed using `-v`.
-
-
 ## Contributing to archNEMESIS
 
 If you want to contribute to the development of archNEMESIS, please follow our [Contribution Guidelines](CONTRIBUTING.md).

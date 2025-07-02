@@ -6,7 +6,7 @@ long_description = (this_directory / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="archnemesis",
-    version="1.0.4",
+    version="1.0.5",
     author="Juan Alday",
     description="Python implementation of the NEMESIS radiative transfer and retrieval code",
     long_description=long_description,
