@@ -20,6 +20,8 @@ def test_lblconv():
     true_sigma  = 0.5 * true_fwhm / np.sqrt(np.log(2))
     y = np.exp(-((vwave - true_center)/true_sigma)**2)
     
+    dy = np.zeros((nwave,1))
+    dy[:,0] = y * 0.01  # Dummy array
 
     nshapes = 3
     for ishape in range(nshapes):
@@ -42,9 +44,14 @@ def test_lblconv():
         vconvx = np.zeros((len(vconv),Measurement.NGEOM))
         vconvx[:,0] = vconv
         Measurement.edit_VCONV(vconvx)
+        
+        #Dummy statements to check that other functions do not break
+        #Measurement.edit_MEAS(vconv/vconv)
+        #Measurement.edit_ERRMEAS(vconv/vconv)
 
         Measurement.build_ils()  #Calculating the ILS
         yconv_an = Measurement.lblconv(vwave,y,IGEOM=0)
+        yconv_an2,dummy = Measurement.lblconvg(vwave,y,dy,IGEOM=0)
         
         #Performing the convolution with numpy
         ##########################################################################
@@ -66,5 +73,4 @@ def test_lblconv():
 
         #Comparing the results
         assert np.allclose(yconv_an[np.where(yconv_an/yconv_an.max()>=1.0e-2)], yconv_np[(yconv_an/yconv_an.max()>=1.0e-2)], rtol=3.0e-2)
-    
-    
+        assert np.allclose(yconv_an2[np.where(yconv_an2/yconv_an2.max()>=1.0e-2)], yconv_np[(yconv_an2/yconv_an2.max()>=1.0e-2)], rtol=3.0e-2)
