@@ -100,6 +100,12 @@ Please note: This is a research software package maintained as time allows. Whil
 
 ## Revision history
 
+- [1.0.5]() (8 July, 2025)
+   - New release of archNEMESIS for publication at Journal of Open Research Software.
+   - Fixed minor bugs throughout the code.
+   - Added unit test for calculation of optical properties using Mie Theory.
+   - Updated setup file to avoid dependency conflicts.
+
 - [1.0.4](https://doi.org/10.5281/zenodo.15789739) (2 July, 2025)
    - New release of archNEMESIS for release on PyPI and Docker Hub.
 
