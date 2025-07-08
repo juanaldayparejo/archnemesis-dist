@@ -577,7 +577,7 @@ class CIA_0:
             filename += '.h5'
         
         with h5py.File(filename, 'r') as f:
-            self.NPARA = np.int32(f.get('NPARA', 1))
+            self.NPARA = np.int32(f.get('NPARA', 0))
             self.NPAIR = h5py_helper.retrieve_data(f, 'NPAIR', np.int32)
             self.NT = h5py_helper.retrieve_data(f, 'NT', np.int32)
             self.NWAVE = h5py_helper.retrieve_data(f, 'NWAVE', np.int32)
