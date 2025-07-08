@@ -30,7 +30,8 @@ setup(
       'joblib',
       'h5py',
       'basemap',
-      'pytest'],
+      'pytest',
+      'corner'],
     extras_require={
         'grib': ['pygrib'],
         'docs': ['sphinx', 'sphinx_rtd_theme']

@@ -1,13 +1,6 @@
 import archnemesis as ans
 from archnemesis import *
 import scipy
-try:
-    import pymultinest
-    from pymultinest.solve import solve
-except ImportError:
-    _lgr.critical('PyMultiNest is not installed. Please download this before attempting to run retrievals with nested sampling. Instructions on installation can be found here: http://johannesbuchner.github.io/PyMultiNest/install.html')
-    pymultinest = None
-    solve = None
 import os
 import corner
 import matplotlib.pyplot as plt
@@ -36,8 +29,16 @@ class NestedSampling_0:
         NestedSampling.make_plots()
         """
         
+        try:
+            import pymultinest
+            from pymultinest.solve import solve
+        except ImportError:
+            _lgr.critical('PyMultiNest is not installed. Please download this before attempting to run retrievals with nested sampling. Instructions on installation can be found here: http://johannesbuchner.github.io/PyMultiNest/install.html')
+            pymultinest = None
+            solve = None
         
         self.N_LIVE_POINTS = N_LIVE_POINTS
+        
         if pymultinest is None:
             raise ImportError("pymultinest was not found. To use the NestedSampling class, you must install it: \n https://johannesbuchner.github.io/PyMultiNest/install.html") 
             
