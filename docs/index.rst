@@ -132,7 +132,7 @@ Dependencies
 -----------------------------
 
 - Numerical calculations: `numpy <https://numpy.org/>`_; `scipy <https://scipy.org/>`_
-- Visualisations: `matplotlib <https://matplotlib.org/>`_; `basemap <https://matplotlib.org/basemap/stable/>`_
+- Visualisations: `matplotlib <https://matplotlib.org/>`_; `basemap <https://matplotlib.org/basemap/stable/>`_; `corner <https://corner.readthedocs.io/en/latest/>`_
 - File handling: `h5py <https://www.h5py.org/>`_
 - Optimisation: `numba <https://numba.pydata.org/>`_; `joblib <https://joblib.readthedocs.io/en/stable/>`_
 - Nested sampling: `pymultinest <https://johannesbuchner.github.io/PyMultiNest/>`_ 

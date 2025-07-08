@@ -125,8 +125,8 @@ Please note: This is a research software package maintained as time allows. Whil
 
 ## Dependencies
 
-- Numerical calculations: [numpy](https://numpy.org/); [scipy](https://scipy.org/); [corner](https://corner.readthedocs.io/en/latest/)
-- Visualisations: [matplotlib](https://matplotlib.org/)
+- Numerical calculations: [numpy](https://numpy.org/); [scipy](https://scipy.org/)
+- Visualisations: [matplotlib](https://matplotlib.org/); [basemap](https://matplotlib.org/basemap/stable/); [corner](https://corner.readthedocs.io/en/latest/)
 - File handling: [h5py](https://www.h5py.org/)
 - Optimisation: [numba](https://numba.pydata.org/); [joblib](https://joblib.readthedocs.io/en/stable/)
 - Nested sampling: [pymultinest](https://johannesbuchner.github.io/PyMultiNest/)
