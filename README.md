@@ -125,7 +125,7 @@ Please note: This is a research software package maintained as time allows. Whil
 
 ## Dependencies
 
-- Numerical calculations: [numpy](https://numpy.org/); [scipy](https://scipy.org/)
+- Numerical calculations: [numpy](https://numpy.org/); [scipy](https://scipy.org/); [corner](https://corner.readthedocs.io/en/latest/)
 - Visualisations: [matplotlib](https://matplotlib.org/)
 - File handling: [h5py](https://www.h5py.org/)
 - Optimisation: [numba](https://numba.pydata.org/); [joblib](https://joblib.readthedocs.io/en/stable/)
