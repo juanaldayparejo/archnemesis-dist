@@ -42,7 +42,7 @@ from archnemesis.enums import (
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -1790,7 +1790,9 @@ class ForwardModel_0:
         #Going through the different variables an updating the spectra and gradients accordingly
         ix = 0
         for ivar in range(self.Variables.NVAR):
-
+            _lgr.debug(f'subspecret :: Updating spectra and gradients for variable {ivar+1} of {self.Variables.NVAR}')
+            _lgr.debug(f'subspecret :: Variable identifier: {self.Variables.VARIDENT[ivar,:]}')
+            _lgr.debug(f'subspecret :: ix = {ix}, n_state_vector_entries = {self.Variables.models[ivar].n_state_vector_entries}')
             self.Variables.models[ivar].calculate_from_subspecret(self, ix, ivar, SPECMOD, dSPECMOD)
             ix += self.Variables.models[ivar].n_state_vector_entries
 

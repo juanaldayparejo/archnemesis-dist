@@ -34,7 +34,8 @@ from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, Atmosphe
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+#_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 class Atmosphere_0:
     """
