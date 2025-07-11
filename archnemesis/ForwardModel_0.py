@@ -1582,6 +1582,8 @@ class ForwardModel_0:
         else:
             return None
 
+    ###############################################################################################
+ 
     def subprofretg(self):
 
         """
@@ -1623,22 +1625,25 @@ class ForwardModel_0:
             self.adjust_hydrostat = True
         if self.Variables.JTAN!=-1:
             self.adjust_hydrostat = True
+            
         #Modify profile via hydrostatic equation to make sure the atm is in hydrostatic equilibrium
         if self.adjust_hydrostat==True:
             if self.Variables.JPRE==-1:
                 jhydro = 0
                 #Then we modify the altitude levels and keep the pressures fixed
-                
                 self.AtmosphereX.adjust_hydrostatH()
                 self.AtmosphereX.calc_grav()   #Updating the gravity values at the new heights
             else:
                 #Then we modifify the pressure levels and keep the altitudes fixed
                 jhydro = 1
-                for i in range(self.Variables.NVAR):
-                    if self.Variables.VARIDENT[i,0]==666:
-                        htan = self.Variables.VARPARAM[i,0] * 1000.
-                ptan = np.exp(self.Variables.XN[self.Variables.JPRE]) * 101325.
-                self.AtmosphereX.adjust_hydrostatP(htan,ptan)
+                ix = 0
+                for ivar in range(self.Variables.NVAR):
+                    #Get the index of the parameterisation
+                    ipar = self._get_ipar(self.Variables.VARIDENT[ivar])
+                    if self.Variables.VARIDENT[ivar,2]==666:
+                        # Re-compute pressure levels based pressure at tangent height on hydrostatic equilibrum
+                        self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, 0.0)
+                    ix += self.Variables.models[ivar].n_state_vector_entries
 
         #Calculate atmospheric density
         rho = self.AtmosphereX.calc_rho() #kg/m3
@@ -1718,9 +1723,15 @@ class ForwardModel_0:
                 self.AtmosphereX.adjust_hydrostatH()
                 self.AtmosphereX.calc_grav()   #Updating the gravity values at the new heights
             else:
-                #Then we modifify the pressure levels and keep the altitudes fixed
-                self.AtmosphereX.adjust_hydrostatP(htan,ptan)
-
+                #Modifying pressure levels based on the hydrostatic equilibrium equation
+                ix = 0
+                for ivar in range(self.Variables.NVAR):
+                    #Get the index of the parameterisation
+                    ipar = self._get_ipar(self.Variables.VARIDENT[ivar])
+                    if self.Variables.VARIDENT[ivar,2]==666:
+                        # Re-compute pressure levels based pressure at tangent height on hydrostatic equilibrum
+                        self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, 0.0)
+                    ix += self.Variables.models[ivar].n_state_vector_entries
 
         #Patch for model -1, since the aerosol density is defined in particles per gram of atm (depends on the density)
         #Going through the different variables an updating the atmosphere accordingly
@@ -1741,7 +1752,6 @@ class ForwardModel_0:
             ix += self.Variables.models[ivar].n_state_vector_entries
         
         return xmap
-
 
     ###############################################################################################
 
