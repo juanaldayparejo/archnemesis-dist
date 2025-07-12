@@ -5558,8 +5558,9 @@ class Model666(PreRTModelBase):
         hpre = Atmosphere.H
         ppre = Atmosphere.P
     
+        _lgr.info(f'Calculating model 666 with htan={htan} km and ptan={ptan} atm')
 
-        Atmosphere.adjust_hydrostatP(htan/1.0e3,ptan*101325.)
+        Atmosphere.adjust_hydrostatP(htan*1.0e3,ptan*101325.)
 
         if MakePlot==True:
 

@@ -1634,6 +1634,7 @@ class ForwardModel_0:
                 self.AtmosphereX.adjust_hydrostatH()
                 self.AtmosphereX.calc_grav()   #Updating the gravity values at the new heights
             else:
+                
                 #Then we modifify the pressure levels and keep the altitudes fixed
                 jhydro = 1
                 ix = 0
@@ -1723,6 +1724,7 @@ class ForwardModel_0:
                 self.AtmosphereX.adjust_hydrostatH()
                 self.AtmosphereX.calc_grav()   #Updating the gravity values at the new heights
             else:
+                
                 #Modifying pressure levels based on the hydrostatic equilibrium equation
                 ix = 0
                 for ivar in range(self.Variables.NVAR):
