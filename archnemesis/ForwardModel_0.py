@@ -8,6 +8,7 @@ from numba import jit
 from multiprocessing import Pool
 from joblib import Parallel, delayed
 import sys
+from copy import deepcopy
 
 from archnemesis.enums import (
     AtmosphericProfileFormatEnum,
@@ -166,7 +167,7 @@ class ForwardModel_0:
 
         """
 
-        from copy import deepcopy
+        
 
         self.runname = runname
 
@@ -206,6 +207,30 @@ class ForwardModel_0:
     ###############################################################################################
 
     ###############################################################################################
+
+    def init_for_geometry_and_averaging_point(self, IGEOM : int = 0, IAV : int = 0):
+        #Calculating new wave array            
+        #Selecting the relevant Measurement
+        self.Measurement.build_ils(IGEOM=IGEOM if IGEOM is not None else 0)
+        wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=IGEOM)
+            
+        #Reading tables in the required wavelength range
+        self.SpectroscopyX = deepcopy(self.Spectroscopy)
+        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+
+        self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
+
+        if IGEOM is not None and IAV is not None:
+            #Updating the required parameters based on the current geometry
+            if self.MeasurementX.EMISS_ANG[IGEOM,IAV]>=0.0:
+                self.ScatterX.SOL_ANG = self.MeasurementX.SOL_ANG[IGEOM,IAV]
+                self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[IGEOM,IAV]
+                self.ScatterX.AZI_ANG = self.MeasurementX.AZI_ANG[IGEOM,IAV]
+            else:
+                self.ScatterX.SOL_ANG = self.MeasurementX.TANHE[IGEOM,IAV]
+                self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[IGEOM,IAV]
+        
+        return self
 
     def select_nemesis_fm(
             self,
