@@ -57,7 +57,6 @@ class Redirector:
 		old_path, new_path = map(Path,redirect_spec.split('->', 1))
 		return cls(old_path, new_path)
 	
-	@classmethod
 	def __init__(self, old_path : Path | str, new_path : Path | str) -> Self:
 		self.old_path = Path(old_path)
 		self.new_path = Path(new_path)
@@ -96,7 +95,6 @@ def remove_redirect(handle : int) -> bool:
 
 def _open_redirector(path : Path | str, *args, **kwargs) -> IO:
 	global _redirects
-	global _open_fn_stack
 	global _builtin_open
 	
 	target_path = Path(path)

@@ -1337,7 +1337,20 @@ def coreretOE(
                 Variables1 = deepcopy(Variables)
                 Variables1.XN = XN1
 
-                ForwardModel1 = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Telluric=Telluric,Variables=Variables1)
+                ForwardModel1 = ForwardModel_0(
+                    runname=runname, 
+                    Atmosphere=Atmosphere,
+                    Surface=Surface,
+                    Measurement=Measurement,
+                    Spectroscopy=Spectroscopy,
+                    Stellar=Stellar,
+                    Scatter=Scatter,
+                    CIA=CIA,
+                    Layer=Layer,
+                    Telluric=Telluric,
+                    Variables=Variables1,
+                    path_redirects = path_redirects,
+                )
                 ForwardModel1.subprofretg()
 
                 if np.any(ForwardModel1.AtmosphereX.T < 0.0):
@@ -1353,7 +1366,20 @@ def coreretOE(
         Variables.edit_XN(XN1)
         _lgr.info('nemesis :: Calculating Jacobian matrix KK')
 
-        ForwardModel = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Telluric=Telluric,Variables=Variables)
+        ForwardModel = ForwardModel_0(
+            runname=runname, 
+            Atmosphere=Atmosphere,
+            Surface=Surface,
+            Measurement=Measurement,
+            Spectroscopy=Spectroscopy,
+            Stellar=Stellar,
+            Scatter=Scatter,
+            CIA=CIA,
+            Layer=Layer,
+            Telluric=Telluric,
+            Variables=Variables,
+            path_redirects = path_redirects,
+        )
         YN1,KK1 = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
 
         OptimalEstimation1 = deepcopy(OptimalEstimation)
