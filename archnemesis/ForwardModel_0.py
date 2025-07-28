@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 import sys
 from copy import deepcopy
 
-
+import archnemesis.enums
 from archnemesis.enums import (
     AtmosphericProfileFormatEnum,
     PathCalc,
@@ -201,8 +201,58 @@ class ForwardModel_0:
         
         _lgr.info(f'ForwardModel_0 instance has {self.path_redirects}')
 
+        # Test that the forward model has Spectroscopy data for each
+        # gas in the atmosphere.
+        if self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:
+            spect_table_type_str = 'k-table'
+            spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
+            spect_legacy_filename = f'{self.runname}.kls'
+        elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            spect_table_type_str = 'line-by-line-table'
+            spect_legacy_filename = f'{self.runname}.lls'
+        else:
+            raise RuntimeError(f'Unknown SpectralCalculationMode: {self.Spectroscopy.ILBL}.')
+        spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
+        
+        atmos_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Atmosphere.ID, self.Atmosphere.ISO))
+        spect_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Spectroscopy.ID, self.Spectroscopy.ISO))
+        was_warned = False
+        warning_lines = [
+            f'Not all atmospheric gasses have spectroscopy data.',
+            f'# WARNING #########################################################################',
+            f'',
+            f'The following atmospheric gasses ARE NOT PRESENT in the spectroscopy data and WILL NOT CONTRIBUTE TO OPACITY:',
+            f'',
+        ]
+        for gas_spec in atmos_gas_specifiers:
+            if gas_spec not in spect_gas_specifiers:
+                was_warned = True
+                warning_lines.append(
+                    f'    {archnemesis.enums.Gas(gas_spec[0]).name} (id {gas_spec[0]}) isotopologue {gas_spec[1]}'
+                )
+                
+        if was_warned:
+            warning_lines.extend([
+                f'',
+                f'To deactivate this warning place a path to a {spect_table_type_str} file for these gasses in one of the following locations (depending upon your input file type):',
+                f'',
+                f'    [HDF5 Input]',
+                f'        In the "{self.runname}.h5" file, add an entry to "/Spectroscopy/LOCATION"',
+                f'        and update "/Spectroscopy/NGAS" appropriately.',
+                f'',
+                f'    [LEGACY Input]',
+                f'        Add an entry to the "{spect_legacy_filename}" file.',
+                f'',
+                f'# END WARNING #####################################################################',
+            ])
+            _lgr.warning('\n'.join(warning_lines))
+        
+        
+        
+
         #Creating extra class to hold the variables class in each permutation of the Jacobian Matrix
         self.Variables1 = deepcopy(Variables)
+        
 
         #Creating extra classes to store the parameters for a particular forward model
         self.AtmosphereX = deepcopy(Atmosphere)
