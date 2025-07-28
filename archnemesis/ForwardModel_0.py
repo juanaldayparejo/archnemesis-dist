@@ -10,6 +10,7 @@ from joblib import Parallel, delayed
 import sys
 from copy import deepcopy
 
+
 from archnemesis.enums import (
     AtmosphericProfileFormatEnum,
     PathCalc,
@@ -21,6 +22,7 @@ from archnemesis.enums import (
     PathObserverPointing,
     RayleighScatteringMode,
 )
+from archnemesis.helpers import redirect_file_access
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -41,9 +43,21 @@ Forward Model Class.
 
 class ForwardModel_0:
 
-    def __init__(self, runname='wasp121', Atmosphere=None, Surface=None,
-        Measurement=None, Spectroscopy=None, Stellar=None, Scatter=None,
-        CIA=None, Layer=None, Variables=None, Telluric=None, adjust_hydrostat=True):
+    def __init__(self, 
+            runname='wasp121', 
+            Atmosphere=None, 
+            Surface=None,
+            Measurement=None, 
+            Spectroscopy=None, 
+            Stellar=None, 
+            Scatter=None,
+            CIA=None, 
+            Layer=None, 
+            Variables=None, 
+            Telluric=None, 
+            adjust_hydrostat=True,
+            path_redirects : tuple[archnemesis.helpers.redirect_file_access.Redirector] = tuple()
+        ):
 
         """Forward Model class
 
@@ -183,6 +197,9 @@ class ForwardModel_0:
         self.Layer = Layer
         self.Telluric = Telluric
         self.adjust_hydrostat=adjust_hydrostat
+        self.path_redirects : tuple[archnemesis.helpers.redirect_file_access.Redirector] = path_redirects
+        
+        _lgr.info(f'ForwardModel_0 instance has {self.path_redirects}')
 
         #Creating extra class to hold the variables class in each permutation of the Jacobian Matrix
         self.Variables1 = deepcopy(Variables)
@@ -1318,7 +1335,6 @@ class ForwardModel_0:
             MODIFICATION HISTORY : Joe Penn (9/07/2024)
 
         """
-        
         start, end, xnx, ixrun, nemesisSO, nemesisL, YNtot, nfm = args
         results = np.copy(YNtot)  # Local copy to prevent conflicts
         for ifm in range(start, end):
@@ -1370,7 +1386,8 @@ class ForwardModel_0:
             archnemesis.cfg.logs.push_packagewide_level(logging.ERROR)
             
             # model the spectrum
-            SPECMOD = nemesis_method()
+            with archnemesis.helpers.redirect_file_access.using(*self.path_redirects):
+                SPECMOD = nemesis_method()
         finally:
             # Stop disabling logging levels
             archnemesis.cfg.logs.pop_packagewide_level()
@@ -1436,7 +1453,6 @@ class ForwardModel_0:
         """
 
         from copy import deepcopy
-
 
         #################################################################################
         # Making some calculations for storing all the arrays

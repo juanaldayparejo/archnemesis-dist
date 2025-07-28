@@ -12,7 +12,7 @@ import pickle
 
 from archnemesis.enums import WaveUnit, SpectraUnit
 from archnemesis.helpers.maths_helper import is_diagonal
-
+from archnemesis.helpers import redirect_file_access
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -1115,6 +1115,7 @@ def coreretOE(
         write_itr=True,
         return_forward_model=False,
         return_phi_and_chisq_history=False,
+        path_redirects : tuple[archnemesis.helpers.redirect_file_access.Redirector] = tuple(),
     ) -> (
         OptimalEstimation_0 
         | tuple[OptimalEstimation_0, ForwardModel_0]
@@ -1223,7 +1224,20 @@ def coreretOE(
     #Calculate the first measurement vector and jacobian matrix
     #################################################################
 
-    ForwardModel = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables,Telluric=Telluric)
+    ForwardModel = ForwardModel_0(
+        runname=runname, 
+        Atmosphere=Atmosphere,
+        Surface=Surface,
+        Measurement=Measurement,
+        Spectroscopy=Spectroscopy,
+        Stellar=Stellar,
+        Scatter=Scatter,
+        CIA=CIA,
+        Layer=Layer,
+        Variables=Variables,
+        Telluric=Telluric,
+        path_redirects=path_redirects
+    )
     _lgr.info('nemesis :: Calculating Jacobian matrix KK')
     YN,KK = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
     
