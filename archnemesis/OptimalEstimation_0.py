@@ -1195,8 +1195,14 @@ def coreretOE(
     
     progress_file = f'progress.txt'
     progress_w_iter = max(4, int(np.ceil(np.log10(NITER))))
-    progress_fmt = f'{{:0{progress_w_iter}}} | {{:09.3E}} | {{:09.3E}} | {{}}\n'
+    progress_iter_states = {
+        'initial' : 'PHI INITIAL     ',
+        True :      'PHI REDUCED     ',
+        False :     'PHI INCREASED   '
+    }
+    progress_fmt = f'{{:0{progress_w_iter}}} | {{}} | {{:09.3E}} | {{:09.3E}} | {{}}\n'
     progress_head = ('iter' + ('' if progress_w_iter <= 4 else ' '*(progress_w_iter-4))
+        +' | iter_state      '
         +' | phi      '
         +' | chisq    '
         +' | state vector '
@@ -1243,7 +1249,7 @@ def coreretOE(
     chisq_history[0] = OptimalEstimation.CHISQ
     state_vector_history[0,:] = OptimalEstimation.XN
     
-    progress_line = progress_fmt.format(0, OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))
+    progress_line = progress_fmt.format(0, progress_iter_states['initial'], OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))
     _lgr.info(f'\t{progress_head}')
     _lgr.info(f'\t{progress_line}')
             
@@ -1266,8 +1272,11 @@ def coreretOE(
     NY1 = np.zeros(OptimalEstimation.NY)
     YN1 = deepcopy(OptimalEstimation.YN)
 
-    for it in range(OptimalEstimation.NITER):
+    successful_iteraton = False
+    n_successful_iterations = 0
 
+    for it in range(OptimalEstimation.NITER):
+        successful_iteraton = False
         _lgr.info('nemesis :: Iteration '+str(it)+'/'+str(OptimalEstimation.NITER))
 
         #Writing into .itr file
@@ -1343,6 +1352,9 @@ def coreretOE(
         #Does the trial solution fit the data better?
         if (OptimalEstimation1.PHI <= OPHI):
             _lgr.info('Successful iteration. Updating xn,yn and kk')
+            successful_iteration = True
+            n_successful_iterations += 1
+            
             OptimalEstimation.edit_XN(XN1)
             OptimalEstimation.edit_YN(YN1)
             OptimalEstimation.edit_KK(KK1)
@@ -1369,11 +1381,12 @@ def coreretOE(
             #Leave xn and kk alone and try again with more braking
             alambda *= 10.0  #increase Marquardt brake
         
-        phi_history[it+1] = OptimalEstimation.PHI
-        chisq_history[it+1] = OptimalEstimation.CHISQ
-        state_vector_history[it+1,:] = OptimalEstimation.XN
-        
-        progress_line = progress_fmt.format(0, OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))
+        if successful_iteration:
+            phi_history[n_successful_iterations] = OptimalEstimation.PHI
+            chisq_history[n_successful_iterations] = OptimalEstimation.CHISQ
+            state_vector_history[n_successful_iterations,:] = OptimalEstimation.XN
+            
+        progress_line = progress_fmt.format(it, progress_iter_states[successful_iteration], OptimalEstimation.1PHI, OptimalEstimation1.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation1.XN)))
         _lgr.info(f'\t{progress_head}')
         _lgr.info(f'\t{progress_line}')
                 
