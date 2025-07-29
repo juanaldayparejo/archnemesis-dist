@@ -939,33 +939,31 @@ class Spectroscopy_0:
                 
                 for igas in range(self.NGAS):
                     
-                    f = h5py.File(self.LOCATION[igas],'r')
-                    kfile = f['K']
-                    wave = f['WAVE']
-                    
-                    #Creating new array to make sure it matches the resolution of self.WAVE
-                    vmin = np.round(np.float64(wave[0]), decimals=7)
-                    delv = np.round(np.float64(wave[1] - wave[0]), decimals=7)
-                    nwave = len(wave)
-                    vmax = delv*(nwave-1) + vmin
-                    wave = np.linspace(vmin,vmax,nwave)
-                    
-                    #Calculating the wavelengths to read
-                    iwl = np.searchsorted(np.array(wave), np.min(self.WAVE), side='right') - 1
-                    if iwl < 0:
-                        iwl = 0
+                    with h5py.File(self.LOCATION[igas],'r') as f:
+                        kfile = f['K']
+                        wave = f['WAVE']
+                        
+                        #Creating new array to make sure it matches the resolution of self.WAVE
+                        vmin = np.round(np.float64(wave[0]), decimals=7)
+                        delv = np.round(np.float64(wave[1] - wave[0]), decimals=7)
+                        nwave = len(wave)
+                        vmax = delv*(nwave-1) + vmin
+                        wave = np.linspace(vmin,vmax,nwave)
+                        
+                        #Calculating the wavelengths to read
+                        iwl = np.searchsorted(np.array(wave), np.min(self.WAVE), side='right') - 1
+                        if iwl < 0:
+                            iwl = 0
 
-                    iwh = np.searchsorted(np.array(wave), np.max(self.WAVE), side='left')
-                    if iwh >= nwave:
-                        iwh = nwave - 1
-                    
-                    klo1[:,igas] = kfile[iwl:iwh+1,ip,it1,0]
-                    klo2[:,igas] = kfile[iwl:iwh+1,ip,it1+1,0]
-                    khi1[:,igas] = kfile[iwl:iwh+1,ip+1,it2,0]
-                    khi2[:,igas] = kfile[iwl:iwh+1,ip+1,it2+1,0]
-                    
-                    f.close()
-
+                        iwh = np.searchsorted(np.array(wave), np.max(self.WAVE), side='left')
+                        if iwh >= nwave:
+                            iwh = nwave - 1
+                        
+                        klo1[:,igas] = kfile[iwl:iwh+1,ip,it1,0]
+                        klo2[:,igas] = kfile[iwl:iwh+1,ip,it1+1,0]
+                        khi1[:,igas] = kfile[iwl:iwh+1,ip+1,it2,0]
+                        khi2[:,igas] = kfile[iwl:iwh+1,ip+1,it2+1,0]
+                        
             #Interpolating to get the k-coefficients at desired p-T
             igood = np.where( (klo1>0.0) & (klo2>0.0) & (khi1>0.0) & (khi2>0.0) )
             
@@ -1107,32 +1105,31 @@ class Spectroscopy_0:
                 
                 for igas in range(self.NGAS):
                     
-                    f = h5py.File(self.LOCATION[igas],'r')
-                    kfile = f['K']
-                    wave = f['WAVE']
-                    
-                    #Creating new array to make sure it matches the resolution of self.WAVE
-                    vmin = np.round(np.float64(wave[0]), decimals=7)
-                    delv = np.round(np.float64(wave[1] - wave[0]), decimals=7)
-                    nwave = len(wave)
-                    vmax = delv*(nwave-1) + vmin
-                    wave = np.linspace(vmin,vmax,nwave)
-                    
-                    #Calculating the wavelengths to read
-                    iwl = np.searchsorted(np.array(wave), np.min(self.WAVE), side='right') - 1
-                    if iwl < 0:
-                        iwl = 0
+                    with h5py.File(self.LOCATION[igas],'r') as f:
+                        kfile = f['K']
+                        wave = f['WAVE']
+                        
+                        #Creating new array to make sure it matches the resolution of self.WAVE
+                        vmin = np.round(np.float64(wave[0]), decimals=7)
+                        delv = np.round(np.float64(wave[1] - wave[0]), decimals=7)
+                        nwave = len(wave)
+                        vmax = delv*(nwave-1) + vmin
+                        wave = np.linspace(vmin,vmax,nwave)
+                        
+                        #Calculating the wavelengths to read
+                        iwl = np.searchsorted(np.array(wave), np.min(self.WAVE), side='right') - 1
+                        if iwl < 0:
+                            iwl = 0
 
-                    iwh = np.searchsorted(np.array(wave), np.max(self.WAVE), side='left')
-                    if iwh >= nwave:
-                        iwh = nwave - 1
+                        iwh = np.searchsorted(np.array(wave), np.max(self.WAVE), side='left')
+                        if iwh >= nwave:
+                            iwh = nwave - 1
+                        
+                        klo1[:,igas] = kfile[iwl:iwh+1,ip,it1,0]
+                        klo2[:,igas] = kfile[iwl:iwh+1,ip,it1+1,0]
+                        khi1[:,igas] = kfile[iwl:iwh+1,ip+1,it2,0]
+                        khi2[:,igas] = kfile[iwl:iwh+1,ip+1,it2+1,0]
                     
-                    klo1[:,igas] = kfile[iwl:iwh+1,ip,it1,0]
-                    klo2[:,igas] = kfile[iwl:iwh+1,ip,it1+1,0]
-                    khi1[:,igas] = kfile[iwl:iwh+1,ip+1,it2,0]
-                    khi2[:,igas] = kfile[iwl:iwh+1,ip+1,it2+1,0]
-                    
-                    f.close()
             
             
             # Interpolating to get the k-coefficients at desired p-T
@@ -1622,25 +1619,22 @@ def read_header_lta_hdf5(filename):
     import h5py
     
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-2:strlen] == 'h5':
-        f = h5py.File(filename,'r')
-    else:
-        f = h5py.File(filename+'.h5','r')
+    filename = filename if filename.endswith('.h5') else (filename+'.h5')
 
-    ilbl = h5py_helper.retrieve_data(f, 'ILBL', np.int32)
-    if ilbl==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-        wave = h5py_helper.retrieve_data(f, 'WAVE', np.array)
-        npress = h5py_helper.retrieve_data(f, 'NP', np.int32)
-        ntemp = h5py_helper.retrieve_data(f, 'NT', np.int32)
-        gasID = h5py_helper.retrieve_data(f, 'ID', np.int32)
-        isoID = h5py_helper.retrieve_data(f, 'ISO', np.int32)
-        presslevels = h5py_helper.retrieve_data(f, 'PRESS', np.array)
-        templevels = h5py_helper.retrieve_data(f, 'TEMP', np.array)
-    else:
-        raise ValueError('error in read_header_lta_hdf5 :: the defined ilbl in the look-up table must be 2')
-    
-    f.close()
+    with h5py.File(filename,'r') as f:
+
+        ilbl = h5py_helper.retrieve_data(f, 'ILBL', np.int32)
+        if ilbl==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            wave = h5py_helper.retrieve_data(f, 'WAVE', np.array)
+            npress = h5py_helper.retrieve_data(f, 'NP', np.int32)
+            ntemp = h5py_helper.retrieve_data(f, 'NT', np.int32)
+            gasID = h5py_helper.retrieve_data(f, 'ID', np.int32)
+            isoID = h5py_helper.retrieve_data(f, 'ISO', np.int32)
+            presslevels = h5py_helper.retrieve_data(f, 'PRESS', np.array)
+            templevels = h5py_helper.retrieve_data(f, 'TEMP', np.array)
+        else:
+            raise ValueError('error in read_header_lta_hdf5 :: the defined ilbl in the look-up table must be 2')
+        
 
     return ilbl,wave,npress,ntemp,gasID,isoID,presslevels,templevels
 

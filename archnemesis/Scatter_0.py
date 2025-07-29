@@ -342,109 +342,108 @@ class Scatter_0:
         #Assessing that all the parameters have the correct type and dimension
         self.assess()
 
-        f = h5py.File(runname+'.h5','a')
-        #Checking if Scatter already exists
-        if ('/Scatter' in f)==True:
-            del f['Scatter']   #Deleting the Scatter information that was previously written in the file
+        with h5py.File(runname+'.h5','a') as f:
+            #Checking if Scatter already exists
+            if ('/Scatter' in f)==True:
+                del f['Scatter']   #Deleting the Scatter information that was previously written in the file
 
-        grp = f.create_group("Scatter")
+            grp = f.create_group("Scatter")
 
-        #Writing the spectral units
-        dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
-        dset.attrs['title'] = "Spectral units"
-        if self.ISPACE==WaveUnit.Wavenumber_cm:
-            dset.attrs['units'] = 'Wavenumber / cm-1'
-        elif self.ISPACE==WaveUnit.Wavelength_um:
-            dset.attrs['units'] = 'Wavelength / um'
-
-        #Writing the scattering calculation type
-        dset = grp.create_dataset('ISCAT', data=int(self.ISCAT))
-        dset.attrs['title'] = "Scattering calculation type"
-        dset.attrs['type'] = self.ISCAT.name.replace('_', ' ').title()
-
-        #Writing the Rayleigh scattering type
-        dset = grp.create_dataset('IRAY',data=int(self.IRAY))
-        dset.attrs['title'] = "Rayleigh scattering type"
-        dset.attrs['type'] = self.IRAY.name.replace('_', ' ').title()
-
-        #Writing the aerosol scattering type
-        dset = grp.create_dataset('IMIE',data=int(self.IMIE))
-        dset.attrs['title'] = "Aerosol scattering phase function type"
-        dset.attrs['type'] = self.IMIE.name.replace('_', ' ').title()
-        
-        #Writing some of the scattering calculation parameters
-        dset = grp.create_dataset('NMU',data=self.NMU)
-        dset.attrs['title'] = "Number of polar angles for multiple scattering calculation"
-
-        dset = grp.create_dataset('NF',data=self.NF)
-        dset.attrs['title'] = "Number of Fourier components for azimuth decomposition"
-
-        dset = grp.create_dataset('NPHI',data=self.NPHI)
-        dset.attrs['title'] = "Number of azimuth angles for multiple scattering calculation"
-
-        dset = grp.create_dataset('NDUST',data=self.NDUST)
-        dset.attrs['title'] = "Number of aerosol populations in atmosphere"
-
-        dset = grp.create_dataset('NWAVE',data=self.NWAVE)
-        dset.attrs['title'] = "Number of spectral points"
-
-        if self.NDUST>0:  #There are aerosols in the atmosphere
-
-            dset = grp.create_dataset('WAVE',data=self.WAVE)
-            dset.attrs['title'] = "Spectral array"
+            #Writing the spectral units
+            dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
+            dset.attrs['title'] = "Spectral units"
             if self.ISPACE==WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
             elif self.ISPACE==WaveUnit.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um'
 
-            dset = grp.create_dataset('KEXT',data=self.KEXT)
-            dset.attrs['title'] = "Extinction coefficient"
-            dset.attrs['units'] = "cm2"
-            dset.attrs['note'] = "KEXT can be normalised to a certain wavelength if the aerosol profiles are also normalised"
+            #Writing the scattering calculation type
+            dset = grp.create_dataset('ISCAT', data=int(self.ISCAT))
+            dset.attrs['title'] = "Scattering calculation type"
+            dset.attrs['type'] = self.ISCAT.name.replace('_', ' ').title()
+
+            #Writing the Rayleigh scattering type
+            dset = grp.create_dataset('IRAY',data=int(self.IRAY))
+            dset.attrs['title'] = "Rayleigh scattering type"
+            dset.attrs['type'] = self.IRAY.name.replace('_', ' ').title()
+
+            #Writing the aerosol scattering type
+            dset = grp.create_dataset('IMIE',data=int(self.IMIE))
+            dset.attrs['title'] = "Aerosol scattering phase function type"
+            dset.attrs['type'] = self.IMIE.name.replace('_', ' ').title()
             
-            dset = grp.create_dataset('SGLALB',data=self.SGLALB)
-            dset.attrs['title'] = "Single scattering albedo"
-            dset.attrs['units'] = ""
+            #Writing some of the scattering calculation parameters
+            dset = grp.create_dataset('NMU',data=self.NMU)
+            dset.attrs['title'] = "Number of polar angles for multiple scattering calculation"
 
-            if self.ISCAT>0:
+            dset = grp.create_dataset('NF',data=self.NF)
+            dset.attrs['title'] = "Number of Fourier components for azimuth decomposition"
 
-                if self.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:  #H-G phase function
+            dset = grp.create_dataset('NPHI',data=self.NPHI)
+            dset.attrs['title'] = "Number of azimuth angles for multiple scattering calculation"
 
-                    dset = grp.create_dataset('G1',data=self.G1)
-                    dset.attrs['title'] = "Assymmetry parameter of first Henyey-Greenstein function"
-                    dset.attrs['units'] = ""
+            dset = grp.create_dataset('NDUST',data=self.NDUST)
+            dset.attrs['title'] = "Number of aerosol populations in atmosphere"
 
-                    dset = grp.create_dataset('G2',data=self.G2)
-                    dset.attrs['title'] = "Assymmetry parameter of second Henyey-Greenstein function"
-                    dset.attrs['units'] = ""
+            dset = grp.create_dataset('NWAVE',data=self.NWAVE)
+            dset.attrs['title'] = "Number of spectral points"
 
-                    dset = grp.create_dataset('F',data=self.F)
-                    dset.attrs['title'] = "Relative contribution from first Henyey-Greenstein function (from 0 to 1)"
-                    dset.attrs['units'] = ""
+            if self.NDUST>0:  #There are aerosols in the atmosphere
 
-                elif self.IMIE == AerosolPhaseFunctionCalculationMode.MIE_THEORY:  #Explicit phase function
+                dset = grp.create_dataset('WAVE',data=self.WAVE)
+                dset.attrs['title'] = "Spectral array"
+                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                    dset.attrs['units'] = 'Wavenumber / cm-1'
+                elif self.ISPACE==WaveUnit.Wavelength_um:
+                    dset.attrs['units'] = 'Wavelength / um'
 
-                    dset = grp.create_dataset('NTHETA',data=self.NTHETA)
-                    dset.attrs['title'] = "Number of angles to define phase function"
+                dset = grp.create_dataset('KEXT',data=self.KEXT)
+                dset.attrs['title'] = "Extinction coefficient"
+                dset.attrs['units'] = "cm2"
+                dset.attrs['note'] = "KEXT can be normalised to a certain wavelength if the aerosol profiles are also normalised"
+                
+                dset = grp.create_dataset('SGLALB',data=self.SGLALB)
+                dset.attrs['title'] = "Single scattering albedo"
+                dset.attrs['units'] = ""
 
-                    dset = grp.create_dataset('THETA',data=self.THETA)
-                    dset.attrs['title'] = "Angles to define phase function"
-                    dset.attrs['units'] = "degrees"
+                if self.ISCAT>0:
 
-                    dset = grp.create_dataset('PHASE',data=self.PHASE)
-                    dset.attrs['title'] = "Phase function of each aerosol population"
-                    dset.attrs['units'] = ""
+                    if self.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:  #H-G phase function
 
-                elif self.IMIE == AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:  #Phase function from Legendre polynomials
+                        dset = grp.create_dataset('G1',data=self.G1)
+                        dset.attrs['title'] = "Assymmetry parameter of first Henyey-Greenstein function"
+                        dset.attrs['units'] = ""
 
-                    dset = grp.create_dataset('NLPOL',data=self.NLPOL)
-                    dset.attrs['title'] = "Number of Legendre coefficients to define phase function"
+                        dset = grp.create_dataset('G2',data=self.G2)
+                        dset.attrs['title'] = "Assymmetry parameter of second Henyey-Greenstein function"
+                        dset.attrs['units'] = ""
 
-                    dset = grp.create_dataset('WLPOL',data=self.WLPOL)
-                    dset.attrs['title'] = "Weights of the Legendre coefficients to define phase function"
-                    dset.attrs['units'] = ""
+                        dset = grp.create_dataset('F',data=self.F)
+                        dset.attrs['title'] = "Relative contribution from first Henyey-Greenstein function (from 0 to 1)"
+                        dset.attrs['units'] = ""
 
-        f.close()
+                    elif self.IMIE == AerosolPhaseFunctionCalculationMode.MIE_THEORY:  #Explicit phase function
+
+                        dset = grp.create_dataset('NTHETA',data=self.NTHETA)
+                        dset.attrs['title'] = "Number of angles to define phase function"
+
+                        dset = grp.create_dataset('THETA',data=self.THETA)
+                        dset.attrs['title'] = "Angles to define phase function"
+                        dset.attrs['units'] = "degrees"
+
+                        dset = grp.create_dataset('PHASE',data=self.PHASE)
+                        dset.attrs['title'] = "Phase function of each aerosol population"
+                        dset.attrs['units'] = ""
+
+                    elif self.IMIE == AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:  #Phase function from Legendre polynomials
+
+                        dset = grp.create_dataset('NLPOL',data=self.NLPOL)
+                        dset.attrs['title'] = "Number of Legendre coefficients to define phase function"
+
+                        dset = grp.create_dataset('WLPOL',data=self.WLPOL)
+                        dset.attrs['title'] = "Weights of the Legendre coefficients to define phase function"
+                        dset.attrs['units'] = ""
+
 
     ###########################################################################################################################
 
@@ -455,49 +454,48 @@ class Scatter_0:
 
         import h5py
 
-        f = h5py.File(runname+'.h5','r')
+        with h5py.File(runname+'.h5','r') as f:
 
-        #Checking if Surface exists
-        e = "/Scatter" in f
-        if e==False:
-            raise ValueError('error :: Scatter is not defined in HDF5 file')
-        else:
+            #Checking if Surface exists
+            e = "/Scatter" in f
+            if e==False:
+                raise ValueError('error :: Scatter is not defined in HDF5 file')
+            else:
 
-            self.NDUST = h5py_helper.retrieve_data(f, 'Scatter/NDUST', np.int32)
-            self.ISPACE = h5py_helper.retrieve_data(f, 'Scatter/ISPACE', lambda x:  WaveUnit(np.int32(x)))
-            self.ISCAT = h5py_helper.retrieve_data(f, 'Scatter/ISCAT', lambda x:  ScatteringCalculationMode(np.int32(x)))
-            self.IRAY = h5py_helper.retrieve_data(f, 'Scatter/IRAY', lambda x:  RayleighScatteringMode(np.int32(x)))
-            self.IMIE = h5py_helper.retrieve_data(f, 'Scatter/IMIE', lambda x:  AerosolPhaseFunctionCalculationMode(np.int32(x)))
-            self.NMU = h5py_helper.retrieve_data(f, 'Scatter/NMU', np.int32)
-            self.NF = h5py_helper.retrieve_data(f, 'Scatter/NF', np.int32)
-            self.NPHI = h5py_helper.retrieve_data(f, 'Scatter/NPHI', np.int32)
-            self.NWAVE = h5py_helper.retrieve_data(f, 'Scatter/NWAVE', np.int32)
-            
-            if self.NDUST>0:
+                self.NDUST = h5py_helper.retrieve_data(f, 'Scatter/NDUST', np.int32)
+                self.ISPACE = h5py_helper.retrieve_data(f, 'Scatter/ISPACE', lambda x:  WaveUnit(np.int32(x)))
+                self.ISCAT = h5py_helper.retrieve_data(f, 'Scatter/ISCAT', lambda x:  ScatteringCalculationMode(np.int32(x)))
+                self.IRAY = h5py_helper.retrieve_data(f, 'Scatter/IRAY', lambda x:  RayleighScatteringMode(np.int32(x)))
+                self.IMIE = h5py_helper.retrieve_data(f, 'Scatter/IMIE', lambda x:  AerosolPhaseFunctionCalculationMode(np.int32(x)))
+                self.NMU = h5py_helper.retrieve_data(f, 'Scatter/NMU', np.int32)
+                self.NF = h5py_helper.retrieve_data(f, 'Scatter/NF', np.int32)
+                self.NPHI = h5py_helper.retrieve_data(f, 'Scatter/NPHI', np.int32)
+                self.NWAVE = h5py_helper.retrieve_data(f, 'Scatter/NWAVE', np.int32)
+                
+                if self.NDUST>0:
 
-                self.WAVE = h5py_helper.retrieve_data(f, 'Scatter/WAVE', np.array)
-                self.KEXT = h5py_helper.retrieve_data(f, 'Scatter/KEXT', np.array)
-                self.SGLALB = h5py_helper.retrieve_data(f, 'Scatter/SGLALB', np.array)
-                self.KSCA = self.SGLALB * self.KEXT
-                self.KABS = self.KEXT - self.KSCA
+                    self.WAVE = h5py_helper.retrieve_data(f, 'Scatter/WAVE', np.array)
+                    self.KEXT = h5py_helper.retrieve_data(f, 'Scatter/KEXT', np.array)
+                    self.SGLALB = h5py_helper.retrieve_data(f, 'Scatter/SGLALB', np.array)
+                    self.KSCA = self.SGLALB * self.KEXT
+                    self.KABS = self.KEXT - self.KSCA
 
-                if self.ISCAT>0:
+                    if self.ISCAT>0:
 
-                    if self.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:  #H-G phase function
-                        self.G1 = h5py_helper.retrieve_data(f, 'Scatter/G1', np.array)
-                        self.G2 = h5py_helper.retrieve_data(f, 'Scatter/G2', np.array)
-                        self.F = h5py_helper.retrieve_data(f, 'Scatter/F', np.array)
-                    elif self.IMIE == AerosolPhaseFunctionCalculationMode.MIE_THEORY:  #Explicit phase function
-                        self.NTHETA = h5py_helper.retrieve_data(f, 'Scatter/NTHETA', np.int32)
-                        self.THETA = h5py_helper.retrieve_data(f, 'Scatter/THETA', np.array)
-                        self.PHASE = h5py_helper.retrieve_data(f, 'Scatter/PHASE', np.array)
-                    elif self.IMIE == AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:  #Phase function from Legendre polynomials
-                        self.NLPOL = h5py_helper.retrieve_data(f, 'Scatter/NLPOL', np.int32)
-                        self.WLPOL = h5py_helper.retrieve_data(f, 'Scatter/WLPOL', np.array)
+                        if self.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:  #H-G phase function
+                            self.G1 = h5py_helper.retrieve_data(f, 'Scatter/G1', np.array)
+                            self.G2 = h5py_helper.retrieve_data(f, 'Scatter/G2', np.array)
+                            self.F = h5py_helper.retrieve_data(f, 'Scatter/F', np.array)
+                        elif self.IMIE == AerosolPhaseFunctionCalculationMode.MIE_THEORY:  #Explicit phase function
+                            self.NTHETA = h5py_helper.retrieve_data(f, 'Scatter/NTHETA', np.int32)
+                            self.THETA = h5py_helper.retrieve_data(f, 'Scatter/THETA', np.array)
+                            self.PHASE = h5py_helper.retrieve_data(f, 'Scatter/PHASE', np.array)
+                        elif self.IMIE == AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:  #Phase function from Legendre polynomials
+                            self.NLPOL = h5py_helper.retrieve_data(f, 'Scatter/NLPOL', np.int32)
+                            self.WLPOL = h5py_helper.retrieve_data(f, 'Scatter/WLPOL', np.array)
 
-        self.calc_GAUSS_LOBATTO()
+            self.calc_GAUSS_LOBATTO()
 
-        f.close()
         
     ###########################################################################################################################
 

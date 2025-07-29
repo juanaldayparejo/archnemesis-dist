@@ -654,15 +654,13 @@ class Variables_0:
 
         import h5py
 
-        f = h5py.File(runname+'.h5','r')
-
-        #Checking if Variables exists
-        e = "/Variables" in f
-        if e==False:
-            raise ValueError('error :: Variables is not defined in HDF5 file')
-        else:
-
-            self.NVAR = h5py_helper.retrieve_data(f, 'Scatter/NVAR', np.int32)
+        with h5py.File(runname+'.h5','r') as f:
+            #Checking if Variables exists
+            e = "/Variables" in f
+            if e==False:
+                raise ValueError('error :: Variables is not defined in HDF5 file')
+            else:
+                self.NVAR = h5py_helper.retrieve_data(f, 'Scatter/NVAR', np.int32)
             
     ################################################################################################################
 

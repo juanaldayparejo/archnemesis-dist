@@ -151,10 +151,9 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise CIA class and read files (.cia)  - NOT FROM HDF5 YET
     ##############################################################
 
-    f = h5py.File(runname+'.h5','r')
-    #Checking if CIA exists
-    e = "/CIA" in f
-    f.close()
+    with h5py.File(runname+'.h5','r') as f:
+        #Checking if CIA exists
+        e = "/CIA" in f
     
     if e==True:
         CIA = CIA_0(runname=runname)
@@ -179,10 +178,9 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Spectroscopy class and read file
     ###############################################################
 
-    f = h5py.File(runname+'.h5','r')
-    #Checking if Spectroscopy exists
-    e = "/Spectroscopy" in f
-    f.close()
+    with h5py.File(runname+'.h5','r') as f:
+        #Checking if Spectroscopy exists
+        e = "/Spectroscopy" in f
 
     if e is True:
         Spectroscopy = Spectroscopy_0(RUNNAME=runname)
@@ -193,10 +191,9 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Telluric class and read file
     ###############################################################
     
-    f = h5py.File(runname+'.h5','r')
-    #Checking if Telluric exists
-    e = "/Telluric" in f
-    f.close()
+    with h5py.File(runname+'.h5','r') as f:
+        #Checking if Telluric exists
+        e = "/Telluric" in f
     
     if e is True:
         Telluric = Telluric_0()

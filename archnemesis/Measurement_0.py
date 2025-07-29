@@ -378,198 +378,196 @@ class Measurement_0:
         #Assessing that all the parameters have the correct type and dimension
         self.assess()
 
-        f = h5py.File(runname+'.h5','a')
-        #Checking if Atmosphere already exists
-        if ('/Measurement' in f)==True:
-            del f['Measurement']   #Deleting the Measurement information that was previously written in the file
+        with h5py.File(runname+'.h5','a') as f:
+            #Checking if Atmosphere already exists
+            if ('/Measurement' in f)==True:
+                del f['Measurement']   #Deleting the Measurement information that was previously written in the file
 
-        grp = f.create_group("Measurement")
-        
+            grp = f.create_group("Measurement")
+            
 
-        #Writing the latitude/longitude at the centre of FOV
-        dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
-        dset.attrs['title'] = "Latitude at centre of FOV"
-        dset.attrs['units'] = 'degrees'
+            #Writing the latitude/longitude at the centre of FOV
+            dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
+            dset.attrs['title'] = "Latitude at centre of FOV"
+            dset.attrs['units'] = 'degrees'
 
-        dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
-        dset.attrs['title'] = "Longitude at centre of FOV"
-        dset.attrs['units'] = 'degrees'
-        
-        # Write optional sub observer lat/lon so we can plot the measurement easily
-        dset = grp.create_dataset('SUBOBS_LAT',data=self.SUBOBS_LAT)
-        dset.attrs['title'] = "Latitude at point directly below the observer (optional)"
-        dset.attrs['units'] = 'degrees'
+            dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
+            dset.attrs['title'] = "Longitude at centre of FOV"
+            dset.attrs['units'] = 'degrees'
+            
+            # Write optional sub observer lat/lon so we can plot the measurement easily
+            dset = grp.create_dataset('SUBOBS_LAT',data=self.SUBOBS_LAT)
+            dset.attrs['title'] = "Latitude at point directly below the observer (optional)"
+            dset.attrs['units'] = 'degrees'
 
-        dset = grp.create_dataset('SUBOBS_LON',data=self.SUBOBS_LON)
-        dset.attrs['title'] = "Longitude at point directly below the observer (optional)"
-        dset.attrs['units'] = 'degrees'
-        
-        #Writing the Doppler velocity
-        dset = grp.create_dataset('V_DOPPLER',data=self.V_DOPPLER)
-        dset.attrs['title'] = "Doppler velocity between the observed body and the observer"
-        dset.attrs['units'] = 'km s-1'
+            dset = grp.create_dataset('SUBOBS_LON',data=self.SUBOBS_LON)
+            dset.attrs['title'] = "Longitude at point directly below the observer (optional)"
+            dset.attrs['units'] = 'degrees'
+            
+            #Writing the Doppler velocity
+            dset = grp.create_dataset('V_DOPPLER',data=self.V_DOPPLER)
+            dset.attrs['title'] = "Doppler velocity between the observed body and the observer"
+            dset.attrs['units'] = 'km s-1'
 
-        #Writing the spectral units
-        dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
-        dset.attrs['title'] = "Spectral units"
-        if self.ISPACE==WaveUnit.Wavenumber_cm:
-            dset.attrs['units'] = 'Wavenumber / cm-1'
-        elif self.ISPACE==WaveUnit.Wavelength_um:
-            dset.attrs['units'] = 'Wavelength / um'
-
-        #Writing the measurement units
-        dset = grp.create_dataset('IFORM',data=int(self.IFORM))
-        dset.attrs['title'] = "Measurement units"
-        
-        if self.ISPACE==WaveUnit.Wavenumber_cm:  #Wavenumber space
-            if self.IFORM==SpectraUnit.Radiance:
-                lunit = 'Radiance / W cm-2 sr-1 (cm-1)-1'
-            elif self.IFORM==SpectraUnit.FluxRatio:
-                lunit = 'Secondary transit depth (Fplanet/Fstar) / Dimensionless'
-            elif self.IFORM==SpectraUnit.A_Ratio:
-                lunit = 'Primary transit depth (100*Aplanet/Astar) / Dimensionless'
-            elif self.IFORM==SpectraUnit.Integrated_spectral_power:
-                lunit = 'Integrated spectral power of planet / W (cm-1)-1'
-            elif self.IFORM==SpectraUnit.Atmospheric_transmission:
-                lunit = 'Atmospheric transmission multiplied by solar flux / W cm-2 (cm-1)-1'
-            elif self.IFORM==SpectraUnit.Normalised_radiance:
-                lunit = 'Spectra normalised to VNORM'
-
-        elif self.ISPACE==WaveUnit.Wavelength_um:  #Wavelength space
-            if self.IFORM==SpectraUnit.Radiance:
-                lunit = 'Radiance / W cm-2 sr-1 um-1'
-            elif self.IFORM==SpectraUnit.FluxRatio:
-                lunit = 'Secondary transit depth (Fplanet/Fstar) / Dimensionless'
-            elif self.IFORM==SpectraUnit.A_Ratio:
-                lunit = 'Primary transit depth (100*Aplanet/Astar) / Dimensionless'
-            elif self.IFORM==SpectraUnit.Integrated_spectral_power:
-                lunit = 'Integrated spectral power of planet / W um-1'
-            elif self.IFORM==SpectraUnit.Atmospheric_transmission:
-                lunit = 'Atmospheric transmission multiplied by solar flux / W cm-2 um-1'
-            elif self.IFORM==SpectraUnit.Normalised_radiance:
-                lunit = 'Spectra normalised to VNORM'
-
-        dset.attrs['units'] = lunit
-        
-        if self.IFORM==SpectraUnit.Normalised_radiance:
-            dset = grp.create_dataset('VNORM',data=self.VNORM)
-            if self.ISPACE==WaveUnit.Wavenumber_cm:
-                dset.attrs['title'] = "Wavenumber for normalisation"
-                dset.attrs['units'] = 'cm-1'
-            elif self.ISPACE==WaveUnit.Wavelength_um:
-                dset.attrs['title'] = "Wavelength for normalisation"
-                dset.attrs['units'] = 'um'
-
-        #Writing the number of geometries
-        dset = grp.create_dataset('NGEOM',data=self.NGEOM)
-        dset.attrs['title'] = "Number of measurement geometries"
-
-        #Defining the averaging points required to reconstruct the field of view 
-        dset = grp.create_dataset('NAV',data=self.NAV)
-        dset.attrs['title'] = "Number of averaging points needed to reconstruct the field-of-view"
-
-        dset = grp.create_dataset('FLAT',data=self.FLAT)
-        dset.attrs['title'] = "Latitude of each averaging point needed to reconstruct the field-of-view"
-        dset.attrs['unit'] = "Degrees"
- 
-        dset = grp.create_dataset('FLON',data=self.FLON)
-        dset.attrs['title'] = "Longitude of each averaging point needed to reconstruct the field-of-view"
-        dset.attrs['unit'] = "Degrees"
-
-        dset = grp.create_dataset('WGEOM',data=self.WGEOM)
-        dset.attrs['title'] = "Weight of each averaging point needed to reconstruct the field-of-view"
-        dset.attrs['unit'] = ""
-
-        dset = grp.create_dataset('EMISS_ANG',data=self.EMISS_ANG)
-        dset.attrs['title'] = "Emission angle of each averaging point needed to reconstruct the field-of-view"
-        dset.attrs['unit'] = "Degrees"
-
-        #Checking if there are any limb-viewing geometries
-        if np.nanmin(self.EMISS_ANG)<0.0:
-
-            dset = grp.create_dataset('TANHE',data=self.TANHE)
-            dset.attrs['title'] = "Tangent height of each averaging point needed to reconstruct the field-of-view"
-            dset.attrs['unit'] = "km"
-
-        #Checking if there are any nadir-viewing / upward looking geometries
-        if np.nanmax(self.EMISS_ANG) >= 0.0:
-
-            dset = grp.create_dataset('SOL_ANG',data=self.SOL_ANG)
-            dset.attrs['title'] = "Solar zenith angle of each averaging point needed to reconstruct the field-of-view"
-            dset.attrs['unit'] = "Degrees"
-
-            dset = grp.create_dataset('AZI_ANG',data=self.AZI_ANG)
-            dset.attrs['title'] = "Azimuth angle of each averaging point needed to reconstruct the field-of-view"
-            dset.attrs['unit'] = "Degrees"
-
-        dset = grp.create_dataset('NCONV',data=self.NCONV)
-        dset.attrs['title'] = "Number of spectral bins in each geometry"
-
-        dset = grp.create_dataset('WOFF',data=self.WOFF)
-        dset.attrs['title'] = "Wavelength/Wavenumber offset to add to each measurement"
-
-
-        dset = grp.create_dataset('VCONV',data=self.VCONV)
-        dset.attrs['title'] = "Spectral bins"
-        if self.ISPACE==WaveUnit.Wavenumber_cm:
-            dset.attrs['units'] = 'Wavenumber / cm-1'
-        elif self.ISPACE==WaveUnit.Wavelength_um:
-            dset.attrs['units'] = 'Wavelength / um'
-
-        dset = grp.create_dataset('MEAS',data=self.MEAS)
-        dset.attrs['title'] = "Measured spectrum in each geometry"
-        dset.attrs['units'] = lunit
-
-        dset = grp.create_dataset('ERRMEAS',data=self.ERRMEAS)
-        dset.attrs['title'] = "Uncertainty in the measured spectrum in each geometry"
-        dset.attrs['units'] = lunit
-
-        if self.FWHM > 0.0:
-            dset = grp.create_dataset('ISHAPE',data=int(self.ISHAPE))
-            dset.attrs['title'] = "Instrument lineshape"
-            if self.ISHAPE==InstrumentLineshape.Square:
-                lils = 'Square function'
-            elif self.ISHAPE==InstrumentLineshape.Triangular:
-                lils = 'Triangular function'
-            elif self.ISHAPE==InstrumentLineshape.Gaussian:
-                lils = 'Gaussian function'
-            elif self.ISHAPE==InstrumentLineshape.Hamming:
-                lils = 'Hamming function'
-            elif self.ISHAPE==InstrumentLineshape.Hanning:
-                lils = 'Hanning function'
-            dset.attrs['type'] = lils
-
-        dset = grp.create_dataset('FWHM',data=self.FWHM)
-        dset.attrs['title'] = "FWHM of instrument lineshape"
-        if self.FWHM > 0.0:
+            #Writing the spectral units
+            dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
+            dset.attrs['title'] = "Spectral units"
             if self.ISPACE==WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
             elif self.ISPACE==WaveUnit.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um'
-            dset.attrs['type'] = 'Analytical lineshape ('+lils+')'
-        elif self.FWHM==0.0:
-            dset.attrs['type'] = 'Convolution already performed in k-tables'
-        elif self.FWHM < 0.0:
-            dset.attrs['type'] = 'Explicit definition of instrument lineshape in each spectral bin'
 
-        if self.FWHM < 0.0:
-            dset = grp.create_dataset('NFIL',data=self.NFIL)
-            dset.attrs['title'] = "Number of points required to define the ILS in each spectral bin"
+            #Writing the measurement units
+            dset = grp.create_dataset('IFORM',data=int(self.IFORM))
+            dset.attrs['title'] = "Measurement units"
+            
+            if self.ISPACE==WaveUnit.Wavenumber_cm:  #Wavenumber space
+                if self.IFORM==SpectraUnit.Radiance:
+                    lunit = 'Radiance / W cm-2 sr-1 (cm-1)-1'
+                elif self.IFORM==SpectraUnit.FluxRatio:
+                    lunit = 'Secondary transit depth (Fplanet/Fstar) / Dimensionless'
+                elif self.IFORM==SpectraUnit.A_Ratio:
+                    lunit = 'Primary transit depth (100*Aplanet/Astar) / Dimensionless'
+                elif self.IFORM==SpectraUnit.Integrated_spectral_power:
+                    lunit = 'Integrated spectral power of planet / W (cm-1)-1'
+                elif self.IFORM==SpectraUnit.Atmospheric_transmission:
+                    lunit = 'Atmospheric transmission multiplied by solar flux / W cm-2 (cm-1)-1'
+                elif self.IFORM==SpectraUnit.Normalised_radiance:
+                    lunit = 'Spectra normalised to VNORM'
 
-            if self.ISPACE==WaveUnit.Wavenumber_cm:
-                dset = grp.create_dataset('VFIL',data=self.VFIL)
-                dset.attrs['title'] = "Wavenumber of the points required to define the ILS in each spectral bin"
-                dset.attrs['unit'] = "Wavenumber / cm-1"
-            elif self.ISPACE==WaveUnit.Wavelength_um:
-                dset = grp.create_dataset('VFIL',data=self.VFIL)
-                dset.attrs['title'] = "Wavelength of the points required to define the ILS in each spectral bin"
-                dset.attrs['unit'] = "Wavelength / um"
+            elif self.ISPACE==WaveUnit.Wavelength_um:  #Wavelength space
+                if self.IFORM==SpectraUnit.Radiance:
+                    lunit = 'Radiance / W cm-2 sr-1 um-1'
+                elif self.IFORM==SpectraUnit.FluxRatio:
+                    lunit = 'Secondary transit depth (Fplanet/Fstar) / Dimensionless'
+                elif self.IFORM==SpectraUnit.A_Ratio:
+                    lunit = 'Primary transit depth (100*Aplanet/Astar) / Dimensionless'
+                elif self.IFORM==SpectraUnit.Integrated_spectral_power:
+                    lunit = 'Integrated spectral power of planet / W um-1'
+                elif self.IFORM==SpectraUnit.Atmospheric_transmission:
+                    lunit = 'Atmospheric transmission multiplied by solar flux / W cm-2 um-1'
+                elif self.IFORM==SpectraUnit.Normalised_radiance:
+                    lunit = 'Spectra normalised to VNORM'
 
-            dset = grp.create_dataset('AFIL',data=self.AFIL)
-            dset.attrs['title'] = "ILS in each spectral bin"
+            dset.attrs['units'] = lunit
+            
+            if self.IFORM==SpectraUnit.Normalised_radiance:
+                dset = grp.create_dataset('VNORM',data=self.VNORM)
+                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                    dset.attrs['title'] = "Wavenumber for normalisation"
+                    dset.attrs['units'] = 'cm-1'
+                elif self.ISPACE==WaveUnit.Wavelength_um:
+                    dset.attrs['title'] = "Wavelength for normalisation"
+                    dset.attrs['units'] = 'um'
+
+            #Writing the number of geometries
+            dset = grp.create_dataset('NGEOM',data=self.NGEOM)
+            dset.attrs['title'] = "Number of measurement geometries"
+
+            #Defining the averaging points required to reconstruct the field of view 
+            dset = grp.create_dataset('NAV',data=self.NAV)
+            dset.attrs['title'] = "Number of averaging points needed to reconstruct the field-of-view"
+
+            dset = grp.create_dataset('FLAT',data=self.FLAT)
+            dset.attrs['title'] = "Latitude of each averaging point needed to reconstruct the field-of-view"
+            dset.attrs['unit'] = "Degrees"
+    
+            dset = grp.create_dataset('FLON',data=self.FLON)
+            dset.attrs['title'] = "Longitude of each averaging point needed to reconstruct the field-of-view"
+            dset.attrs['unit'] = "Degrees"
+
+            dset = grp.create_dataset('WGEOM',data=self.WGEOM)
+            dset.attrs['title'] = "Weight of each averaging point needed to reconstruct the field-of-view"
             dset.attrs['unit'] = ""
 
-        f.close()
+            dset = grp.create_dataset('EMISS_ANG',data=self.EMISS_ANG)
+            dset.attrs['title'] = "Emission angle of each averaging point needed to reconstruct the field-of-view"
+            dset.attrs['unit'] = "Degrees"
+
+            #Checking if there are any limb-viewing geometries
+            if np.nanmin(self.EMISS_ANG)<0.0:
+
+                dset = grp.create_dataset('TANHE',data=self.TANHE)
+                dset.attrs['title'] = "Tangent height of each averaging point needed to reconstruct the field-of-view"
+                dset.attrs['unit'] = "km"
+
+            #Checking if there are any nadir-viewing / upward looking geometries
+            if np.nanmax(self.EMISS_ANG) >= 0.0:
+
+                dset = grp.create_dataset('SOL_ANG',data=self.SOL_ANG)
+                dset.attrs['title'] = "Solar zenith angle of each averaging point needed to reconstruct the field-of-view"
+                dset.attrs['unit'] = "Degrees"
+
+                dset = grp.create_dataset('AZI_ANG',data=self.AZI_ANG)
+                dset.attrs['title'] = "Azimuth angle of each averaging point needed to reconstruct the field-of-view"
+                dset.attrs['unit'] = "Degrees"
+
+            dset = grp.create_dataset('NCONV',data=self.NCONV)
+            dset.attrs['title'] = "Number of spectral bins in each geometry"
+
+            dset = grp.create_dataset('WOFF',data=self.WOFF)
+            dset.attrs['title'] = "Wavelength/Wavenumber offset to add to each measurement"
+
+
+            dset = grp.create_dataset('VCONV',data=self.VCONV)
+            dset.attrs['title'] = "Spectral bins"
+            if self.ISPACE==WaveUnit.Wavenumber_cm:
+                dset.attrs['units'] = 'Wavenumber / cm-1'
+            elif self.ISPACE==WaveUnit.Wavelength_um:
+                dset.attrs['units'] = 'Wavelength / um'
+
+            dset = grp.create_dataset('MEAS',data=self.MEAS)
+            dset.attrs['title'] = "Measured spectrum in each geometry"
+            dset.attrs['units'] = lunit
+
+            dset = grp.create_dataset('ERRMEAS',data=self.ERRMEAS)
+            dset.attrs['title'] = "Uncertainty in the measured spectrum in each geometry"
+            dset.attrs['units'] = lunit
+
+            if self.FWHM > 0.0:
+                dset = grp.create_dataset('ISHAPE',data=int(self.ISHAPE))
+                dset.attrs['title'] = "Instrument lineshape"
+                if self.ISHAPE==InstrumentLineshape.Square:
+                    lils = 'Square function'
+                elif self.ISHAPE==InstrumentLineshape.Triangular:
+                    lils = 'Triangular function'
+                elif self.ISHAPE==InstrumentLineshape.Gaussian:
+                    lils = 'Gaussian function'
+                elif self.ISHAPE==InstrumentLineshape.Hamming:
+                    lils = 'Hamming function'
+                elif self.ISHAPE==InstrumentLineshape.Hanning:
+                    lils = 'Hanning function'
+                dset.attrs['type'] = lils
+
+            dset = grp.create_dataset('FWHM',data=self.FWHM)
+            dset.attrs['title'] = "FWHM of instrument lineshape"
+            if self.FWHM > 0.0:
+                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                    dset.attrs['units'] = 'Wavenumber / cm-1'
+                elif self.ISPACE==WaveUnit.Wavelength_um:
+                    dset.attrs['units'] = 'Wavelength / um'
+                dset.attrs['type'] = 'Analytical lineshape ('+lils+')'
+            elif self.FWHM==0.0:
+                dset.attrs['type'] = 'Convolution already performed in k-tables'
+            elif self.FWHM < 0.0:
+                dset.attrs['type'] = 'Explicit definition of instrument lineshape in each spectral bin'
+
+            if self.FWHM < 0.0:
+                dset = grp.create_dataset('NFIL',data=self.NFIL)
+                dset.attrs['title'] = "Number of points required to define the ILS in each spectral bin"
+
+                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                    dset = grp.create_dataset('VFIL',data=self.VFIL)
+                    dset.attrs['title'] = "Wavenumber of the points required to define the ILS in each spectral bin"
+                    dset.attrs['unit'] = "Wavenumber / cm-1"
+                elif self.ISPACE==WaveUnit.Wavelength_um:
+                    dset = grp.create_dataset('VFIL',data=self.VFIL)
+                    dset.attrs['title'] = "Wavelength of the points required to define the ILS in each spectral bin"
+                    dset.attrs['unit'] = "Wavelength / um"
+
+                dset = grp.create_dataset('AFIL',data=self.AFIL)
+                dset.attrs['title'] = "ILS in each spectral bin"
+                dset.attrs['unit'] = ""
 
     #################################################################################################################
 
@@ -580,62 +578,60 @@ class Measurement_0:
 
         import h5py
 
-        f = h5py.File(runname+'.h5','r')
+        with h5py.File(runname+'.h5','r') as f:
 
-        #Checking if Measurement exists
-        e = "/Measurement" in f
-        if e==False:
-            raise ValueError('error :: Measurement is not defined in HDF5 file')
-        else:
+            #Checking if Measurement exists
+            e = "/Measurement" in f
+            if e==False:
+                raise ValueError('error :: Measurement is not defined in HDF5 file')
+            else:
 
-            self.NGEOM = h5py_helper.retrieve_data(f, 'Measurement/NGEOM', np.int32)
-            self.ISPACE = h5py_helper.retrieve_data(f, 'Measurement/ISPACE', lambda x:  WaveUnit(np.int32(x)))
-            self.IFORM = h5py_helper.retrieve_data(f, 'Measurement/IFORM', lambda x:  SpectraUnit(np.int32(x)))
-            self.LATITUDE = h5py_helper.retrieve_data(f, 'Measurement/LATITUDE', np.float64)
-            self.LONGITUDE = h5py_helper.retrieve_data(f, 'Measurement/LONGITUDE', np.float64)
-            self.SUBOBS_LAT = h5py_helper.retrieve_data(f, 'Measurement/SUBOBS_LAT', np.float64)
-            self.SUBOBS_LON = h5py_helper.retrieve_data(f, 'Measurement/SUBOBS_LON', np.float64)
-            self.NAV = h5py_helper.retrieve_data(f, 'Measurement/NAV', np.array)
-            self.FLAT = h5py_helper.retrieve_data(f, 'Measurement/FLAT', np.array)
-            self.FLON = h5py_helper.retrieve_data(f, 'Measurement/FLON', np.array)
-            self.WGEOM = h5py_helper.retrieve_data(f, 'Measurement/WGEOM', np.array)
-            self.EMISS_ANG = h5py_helper.retrieve_data(f, 'Measurement/EMISS_ANG', np.array)
+                self.NGEOM = h5py_helper.retrieve_data(f, 'Measurement/NGEOM', np.int32)
+                self.ISPACE = h5py_helper.retrieve_data(f, 'Measurement/ISPACE', lambda x:  WaveUnit(np.int32(x)))
+                self.IFORM = h5py_helper.retrieve_data(f, 'Measurement/IFORM', lambda x:  SpectraUnit(np.int32(x)))
+                self.LATITUDE = h5py_helper.retrieve_data(f, 'Measurement/LATITUDE', np.float64)
+                self.LONGITUDE = h5py_helper.retrieve_data(f, 'Measurement/LONGITUDE', np.float64)
+                self.SUBOBS_LAT = h5py_helper.retrieve_data(f, 'Measurement/SUBOBS_LAT', np.float64)
+                self.SUBOBS_LON = h5py_helper.retrieve_data(f, 'Measurement/SUBOBS_LON', np.float64)
+                self.NAV = h5py_helper.retrieve_data(f, 'Measurement/NAV', np.array)
+                self.FLAT = h5py_helper.retrieve_data(f, 'Measurement/FLAT', np.array)
+                self.FLON = h5py_helper.retrieve_data(f, 'Measurement/FLON', np.array)
+                self.WGEOM = h5py_helper.retrieve_data(f, 'Measurement/WGEOM', np.array)
+                self.EMISS_ANG = h5py_helper.retrieve_data(f, 'Measurement/EMISS_ANG', np.array)
+                
+                if self.IFORM==SpectraUnit.Normalised_radiance:
+                    if 'Measurement/VNORM' in f:
+                        self.VNORM = h5py_helper.retrieve_data(f, 'Measurement/VNORM', np.float64)
+                
+                #Reading Doppler shift if exists
+                if 'Measurement/V_DOPPLER' in f:
+                    self.V_DOPPLER = h5py_helper.retrieve_data(f, 'Measurement/V_DOPPLER', np.float64)
+
+                #Checking if there are any limb-viewing geometries
+                if np.nanmin(self.EMISS_ANG)<0.0:
+                    self.TANHE = h5py_helper.retrieve_data(f, 'Measurement/TANHE', np.array)
+
+                #Checking if there are any nadir-viewing / upward looking geometries
+                if np.nanmax(self.EMISS_ANG) >= 0.0:
+                    self.SOL_ANG = h5py_helper.retrieve_data(f, 'Measurement/SOL_ANG', np.array)
+                    self.AZI_ANG = h5py_helper.retrieve_data(f, 'Measurement/AZI_ANG', np.array)
+
+
+                self.NCONV = h5py_helper.retrieve_data(f, 'Measurement/NCONV', np.array)
+                self.WOFF = h5py_helper.retrieve_data(f, 'Measurement/WOFF', np.float64)
+                self.VCONV = h5py_helper.retrieve_data(f, 'Measurement/VCONV', np.array) + self.WOFF
+                self.MEAS = h5py_helper.retrieve_data(f, 'Measurement/MEAS', np.array)
+                self.ERRMEAS = h5py_helper.retrieve_data(f, 'Measurement/ERRMEAS', np.array)
+
+                self.FWHM = h5py_helper.retrieve_data(f, 'Measurement/FWHM', np.float64)
+                if self.FWHM > 0.0:
+                    self.ISHAPE = h5py_helper.retrieve_data(f, 'Measurement/ISHAPE', lambda x:  InstrumentLineshape(np.int32(x)))
+                elif self.FWHM < 0.0:
+                    self.NFIL = h5py_helper.retrieve_data(f, 'Measurement/NFIL', np.array)
+                    self.VFIL = h5py_helper.retrieve_data(f, 'Measurement/VFIL', np.array)
+                    self.AFIL = h5py_helper.retrieve_data(f, 'Measurement/AFIL', np.array)
+
             
-            if self.IFORM==SpectraUnit.Normalised_radiance:
-                if 'Measurement/VNORM' in f:
-                    self.VNORM = h5py_helper.retrieve_data(f, 'Measurement/VNORM', np.float64)
-            
-            #Reading Doppler shift if exists
-            if 'Measurement/V_DOPPLER' in f:
-                self.V_DOPPLER = h5py_helper.retrieve_data(f, 'Measurement/V_DOPPLER', np.float64)
-
-            #Checking if there are any limb-viewing geometries
-            if np.nanmin(self.EMISS_ANG)<0.0:
-                self.TANHE = h5py_helper.retrieve_data(f, 'Measurement/TANHE', np.array)
-
-            #Checking if there are any nadir-viewing / upward looking geometries
-            if np.nanmax(self.EMISS_ANG) >= 0.0:
-                self.SOL_ANG = h5py_helper.retrieve_data(f, 'Measurement/SOL_ANG', np.array)
-                self.AZI_ANG = h5py_helper.retrieve_data(f, 'Measurement/AZI_ANG', np.array)
-
-
-            self.NCONV = h5py_helper.retrieve_data(f, 'Measurement/NCONV', np.array)
-            self.WOFF = h5py_helper.retrieve_data(f, 'Measurement/WOFF', np.float64)
-            self.VCONV = h5py_helper.retrieve_data(f, 'Measurement/VCONV', np.array) + self.WOFF
-            self.MEAS = h5py_helper.retrieve_data(f, 'Measurement/MEAS', np.array)
-            self.ERRMEAS = h5py_helper.retrieve_data(f, 'Measurement/ERRMEAS', np.array)
-
-            self.FWHM = h5py_helper.retrieve_data(f, 'Measurement/FWHM', np.float64)
-            if self.FWHM > 0.0:
-                self.ISHAPE = h5py_helper.retrieve_data(f, 'Measurement/ISHAPE', lambda x:  InstrumentLineshape(np.int32(x)))
-            elif self.FWHM < 0.0:
-                self.NFIL = h5py_helper.retrieve_data(f, 'Measurement/NFIL', np.array)
-                self.VFIL = h5py_helper.retrieve_data(f, 'Measurement/VFIL', np.array)
-                self.AFIL = h5py_helper.retrieve_data(f, 'Measurement/AFIL', np.array)
-
-            
-        f.close()
-
         self.assess()
         
         self.build_ils() 

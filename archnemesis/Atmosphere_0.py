@@ -331,93 +331,92 @@ class Atmosphere_0:
         #Assessing that all the parameters have the correct type and dimension
         self.assess()
 
-        f = h5py.File(runname+'.h5','a')
+
+        with h5py.File(runname+'.h5','a') as f:
         
-        if inside_telluric is False:
-            
-            #Checking if Atmosphere already exists
-            if ('/Atmosphere' in f)==True:
-                del f['Atmosphere']   #Deleting the Atmosphere information that was previously written in the file
+            if inside_telluric is False:
+                
+                #Checking if Atmosphere already exists
+                if ('/Atmosphere' in f)==True:
+                    del f['Atmosphere']   #Deleting the Atmosphere information that was previously written in the file
 
-            grp = f.create_group("Atmosphere")
-            
-        else:
-            
-            #The Atmosphere class must be inserted inside the Telluric class
-            if ('/Telluric/Atmosphere' in f)==True:
-                del f['Telluric/Atmosphere']   #Deleting the Atmosphere information that was previously written in the file
+                grp = f.create_group("Atmosphere")
+                
+            else:
+                
+                #The Atmosphere class must be inserted inside the Telluric class
+                if ('/Telluric/Atmosphere' in f)==True:
+                    del f['Telluric/Atmosphere']   #Deleting the Atmosphere information that was previously written in the file
 
-            grp = f.create_group("Telluric/Atmosphere")
+                grp = f.create_group("Telluric/Atmosphere")
 
-        #Writing the main dimensions
-        dset = grp.create_dataset('NP',data=self.NP)
-        dset.attrs['title'] = "Number of vertical points in profiles"
+            #Writing the main dimensions
+            dset = grp.create_dataset('NP',data=self.NP)
+            dset.attrs['title'] = "Number of vertical points in profiles"
 
-        dset = grp.create_dataset('NVMR',data=self.NVMR)
-        dset.attrs['title'] = "Number of gaseous species in atmosphere"
+            dset = grp.create_dataset('NVMR',data=self.NVMR)
+            dset.attrs['title'] = "Number of gaseous species in atmosphere"
 
-        dset = grp.create_dataset('NLOCATIONS',data=self.NLOCATIONS)
-        dset.attrs['title'] = "Number of different vertical profiles in atmosphere"
+            dset = grp.create_dataset('NLOCATIONS',data=self.NLOCATIONS)
+            dset.attrs['title'] = "Number of different vertical profiles in atmosphere"
 
-        dset = grp.create_dataset('NDUST',data=self.NDUST)
-        dset.attrs['title'] = "Number of aerosol populations in atmosphere"
+            dset = grp.create_dataset('NDUST',data=self.NDUST)
+            dset.attrs['title'] = "Number of aerosol populations in atmosphere"
 
-        dset = grp.create_dataset('IPLANET',data=self.IPLANET)
-        dset.attrs['title'] = "Planet ID"
-        dset.attrs['type'] = planet_info[str(int(self.IPLANET))]["name"]
+            dset = grp.create_dataset('IPLANET',data=self.IPLANET)
+            dset.attrs['title'] = "Planet ID"
+            dset.attrs['type'] = planet_info[str(int(self.IPLANET))]["name"]
 
-        dset = grp.create_dataset('AMFORM',data=self.AMFORM)
-        dset.attrs['title'] = "Type of Molecular Weight calculation"
-        if self.AMFORM==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:
-            dset.attrs['type'] = "Explicit definition of the molecular weight MOLWT"
-            dset = grp.create_dataset('MOLWT',data=self.MOLWT)
-            dset.attrs['title'] = "Molecular weight"
-            dset.attrs['units'] = "kg mol-1"
-        elif self.AMFORM==AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE:
-            dset.attrs['type'] = "Internal calculation of molecular weight with scaling of VMRs to 1"
-        elif self.AMFORM==AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR:
-            dset.attrs['type'] = "Internal calculation of molecular weight without scaling of VMRs"
+            dset = grp.create_dataset('AMFORM',data=self.AMFORM)
+            dset.attrs['title'] = "Type of Molecular Weight calculation"
+            if self.AMFORM==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:
+                dset.attrs['type'] = "Explicit definition of the molecular weight MOLWT"
+                dset = grp.create_dataset('MOLWT',data=self.MOLWT)
+                dset.attrs['title'] = "Molecular weight"
+                dset.attrs['units'] = "kg mol-1"
+            elif self.AMFORM==AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE:
+                dset.attrs['type'] = "Internal calculation of molecular weight with scaling of VMRs to 1"
+            elif self.AMFORM==AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR:
+                dset.attrs['type'] = "Internal calculation of molecular weight without scaling of VMRs"
 
-        dset = grp.create_dataset('ID',data=self.ID)
-        dset.attrs['title'] = "ID of the gaseous species"
+            dset = grp.create_dataset('ID',data=self.ID)
+            dset.attrs['title'] = "ID of the gaseous species"
 
-        dset = grp.create_dataset('ISO',data=self.ISO)
-        dset.attrs['title'] = "Isotope ID of the gaseous species"
+            dset = grp.create_dataset('ISO',data=self.ISO)
+            dset.attrs['title'] = "Isotope ID of the gaseous species"
 
-        dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
-        dset.attrs['title'] = "Latitude of each vertical profile"
-        dset.attrs['units'] = "Degrees"
+            dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
+            dset.attrs['title'] = "Latitude of each vertical profile"
+            dset.attrs['units'] = "Degrees"
 
-        dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
-        dset.attrs['title'] = "Longitude of each vertical profile"
-        dset.attrs['units'] = "Degrees"
+            dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
+            dset.attrs['title'] = "Longitude of each vertical profile"
+            dset.attrs['units'] = "Degrees"
 
-        dset = grp.create_dataset('P',data=self.P)
-        dset.attrs['title'] = "Pressure"
-        dset.attrs['units'] = "Pa"
+            dset = grp.create_dataset('P',data=self.P)
+            dset.attrs['title'] = "Pressure"
+            dset.attrs['units'] = "Pa"
 
-        dset = grp.create_dataset('T',data=self.T)
-        dset.attrs['title'] = "Temperature"
-        dset.attrs['units'] = "K"
+            dset = grp.create_dataset('T',data=self.T)
+            dset.attrs['title'] = "Temperature"
+            dset.attrs['units'] = "K"
 
-        dset = grp.create_dataset('H',data=self.H)
-        dset.attrs['title'] = "Altitude"
-        dset.attrs['units'] = "m"
+            dset = grp.create_dataset('H',data=self.H)
+            dset.attrs['title'] = "Altitude"
+            dset.attrs['units'] = "m"
 
-        dset = grp.create_dataset('VMR',data=self.VMR)
-        dset.attrs['title'] = "Volume mixing ratio"
-        dset.attrs['units'] = ""
+            dset = grp.create_dataset('VMR',data=self.VMR)
+            dset.attrs['title'] = "Volume mixing ratio"
+            dset.attrs['units'] = ""
 
-        if self.NDUST>0:
-            dset = grp.create_dataset('DUST',data=self.DUST)
-            dset.attrs['title'] = "Aerosol abundance"
-            dset.attrs['units'] = "particles m-3"
-            
-        if self.PARAH2 is not None:
-            dset = grp.create_dataset('PARAH2',data=self.PARAH2)
-            dset.attrs['title'] = "Para-H2 fraction"
-
-        f.close()
+            if self.NDUST>0:
+                dset = grp.create_dataset('DUST',data=self.DUST)
+                dset.attrs['title'] = "Aerosol abundance"
+                dset.attrs['units'] = "particles m-3"
+                
+            if self.PARAH2 is not None:
+                dset = grp.create_dataset('PARAH2',data=self.PARAH2)
+                dset.attrs['title'] = "Para-H2 fraction"
 
     ##################################################################################
 
@@ -428,62 +427,60 @@ class Atmosphere_0:
 
         import h5py
 
-        f = h5py.File(runname+'.h5','r')
+        with h5py.File(runname+'.h5','r') as f:
         
-        if inside_telluric is True:
-            name = '/Telluric/Atmosphere'
-        else:
-            name = '/Atmosphere'
-
-        #Checking if Atmosphere exists
-        e = name in f
-        if e==False:
-            raise ValueError('error :: Atmosphere is not defined in HDF5 file')
-        else:
-
-            self.NP = np.int32(f.get(name+'/NP'))
-            self.NLOCATIONS = np.int32(f.get(name+'/NLOCATIONS'))
-            self.NVMR = np.int32(f.get(name+'/NVMR'))
-            self.NDUST = np.int32(f.get(name+'/NDUST'))
-            self.AMFORM : AtmosphericProfileFormatEnum = AtmosphericProfileFormatEnum(np.int32(f.get(name+'/AMFORM')))
-            self.IPLANET : PlanetEnum = PlanetEnum(np.int32(f.get(name+'/IPLANET')))
-
-            if self.NLOCATIONS==1:
-                self.LATITUDE = np.float64(f.get(name+'/LATITUDE'))
-                self.LONGITUDE = np.float64(f.get(name+'/LONGITUDE'))
+            if inside_telluric is True:
+                name = '/Telluric/Atmosphere'
             else:
-                self.LATITUDE = np.array(f.get(name+'/LATITUDE'))
-                self.LONGITUDE = np.array(f.get(name+'/LONGITUDE'))
+                name = '/Atmosphere'
 
-            self.ID = np.array(f.get(name+'/ID'))
-            self.ISO = np.array(f.get(name+'/ISO'))
+            #Checking if Atmosphere exists
+            e = name in f
+            if e==False:
+                raise ValueError('error :: Atmosphere is not defined in HDF5 file')
+            else:
 
-            self.H = np.array(f.get(name+'/H'))
-            self.P = np.array(f.get(name+'/P'))
-            self.T = np.array(f.get(name+'/T'))
-            self.VMR = np.array(f.get(name+'/VMR'))
+                self.NP = np.int32(f.get(name+'/NP'))
+                self.NLOCATIONS = np.int32(f.get(name+'/NLOCATIONS'))
+                self.NVMR = np.int32(f.get(name+'/NVMR'))
+                self.NDUST = np.int32(f.get(name+'/NDUST'))
+                self.AMFORM : AtmosphericProfileFormatEnum = AtmosphericProfileFormatEnum(np.int32(f.get(name+'/AMFORM')))
+                self.IPLANET : PlanetEnum = PlanetEnum(np.int32(f.get(name+'/IPLANET')))
 
-            if self.NDUST>0:
-                self.DUST = np.array(f.get(name+'/DUST'))
-                self.DUST_UNITS_FLAG = None  #if reading from the HDF5 files units are assumed to be in number density (m^{-3})
-                
-            parah2 = name+'/PARAH2'
-            if parah2 in f:
-                self.PARAH2 = np.array(f.get(name+'/PARAH2'))
+                if self.NLOCATIONS==1:
+                    self.LATITUDE = np.float64(f.get(name+'/LATITUDE'))
+                    self.LONGITUDE = np.float64(f.get(name+'/LONGITUDE'))
+                else:
+                    self.LATITUDE = np.array(f.get(name+'/LATITUDE'))
+                    self.LONGITUDE = np.array(f.get(name+'/LONGITUDE'))
 
-            if self.AMFORM==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:
-                self.MOLWT = np.array(f.get(name+'/MOLWT'))
-            if self.AMFORM in (
-                    AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE, 
-                    AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR
-                ):
-                self.calc_molwt()
+                self.ID = np.array(f.get(name+'/ID'))
+                self.ISO = np.array(f.get(name+'/ISO'))
 
-            self.calc_grav()   
+                self.H = np.array(f.get(name+'/H'))
+                self.P = np.array(f.get(name+'/P'))
+                self.T = np.array(f.get(name+'/T'))
+                self.VMR = np.array(f.get(name+'/VMR'))
 
-            self.assess()  
+                if self.NDUST>0:
+                    self.DUST = np.array(f.get(name+'/DUST'))
+                    self.DUST_UNITS_FLAG = None  #if reading from the HDF5 files units are assumed to be in number density (m^{-3})
+                    
+                parah2 = name+'/PARAH2'
+                if parah2 in f:
+                    self.PARAH2 = np.array(f.get(name+'/PARAH2'))
 
-        f.close()       
+                if self.AMFORM==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:
+                    self.MOLWT = np.array(f.get(name+'/MOLWT'))
+                if self.AMFORM in (
+                        AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE, 
+                        AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR
+                    ):
+                    self.calc_molwt()
+
+                self.calc_grav()   
+
+                self.assess()  
 
     ##################################################################################
 

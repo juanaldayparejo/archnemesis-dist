@@ -5092,18 +5092,16 @@ class Model446(PreRTModelBase):
         from scipy.interpolate import interp1d
 
         #Reading the look-up table file
-        f = h5py.File(lookupfile,'r')
+        with h5py.File(lookupfile,'r') as f:
 
-        NWAVE = h5py_helper.retrieve_data(f, 'NWAVE', np.int32)
-        NSIZE = h5py_helper.retrieve_data(f, 'NSIZE', np.int32)
+            NWAVE = h5py_helper.retrieve_data(f, 'NWAVE', np.int32)
+            NSIZE = h5py_helper.retrieve_data(f, 'NSIZE', np.int32)
 
-        WAVE = h5py_helper.retrieve_data(f, 'WAVE', np.array)
-        REFF = h5py_helper.retrieve_data(f, 'REFF', np.array)
+            WAVE = h5py_helper.retrieve_data(f, 'WAVE', np.array)
+            REFF = h5py_helper.retrieve_data(f, 'REFF', np.array)
 
-        KEXT = h5py_helper.retrieve_data(f, 'KEXT', np.array)      #(NWAVE,NSIZE)
-        SGLALB = h5py_helper.retrieve_data(f, 'SGLALB', np.array)  #(NWAVE,NSIZE)
-
-        f.close()
+            KEXT = h5py_helper.retrieve_data(f, 'KEXT', np.array)      #(NWAVE,NSIZE)
+            SGLALB = h5py_helper.retrieve_data(f, 'SGLALB', np.array)  #(NWAVE,NSIZE)
 
         #First we interpolate to the wavelengths in the Scatter class
         sext = interp1d(WAVE,KEXT,axis=0)

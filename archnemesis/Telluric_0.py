@@ -79,34 +79,33 @@ class Telluric_0:
         #Assessing that all the parameters have the correct type and dimension
         #self.assess()
 
-        f = h5py.File(runname+'.h5','a')
-        #Checking if Atmosphere already exists
-        if ('/Telluric' in f)==True:
-            del f['Telluric']   #Deleting the Telluric information that was previously written in the file
+        with h5py.File(runname+'.h5','a') as f:
+            #Checking if Atmosphere already exists
+            if ('/Telluric' in f)==True:
+                del f['Telluric']   #Deleting the Telluric information that was previously written in the file
 
-        grp = f.create_group("Telluric")
-        
-        #Writing the parameters about the observation and observatory
-        dt = h5py.special_dtype(vlen=str)
-        dset = grp.create_dataset('DATE',data=self.DATE,dtype=dt)
-        dset.attrs['title'] = "UTC date of the observation (DD-MM-YYYY)"
-        
-        dset = grp.create_dataset('TIME',data=self.TIME,dtype=dt)
-        dset.attrs['title'] = "UTC time of the observation (HH:MM:SS)"
-        
-        dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
-        dset.attrs['title'] = "Latitude of the observatory (degrees)"
-        
-        dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
-        dset.attrs['title'] = "Longitude of the observatory (degrees)"
-        
-        dset = grp.create_dataset('ALTITUDE',data=self.ALTITUDE)
-        dset.attrs['title'] = "Altitude of the observatory (metres)"
-        
-        dset = grp.create_dataset('EMISS_ANG',data=self.EMISS_ANG)
-        dset.attrs['title'] = "Emission angle (degrees)"
-        
-        f.close()
+            grp = f.create_group("Telluric")
+            
+            #Writing the parameters about the observation and observatory
+            dt = h5py.special_dtype(vlen=str)
+            dset = grp.create_dataset('DATE',data=self.DATE,dtype=dt)
+            dset.attrs['title'] = "UTC date of the observation (DD-MM-YYYY)"
+            
+            dset = grp.create_dataset('TIME',data=self.TIME,dtype=dt)
+            dset.attrs['title'] = "UTC time of the observation (HH:MM:SS)"
+            
+            dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
+            dset.attrs['title'] = "Latitude of the observatory (degrees)"
+            
+            dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
+            dset.attrs['title'] = "Longitude of the observatory (degrees)"
+            
+            dset = grp.create_dataset('ALTITUDE',data=self.ALTITUDE)
+            dset.attrs['title'] = "Altitude of the observatory (metres)"
+            
+            dset = grp.create_dataset('EMISS_ANG',data=self.EMISS_ANG)
+            dset.attrs['title'] = "Emission angle (degrees)"
+    
         
         #Writing the Atmosphere
         if self.Atmosphere is None:
@@ -130,33 +129,31 @@ class Telluric_0:
         
         from archnemesis import Atmosphere_0, Spectroscopy_0
         
-        f = h5py.File(runname+'.h5','r')
+        with h5py.File(runname+'.h5','r') as f:
 
-        #Checking if Telluric exists
-        name = '/Telluric'
-        e = name in f
-        if e==False:
-            f.close()
-            raise ValueError('error :: Telluric is not defined in HDF5 file')
-        else:
+            #Checking if Telluric exists
+            name = '/Telluric'
+            e = name in f
+            if e==False:
+                raise ValueError('error :: Telluric is not defined in HDF5 file')
+            else:
 
-            grp = f[name]
+                grp = f[name]
 
-            self.DATE = grp['DATE'][()].decode('ascii')
-            self.TIME = grp['TIME'][()].decode('ascii')
+                self.DATE = grp['DATE'][()].decode('ascii')
+                self.TIME = grp['TIME'][()].decode('ascii')
+                
+                self.LATITUDE = np.float32(f.get(name+'/LATITUDE'))
+                self.LONGITUDE = np.float32(f.get(name+'/LONGITUDE'))
+                self.ALTITUDE = np.float32(f.get(name+'/ALTITUDE'))
+                self.EMISS_ANG = np.float32(f.get(name+'/EMISS_ANG'))
+                
+                self.Atmosphere = Atmosphere_0()
+                self.Atmosphere.read_hdf5(runname,inside_telluric=True)
+                
+                self.Spectroscopy = Spectroscopy_0()
+                self.Spectroscopy.read_hdf5(runname,inside_telluric=True)
             
-            self.LATITUDE = np.float32(f.get(name+'/LATITUDE'))
-            self.LONGITUDE = np.float32(f.get(name+'/LONGITUDE'))
-            self.ALTITUDE = np.float32(f.get(name+'/ALTITUDE'))
-            self.EMISS_ANG = np.float32(f.get(name+'/EMISS_ANG'))
-            
-            self.Atmosphere = Atmosphere_0()
-            self.Atmosphere.read_hdf5(runname,inside_telluric=True)
-            
-            self.Spectroscopy = Spectroscopy_0()
-            self.Spectroscopy.read_hdf5(runname,inside_telluric=True)
-        
-            f.close()
 
         
         

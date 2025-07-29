@@ -271,41 +271,40 @@ class CIA_0:
         
         import h5py
 
-        f = h5py.File(runname+'.h5','a')
-        #Checking if Spectroscopy already exists
-        if ('/CIA' in f)==True:
-            del f['CIA']   #Deleting the Spectroscopy information that was previously written in the file
+        with h5py.File(runname+'.h5','a') as f:
+            #Checking if Spectroscopy already exists
+            if ('/CIA' in f)==True:
+                del f['CIA']   #Deleting the Spectroscopy information that was previously written in the file
 
-        grp = f.create_group("CIA")
+            grp = f.create_group("CIA")
 
-        #Writing the necessary flags
-        dset = grp.create_dataset('INORMAL',data=int(self.INORMAL))
-        dset.attrs['title'] = "Flag indicating whether the ortho/para-H2 ratio is in equilibrium (0 for 1:1) or normal (1 for 3:1)"
+            #Writing the necessary flags
+            dset = grp.create_dataset('INORMAL',data=int(self.INORMAL))
+            dset.attrs['title'] = "Flag indicating whether the ortho/para-H2 ratio is in equilibrium (0 for 1:1) or normal (1 for 3:1)"
+            
+            #Write the directory where CIA tables are stored
+            dt = h5py.special_dtype(vlen=str)
+            CIADATA = ['']*1
+            
+            # Indirect the archnemesis path so it works on other systems
+            CIADATA[0] = archnemesis_indirect_path(self.CIADATA)
+            
+            dset = grp.create_dataset('CIADATA',data=CIADATA,dtype=dt)
+            dset.attrs['title'] = "Path to directory where CIA table is stored"
+            
+            # Convert CIATABLE to HDF5 format if we do not have an HDF5 format of this table
+            CIATABLE_str = self.CIATABLE
+            if CIATABLE_str.endswith('.tab'):
+                CIATABLE_str = CIATABLE_str[:-4]+'.h5'
+            
+            if not os.path.exists(self.CIADATA+CIATABLE_str):
+                self.write_ciatable_hdf5(self.CIADATA+CIATABLE_str)
+            
+            # Write the name of the CIATABLE
+            CIATABLE = [CIATABLE_str]
+            dset = grp.create_dataset('CIATABLE',data=CIATABLE,dtype=dt)
+            dset.attrs['title'] = "Name of the CIA table file"
         
-        #Write the directory where CIA tables are stored
-        dt = h5py.special_dtype(vlen=str)
-        CIADATA = ['']*1
-        
-        # Indirect the archnemesis path so it works on other systems
-        CIADATA[0] = archnemesis_indirect_path(self.CIADATA)
-        
-        dset = grp.create_dataset('CIADATA',data=CIADATA,dtype=dt)
-        dset.attrs['title'] = "Path to directory where CIA table is stored"
-        
-        # Convert CIATABLE to HDF5 format if we do not have an HDF5 format of this table
-        CIATABLE_str = self.CIATABLE
-        if CIATABLE_str.endswith('.tab'):
-            CIATABLE_str = CIATABLE_str[:-4]+'.h5'
-        
-        if not os.path.exists(self.CIADATA+CIATABLE_str):
-            self.write_ciatable_hdf5(self.CIADATA+CIATABLE_str)
-        
-        # Write the name of the CIATABLE
-        CIATABLE = [CIATABLE_str]
-        dset = grp.create_dataset('CIATABLE',data=CIATABLE,dtype=dt)
-        dset.attrs['title'] = "Name of the CIA table file"
-        
-        f.close()
         
     ##################################################################################
 
