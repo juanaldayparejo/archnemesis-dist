@@ -363,3 +363,22 @@ class AtmosphericProfileType(IntEnum):
     AEROSOL_DENSITY = 2
     PARA_H2_FRACTION = 3
     FRACTIONAL_CLOUD_COVERAGE = 4
+
+
+class SpectroscopicLineList(IntEnum):
+    """
+    Defines the spectroscopic line list to be used 
+
+    Used as DATABASE in 'LineData_0.py'
+    """
+    CUSTOM = 0
+    HITRAN = 1
+    
+class AmbientGas(IntEnum):
+    """
+    Defines the ambient gas used in the line spectroscopy calculations
+
+    Used as ambient_gas in 'LineData_0.py'
+    """
+    AIR = 0
+    CO2 = 1

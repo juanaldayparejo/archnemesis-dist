@@ -34,7 +34,8 @@ setup(
       'corner'],
     extras_require={
         'grib': ['pygrib'],
-        'docs': ['sphinx', 'sphinx_rtd_theme']
+        'docs': ['sphinx', 'sphinx_rtd_theme'],
+        'spectroscopy': ['hapi'],
     },
     classifiers=[
         "Programming Language :: Python :: 3",

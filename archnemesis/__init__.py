@@ -18,7 +18,7 @@ from .ForwardModel_0 import *
 from .OptimalEstimation_0 import *
 from .NestedSampling_0 import *
 from .Telluric_0 import *
-#from .LineData_0 import *
+from .LineData_0 import *
 
 from .Models import Models
 from .Data import *
