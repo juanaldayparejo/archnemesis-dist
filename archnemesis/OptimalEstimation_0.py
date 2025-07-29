@@ -1173,7 +1173,7 @@ def coreretOE(
     from archnemesis import ForwardModel_0
     
     # Reset the warning flag each time we do a retrieval
-    ForwardModel_0.DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG = False
+    ForwardModel_0.reset_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG()
 
     #Creating class and including inputs
     #############################################

@@ -40,11 +40,24 @@ Created on Tue Mar 15 2022
 Forward Model Class.
 """
 
-
+_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG = False
 
 class ForwardModel_0:
     
-    DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG : bool = False # class variable
+    @classmethod
+    def get_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG(cls):
+        global _DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG
+        return _DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG
+    
+    @classmethod
+    def set_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG(cls):
+        global _DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG
+        _DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG = True
+    
+    @classmethod
+    def reset_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG(cls):
+        global _DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG
+        _DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG = True
 
     def __init__(self, 
             runname='wasp121', 
@@ -200,21 +213,23 @@ class ForwardModel_0:
         self.Telluric = Telluric
         self.adjust_hydrostat=adjust_hydrostat
         
-        # Test that the forward model has Spectroscopy data for each
-        # gas in the atmosphere.
-        if self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:
-            spect_table_type_str = 'k-table'
-            spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
-            spect_legacy_filename = f'{self.runname}.kls'
-        elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            spect_table_type_str = 'line-by-line-table'
-            spect_legacy_filename = f'{self.runname}.lls'
-        else:
-            raise RuntimeError(f'Unknown SpectralCalculationMode: {self.Spectroscopy.ILBL}.')
-        spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
         
-        if not self.DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG:
+        if not self.get_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG():
             should_warn = False
+            
+            # Test that the forward model has Spectroscopy data for each
+            # gas in the atmosphere.
+            if self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:
+                spect_table_type_str = 'k-table'
+                spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
+                spect_legacy_filename = f'{self.runname}.kls'
+            elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                spect_table_type_str = 'line-by-line-table'
+                spect_legacy_filename = f'{self.runname}.lls'
+            else:
+                raise RuntimeError(f'Unknown SpectralCalculationMode: {self.Spectroscopy.ILBL}.')
+            spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
+            
             atmos_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Atmosphere.ID, self.Atmosphere.ISO))
             spect_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Spectroscopy.ID, self.Spectroscopy.ISO))
             
@@ -247,7 +262,7 @@ class ForwardModel_0:
                     f'# END WARNING #####################################################################',
                 ])
                 _lgr.warning('\n'.join(warning_lines))
-            self.DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG = True
+                self.set_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG()
         
         
         

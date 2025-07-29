@@ -382,7 +382,7 @@ class Spectroscopy_0:
             if self.NGAS>0:
                 if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
                     dt = h5py.special_dtype(vlen=str)
-                    dset = grp.create_dataset('LOCATION',data=self.LOCATION,dtype=dt)
+                    dset = grp.create_dataset('LOCATION',data=self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
                     dset.attrs['title'] = "Location of the pre-tabulated tables"
 
     ######################################################################################################
