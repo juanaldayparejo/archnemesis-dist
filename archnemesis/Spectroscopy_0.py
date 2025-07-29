@@ -11,17 +11,16 @@ import numpy as np
 import scipy
 import matplotlib.pyplot as plt
 import os
+import os.path
 from numba import jit, njit
 
-from archnemesis.helpers import h5py_helper
+from archnemesis.helpers import h5py_helper, path_redirect
 
 
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 
-#!/usr/local/bin/python3
-# -*- coding: utf-8 -*-
 
 ###############################################################################################
 
@@ -35,7 +34,13 @@ State Vector Class.
 
 class Spectroscopy_0:
 
-    def __init__(self, RUNNAME: str = '', ILBL: SpectralCalculationMode = SpectralCalculationMode.LINE_BY_LINE_TABLES, NGAS: int = 2, ONLINE: bool = False):
+    def __init__(
+            self, 
+            RUNNAME: str = '', 
+            ILBL: SpectralCalculationMode = SpectralCalculationMode.LINE_BY_LINE_TABLES, 
+            NGAS: int = 2, 
+            ONLINE: bool = False
+        ):
 
         """
         Inputs
@@ -101,7 +106,7 @@ class Spectroscopy_0:
 
 
         # Input parameters with validation
-        self.RUNNAME = RUNNAME
+        self.runname = RUNNAME
         #self.ILBL = SpectralCalculationMode(ILBL) if not isinstance(ILBL, SpectralCalculationMode) else ILBL
         self.NGAS = NGAS
         self.ONLINE = ONLINE
@@ -110,7 +115,7 @@ class Spectroscopy_0:
         #self.ISPACE: Optional[WaveUnit] = None
         self.ID: Optional[np.ndarray] = None  # Array of Gas enum values (NGAS)
         self.ISO = None       #(NGAS)
-        self.LOCATION = None  #(NGAS)
+        self._locations = path_redirect.PathRedirectList() #(NGAS)
         self.NWAVE = None     
         self.WAVE = None      #(NWAVE)
         self.NP = None
@@ -127,10 +132,33 @@ class Spectroscopy_0:
         # private attributes
         self._ilbl = None
         self._ispace = None
+        self._locations_initialised = False
         
         # set property values
         self.ILBL = ILBL
         self.ISPACE = WaveUnit.Wavenumber_cm  # Default value
+
+    @property
+    def LOCATION(self) -> list[str]:
+        # NOTE: paths are stored as strings so we should be able to use `str.startswith(...)` to match them up.
+        if not self._locations_initialised:
+            return None
+        
+        return self._locations
+
+
+    @LOCATION.setter
+    def LOCATION(self, value) -> None:
+        if value is None:
+            self._locations_initialised = False
+        else:
+            self._locations._raw_paths = [x for x in value]
+            self._locations_initialised = True
+
+
+    @property
+    def RUNNAME(self):
+        return self.runname
     
     @property
     def ILBL(self) -> SpectralCalculationMode:
@@ -266,6 +294,51 @@ class Spectroscopy_0:
 
 
     ######################################################################################################
+    def set_table_location_redirects(self, redirects: tuple[tuple[str,str],...]):
+        """
+        Adds a group of redirects that means we can look in a different place for a file instead of
+        having to copy files into different places.
+        """
+        for old_path, new_path in redirects:
+            self._locations._path_redirects[old_path] = new_path
+        
+        return self
+
+    def add_table_location(self, *new_locations : str) -> None:
+        """
+        Adds the location of a table to this class, will not add the same table twice.
+        """
+        
+        for new_location in new_locations:
+            _lgr.debug(f'Adding table location {new_location=}')
+            if self.LOCATION is None or self.NGAS is None:
+                _lgr.error(f'Spectroscopy_0 instance cannot add a table location before it has been fully initialised. Run one of the following routines first: `self.read_hdf5(...)`, `self.read_lls(...)`, `self.read_kls(...)`.')
+                return
+            
+            add_new_loc_flag = True
+            
+            # Check that the new_location is not already in our list of locations
+            for location in self.LOCATION:
+                if os.path.samefile(self._locations._get_redirected_path(new_location), location): # NOTE: must apply redirects here as well otherwise we will be comparing the wrong files
+                    _lgr.warning(f'Spectral table file "{new_location}" is the same file as "{location}". Spectroscopy_0 instance will not add the same file twice as the data is already included')
+                    add_new_loc_flag = False
+            
+            if add_new_loc_flag:
+                self.LOCATION.append(new_location)
+                self.NGAS = len(self.LOCATION)
+                _lgr.info(f'Added new table location "{new_location}" to the Spectroscopy_0 instance. To make this change permanent do one of the following: [LEGACY INPUT] add the string to "{self.runname}.lls" or "{self.runname}.kls"; [HDF5 INPUT] run the snippet `spectroscopy.write_hdf5(spectroscopy.runname)` where `spectroscopy` is this Spectroscopy_0 instance.')
+            else:
+                if self.NGAS != len(self.LOCATION):
+                    _lgr.warning(f'Table file "{new_location}" was not added due to the above reason. However, the number of active gasses ({self.NGAS}) does not match the number of table locations ({len(self.LOCATION)}), whereas it is expected that they should. Updating the number of active gasses to be the same as the number of table locations...')
+                    self.NGAS = len(self.LOCATION)
+        
+        
+        # If tables have already been read, re-read them
+        if self.ID is not None:
+            self.read_header()
+        
+        return
+
     def write_hdf5(self, runname, inside_telluric=False):
         """
         Write the information about the k-tables or lbl-tables into the HDF5 file
@@ -332,7 +405,6 @@ class Spectroscopy_0:
             #Checking if Spectroscopy exists
             e = name in f
             if e==False:
-                f.close()
                 raise ValueError('error :: Spectroscopy is not defined in HDF5 file')
             else:
                 self.NGAS = np.int32(f.get(name+'/NGAS'))
@@ -473,7 +545,7 @@ class Spectroscopy_0:
         Given the LOCATION of the look-up tables, reads the header information
         """
         
-
+        _lgr.warning(f'{self.NGAS=} {self.LOCATION=}')
         if self.NGAS>0:
 
             if self.ILBL==SpectralCalculationMode.K_TABLES:
@@ -695,7 +767,6 @@ class Spectroscopy_0:
             else:
                 raise ValueError('error in Spectroscopy :: ILBL must be either 0 (K-tables) or 2 (LBL-tables)')
 
-
     ######################################################################################################
     def write_table_hdf5(self,ID,ISO,filename):
         """
@@ -722,50 +793,47 @@ class Spectroscopy_0:
             if os.path.exists(filename+'.h5')==True:
                 os.remove(filename+'.h5')
             
-            f = h5py.File(filename+'.h5','w')
+            with h5py.File(filename+'.h5','w') as f:
             
-            #Writing the header information
-            dset = h5py_helper.store_data(f, 'ILBL', data=self.ILBL)
-            dset.attrs['title'] = "Spectroscopy calculation type"
-            if self.ILBL==SpectralCalculationMode.K_TABLES:
-                dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
-            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-                dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
-            else:
-                raise ValueError('error :: ILBL must be 0 or 2')
+                #Writing the header information
+                dset = h5py_helper.store_data(f, 'ILBL', data=self.ILBL)
+                dset.attrs['title'] = "Spectroscopy calculation type"
+                if self.ILBL==SpectralCalculationMode.K_TABLES:
+                    dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
+                elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                    dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
+                else:
+                    raise ValueError('error :: ILBL must be 0 or 2')
+                    
+                dset = h5py_helper.store_data(f, 'ID', data=ID)
+                dset.attrs['title'] = "ID of the gaseous species"
+
+                dset = h5py_helper.store_data(f, 'ISO', data=ISO)
+                dset.attrs['title'] = "Isotope ID of the gaseous species"
                 
-            dset = h5py_helper.store_data(f, 'ID', data=ID)
-            dset.attrs['title'] = "ID of the gaseous species"
-
-            dset = h5py_helper.store_data(f, 'ISO', data=ISO)
-            dset.attrs['title'] = "Isotope ID of the gaseous species"
+                dset = h5py_helper.store_data(f, 'WAVE', data=self.WAVE)
+                dset.attrs['title'] = "Spectral points at which the cross sections are defined"
+                
+                dset = h5py_helper.store_data(f, 'NP', data=self.NP)
+                dset.attrs['title'] = "Number of pressure levels at which the look-up table is tabulated"
+                
+                dset = h5py_helper.store_data(f, 'NT', data=self.NT)
+                dset.attrs['title'] = "Number of temperature levels at which the look-up table is tabulated"
+                
+                dset = h5py_helper.store_data(f, 'PRESS', data=self.PRESS)
+                dset.attrs['title'] = "Pressure levels at which the look-up table is tabulated / atm"
+                
+                dset = h5py_helper.store_data(f, 'TEMP', data=self.TEMP)
+                dset.attrs['title'] = "Temperature levels at which the look-up table is tabulated / K"
+                
+                #Writing the coefficients
+                dset = h5py_helper.store_data(f, 'K', data=self.K[:,:,:,igas])
+                dset.attrs['title'] = "Tabulated cross sections / cm2 multiplied by a factor of 1.0 x 10^20"
             
-            dset = h5py_helper.store_data(f, 'WAVE', data=self.WAVE)
-            dset.attrs['title'] = "Spectral points at which the cross sections are defined"
-            
-            dset = h5py_helper.store_data(f, 'NP', data=self.NP)
-            dset.attrs['title'] = "Number of pressure levels at which the look-up table is tabulated"
-            
-            dset = h5py_helper.store_data(f, 'NT', data=self.NT)
-            dset.attrs['title'] = "Number of temperature levels at which the look-up table is tabulated"
-            
-            dset = h5py_helper.store_data(f, 'PRESS', data=self.PRESS)
-            dset.attrs['title'] = "Pressure levels at which the look-up table is tabulated / atm"
-            
-            dset = h5py_helper.store_data(f, 'TEMP', data=self.TEMP)
-            dset.attrs['title'] = "Temperature levels at which the look-up table is tabulated / K"
-            
-            #Writing the coefficients
-            dset = h5py_helper.store_data(f, 'K', data=self.K[:,:,:,igas])
-            dset.attrs['title'] = "Tabulated cross sections / cm2 multiplied by a factor of 1.0 x 10^20"
-            
-            f.close()
-
         else:
             
             raise ValueError('error in write_table_hdf5 :: selected ILBL has not been implemented yet (only ILBL=2 is currently working)')
-        
-        
+
     ######################################################################################################
     def calc_klblg(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
         """
@@ -934,6 +1002,7 @@ class Spectroscopy_0:
             
 
         return kgood,dkgooddT
+
     ######################################################################################################
     def calc_klbl(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
         """
@@ -1088,7 +1157,6 @@ class Spectroscopy_0:
             )
             
         return kgood
-
 
     ######################################################################################################
     def calc_kg(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):

@@ -12,7 +12,6 @@ import pickle
 
 from archnemesis.enums import WaveUnit, SpectraUnit
 from archnemesis.helpers.maths_helper import is_diagonal
-from archnemesis.helpers import redirect_file_access
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -1115,7 +1114,6 @@ def coreretOE(
         write_itr=True,
         return_forward_model=False,
         return_phi_and_chisq_history=False,
-        path_redirects : tuple[archnemesis.helpers.redirect_file_access.Redirector] = tuple(),
     ) -> (
         OptimalEstimation_0 
         | tuple[OptimalEstimation_0, ForwardModel_0]
@@ -1173,6 +1171,9 @@ def coreretOE(
 
     from archnemesis import OptimalEstimation_0
     from archnemesis import ForwardModel_0
+    
+    # Reset the warning flag each time we do a retrieval
+    ForwardModel_0.DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG = False
 
     #Creating class and including inputs
     #############################################
@@ -1236,7 +1237,6 @@ def coreretOE(
         Layer=Layer,
         Variables=Variables,
         Telluric=Telluric,
-        path_redirects=path_redirects
     )
     _lgr.info('nemesis :: Calculating Jacobian matrix KK')
     YN,KK = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
@@ -1349,7 +1349,6 @@ def coreretOE(
                     Layer=Layer,
                     Telluric=Telluric,
                     Variables=Variables1,
-                    path_redirects = path_redirects,
                 )
                 ForwardModel1.subprofretg()
 
@@ -1378,7 +1377,6 @@ def coreretOE(
             Layer=Layer,
             Telluric=Telluric,
             Variables=Variables,
-            path_redirects = path_redirects,
         )
         YN1,KK1 = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
 

@@ -22,7 +22,6 @@ from archnemesis.enums import (
     PathObserverPointing,
     RayleighScatteringMode,
 )
-from archnemesis.helpers import redirect_file_access
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -41,7 +40,11 @@ Created on Tue Mar 15 2022
 Forward Model Class.
 """
 
+
+
 class ForwardModel_0:
+    
+    DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG : bool = False # class variable
 
     def __init__(self, 
             runname='wasp121', 
@@ -56,7 +59,6 @@ class ForwardModel_0:
             Variables=None, 
             Telluric=None, 
             adjust_hydrostat=True,
-            path_redirects : tuple[archnemesis.helpers.redirect_file_access.Redirector] = tuple()
         ):
 
         """Forward Model class
@@ -197,10 +199,7 @@ class ForwardModel_0:
         self.Layer = Layer
         self.Telluric = Telluric
         self.adjust_hydrostat=adjust_hydrostat
-        self.path_redirects : tuple[archnemesis.helpers.redirect_file_access.Redirector] = path_redirects
         
-        _lgr.info(f'ForwardModel_0 instance has {self.path_redirects}')
-
         # Test that the forward model has Spectroscopy data for each
         # gas in the atmosphere.
         if self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:
@@ -214,38 +213,41 @@ class ForwardModel_0:
             raise RuntimeError(f'Unknown SpectralCalculationMode: {self.Spectroscopy.ILBL}.')
         spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
         
-        atmos_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Atmosphere.ID, self.Atmosphere.ISO))
-        spect_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Spectroscopy.ID, self.Spectroscopy.ISO))
-        was_warned = False
-        warning_lines = [
-            f'Not all atmospheric gasses have spectroscopy data.',
-            f'# WARNING #########################################################################',
-            f'',
-            f'The following atmospheric gasses ARE NOT PRESENT in the spectroscopy data and WILL NOT CONTRIBUTE TO OPACITY:',
-            f'',
-        ]
-        for gas_spec in atmos_gas_specifiers:
-            if gas_spec not in spect_gas_specifiers:
-                was_warned = True
-                warning_lines.append(
-                    f'    {archnemesis.enums.Gas(gas_spec[0]).name} (id {gas_spec[0]}) isotopologue {gas_spec[1]}'
-                )
-                
-        if was_warned:
-            warning_lines.extend([
+        if not self.DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG:
+            should_warn = False
+            atmos_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Atmosphere.ID, self.Atmosphere.ISO))
+            spect_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Spectroscopy.ID, self.Spectroscopy.ISO))
+            
+            warning_lines = [
+                f'Not all atmospheric gasses have spectroscopy data.',
+                f'# WARNING #########################################################################',
                 f'',
-                f'To deactivate this warning place a path to a {spect_table_type_str} file for these gasses in one of the following locations (depending upon your input file type):',
+                f'The following atmospheric gasses ARE NOT PRESENT in the spectroscopy data and WILL NOT CONTRIBUTE TO OPACITY:',
                 f'',
-                f'    [HDF5 Input]',
-                f'        In the "{self.runname}.h5" file, add an entry to "/Spectroscopy/LOCATION"',
-                f'        and update "/Spectroscopy/NGAS" appropriately.',
-                f'',
-                f'    [LEGACY Input]',
-                f'        Add an entry to the "{spect_legacy_filename}" file.',
-                f'',
-                f'# END WARNING #####################################################################',
-            ])
-            _lgr.warning('\n'.join(warning_lines))
+            ]
+            for gas_spec in atmos_gas_specifiers:
+                if gas_spec not in spect_gas_specifiers:
+                    should_warn = True
+                    warning_lines.append(
+                        f'    {archnemesis.enums.Gas(gas_spec[0]).name} (id {gas_spec[0]}) isotopologue {gas_spec[1]}'
+                    )
+            
+            if should_warn:
+                warning_lines.extend([
+                    f'',
+                    f'To deactivate this warning place a path to a {spect_table_type_str} file for these gasses in one of the following locations (depending upon your input file type):',
+                    f'',
+                    f'    [HDF5 Input]',
+                    f'        In the "{self.runname}.h5" file, add an entry to "/Spectroscopy/LOCATION"',
+                    f'        and update "/Spectroscopy/NGAS" appropriately.',
+                    f'',
+                    f'    [LEGACY Input]',
+                    f'        Add an entry to the "{spect_legacy_filename}" file.',
+                    f'',
+                    f'# END WARNING #####################################################################',
+                ])
+                _lgr.warning('\n'.join(warning_lines))
+            self.DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG = True
         
         
         
@@ -1436,8 +1438,7 @@ class ForwardModel_0:
             archnemesis.cfg.logs.push_packagewide_level(logging.ERROR)
             
             # model the spectrum
-            with archnemesis.helpers.redirect_file_access.using(*self.path_redirects):
-                SPECMOD = nemesis_method()
+            SPECMOD = nemesis_method()
         finally:
             # Stop disabling logging levels
             archnemesis.cfg.logs.pop_packagewide_level()
