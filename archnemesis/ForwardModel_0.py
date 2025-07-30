@@ -215,6 +215,7 @@ class ForwardModel_0:
         
         
         if not self.get_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG():
+            _lgr.info(f'Checking atmospheric gasses have spectroscopy data.')
             should_warn = False
             
             # Test that the forward model has Spectroscopy data for each

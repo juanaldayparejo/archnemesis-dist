@@ -1284,11 +1284,11 @@ def coreretOE(
     NY1 = np.zeros(OptimalEstimation.NY)
     YN1 = deepcopy(OptimalEstimation.YN)
 
-    successful_iteraton = False
+    successful_iteration = False
     n_successful_iterations = 0
 
     for it in range(OptimalEstimation.NITER):
-        successful_iteraton = False
+        successful_iteration = False
         _lgr.info('nemesis :: Iteration '+str(it)+'/'+str(OptimalEstimation.NITER))
 
         #Writing into .itr file
