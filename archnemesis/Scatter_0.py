@@ -1,3 +1,22 @@
+#!/usr/local/bin/python3
+# -*- coding: utf-8 -*-
+#
+# archNEMESIS - Python implementation of the NEMESIS radiative transfer and retrieval code
+# Scatter_0.py - Object to store the optical properties of atmospheric aerosols.
+#
+# Copyright (C) 2025 Juan Alday, Joseph Penn, Patrick Irwin,
+# Jack Dobinson, Jon Mason, Jingxuan Yang
+#
+# This file is part of archNEMESIS.
+#
+# archNEMESIS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 from archnemesis import *
 from archnemesis.enums import (
     WaveUnit,
@@ -1748,6 +1767,7 @@ def miescat(xlam, iscat, dsize, rs, refindx, theta):
                 anr1 = rr ** alpha * np.exp(-rr / (aa * bb))
             elif iscat == 2: #Log-normal distribution
                 anr1 = 1. / (rr * bb * np.sqrt(2 * pi)) * np.exp( - (np.log(rr)-np.log(aa))**2. / (2.*bb**2.))
+                #anr1 = 1. / (rr * bb * np.sqrt(2 * pi)) * np.exp(-0.5 * ((np.log(rr) - np.log(aa)) / bb) ** 2)
             elif iscat == 3: #MCS Modified standard gamma distribution
                 cc = dsize[2]
                 anr1 = rr ** aa * np.exp(-bb * rr ** cc)

@@ -1,13 +1,25 @@
+#!/usr/local/bin/python3
+# -*- coding: utf-8 -*-
+#
+# archNEMESIS - Python implementation of the NEMESIS radiative transfer and retrieval code
+# NestedSampling_0.py - Object to run nested sampling retrievals.
+#
+# Copyright (C) 2025 Juan Alday, Joseph Penn, Patrick Irwin,
+# Jack Dobinson, Jon Mason, Jingxuan Yang
+#
+# This file is part of archNEMESIS.
+#
+# archNEMESIS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 import archnemesis as ans
 from archnemesis import *
 import scipy
-try:
-    import pymultinest
-    from pymultinest.solve import solve
-except ImportError:
-    _lgr.critical('PyMultiNest is not installed. Please download this before attempting to run retrievals with nested sampling. Instructions on installation can be found here: http://johannesbuchner.github.io/PyMultiNest/install.html')
-    pymultinest = None
-    solve = None
 import os
 import corner
 import matplotlib.pyplot as plt
@@ -36,8 +48,16 @@ class NestedSampling_0:
         NestedSampling.make_plots()
         """
         
+        try:
+            import pymultinest
+            from pymultinest.solve import solve
+        except ImportError:
+            _lgr.critical('PyMultiNest is not installed. Please download this before attempting to run retrievals with nested sampling. Instructions on installation can be found here: http://johannesbuchner.github.io/PyMultiNest/install.html')
+            pymultinest = None
+            solve = None
         
         self.N_LIVE_POINTS = N_LIVE_POINTS
+        
         if pymultinest is None:
             raise ImportError("pymultinest was not found. To use the NestedSampling class, you must install it: \n https://johannesbuchner.github.io/PyMultiNest/install.html") 
             

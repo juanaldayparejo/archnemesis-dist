@@ -1,3 +1,22 @@
+#!/usr/local/bin/python3
+# -*- coding: utf-8 -*-
+#
+# archNEMESIS - Python implementation of the NEMESIS radiative transfer and retrieval code
+# CIA_0.py - Object to represent the collision-induced absorption (CIA) properties of gases.
+#
+# Copyright (C) 2025 Juan Alday, Joseph Penn, Patrick Irwin,
+# Jack Dobinson, Jon Mason, Jingxuan Yang
+#
+# This file is part of archNEMESIS.
+#
+# archNEMESIS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 from archnemesis.Data.path_data import *
@@ -12,9 +31,6 @@ from archnemesis.enums import Gas, ParaH2Ratio
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
-
-#!/usr/local/bin/python3
-# -*- coding: utf-8 -*-
 
 ###############################################################################################
 
@@ -576,7 +592,7 @@ class CIA_0:
             filename += '.h5'
         
         with h5py.File(filename, 'r') as f:
-            self.NPARA = np.int32(f.get('NPARA', 1))
+            self.NPARA = np.int32(f.get('NPARA', 0))
             self.NPAIR = h5py_helper.retrieve_data(f, 'NPAIR', np.int32)
             self.NT = h5py_helper.retrieve_data(f, 'NT', np.int32)
             self.NWAVE = h5py_helper.retrieve_data(f, 'NWAVE', np.int32)

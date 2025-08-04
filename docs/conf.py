@@ -47,7 +47,16 @@ nbsphinx_thumbnails = {
     #'examples/Measurement/Measurement': '_static/observation_sketch.png',
 }
 
+#Adding logo
+html_logo = "images/archnemesis_logo_white_background.png"
+
 #Defining the actual appearance of the website
 html_theme = 'sphinx_rtd_theme'
+html_static_path = ['_static','images']
 
 exclude_patterns = ['_build', '**.ipynb_checkpoints']
+
+html_theme_options = {
+    'logo_only': True,  # Don't show project name next to logo
+    'display_version': True,  # Still show version below logo if you want
+}

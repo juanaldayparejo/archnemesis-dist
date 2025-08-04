@@ -9,7 +9,8 @@ from .ModelBase import *
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+#_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 
 
@@ -436,22 +437,22 @@ class Model231(PostRTModelBase):
             #   parameters used by this model
         ) -> tuple[np.ndarray[['NCONV'],float], np.ndarray[['NCONV','NX'],float]]:
         
-        W0 = WAVE[0]
-        spec = SPECMOD[:WAVE.size]
+        WAVE0 = WAVE[0]
+        spec = np.zeros(WAVE.size)
+        spec[:] = SPECMOD[:WAVE.size]
         POL = np.zeros_like(spec)
         
         dW = WAVE-WAVE0
         for j in range(COEFF.shape[0]):
-            POL[:] = POL[:] + COEFF[j] * (dW**j)
+            POL[:] = POL[:] + COEFF[j] * dW**j
         
         SPECMOD[:WAVE.size] *= POL
-        
         dSPECMOD[:WAVE.size,:] *= POL[:,None]
         
         dspecmod_part = dSPECMOD[:WAVE.size, state_vector_slice]
         for j in range(COEFF.shape[0]):
-            dspecmod_part[:WAVE.size,j] = spec * (dW**j)
-        
+            dspecmod_part[:WAVE.size,j] = spec * dW**j
+
         return SPECMOD, dSPECMOD
     
     
@@ -508,17 +509,24 @@ class Model231(PostRTModelBase):
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
         ) -> None:
-        coeff_shape = (self.n_degree+1, self.n_geom)
-        coeff = self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX).reshape(coeff_shape)
-        
+
+        #coeff_shape = (self.n_degree+1, self.n_geom)
+        coeff_shape = (self.n_geom, self.n_degree+1)
+        coeff = self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)[0].reshape(coeff_shape)
+
+        for i_geom in range(self.n_geom):
+            _lgr.debug(f'coefficients for geometry {i_geom}: {coeff[i_geom,:]}')
+
+        ixx = ix
         for i_geom in range(self.n_geom):
             SPECMOD[:,i_geom], dSPECMOD[:,i_geom,:] = self.calculate(
                 SPECMOD[:,i_geom],
                 dSPECMOD[:,i_geom,:],
                 forward_model.Measurement.VCONV[:forward_model.Measurement.NCONV[i_geom], i_geom],
-                coeff[:,i_geom],
-                self.state_vector_slice
+                coeff[i_geom,:],
+                slice(ixx, ixx + self.n_degree + 1)
             )
+            ixx += self.n_degree + 1
         
         return
 

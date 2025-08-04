@@ -1,5 +1,22 @@
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
+#
+# archNEMESIS - Python implementation of the NEMESIS radiative transfer and retrieval code
+# gas_data.py - Gas properties and constants.
+#
+# Copyright (C) 2025 Juan Alday, Joseph Penn, Patrick Irwin,
+# Jack Dobinson, Jon Mason, Jingxuan Yang
+#
+# This file is part of archNEMESIS.
+#
+# archNEMESIS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 """
 Data reference files.
 
@@ -43,6 +60,7 @@ def count_isotopes(mol_id):
     else:
         return 0  # Molecule ID not found
 
+
 def id_to_name(gasid,isoid):
     """
     Return the number of the molecule or isotope
@@ -53,23 +71,21 @@ def id_to_name(gasid,isoid):
     else:
         return gas_info[str(gasid)]["isotope"][str(isoid)]["name"]
 
+
 def molecule_to_latex(formula):
     import re
-    # Step 1: Replace isotopes in parentheses (e.g. (14N) -> ^{14}\textnormal{N})
-    formula = re.sub(r'\((\d+)([A-Z][a-z]*)\)', r'^{\1}\\textnormal{\2}', formula)
-    
-    # Step 2: Add subscripts to numbers following elements
+    # Step 1: Replace isotopes in parentheses (e.g., (14N) -> ^{14}N)
+    formula = re.sub(r'\((\d+)([A-Z][a-z]*)\)', r'^{\1}\2', formula)
+
+    # Step 2: Add \text{} around elements and subscripts for numbers
     def add_subscripts(match):
-        element = match.group(1)
-        number = match.group(2)
+        element, number = match.groups()
         if number:
-            return f"\\textnormal{{{element}}}_{{{number}}}"
+            return f"\\text{{{element}}}_{{{number}}}"
         else:
-            return f"\\textnormal{{{element}}}"
-    
-    pattern = re.compile(r'([A-Z][a-z]*)(\d*)')
-    formula = pattern.sub(add_subscripts, formula)
-    
+            return f"\\text{{{element}}}"
+
+    formula = re.sub(r'([A-Z][a-z]*)(\d*)', add_subscripts, formula)
     return formula
 
 

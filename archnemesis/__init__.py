@@ -1,6 +1,7 @@
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
-from . import cfg
+
+from .cfg import *
 
 from .Spectroscopy_0 import *
 from .Scatter_0 import *
@@ -15,8 +16,9 @@ from .Path_0 import *
 from .Variables_0 import *
 from .ForwardModel_0 import *
 from .OptimalEstimation_0 import *
-#from .NestedSampling_0 import *
+from .NestedSampling_0 import *
 from .Telluric_0 import *
+from .LineData_0 import *
 
 from .Models import Models
 from .Data import *

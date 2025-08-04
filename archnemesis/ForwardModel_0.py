@@ -1,3 +1,22 @@
+#!/usr/local/bin/python3
+# -*- coding: utf-8 -*-
+#
+# archNEMESIS - Python implementation of the NEMESIS radiative transfer and retrieval code
+# ForwardModel_0.py - Object to represent the forward model calculations.
+#
+# Copyright (C) 2025 Juan Alday, Joseph Penn, Patrick Irwin,
+# Jack Dobinson, Jon Mason, Jingxuan Yang
+#
+# This file is part of archNEMESIS.
+#
+# archNEMESIS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 from __future__ import annotations #  for 3.9 compatability
 from archnemesis import *
 from archnemesis.Models import Models
@@ -25,7 +44,7 @@ from archnemesis.enums import (
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -1671,6 +1690,8 @@ class ForwardModel_0:
         else:
             return None
 
+    ###############################################################################################
+ 
     def subprofretg(self):
 
         """
@@ -1712,22 +1733,26 @@ class ForwardModel_0:
             self.adjust_hydrostat = True
         if self.Variables.JTAN!=-1:
             self.adjust_hydrostat = True
+            
         #Modify profile via hydrostatic equation to make sure the atm is in hydrostatic equilibrium
         if self.adjust_hydrostat==True:
             if self.Variables.JPRE==-1:
                 jhydro = 0
                 #Then we modify the altitude levels and keep the pressures fixed
-                
                 self.AtmosphereX.adjust_hydrostatH()
                 self.AtmosphereX.calc_grav()   #Updating the gravity values at the new heights
             else:
+                
                 #Then we modifify the pressure levels and keep the altitudes fixed
                 jhydro = 1
-                for i in range(self.Variables.NVAR):
-                    if self.Variables.VARIDENT[i,0]==666:
-                        htan = self.Variables.VARPARAM[i,0] * 1000.
-                ptan = np.exp(self.Variables.XN[self.Variables.JPRE]) * 101325.
-                self.AtmosphereX.adjust_hydrostatP(htan,ptan)
+                ix = 0
+                for ivar in range(self.Variables.NVAR):
+                    #Get the index of the parameterisation
+                    ipar = self._get_ipar(self.Variables.VARIDENT[ivar])
+                    if self.Variables.VARIDENT[ivar,2]==666:
+                        # Re-compute pressure levels based pressure at tangent height on hydrostatic equilibrum
+                        self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, 0.0)
+                    ix += self.Variables.models[ivar].n_state_vector_entries
 
         #Calculate atmospheric density
         rho = self.AtmosphereX.calc_rho() #kg/m3
@@ -1807,9 +1832,16 @@ class ForwardModel_0:
                 self.AtmosphereX.adjust_hydrostatH()
                 self.AtmosphereX.calc_grav()   #Updating the gravity values at the new heights
             else:
-                #Then we modifify the pressure levels and keep the altitudes fixed
-                self.AtmosphereX.adjust_hydrostatP(htan,ptan)
-
+                
+                #Modifying pressure levels based on the hydrostatic equilibrium equation
+                ix = 0
+                for ivar in range(self.Variables.NVAR):
+                    #Get the index of the parameterisation
+                    ipar = self._get_ipar(self.Variables.VARIDENT[ivar])
+                    if self.Variables.VARIDENT[ivar,2]==666:
+                        # Re-compute pressure levels based pressure at tangent height on hydrostatic equilibrum
+                        self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, 0.0)
+                    ix += self.Variables.models[ivar].n_state_vector_entries
 
         #Patch for model -1, since the aerosol density is defined in particles per gram of atm (depends on the density)
         #Going through the different variables an updating the atmosphere accordingly
@@ -1830,7 +1862,6 @@ class ForwardModel_0:
             ix += self.Variables.models[ivar].n_state_vector_entries
         
         return xmap
-
 
     ###############################################################################################
 
@@ -1869,7 +1900,9 @@ class ForwardModel_0:
         #Going through the different variables an updating the spectra and gradients accordingly
         ix = 0
         for ivar in range(self.Variables.NVAR):
-
+            _lgr.debug(f'subspecret :: Updating spectra and gradients for variable {ivar+1} of {self.Variables.NVAR}')
+            _lgr.debug(f'subspecret :: Variable identifier: {self.Variables.VARIDENT[ivar,:]}')
+            _lgr.debug(f'subspecret :: ix = {ix}, n_state_vector_entries = {self.Variables.models[ivar].n_state_vector_entries}')
             self.Variables.models[ivar].calculate_from_subspecret(self, ix, ivar, SPECMOD, dSPECMOD)
             ix += self.Variables.models[ivar].n_state_vector_entries
 
