@@ -1,6 +1,6 @@
 from __future__ import annotations #  for 3.9 compatability
 
-import hapi
+import archnemesis.database.wrappers.hapi as hapi
 
 from .gas_descriptor import GasDescriptor, RadtranGasDescriptor, HitranGasDescriptor
 from archnemesis import Data

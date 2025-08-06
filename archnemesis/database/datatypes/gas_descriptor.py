@@ -2,7 +2,7 @@ from __future__ import annotations #  for 3.9 compatability
 
 import dataclasses as dc
 
-import hapi
+import archnemesis.database.wrappers.hapi as hapi
 
 from ..mappings.hitran import radtran_to_hitran, hitran_to_radtran
 from archnemesis import Data

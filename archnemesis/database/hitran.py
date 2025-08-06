@@ -1,14 +1,15 @@
 from __future__ import annotations #  for 3.9 compatability
 
-import os
+import sys, os
 import os.path
 import pickle
 
 import numpy as np
-import hapi
+
 
 import archnemesis as ans
 import archnemesis.enums
+import archnemesis.database.wrappers.hapi as hapi
 from .line_database_protocol import LineDatabaseProtocol, LineDataProtocol, PartitionFunctionDataProtocol
 from .datatypes.wave_range import WaveRange
 from .datatypes.gas_isotopes import GasIsotopes
@@ -16,7 +17,9 @@ from .datatypes.gas_descriptor import RadtranGasDescriptor, HitranGasDescriptor
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
+
+
 
 class HITRAN(LineDatabaseProtocol):
     """
@@ -40,45 +43,184 @@ class HITRAN(LineDatabaseProtocol):
     """
     
     
-    local_storage_dir : str = os.path.normpath('local_line_database')
+    _class_local_storage_dir : str = os.path.abspath('local_line_database')
     
-    downloaded_gas_wavenumber_interval_cache_file : str = 'downloaded_gas_wavenumber_interval.pkl'
+    _class_downloaded_gas_wavenumber_interval_cache_file : str = 'downloaded_gas_wavenumber_interval.pkl'
     
-    db_init_flag : bool = False
+    _class_db_init_flag : bool = False
     
-    class_downloaded_gas_wavenumber_interval : dict[RadtranGasDescriptor, WaveRange] = dict() 
+    _class_downloaded_gas_wavenumber_interval : dict[tuple[RadtranGasDescriptor, ans.enums.AmbientGas], WaveRange] = dict() 
         
-    class_gas_wavenumber_interval_to_download : dict[RadtranGasDescriptor, WaveRange] = dict() 
+    _class_gas_wavenumber_interval_to_download : dict[tuple[RadtranGasDescriptor, ans.enums.AmbientGas], WaveRange] = dict() 
     
     
     @classmethod
-    def set_local_storage_dir(cls, local_storage_dir : str):
-        if cls.db_init_flag:
-            raise RuntimeError(f'For now, cannot change location of HITRAN database after it has been initialised')
+    def set_class_local_storage_dir(cls, local_storage_dir : str):
+        if cls._class_db_init_flag:
+            raise RuntimeError(f'Cannot change location of HITRAN database after it has been initialised as HAPI does not have a way of using multiple databases at once.')
         else:
-            cls.local_storage_dir = os.normpath(local_storage_dir)
+            cls._class_local_storage_dir = os.path.abspath(local_storage_dir)
     
     
     @classmethod
-    def set_db_init_flag(cls, v : bool):
-        cls.db_init_flag = v
+    def set_class_db_init_flag(cls, v : bool):
+        cls._class_db_init_flag = v
     
+    
+    @property
+    def local_storage_dir(self) -> str:
+        """
+        Required by LineDatabaseProtocol. Gets the directory the local database is in.
+        """
+        return self._class_local_storage_dir
+    
+    @local_storage_dir.setter
+    def local_storage_dir(self, value : str) -> None:
+        """
+        Required by LineDatabaseProtocol. Sets the directory the local database is in.
+        """
+        self.set_class_local_storage_dir(value)
+    
+    @property
+    def db_init_flag(self) -> bool:
+        """
+        Gets the value of the flag that tell us if the local database has been initialised
+        """
+        return self._class_db_init_flag
+    
+    @db_init_flag.setter
+    def db_init_flag(self, value : bool) -> None:
+        """
+        Sets the value of the flag that tell us if the local database has been initialised
+        """
+        self.set_class_db_init_flag(value)
+    
+    @property
+    def _downloaded_gas_wavenumber_interval(self) -> dict[RadtranGasDescriptor, WaveRange]:
+        return self._class_downloaded_gas_wavenumber_interval
+    
+    @property
+    def _gas_wavenumber_interval_to_download(self) -> dict[RadtranGasDescriptor, WaveRange]:
+        return self._class_gas_wavenumber_interval_to_download
+    
+    @property
+    def _downloaded_gas_wavenumber_interval_cache_file(self):
+        return os.path.join(self._class_local_storage_dir, self._class_downloaded_gas_wavenumber_interval_cache_file)
+    
+    
+    @staticmethod
+    def get_tablename_from_props(gas_desc : RadtranGasDescriptor, ambient_gas : ans.enums.AmbientGas) -> str:
+        return f'{gas_desc.gas_name}_{gas_desc.iso_id}_ambient_{ambient_gas.name}'
+    
+    @staticmethod
+    def get_props_from_tablename(tablename : str) -> tuple[RadtranGasDescriptor, ans.enums.AmbientGas]:
+        gas_name, iso_id, _, amb_gas = tablename.split('_')
+        return (
+            RadtranGasDescriptor(
+                getattr(ans.enums.Gas, gas_name),
+                int(iso_id)
+            ),
+            getattr(ans.enums.AmbientGas, amb_gas),
+        )
+    
+    @staticmethod
+    def get_ambient_gas_parameter_strings(ambient_gas : ans.enums.AmbientGas) -> tuple[str,str,str]:
+        if ambient_gas == ans.enums.AmbientGas.AIR:
+            gamma_str = 'gamma_air'
+            n_str = 'n_air'
+            delta_str = 'delta_air'
+        elif ambient_gas == ans.enums.AmbientGas.CO2:
+            gamma_str = 'gamma_co2'
+            n_str = 'n_co2'
+            delta_str = 'delta_co2'
+        else:
+            raise ValueError(f'Unrecognised ambient gas {ambient_gas}')
+        
+        return gamma_str, n_str, delta_str
     
     def __init__(
-            self, 
+            self,
+            local_storage_dir : None | str = None,
         ):
+        self.init_database(local_storage_dir)
+    
+    @property
+    def ready(self) -> bool:
+        """
+        Required by LineDatabaseProtocol. Returns True if the database is ready to use, False otherwise
+        """
+        return self.db_init_flag
+    
+    def purge(self) -> None:
+        """
+        Required by LineDatabaseProtocol. Remove all local data and make it so the database must be reinitalised
+        """
+        if not self.db_init_flag:
+            _lgr.warning(f'HITRAN database is not initialised yet, so cannot purge it.')
+            return
         
-        self._init_database()
-    
-    
+        tablenames = list(hapi.tableList())
+        
+        
+        # drop all tables
+        for tablename in tablenames:
+            hapi.dropTable(tablename)
+        hapi.db_commit()
+        
+        # Remove any table files remaining
+        for tablename in tablenames:
+            table_header_path = os.path.join(self.local_storage_dir, f'{tablename}.header')
+            table_data_path = os.path.join(self.local_storage_dir, f'{tablename}.data')
+            table_fpaths = (
+                table_header_path, 
+                table_data_path
+            )
+            for fpath in table_fpaths:
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+                
+        # delete all cache files
+        cache_fpaths = (
+            self._downloaded_gas_wavenumber_interval_cache_file,
+        )
+        for fpath in cache_fpaths:
+            if os.path.exists(fpath):
+                os.remove(fpath)
+        
+        # Delete local storage of data
+        for k in tuple(self._downloaded_gas_wavenumber_interval.keys()):
+            del self._downloaded_gas_wavenumber_interval[k]
+        
+        for k in tuple(self._gas_wavenumber_interval_to_download.keys()):
+            del self._gas_wavenumber_interval_to_download[k]
+        
+        # Need this hack so tables are not held on to by `hapi`
+        hapi.LOCAL_TABLE_CACHE = dict()
+        
+        # set flag so that database can be reinitalised
+        self.db_init_flag = False
+        _lgr.info(f'Database {self} has been purged. It no longer holds any local data and must be re-initialised using `self.init_database(...)`.')
+        
+        return
+
+
     def get_line_data(
             self, 
             gas_descs : tuple[RadtranGasDescriptor,...], 
             wave_range : WaveRange, 
             ambient_gas : ans.enums.AmbientGas
         ) -> dict[RadtranGasDescriptor, LineDataProtocol]:
+        """
+        Required by LineDatabaseProtocol. Retrieves line data from the database.
+        
+        Checks if database has been initialised, checks if we have all requested data, download if required, reads
+        requested data from database and returns it in LineDataProtocol format
+        """
         gd = tuple(gas_descs)
-        self._check_available_data(gd, wave_range)
+        if not self.db_init_flag:
+            self._init_database()
+        
+        self._check_available_data(gd, wave_range, ambient_gas)
         self._fetch_line_data()
         
         return self._read_line_data(gd, wave_range, ambient_gas)
@@ -88,22 +230,13 @@ class HITRAN(LineDatabaseProtocol):
             self, 
             gas_descs : tuple[RadtranGasDescriptor,...]
         ) -> dict[RadtranGasDescriptor, PartitionFunctionDataProtocol]:
+        """
+        Required by LineDatabaseProtocol. Retrieves partition function data from the database.
+        
+        HITRAN stores partition function data in the `hapi` module, so data is always local and available,
+        therefore just need to get it into the PartitionFunctionDataProtocol format.
+        """
         return self._read_partition_function_data(tuple(gas_descs))
-    
-    
-    @property
-    def _downloaded_gas_wavenumber_interval(self) -> dict[RadtranGasDescriptor, WaveRange]:
-        return self.class_downloaded_gas_wavenumber_interval
-    
-    
-    @property
-    def _gas_wavenumber_interval_to_download(self) -> dict[RadtranGasDescriptor, WaveRange]:
-        return self.class_gas_wavenumber_interval_to_download
-    
-    
-    @property
-    def _downloaded_gas_wavenumber_interval_cache_file(self):
-        return os.path.join(self.local_storage_dir, self.downloaded_gas_wavenumber_interval_cache_file)
     
     
     def retrieve_downloaded_gas_wavenumber_interval_from_cache(self):
@@ -121,7 +254,7 @@ class HITRAN(LineDatabaseProtocol):
                     self._downloaded_gas_wavenumber_interval.update(loaded)
             _lgr.debug(f'Loaded cached {self._downloaded_gas_wavenumber_interval=}')
         else:
-            _lgr.info(f'Cache file for `self._downloaded_gas_wavenumber_interval` not found at {cache_file_path=}')
+            _lgr.info(f'Cache file for `self._downloaded_gas_wavenumber_interval` not found at {cache_file_path=}. This is not a problem if the database is being built from scratch.')
 
     def store_downloaded_gas_wavenumber_interval_to_cache(self):
         cache_file_path = self._downloaded_gas_wavenumber_interval_cache_file
@@ -134,88 +267,103 @@ class HITRAN(LineDatabaseProtocol):
                 _lgr.warning(f'Something went wrong when pickling `self._downloaded_gas_wavenumber_interval` to "{cache_file_path}". Data will not be cached. Error: {str(e)}')
 
 
-    def _init_database(self):
-        if not self.db_init_flag:
-            # Create directory to store database in
-            os.makedirs(self.local_storage_dir, exist_ok=True)
-            
-            # Read downloaded_gas_wavenumber_interval_cache_file if it exists
-            self.retrieve_downloaded_gas_wavenumber_interval_from_cache()
-            
-            #Starting the HAPI database
-            hapi.db_begin(self.local_storage_dir)
-            self.set_db_init_flag(True)
-            
-            tablenames = list(hapi.tableList())
-            
-            _lgr.debug(f'{tablenames=}')
-            
-            
-            for tablename in tablenames:
-                if _lgr.level <= logging.DEBUG:
-                    hapi.describeTable(tablename)
-                
-                if hasattr(ans.enums.Gas, tablename.split('_',1)[0]):
-                    hapi.select(tablename, ParameterNames=('molec_id', 'local_iso_id', 'nu'), Conditions=None, DestinationTableName = 'temp')
-                    found_molec_ids, found_iso_local_ids, found_v = hapi.getColumns('temp', ('molec_id', 'local_iso_id', 'nu'))
-                    
-                    found_iso_local_ids = np.array(found_iso_local_ids, dtype=int)
-                    found_v = np.array(found_v, dtype=float)
-                    
-                    molec_id_set = tuple(set(found_molec_ids))
-                    local_iso_set = set(found_iso_local_ids)
-                    
-                    _lgr.debug(f'{found_iso_local_ids=}')
-                    _lgr.debug(f'{molec_id_set=}')
-                    _lgr.debug(f'{local_iso_set=}')
-                    
-                    
-                    assert len(molec_id_set) == 1, "Should only have a single gas per HITRAN database table"
+    def init_database(
+            self,
+            local_storage_dir : None | str = None,
+        ):
+        
+        
+        if self.db_init_flag:
+            _lgr.warning(f'Database {self} is already initialised, cannot initialise it again unless it is purged using `self.purge()`.')
+            return
+        
+        if local_storage_dir is not None:
+            self.local_storage_dir = local_storage_dir
+        
+        # Create directory to store database in
+        os.makedirs(self.local_storage_dir, exist_ok=True)
+        
+        # Read downloaded_gas_wavenumber_interval_cache_file if it exists
+        self.retrieve_downloaded_gas_wavenumber_interval_from_cache()
+        
 
-                    for iso in local_iso_set:
-                        iso_mask = found_iso_local_ids == iso
-                        _lgr.debug(f'{iso_mask=}')
-                        iso_v = found_v[iso_mask]
-                        vmin = np.min(iso_v)
-                        vmax = np.max(iso_v)
-                        
-                        gas_desc = HitranGasDescriptor.from_gas_and_iso_id(molec_id_set[0], iso).to_radtran()
-                        if gas_desc not in self._downloaded_gas_wavenumber_interval:
-                            self._downloaded_gas_wavenumber_interval[gas_desc] = WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm)
-                            _lgr.info(f'No cache of downloaded wave range for {gas_desc}, using wave range {self._downloaded_gas_wavenumber_interval[gas_desc]=} found in tables {tablename} which will underestimate the requested range.')
-                        
-                    hapi.dropTable('temp')
+        #Starting the HAPI database
+        hapi.db_begin(self.local_storage_dir)
+        tablenames = list(hapi.tableList())
+        
+        _lgr.debug(f'{tablenames=}')
+        
+        # Read all of the data we have stored locally
+        for tablename in tablenames:
+            if _lgr.level <= logging.DEBUG:
+                hapi.describeTable(tablename)
+            
+            # Assume tables conform to our naming format
+            try:
+                gas_desc, ambient_gas = self.get_props_from_tablename(tablename)
+            except Exception as e:
+                _lgr.warning(f'HITRAN database found table "{tablename}" that does not conform to our naming format. Skipping...')
+                continue
+            
+            # Should only ever have a single gas isotope per file
+            hapi.select(tablename, ParameterNames=('molec_id', 'local_iso_id', 'nu'), Conditions=None, DestinationTableName = 'temp')
+            found_molec_ids, found_iso_local_ids, found_v = hapi.getColumns('temp', ('molec_id', 'local_iso_id', 'nu'))
+            
+            assert len(set(found_molec_ids)) == 1, "Should only have one HITRAN gas per table"
+            assert len(set(found_iso_local_ids)) == 1, "Should only have one HITRAN isotope per table"
+            
+            
+            found_v = np.array(found_v, dtype=float)
+            
+            vmin = np.min(found_v)
+            vmax = np.max(found_v)
+            
+            gda_pair = (gas_desc, ambient_gas)
+            if gda_pair not in self._downloaded_gas_wavenumber_interval:
+                self._downloaded_gas_wavenumber_interval[gda_pair] = WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm)
+                _lgr.info(f'No cache of downloaded wave range for {gda_pair}, using wave range {self._downloaded_gas_wavenumber_interval[gda_pair]=} found in tables {tablename} which will underestimate the requested range.')
+                
+            hapi.dropTable('temp')
+        
+        self.db_init_flag = True
+        _lgr.info(f'Database {self} initialised.')
+        
         return
 
-
-    def _check_available_data(self, gas_descs : tuple[RadtranGasDescriptor,...], wave_range : WaveRange):
-        self._gasses_to_download = set()
+    def _check_available_data(self, gas_descs : tuple[RadtranGasDescriptor,...], wave_range : WaveRange, ambient_gas : ans.enums.AmbientGas):
         for gas_desc in gas_descs:
-            if gas_desc not in self._gas_wavenumber_interval_to_download:
-                self._gas_wavenumber_interval_to_download[gas_desc] = wave_range.as_unit(ans.enums.WaveUnit.Wavenumber_cm)
+            gda_pair = (gas_desc, ambient_gas)
+            if gda_pair not in self._gas_wavenumber_interval_to_download:
+                self._gas_wavenumber_interval_to_download[gda_pair] = wave_range.as_unit(ans.enums.WaveUnit.Wavenumber_cm)
             else:
-                if not self._downloaded_gas_wavenumber_interval[gas_desc].contains(wave_range):
-                    self._gas_wavenumber_interval_to_download[gas_desc] = self._downloaded_gas_wavenumber_interval[gas_desc].union(wave_range)
+                if not self._downloaded_gas_wavenumber_interval[gda_pair].contains(wave_range):
+                    self._gas_wavenumber_interval_to_download[gda_pair] = self._downloaded_gas_wavenumber_interval[gda_pair].union(wave_range)
     
     
     def _fetch_line_data(self):
+        if not self.db_init_flag:
+            raise RuntimeError(f'Cannot fetch line data as database {self} is not initalised yet.')
         
-        for gas_desc, wave_range in tuple(self._gas_wavenumber_interval_to_download.items()):
-            if gas_desc not in self._gas_wavenumber_interval_to_download:
+        for gda_pair, wave_range in tuple(self._gas_wavenumber_interval_to_download.items()):
+            if gda_pair not in self._gas_wavenumber_interval_to_download:
                 continue
-            saved_wave_range = self._downloaded_gas_wavenumber_interval.get(gas_desc, None)
+            saved_wave_range = self._downloaded_gas_wavenumber_interval.get(gda_pair, None)
             if saved_wave_range is not None and saved_wave_range.contains(wave_range):
-                _lgr.debug(f'Downloaded gas data {gas_desc} CONTAINS desired wave range {saved_wave_range} vs {wave_range}')
+                _lgr.debug(f'Downloaded gas data {gda_pair} CONTAINS desired wave range {saved_wave_range} vs {wave_range}')
                 continue
             else:
-                _lgr.debug(f'Downloaded gas data {gas_desc} DOES NOT CONTAIN desired wave range {saved_wave_range} vs {wave_range}')
+                _lgr.debug(f'Downloaded gas data {gda_pair} DOES NOT CONTAIN desired wave range {saved_wave_range} vs {wave_range}')
+        
+            _lgr.info(f'Downloading data for {gda_pair} where {wave_range=}...')
+        
+            gas_desc, ambient_gas = gda_pair
         
             ht_gas = gas_desc.to_hitran()
             
             vmin, vmax = wave_range.as_unit(ans.enums.WaveUnit.Wavenumber_cm).values()
             try:
                 hapi.fetch(
-                    f'{gas_desc.gas_name}_{gas_desc.iso_id}',
+                    self.get_tablename_from_props(gas_desc, ambient_gas),
                     ht_gas.gas_id,
                     ht_gas.iso_id,
                     vmin,
@@ -223,12 +371,14 @@ class HITRAN(LineDatabaseProtocol):
                 )
             except Exception as e:
                 raise RuntimeError('Something went wrong when attempting to download data from HITRAN servers.') from e
+            else:
+                hapi.db_commit()
             
-            hapi.db_commit()
+            _lgr.info(f'Data downloaded.')
             
-            self._downloaded_gas_wavenumber_interval[gas_desc] = wave_range
-            if gas_desc in self._gas_wavenumber_interval_to_download:
-                del self._gas_wavenumber_interval_to_download[gas_desc]
+            self._downloaded_gas_wavenumber_interval[gda_pair] = wave_range
+            if gda_pair in self._gas_wavenumber_interval_to_download:
+                del self._gas_wavenumber_interval_to_download[gda_pair]
             
         # Cache to downloaded_gas_wavenumber_interval_cache_file for future
         self.store_downloaded_gas_wavenumber_interval_to_cache()
@@ -236,23 +386,13 @@ class HITRAN(LineDatabaseProtocol):
         return
 
 
-    def _get_ambient_gas_parameter_strings(self, ambient_gas : ans.enums.AmbientGas) -> tuple[str,str,str]:
-        if ambient_gas == ans.enums.AmbientGas.AIR:
-            gamma_str = 'gamma_air'
-            n_str = 'n_air'
-            delta_str = 'delta_air'
-        elif ambient_gas == ans.enums.AmbientGas.CO2:
-            gamma_str = 'gamma_co2'
-            n_str = 'n_co2'
-            delta_str = 'delta_co2'
-        else:
-            raise ValueError(f'Unrecognised ambient gas {ambient_gas}')
-        
-        return gamma_str, n_str, delta_str
+    
 
 
     def _read_line_data(self, gas_descs : tuple[RadtranGasDescriptor,...], wave_range : WaveRange, ambient_gas : ans.enums.AmbientGas):
-        # Assume we have downloaded all the files we need at this point
+        if not self.db_init_flag:
+            raise RuntimeError(f'Cannot read line data as database {self} is not initalised yet.')
+        
         temp_line_data_table_name = 'temp_line_data'
         _lgr.debug(f'{temp_line_data_table_name=}')
         
@@ -269,9 +409,16 @@ class HITRAN(LineDatabaseProtocol):
             vmin, vmax = wave_range.values()
             Conditions = ('and',('between', 'nu', vmin, vmax),('equal','local_iso_id',ht_gas_desc.iso_id))
             
-            hapi.select(f'{gas_desc.gas_name}_{gas_desc.iso_id}', Conditions=Conditions, DestinationTableName=temp_line_data_table_name)
+            try:
+                hapi.select(
+                    self.get_tablename_from_props(gas_desc, ambient_gas), 
+                    Conditions=Conditions, 
+                    DestinationTableName=temp_line_data_table_name
+                )
+            except Exception as e:
+                raise RuntimeError(f'Failure when reading from database {self}.') from e
         
-            gamma_str, n_str, delta_str = self._get_ambient_gas_parameter_strings(ambient_gas)
+            gamma_str, n_str, delta_str = self.get_ambient_gas_parameter_strings(ambient_gas)
             
             cols = hapi.getColumns(
                 temp_line_data_table_name,

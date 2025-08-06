@@ -29,12 +29,12 @@ from typing import Self, Iterator, Any
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-import hapi
 # This package
 from archnemesis import Data
 from archnemesis import *
 from archnemesis.enums import SpectroscopicLineList, AmbientGas
 import archnemesis.database
+import archnemesis.database.hitran
 from archnemesis.database.datatypes.wave_range import WaveRange
 from archnemesis.database.datatypes.gas_isotopes import GasIsotopes
 from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
@@ -76,8 +76,7 @@ class LineData_0:
         
         @attribute DATABASE: None | archnemsis.database.LineDatabaseProtocol
             Instance of a class that implements the `archnemsis.database.LineDatabaseProtocol` protocol.
-            If `None` will fail to perform most operations. This enables us to use different database
-            wrapper classes.
+            If `None` will use HITRAN as backend.
         
 
         Attributes
@@ -136,7 +135,7 @@ class LineData_0:
         self.ID = ID
         self.ISO = ISO
         self._ambient_gas = ambient_gas
-        self._database = DATABASE
+        self.DATABASE = DATABASE
         self.line_data = None
         self.partition_data = None
         
@@ -151,7 +150,12 @@ class LineData_0:
 
     @DATABASE.setter
     def DATABASE(self, value : archnemsis.database.LineDatabaseProtocol):
-        self._database = value
+        if value is None:
+            db = archnemesis.database.hitran.HITRAN()
+            _lgr.info(f'Using default database {db}')
+            self._database = db
+        else:
+            self._database = value
 
     @property
     def ambient_gas(self) -> AmbientGas:
@@ -162,7 +166,7 @@ class LineData_0:
         self._ambient_gas = AmbientGas(value)
 
     def __repr__(self) -> str:
-        return f'LineData_0(ID={self.ID}, ISO={self.ISO}, ambient_gas={self.ambient_gas}, line_data_ready={self.line_data_ready()}, partition_function_ready={self.partition_function_ready()}, database={self._database})'
+        return f'LineData_0(ID={self.ID}, ISO={self.ISO}, ambient_gas={self.ambient_gas}, is_line_data_ready={self.is_line_data_ready()}, is_partition_function_ready={self.is_partition_function_ready()}, database={self._database})'
 
     ##################################################################################
  
@@ -186,14 +190,14 @@ class LineData_0:
         
     ###########################################################################################################################
     
-    def line_data_ready(self) -> bool:
+    def is_line_data_ready(self) -> bool:
         return self.line_data is not None
     
     def fetch_linedata(self, vmin : float , vmax : float, refresh : bool = False) -> None:
         """
         Fetch the line data from the specified database, if `refresh` then get the data even if we already have some.
         NOTE: Does not check that the data we already have is valid for the wavelength range (vmin, vmax), only
-        checks if `self.line_data_ready()` is True or False.
+        checks if `self.is_line_data_ready()` is True or False.
         
         # ARGUMENTS #
             vmin : float
@@ -204,31 +208,37 @@ class LineData_0:
                 If True will retrieve data from database again, even if data
                 is already present.
         """
-        if refresh or not self.line_data_ready():
+        if refresh or not self.is_line_data_ready():
             self.line_data = self.DATABASE.get_line_data(
                 GasIsotopes(self.ID, self.ISO).as_radtran_gasses(), 
                 WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm), 
                 self.ambient_gas
             )
+            _lgr.info(f'Retrieved line data from database {self.DATABASE}')
+        else:
+            _lgr.info(f'Line data already loaded')
         
     ###########################################################################################################################
     
-    def partition_function_ready(self) -> bool:
+    def is_partition_function_ready(self) -> bool:
         return self.partition_data is not None
     
     def fetch_partition_function(self, refresh : bool = False) -> None:
         """
-        Get partition function data, if `refresh` then get the data again even if `self.partition_function_ready()` is True.
+        Get partition function data, if `refresh` then get the data again even if `self.is_partition_function_ready()` is True.
         
         # ARGUMENTS #
             refresh : bool = False
                 If True will retrieve data from database again, even if data
                 is already present.
         """
-        if refresh or not self.partition_function_ready():
+        if refresh or not self.is_partition_function_ready():
             self.partition_data = self.DATABASE.get_partition_function_data(
                 GasIsotopes(self.ID, self.ISO).as_radtran_gasses()
             )
+            _lgr.info(f'Retrieved partition function data from database {self.DATABASE}')
+        else:
+            _lgr.info(f'Partition function data already loaded')
     
     ###########################################################################################################################
     
@@ -314,7 +324,7 @@ class LineData_0:
                 Dictionary to pass to legend that will set style parameters (e.g. `fontsize`, `title_fontsize`, ...)
         """
         
-        if not self.line_data_ready():
+        if not self.is_line_data_ready():
             raise RuntimeError(f'No line data ready in {self}')
         
         scatter_style_defaults = dict(
