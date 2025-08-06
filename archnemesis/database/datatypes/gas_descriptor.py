@@ -13,13 +13,13 @@ _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 
 
-@dc.dataclass(slots=True, unsafe_hash=True)
+@dc.dataclass(slots=True, frozen=True)
 class GasDescriptor:
     gas_id : int
     iso_id : int
 
 
-@dc.dataclass(slots=True, unsafe_hash=True)
+@dc.dataclass(slots=True, frozen=True)
 class RadtranGasDescriptor(GasDescriptor):
     
     def to_hitran(self):
@@ -37,7 +37,7 @@ class RadtranGasDescriptor(GasDescriptor):
         return Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['name']
 
 
-@dc.dataclass(slots=True, unsafe_hash=True)
+@dc.dataclass(slots=True, frozen=True)
 class HitranGasDescriptor(GasDescriptor):
     global_id : int # ID of the (gas_id, iso_id) pair
     

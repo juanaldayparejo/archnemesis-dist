@@ -9,7 +9,7 @@ import hapi
 
 import archnemesis as ans
 import archnemesis.enums
-from .line_database_protocol import LineDatabaseProtocol
+from .line_database_protocol import LineDatabaseProtocol, LineDataProtocol, PartitionFunctionDataProtocol
 from .datatypes.wave_range import WaveRange
 from .datatypes.gas_isotopes import GasIsotopes
 from .datatypes.gas_descriptor import RadtranGasDescriptor, HitranGasDescriptor
@@ -50,6 +50,7 @@ class HITRAN(LineDatabaseProtocol):
         
     class_gas_wavenumber_interval_to_download : dict[RadtranGasDescriptor, WaveRange] = dict() 
     
+    
     @classmethod
     def set_local_storage_dir(cls, local_storage_dir : str):
         if cls.db_init_flag:
@@ -57,27 +58,53 @@ class HITRAN(LineDatabaseProtocol):
         else:
             cls.local_storage_dir = os.normpath(local_storage_dir)
     
+    
     @classmethod
     def set_db_init_flag(cls, v : bool):
         cls.db_init_flag = v
+    
     
     def __init__(
             self, 
         ):
         
         self._init_database()
+    
+    
+    def get_line_data(
+            self, 
+            gas_descs : tuple[RadtranGasDescriptor,...], 
+            wave_range : WaveRange, 
+            ambient_gas : ans.enums.AmbientGas
+        ) -> dict[RadtranGasDescriptor, LineDataProtocol]:
+        gd = tuple(gas_descs)
+        self._check_available_data(gd, wave_range)
+        self._fetch_line_data()
         
+        return self._read_line_data(gd, wave_range, ambient_gas)
+    
+    
+    def get_partition_function_data(
+            self, 
+            gas_descs : tuple[RadtranGasDescriptor,...]
+        ) -> dict[RadtranGasDescriptor, PartitionFunctionDataProtocol]:
+        return self._read_partition_function_data(tuple(gas_descs))
+    
+    
     @property
     def _downloaded_gas_wavenumber_interval(self) -> dict[RadtranGasDescriptor, WaveRange]:
         return self.class_downloaded_gas_wavenumber_interval
+    
     
     @property
     def _gas_wavenumber_interval_to_download(self) -> dict[RadtranGasDescriptor, WaveRange]:
         return self.class_gas_wavenumber_interval_to_download
     
+    
     @property
     def _downloaded_gas_wavenumber_interval_cache_file(self):
         return os.path.join(self.local_storage_dir, self.downloaded_gas_wavenumber_interval_cache_file)
+    
     
     def retrieve_downloaded_gas_wavenumber_interval_from_cache(self):
         cache_file_path = self._downloaded_gas_wavenumber_interval_cache_file
@@ -161,17 +188,6 @@ class HITRAN(LineDatabaseProtocol):
         return
 
 
-    def get_line_data(self, gas_descs : tuple[RadtranGasDescriptor,...], wave_range : WaveRange, ambient_gas : ans.enums.AmbientGas):
-        gd = tuple(gas_descs)
-        self._check_available_data(gd, wave_range)
-        self._fetch_line_data()
-        
-        return self._read_line_data(gd, wave_range, ambient_gas)
-    
-    def get_partition_function_data(self, gas_descs : tuple[RadtranGasDescriptor,...]):
-        return self._read_partition_function_data(tuple(gas_descs))
-    
-    
     def _check_available_data(self, gas_descs : tuple[RadtranGasDescriptor,...], wave_range : WaveRange):
         self._gasses_to_download = set()
         for gas_desc in gas_descs:
@@ -233,7 +249,7 @@ class HITRAN(LineDatabaseProtocol):
             raise ValueError(f'Unrecognised ambient gas {ambient_gas}')
         
         return gamma_str, n_str, delta_str
-    
+
 
     def _read_line_data(self, gas_descs : tuple[RadtranGasDescriptor,...], wave_range : WaveRange, ambient_gas : ans.enums.AmbientGas):
         # Assume we have downloaded all the files we need at this point
@@ -276,16 +292,16 @@ class HITRAN(LineDatabaseProtocol):
             line_data[gas_desc] = np.array(
                 list(zip(*cols)),
                 dtype = [
-                    ('nu', float), # Transition wavenumber (cm^{-1})
-                    ('sw', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
-                    ('a', float), # einstein-A coeifficient (s^{-1})
-                    ('gamma_amb', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
-                    ('n_amb', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
-                    ('delta_amb', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
-                    ('gamma_self', float), # self broadening coefficient (cm^{-1} atm^{-1})
-                    ('elower', float), # lower state energy (cm^{-1})
+                    ('NU', float), # Transition wavenumber (cm^{-1})
+                    ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
+                    ('A', float), # einstein-A coeifficient (s^{-1})
+                    ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
+                    ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
+                    ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
+                    ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
+                    ('ELOWER', float), # lower state energy (cm^{-1})
                 ]
-            )
+            ).view(np.recarray)
             
             hapi.dropTable(temp_line_data_table_name)
         
@@ -308,9 +324,9 @@ class HITRAN(LineDatabaseProtocol):
                     qs
                 )),
                 dtype=[
-                    ('t', float), 
-                    ('q', float)
+                    ('TEMP', float), 
+                    ('Q', float)
                 ]
-            )
+            ).view(np.recarray)
         return partition_function_data
     

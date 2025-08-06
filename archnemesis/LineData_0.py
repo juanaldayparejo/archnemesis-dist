@@ -65,102 +65,74 @@ class LineData_0:
         ------
         @attribute ID: int
             Radtran Gas ID
+        
         @attribute ISO: int
             Radtran Isotope ID for each gas, default 0 for all
             isotopes in terrestrial relative abundance
-        @attribute DATAFILE: str
-            Path to the data file containing the line data.
-            If it is None and DATABASE is HITRAN, it will
-            automatically download the data from HITRAN.
-        @attribute DATABASE: enum
-            Name of the database to use, default HITRAN.
+        
         @attribute ambient_gas: enum
             Name of the ambient gas, default AIR. This is used to
             determine the pressure-broadening coefficients
+        
+        @attribute DATABASE: None | archnemsis.database.LineDatabaseProtocol
+            Instance of a class that implements the `archnemsis.database.LineDatabaseProtocol` protocol.
+            If `None` will fail to perform most operations. This enables us to use different database
+            wrapper classes.
+        
 
         Attributes
         ----------
         
-        @attribute isotope_abundance: np.array
-            Array containing the isotope abundance for the gas.
-            This is only useful if calculating linedata for all isotopes (i.e., ISO=0). 
-            If ISO=0 and isotope_abundance is None, then we will assume the HITRAN terrestrial abundance for the gas.
+        @attribute line_data : None | archnemsis.database.line_database_protocol.LineDataProtocol
+            An object (normally a numpy record array) that implements the `archnemsis.database.line_database_protocol.LineDataProtocol`
+            protocol. If `None` the data has not been retrieved from the database yet.
             
-        @attribute NLINES: int
-            Number of lines in the line data.
-        @attribute IDLINE: np.array
-            Radtran ID for each of the lines (this will be the same as ID)
-        @attribute ISOLINE: np.array
-            Radtran isotope ID for each of the lines (this will be the same as ISO if ISO!=0)
-        @attribute NU: np.array
-            Wavenumbers of the lines in cm^-1.
-        @attribute SW: np.array
-            Line strengths in cm/molecule.
-        @attribute A: np.array
-            Einstein A coefficients in s^-1.
-        @attribute GAMMA_AIR: np.array
-            Air-broadening coefficients in cm^-1/atm.
-        @attribute N_AIR: np.array
-            Air-broadening exponents.
-        @attribute DELTA_AIR: np.array
-            Air-broadening pressure shift coefficients in cm^-1/atm.
-        @attribute GAMMA_SELF: np.array
-            Self-broadening coefficients in cm^-1/atm.
-        @attribute ELOWER: np.array
-            Lower state energies in cm^-1.
+            If not `None` will have the following attributes:
+                
+                NU : np.ndarray[['N_LINES_OF_GAS'],float]
+                    Transition wavenumber (cm^{-1})
+                
+                SW : np.ndarray[['N_LINES_OF_GAS'],float]
+                    Transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
+                
+                A : np.ndarray[['N_LINES_OF_GAS'],float]
+                    Einstein-A coeifficient (s^{-1})
+                
+                GAMMA_AMB : np.ndarray[['N_LINES_OF_GAS'],float]
+                    Ambient gas broadening coefficient (cm^{-1} atm^{-1})
+                
+                N_AMB : np.ndarray[['N_LINES_OF_GAS'],float] 
+                    Temperature dependent exponent for `GAMMA_AMB` (NUMBER)
+                
+                DELTA_AMB : np.ndarray[['N_LINES_OF_GAS'],float] 
+                    Ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
+                
+                GAMMA_SELF : np.ndarray[['N_LINES_OF_GAS'],float] 
+                    Self broadening coefficient (cm^{-1} atm^{-1})
+                
+                ELOWER : np.ndarray[['N_LINES_OF_GAS'],float] 
+                    Lower state energy (cm^{-1})
+        
+        @attribute partition_data : None | archnemsis.database.line_database_protocol.PartitionFunctionDataProtocol
+            An object (normally a numpy record array) that implements the `archnemsis.database.line_database_protocol.PartitionFunctionDataProtocol`
+            protocol. If `None` the data has not been retrieved from the database yet.
             
-        @attribute NISOQ: int
-            Number of isotopes for which the partition sums are stored
-        @attribute IDQ: np.array(NISOQ)
-            Radtran ID for the gases whose partition sums are stored
-        @attribute ISOQ: np.array(NISOQ)
-            Radtran isotope ID for the gases whose partition sums are stored
-        @attribute NTQ: np.array(NISOQ)
-            Number of temperatures at which the partition sums are tabulated
-        @attribute TT: np.array(NTQ,NISOQ)
-            Temperatures at which the partition sums are tabulated
-        @attribute QT: np.array(NTQ,NISOQ)
-            Tabulated partition functions
+            If not `None` will have the following attributes:
+            
+                TEMP : np.ndarray[['N_TEMPS_OF_GAS'],float]
+                    Temperature of tablulated partition function (Kelvin)
+                
+                Q : np.ndarray[['N_TEMPS_OF_GAS'],float]
+                    Tabulated partition function value
+        
 
         Methods
         -------
         LineData_0.assess()
-        LineData_0.fetch_linedata()
+        LineData_0.fetch_linedata(...)
+        LineData_0.fetch_partition_function(...)
         """
-        """
-        #Spectroscopic parameters
-        self.NLINES = 0      #Number of lines
-        self.NU = None               #np.array(NLINES)
-        self.IDLINE = None           #np.array(NLINES)
-        self.ISOLINE = None          #np.array(NLINES)
-        self.SW = None               #np.array(NLINES)
-        self.A = None                #np.array(NLINES)
-        self.GAMMA_AIR = None        #np.array(NLINES)
-        self.N_AIR = None            #np.array(NLINES)
-        self.DELTA_AIR = None        #np.array(NLINES)
-        self.GAMMA_SELF = None       #np.array(NLINES)
-        self.ELOWER = None           #np.array(NLINES)
         
-        #Partition functions
-        self.NISOQ = None            #int 
-        self.IDQ = None              #np.array(NISOQ)
-        self.ISOQ = None             #np.array(NISOQ)
-        self.NTQ = None              #np.array(NISOQ)
-        self.TT = None               #np.array((NTQ,NISOQ))
-        self.QT = None               #np.array((NTQ,NISOQ))
-        
-        # private attributes
-        self._database = None
-        self._ambient_gas = None
-        
-        #General inputs
-        self.ID = ID
-        self.ISO = ISO
-        self.isotope_abundance = None  #np.array([NISOTOPES])  
-        self.DATABASE = DATABASE 
-        self.DATAFILE = DATAFILE
-        self.ambient_gas = ambient_gas
-        """
         self.ID = ID
         self.ISO = ISO
         self._ambient_gas = ambient_gas
@@ -186,15 +158,15 @@ class LineData_0:
         return self._ambient_gas
 
     @ambient_gas.setter
-    def ambient_gas(self, value):
+    def ambient_gas(self, value : int | AmbientGas):
         self._ambient_gas = AmbientGas(value)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'LineData_0(ID={self.ID}, ISO={self.ISO}, ambient_gas={self.ambient_gas}, line_data_ready={self.line_data_ready()}, partition_function_ready={self.partition_function_ready()}, database={self._database})'
 
     ##################################################################################
  
-    def assess(self):
+    def assess(self) -> None:
         """
         Assess whether the different variables have the correct dimensions and types
         """
@@ -214,42 +186,49 @@ class LineData_0:
         
     ###########################################################################################################################
     
-    def line_data_ready(self):
+    def line_data_ready(self) -> bool:
         return self.line_data is not None
     
-    def partition_function_ready(self):
-        return self.partition_data is not None
-    
-    def fetch_linedata(self,vmin,vmax):
+    def fetch_linedata(self, vmin : float , vmax : float, refresh : bool = False) -> None:
         """
-        Fetch the line data from the specified database.
-        If DATAFILE is provided, it will read the data from that file.
-        If DATABASE is SpectroscopicLineList.HITRAN, it will download the data from HITRAN.
-        If keep_data is False, then the downloaded file from HITRAN will be removed.
+        Fetch the line data from the specified database, if `refresh` then get the data even if we already have some.
+        NOTE: Does not check that the data we already have is valid for the wavelength range (vmin, vmax), only
+        checks if `self.line_data_ready()` is True or False.
+        
+        # ARGUMENTS #
+            vmin : float
+                Minimum wavenumber to get line data for (cm^{-1})
+            vmax : float
+                Maximum wavenumber to get line data for (cm^{-1})
+            refresh : bool = False
+                If True will retrieve data from database again, even if data
+                is already present.
         """
-        self.line_data = self.DATABASE.get_line_data(
-            GasIsotopes(self.ID, self.ISO).as_radtran_gasses(), 
-            WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm), 
-            self.ambient_gas
-        )
-
-        #self.line_data = {}
-        #for k,v in self.DATABASE.get_line_data(
-        #        GasIsotopes(self.ID, self.ISO).as_radtran_gasses(), 
-        #        WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm), 
-        #        self.ambient_gas
-        #    ).items():
-        #    self.line_data[k] = v.view(np.recarray)
+        if refresh or not self.line_data_ready():
+            self.line_data = self.DATABASE.get_line_data(
+                GasIsotopes(self.ID, self.ISO).as_radtran_gasses(), 
+                WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm), 
+                self.ambient_gas
+            )
         
     ###########################################################################################################################
     
-    def fetch_partition_function(self):
+    def partition_function_ready(self) -> bool:
+        return self.partition_data is not None
+    
+    def fetch_partition_function(self, refresh : bool = False) -> None:
         """
-        Get partition function data
+        Get partition function data, if `refresh` then get the data again even if `self.partition_function_ready()` is True.
+        
+        # ARGUMENTS #
+            refresh : bool = False
+                If True will retrieve data from database again, even if data
+                is already present.
         """
-        self.partition_data = self.DATABASE.get_partition_function_data(
-            GasIsotopes(self.ID, self.ISO).as_radtran_gasses()
-        )
+        if refresh or not self.partition_function_ready():
+            self.partition_data = self.DATABASE.get_partition_function_data(
+                GasIsotopes(self.ID, self.ISO).as_radtran_gasses()
+            )
     
     ###########################################################################################################################
     
@@ -261,12 +240,14 @@ class LineData_0:
             T (float): Temperature (K)
 
         Returns:
-            QT (NISOQ): Partition functions for each of the isotopes at temperature T 
+            QT : np.ndarray[['N_GAS_ISOTOPES'], float]
+                Partition functions for each of the isotopes at temperature T 
         """
         gas_isotopes = GasIsotopes(self.ID, self.ISO)
         QTs = np.zeros(gas_isotopes.n_isotopes)
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
-            QTs[i] = np.interp(T, self.partition_data[gas_desc]['t'], self.partition_data[gas_desc]['q'])
+            gas_partition_data = self.partition_data[gas_desc]
+            QTs[i] = np.interp(T, gas_partition_data.TEMP, gas_partition_data.Q)
         
         return QTs
         
@@ -281,7 +262,8 @@ class LineData_0:
             Tref (float) :: Reference temperature at which the line strengths are listed (default 296 K)
 
         Returns:
-            SW(NLINES) :: Line strengths at temperature T
+            line_strengths : dict[RadtranGasDescriptor, np.ndarray[['N_GAS_LINES'], float]
+                Line strengths at temperature T
         """
         
         c2 = 1.4388028496642257  #cm K
@@ -293,10 +275,11 @@ class LineData_0:
         gas_isotopes = GasIsotopes(self.ID, self.ISO)
         line_strengths = dict()
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
-            num = np.exp(-c2*self.line_data[gas_desc]['elower']/T) * ( 1 - np.exp(-c2*self.line_data[gas_desc]['nu']/T))
-            den = np.exp(-c2*self.line_data[gas_desc]['elower']/Tref) * ( 1 - np.exp(-c2*self.line_data[gas_desc]['nu']/Tref))
+            gas_line_data = self.line_data[gas_desc]
+            num = np.exp(-c2*gas_line_data.ELOWER/T) * ( 1 - np.exp(-c2*gas_line_data.NU/T))
+            den = np.exp(-c2*gas_line_data.ELOWER/Tref) * ( 1 - np.exp(-c2*gas_line_data.NU/Tref))
         
-            line_strengths[gas_desc] = self.line_data[gas_desc]['sw'] * QTrefs[i]/QTs[i] * num / den
+            line_strengths[gas_desc] = gas_line_data.SW * QTrefs[i]/QTs[i] * num / den
         
         return line_strengths
         
@@ -309,7 +292,7 @@ class LineData_0:
             scatter_style_kw : dict[str,Any] = {},
             ax_style_kw : dict[str,Any] = {},
             legend_style_kw : dict[str,Any] = {},
-        ):
+        ) -> None:
         """
         Create diagnostic plots of the line data.
         
@@ -368,9 +351,9 @@ class LineData_0:
         line_strengths_max = 0
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
             gas_linedata = self.line_data[gas_desc]
-            line_strength_mask = gas_linedata['sw'] >= smin
-            wavenumbers = gas_linedata['nu'][line_strength_mask]
-            line_strengths = gas_linedata['sw'][line_strength_mask]
+            line_strength_mask = gas_linedata.SW >= smin
+            wavenumbers = gas_linedata.NU[line_strength_mask]
+            line_strengths = gas_linedata.SW[line_strength_mask]
             
             ls_max = line_strengths.max()
             line_strengths_max = ls_max if ls_max > line_strengths_max else line_strengths_max
@@ -399,9 +382,9 @@ class LineData_0:
     
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
             gas_linedata = self.line_data[gas_desc]
-            line_strength_mask = gas_linedata['sw'] >= smin
-            wavenumbers = gas_linedata['nu'][line_strength_mask]
-            line_strengths = gas_linedata['sw'][line_strength_mask]
+            line_strength_mask = gas_linedata.SW >= smin
+            wavenumbers = gas_linedata.NU[line_strength_mask]
+            line_strengths = gas_linedata.SW[line_strength_mask]
             
             # Plots for specific isotopes, coloured by lower energy state
             ax = ax_array[i+1]
@@ -410,7 +393,7 @@ class LineData_0:
             p1 = ax.scatter(
                 wavenumbers,
                 line_strengths,
-                c = gas_linedata['elower'][line_strength_mask],
+                c = gas_linedata.ELOWER[line_strength_mask],
                 cmap = 'turbo',
                 vmin = 0,
                 **scatter_style_defaults
