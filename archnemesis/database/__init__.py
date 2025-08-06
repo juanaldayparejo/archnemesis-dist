@@ -1,0 +1,4 @@
+from __future__ import annotations #  for 3.9 compatability
+
+from .hitran import HITRAN
+from .line_database_protocol import LineDatabaseProtocol
