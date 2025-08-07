@@ -1,15 +1,10 @@
 from __future__ import annotations #  for 3.9 compatability
 import sys, os
 import abc
-from typing import TYPE_CHECKING, IO, Any
+from typing import TYPE_CHECKING, IO, Any, Self
 from collections import namedtuple
 import textwrap
 import inspect
-
-if sys.version_info[0] <= 3 and sys.version_info[1] <= 10:
-    from typing_extensions import Self
-else:
-    from typing import Self
 
 
 import matplotlib.pyplot as plt # used in some of the models, I should really remove the plotting code or at least separate it from the calculation code

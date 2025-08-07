@@ -2,7 +2,6 @@ from __future__ import annotations #  for 3.9 compatability
 
 import os.path
 from typing import Self, Protocol, ClassVar, TYPE_CHECKING
-import dataclasses as dc
 
 import numpy as np
 

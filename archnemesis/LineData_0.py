@@ -23,7 +23,6 @@ from __future__ import annotations #  for 3.9 compatability
 ## Imports
 # Standard library
 import time
-import dataclasses as dc
 from typing import Self, Iterator, Any
 # Third party
 import numpy as np

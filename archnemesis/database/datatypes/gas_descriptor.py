@@ -1,6 +1,6 @@
 from __future__ import annotations #  for 3.9 compatability
 
-import dataclasses as dc
+from typing import NamedTuple
 
 import archnemesis.database.wrappers.hapi as hapi
 
@@ -13,14 +13,14 @@ _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 
 
-@dc.dataclass(slots=True, frozen=True)
-class GasDescriptor:
+class GasDescriptor(NamedTuple):
     gas_id : int
     iso_id : int
 
 
-@dc.dataclass(slots=True, frozen=True)
-class RadtranGasDescriptor(GasDescriptor):
+class RadtranGasDescriptor(NamedTuple):
+    gas_id : int
+    iso_id : int
     
     def to_hitran(self):
         result = radtran_to_hitran.get((self.gas_id,self.iso_id), None)
@@ -37,8 +37,9 @@ class RadtranGasDescriptor(GasDescriptor):
         return Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['name']
 
 
-@dc.dataclass(slots=True, frozen=True)
-class HitranGasDescriptor(GasDescriptor):
+class HitranGasDescriptor(NamedTuple):
+    gas_id : int
+    iso_id : int
     global_id : int # ID of the (gas_id, iso_id) pair
     
     @classmethod

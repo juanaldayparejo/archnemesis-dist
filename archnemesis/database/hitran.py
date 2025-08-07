@@ -17,7 +17,7 @@ from .datatypes.gas_descriptor import RadtranGasDescriptor, HitranGasDescriptor
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.INFO)
+_lgr.setLevel(logging.DEBUG)
 
 
 
@@ -124,7 +124,28 @@ class HITRAN(LineDatabaseProtocol):
         )
     
     @staticmethod
-    def get_ambient_gas_parameter_strings(ambient_gas : ans.enums.AmbientGas) -> tuple[str,str,str]:
+    def get_ambient_gas_parameter_name_strings(ambient_gas : ans.enums.AmbientGas) -> tuple[str,str,str]:
+        """
+        HITRAN paramter names have gas in UPPERCASE (except for 'air')
+        """
+        if ambient_gas == ans.enums.AmbientGas.AIR:
+            gamma_str = 'gamma_air'
+            n_str = 'n_air'
+            delta_str = 'delta_air'
+        elif ambient_gas == ans.enums.AmbientGas.CO2:
+            gamma_str = 'gamma_CO2'
+            n_str = 'n_CO2'
+            delta_str = 'delta_CO2'
+        else:
+            raise ValueError(f'Unrecognised ambient gas {ambient_gas}')
+        
+        return gamma_str, n_str, delta_str
+    
+    @staticmethod
+    def get_ambient_gas_column_name_strings(ambient_gas : ans.enums.AmbientGas) -> tuple[str,str,str]:
+        """
+        HAPI column names have gas in LOWERCASE (including 'air')
+        """
         if ambient_gas == ans.enums.AmbientGas.AIR:
             gamma_str = 'gamma_air'
             n_str = 'n_air'
@@ -361,6 +382,19 @@ class HITRAN(LineDatabaseProtocol):
             ht_gas = gas_desc.to_hitran()
             
             vmin, vmax = wave_range.as_unit(ans.enums.WaveUnit.Wavenumber_cm).values()
+            
+            gamma_str, n_str, delta_str = self.get_ambient_gas_parameter_name_strings(ambient_gas)
+            parameters = (
+                'nu',
+                'sw',
+                'a',
+                gamma_str,
+                n_str,
+                delta_str,
+                'gamma_self',
+                'elower'
+            )
+            _lgr.debug(f'Fetching the following parameters from HITRAN: {parameters}')
             try:
                 hapi.fetch(
                     self.get_tablename_from_props(gas_desc, ambient_gas),
@@ -368,6 +402,7 @@ class HITRAN(LineDatabaseProtocol):
                     ht_gas.iso_id,
                     vmin,
                     vmax,
+                    Parameters=parameters
                 )
             except Exception as e:
                 raise RuntimeError('Something went wrong when attempting to download data from HITRAN servers.') from e
@@ -406,6 +441,9 @@ class HITRAN(LineDatabaseProtocol):
             if ht_gas_desc is None:
                 continue
             
+            if _lgr.level <= logging.DEBUG:
+                hapi.describeTable(self.get_tablename_from_props(gas_desc, ambient_gas))
+            
             vmin, vmax = wave_range.values()
             Conditions = ('and',('between', 'nu', vmin, vmax),('equal','local_iso_id',ht_gas_desc.iso_id))
             
@@ -418,7 +456,7 @@ class HITRAN(LineDatabaseProtocol):
             except Exception as e:
                 raise RuntimeError(f'Failure when reading from database {self}.') from e
         
-            gamma_str, n_str, delta_str = self.get_ambient_gas_parameter_strings(ambient_gas)
+            gamma_str, n_str, delta_str = self.get_ambient_gas_column_name_strings(ambient_gas)
             
             cols = hapi.getColumns(
                 temp_line_data_table_name,

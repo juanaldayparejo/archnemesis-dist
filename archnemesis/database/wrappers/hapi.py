@@ -14,11 +14,12 @@ USAGE:
 import sys
 import builtins
 from io import StringIO
+import inspect
 
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.WARN)
+_lgr.setLevel(logging.DEBUG)
 
 __HAPI_string_buffer = StringIO()
 
@@ -73,12 +74,27 @@ if not HAPI_MODULE_INSTALLED:
         raise ModuleNotFoundError(f'HAPI (hitran-api) module was not installed, therefore HITRAN online backend is NOT available.')
 
 else:
+    if _lgr.level <= logging.DEBUG:
+        hapi.VARIABLES['DISPLAY_FETCH_URL'] = True
+    
+    
+    
     hapi.LOCAL_TABLE_CACHE = dict()
 
+    from . import hapi_monkey_patches as HMP
+
+    for name, monkey_patch_fn in inspect.getmembers(HMP, lambda x: inspect.isfunction(x) and x.__name__.endswith('_MONKEYPATCH')):
+        hapi_name = name[:-len('_MONKEYPATCH')]
+        _lgr.debug(f'Monkey patching function `hapi.{hapi_name}(...)`')
+        setattr(hapi, hapi_name, monkey_patch_fn)
 
     # Use these two functions to pass everything through to the "real" `hapi` module.
     def __getattr__(name):
+        wrapped = None
+        
         wrapped = getattr(hapi, name)
+        
+        
         if not callable(wrapped) or name=='describeTable':
             return wrapped
         
