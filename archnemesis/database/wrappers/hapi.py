@@ -53,29 +53,43 @@ def __HAPI_print_intercept(*args, **kwargs) -> None:
         __builtin_print(*args, **kwargs)
 
 builtins.print = __HAPI_print_intercept
+
+
+HAPI_MODULE_INSTALLED = True
 try:
     # Must import this way to avoid hapi.__init__ shadowing various bits of the module.
     import hapi.hapi as hapi
+except ModuleNotFoundError:
+    _lgr.warning(f'HAPI (hitran-api) module was not installed, therefore HITRAN online backend is NOT available. All attempts to use the backend will raise a `ModuleNotFoundError` exception')
+    HAPI_MODULE_INSTALLED = False
 finally:
     builtins.print = __builtin_print
 
-hapi.LOCAL_TABLE_CACHE = dict()
-
-
-# Use these two functions to pass everything through to the "real" `hapi` module.
-def __getattr__(name):
-    wrapped = getattr(hapi, name)
-    if not callable(wrapped) or name=='describeTable':
-        return wrapped
+if not HAPI_MODULE_INSTALLED:
+    def __getattr__(name):
+        raise ModuleNotFoundError(f'HAPI (hitran-api) module was not installed, therefore HITRAN online backend is NOT available.')
     
-    def wrapper(*args, **kwargs):
-        builtins.print = __HAPI_print_intercept
-        try:
-            result = wrapped(*args, **kwargs)
-        finally:
-            builtins.print = __builtin_print
-        return result
-    return wrapper
+    def __setattr__(name, value):
+        raise ModuleNotFoundError(f'HAPI (hitran-api) module was not installed, therefore HITRAN online backend is NOT available.')
 
-def __setattr__(name, value):
-    setattr(hapi, name, value)
+else:
+    hapi.LOCAL_TABLE_CACHE = dict()
+
+
+    # Use these two functions to pass everything through to the "real" `hapi` module.
+    def __getattr__(name):
+        wrapped = getattr(hapi, name)
+        if not callable(wrapped) or name=='describeTable':
+            return wrapped
+        
+        def wrapper(*args, **kwargs):
+            builtins.print = __HAPI_print_intercept
+            try:
+                result = wrapped(*args, **kwargs)
+            finally:
+                builtins.print = __builtin_print
+            return result
+        return wrapper
+
+    def __setattr__(name, value):
+        setattr(hapi, name, value)
