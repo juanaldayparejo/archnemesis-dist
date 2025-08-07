@@ -104,4 +104,15 @@ class GasIsotopes:
             return (x.to_hitran() for x in self.as_radtran_gasses() if x is not None)
         else:
             return (x.to_hitran() for x in self.as_radtran_gasses())
+    
+    def contains(self, other : GasIsotopes) -> bool:
+        """
+        Does this set of gas isotopes contain `other`
+        """
+        if self.rt_gas_id != other.rt_gas_id:
+            return False
+        for iso_id in other.rt_iso_ids:
+            if iso_id not in self.rt_iso_ids:
+                return False
         
+        return True

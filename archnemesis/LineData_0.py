@@ -138,7 +138,6 @@ class LineData_0:
         self.line_data = None
         self.partition_data = None
         
-        
     ##################################################################################
 
     @property
@@ -207,11 +206,15 @@ class LineData_0:
                 If True will retrieve data from database again, even if data
                 is already present.
         """
+        gas_isotopes = GasIsotopes(self.ID, self.ISO)
+        wave_range = WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm)
+        
+    
         if refresh or not self.is_line_data_ready():
             self.line_data = self.DATABASE.get_line_data(
-                GasIsotopes(self.ID, self.ISO).as_radtran_gasses(), 
-                WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm), 
-                self.ambient_gas
+                gas_isotopes.as_radtran_gasses(), 
+                wave_range,
+                self.ambient_gas, 
             )
             _lgr.info(f'Retrieved line data from database {self.DATABASE}')
         else:
@@ -231,9 +234,12 @@ class LineData_0:
                 If True will retrieve data from database again, even if data
                 is already present.
         """
+        
+        gas_isotopes = GasIsotopes(self.ID, self.ISO)
+        
         if refresh or not self.is_partition_function_ready():
             self.partition_data = self.DATABASE.get_partition_function_data(
-                GasIsotopes(self.ID, self.ISO).as_radtran_gasses()
+                gas_isotopes.as_radtran_gasses()
             )
             _lgr.info(f'Retrieved partition function data from database {self.DATABASE}')
         else:

@@ -3,8 +3,10 @@ from __future__ import annotations #  for 3.9 compatability
 import sys, os
 import os.path
 import pickle
+import warnings
 
 import numpy as np
+import numpy.ma
 
 
 import archnemesis as ans
@@ -17,7 +19,7 @@ from .datatypes.gas_descriptor import RadtranGasDescriptor, HitranGasDescriptor
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 
 
@@ -360,7 +362,7 @@ class HITRAN(LineDatabaseProtocol):
         for gas_desc in gas_descs:
             gda_pair = (gas_desc, ambient_gas)
             if gda_pair not in self._gas_wavenumber_interval_to_download:
-                self._gas_wavenumber_interval_to_download[gda_pair] = wave_range.as_unit(ans.enums.WaveUnit.Wavenumber_cm)
+                self._gas_wavenumber_interval_to_download[gda_pair] = wave_range.to_unit(ans.enums.WaveUnit.Wavenumber_cm)
             else:
                 if not self._downloaded_gas_wavenumber_interval[gda_pair].contains(wave_range):
                     self._gas_wavenumber_interval_to_download[gda_pair] = self._downloaded_gas_wavenumber_interval[gda_pair].union(wave_range)
@@ -461,37 +463,46 @@ class HITRAN(LineDatabaseProtocol):
             except Exception as e:
                 raise RuntimeError(f'Failure when reading from database {self}.') from e
         
+            if _lgr.level <= logging.DEBUG:
+                hapi.describeTable(temp_line_data_table_name)
+        
             gamma_str, n_str, delta_str = self.get_ambient_gas_column_name_strings(ambient_gas)
+            col_names = (
+                'nu',
+                'sw',
+                'a',
+                gamma_str,
+                n_str,
+                delta_str,
+                'gamma_self',
+                'elower'
+            )
             
             cols = hapi.getColumns(
                 temp_line_data_table_name,
-                [
-                    'nu',
-                    'sw',
-                    'a',
-                    gamma_str,
-                    n_str,
-                    delta_str,
-                    'gamma_self',
-                    'elower'
-                ]
+                col_names
             )
+            
             
             _lgr.debug(f'{len(cols)=} {[len(c) for c in cols]=}')
             
-            line_data[gas_desc] = np.array(
-                list(zip(*cols)),
-                dtype = [
-                    ('NU', float), # Transition wavenumber (cm^{-1})
-                    ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
-                    ('A', float), # einstein-A coeifficient (s^{-1})
-                    ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
-                    ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
-                    ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
-                    ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
-                    ('ELOWER', float), # lower state energy (cm^{-1})
-                ]
-            ).view(np.recarray)
+            
+            with warnings.catch_warnings():
+                warnings.simplefilter('default', UserWarning)
+            
+                line_data[gas_desc] = np.array(
+                    list(zip(*cols)),
+                    dtype = [
+                        ('NU', float), # Transition wavenumber (cm^{-1})
+                        ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
+                        ('A', float), # einstein-A coeifficient (s^{-1})
+                        ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
+                        ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
+                        ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
+                        ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
+                        ('ELOWER', float), # lower state energy (cm^{-1})
+                    ]
+                ).view(np.recarray)
             
             hapi.dropTable(temp_line_data_table_name)
         

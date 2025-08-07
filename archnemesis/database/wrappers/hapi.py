@@ -19,7 +19,7 @@ import inspect
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 __HAPI_string_buffer = StringIO()
 
