@@ -5,6 +5,7 @@ from typing import Self, Iterator
 import archnemesis.database.wrappers.hapi as hapi
 
 from .gas_descriptor import GasDescriptor, RadtranGasDescriptor, HitranGasDescriptor
+from ..mappings.hitran import hitran_to_radtran
 from archnemesis import Data
 import archnemesis.Data.gas_data
 
