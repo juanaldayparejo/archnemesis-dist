@@ -31,15 +31,20 @@ class HITRAN(LineDatabaseProtocol):
     
     NOTE: HAPI does not do databases properly so we cannot get a handle to the actual database connection, we need to 
     ensure that `hapi.db_begin(...)` is only called once so we need class variables to make sure the class can remember
-    if it has initialised the database or not, and for instances to pass information between eachother.
+    if it has initialised the database or not, and for instances to pass information between eachother. In the background
+    there is **only ever one database** so if we want to move to a different database while running we have to somehow
+    "forget" the old one, and the re-initialise on the new one (including the time taken to parse the large column text
+    files that act as the "database" on-disk storage).
     
     NOTE: There is not way to get HAPI to update a table it will always overwrite it, therefore we want to have a single
     table for each isotope.
     
-    TODO: HAPI does not store the last request, therefore we cannot know how many wavelengths were requested. At the moment
-    I have set it to request 10% more than required so when the wavenumber interval is calculated it only downloads again if
-    more wavenumbers are requested. However, this fails when there is not enough wavelengths to cover the whole range. Therefore
-    I should save the last wavelength range requested to disk so I do not re-request when I do not need to.
+    TODO: HAPI does not store the last request, therefore we cannot know how many wavelengths were requested. We therefore
+    keep track of the limits of the wave range requested for each (gas, ambient-gas) pair. We always request the 
+    wave interval that encompasses the cached interval and the requested wave range. That means if you ask for 
+    (100,200) cm^{-1} and the cached range is (9000, 10000) cm^{-1}, then the re-requested range will be the encompassing
+    interval (100, 10000) cm^{-1}. We do this becase HAPI always overwrites the previously downloaded data, it cannot
+    update it.
     """
     
     

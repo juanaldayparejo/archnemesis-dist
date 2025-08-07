@@ -120,7 +120,7 @@ def storage2cache_MONKEYPATCH(TableName,cast=True,ext=None,nlines=None,pos=None)
                             return dtype(line[start:end].replace('D','E'))
                         except ValueError: # this is a special case and it should not be in the main version tree!
                             # Dealing with the weird and unparsable intensity format such as "2.700-164, i.e with no E or D characters.
-                            res = re.search('(\d\.\d\d\d)\-(\d\d\d)',line[start:end])
+                            res = re.search(r'(\d\.\d\d\d)\-(\d\d\d)',line[start:end])
                             if res:
                                 return dtype(res.group(1)+'E-'+res.group(2))
                             else:
