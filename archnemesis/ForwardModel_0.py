@@ -65,7 +65,6 @@ class ForwardModel_0:
     
     @classmethod
     def get_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG(cls):
-        global _DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG
         return _DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG
     
     @classmethod

@@ -1,6 +1,7 @@
 from __future__ import annotations #  for 3.9 compatability
 
 import dataclasses as dc
+from typing import Self
 
 import archnemesis as ans
 import archnemesis.enums
