@@ -575,9 +575,14 @@ class CIA_0:
             dset.attrs['title'] = "Temperature"
             dset.attrs['units'] = "K"
             
+            dset = h5py_helper.store_data(f, 'FRAC', data=self.FRAC)
+            dset.attrs['title'] = "Para-H2 fractions"
+            
             dset = h5py_helper.store_data(f, 'K_CIA', data=self.K_CIA)
             dset.attrs['title'] = "CIA cross sections"
             dset.attrs['units'] = "cm5 molecule-2"
+
+
         
         
     ##################################################################################
@@ -604,6 +609,7 @@ class CIA_0:
             
             self.WAVEN = h5py_helper.retrieve_data(f, 'WAVEN', np.array)
             self.TEMP = h5py_helper.retrieve_data(f, 'TEMP', np.array)
+            self.FRAC = h5py_helper.retrieve_data(f, 'FRAC', np.array)
             
             K_CIA = np.zeros((self.NPAIR,max(self.NPARA,1),self.NT,self.NWAVE)) # NPAIR x NPARA x NT x NWAVE
             K_CIA[:,:,:,:] = h5py_helper.retrieve_data(f, 'K_CIA', np.array)
