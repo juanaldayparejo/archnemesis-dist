@@ -1491,32 +1491,31 @@ def read_ltahead(filename):
     """
 
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-3:strlen] == 'lta':
-        f = open(filename,'r')
-    else:
-        f = open(filename+'.lta','r')
-
-    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
-    nwave = np.fromfile(f,dtype='int32',count=1)[0]
-    vmin = np.fromfile(f,dtype='float32',count=1)[0]
-    delv = np.fromfile(f,dtype='float32',count=1)[0]
-    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
-    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
-    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+    if not filename.endswith('.lta'):
+        filename += '.lta'
     
-    # Convert explicitly rounding to 7 decimals (float32 precision)
-    vmin = np.round(np.float64(vmin), decimals=7)
-    delv = np.round(np.float64(delv), decimals=7)
+    with open(filename, 'rb') as f:
+        
+        irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
+        nwave = np.fromfile(f,dtype='int32',count=1)[0]
+        vmin = np.fromfile(f,dtype='float32',count=1)[0]
+        delv = np.fromfile(f,dtype='float32',count=1)[0]
+        npress = int(np.fromfile(f,dtype='int32',count=1)[0])
+        ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
+        gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        
+        # Convert explicitly rounding to 7 decimals (float32 precision)
+        vmin = np.round(np.float64(vmin), decimals=7)
+        delv = np.round(np.float64(delv), decimals=7)
 
-    presslevels = np.fromfile(f,dtype='float32',count=npress)
-    if ntemp > 0:
-        templevels = np.fromfile(f,dtype='float32',count=ntemp)
-    else:
-        templevels = np.zeros((npress,2))
-        for i in range(npress):
-            templevels[i] = np.fromfile(f,dtype='float32',count=-ntemp)
+        presslevels = np.fromfile(f,dtype='float32',count=npress)
+        if ntemp > 0:
+            templevels = np.fromfile(f,dtype='float32',count=ntemp)
+        else:
+            templevels = np.zeros((npress,2))
+            for i in range(npress):
+                templevels[i] = np.fromfile(f,dtype='float32',count=-ntemp)
 
     return nwave,vmin,delv,npress,ntemp,gasID,isoID,presslevels,templevels
 
@@ -1554,53 +1553,51 @@ def read_ktahead(filename):
         MODIFICATION HISTORY : Juan Alday (29/04/2019)
 
     """
-
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-3:strlen] == 'kta':
-        f = open(filename,'r')
-    else:
-        f = open(filename+'.kta','r')
+    if not filename.endswith('.kta'):
+        filename += '.kta'
+    
+    with open(filename, 'rb') as f:
 
-    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
-    nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
-    vmin = np.fromfile(f,dtype='float32',count=1)[0]
-    delv = np.fromfile(f,dtype='float32',count=1)[0]
-    fwhm = np.fromfile(f,dtype='float32',count=1)[0]
-    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ng = int(np.fromfile(f,dtype='int32',count=1)[0])
-    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
-    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
+        nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
+        vmin = np.fromfile(f,dtype='float32',count=1)[0]
+        delv = np.fromfile(f,dtype='float32',count=1)[0]
+        fwhm = np.fromfile(f,dtype='float32',count=1)[0]
+        npress = int(np.fromfile(f,dtype='int32',count=1)[0])
+        ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
+        ng = int(np.fromfile(f,dtype='int32',count=1)[0])
+        gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
 
-    # Convert explicitly rounding to 7 decimals (float32 precision)
-    vmin = np.round(np.float64(vmin), decimals=7)
-    delv = np.round(np.float64(delv), decimals=7)
+        # Convert explicitly rounding to 7 decimals (float32 precision)
+        vmin = np.round(np.float64(vmin), decimals=7)
+        delv = np.round(np.float64(delv), decimals=7)
 
-    g_ord = np.fromfile(f,dtype='float32',count=ng)
-    del_g = np.fromfile(f,dtype='float32',count=ng)
+        g_ord = np.fromfile(f,dtype='float32',count=ng)
+        del_g = np.fromfile(f,dtype='float32',count=ng)
 
-    dummy = np.fromfile(f,dtype='float32',count=1)
-    dummy = np.fromfile(f,dtype='float32',count=1)
+        dummy = np.fromfile(f,dtype='float32',count=1)
+        dummy = np.fromfile(f,dtype='float32',count=1)
 
-    presslevels = np.fromfile(f,dtype='float32',count=npress)
+        presslevels = np.fromfile(f,dtype='float32',count=npress)
 
-    N1 = abs(ntemp)
-    if ntemp < 0:
-        templevels = np.zeros([npress,N1])
-        for i in range(npress):
-            for j in range(N1):
-                templevels[i,j] =  np.fromfile(f,dtype='float32',count=1)
-    else:
-        templevels = np.fromfile(f,dtype='float32',count=ntemp)
+        N1 = abs(ntemp)
+        if ntemp < 0:
+            templevels = np.zeros([npress,N1])
+            for i in range(npress):
+                for j in range(N1):
+                    templevels[i,j] =  np.fromfile(f,dtype='float32',count=1)
+        else:
+            templevels = np.fromfile(f,dtype='float32',count=ntemp)
 
-    #Reading central wavelengths in non-uniform grid
-    if delv>0.0:
-        vmax = delv*(nwave-1) + vmin
-        wavetot = np.linspace(vmin,vmax,nwave)
-    else:
-        wavetot = np.zeros(nwave)
-        wavetot[:] = np.fromfile(f,dtype='float32',count=nwave)
+        #Reading central wavelengths in non-uniform grid
+        if delv>0.0:
+            vmax = delv*(nwave-1) + vmin
+            wavetot = np.linspace(vmin,vmax,nwave)
+        else:
+            wavetot = np.zeros(nwave)
+            wavetot[:] = np.fromfile(f,dtype='float32',count=nwave)
 
     return nwave,wavetot,fwhm,npress,ntemp,ng,gasID,isoID,g_ord,del_g,presslevels,templevels
 
@@ -1693,67 +1690,63 @@ def read_lbltable(filename,wavemin,wavemax):
         MODIFICATION HISTORY : Juan Alday (25/09/2019)
 
     """
-
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-3:strlen] == 'lta':
-        f = open(filename,'rb')
-    else:
-        f = open(filename+'.lta','rb')
-
-    nbytes_int32 = 4
-    nbytes_float32 = 4
-
-    #Reading header
-    irec0 = np.fromfile(f,dtype='int32',count=1)[0]
-    nwavelta = np.fromfile(f,dtype='int32',count=1)[0]
-    vmin = np.fromfile(f,dtype='float32',count=1)[0]
-    delv = np.fromfile(f,dtype='float32',count=1)[0]
-    npress = np.fromfile(f,dtype='int32',count=1)[0]
-    ntemp = np.fromfile(f,dtype='int32',count=1)[0]
-    gasID = np.fromfile(f,dtype='int32',count=1)[0]
-    isoID = np.fromfile(f,dtype='int32',count=1)[0]
-
-    # Convert explicitly rounding to 7 decimals (float32 precision)
-    vmin = np.round(np.float64(vmin), decimals=7)
-    delv = np.round(np.float64(delv), decimals=7)
-
-    presslevels = np.fromfile(f,dtype='float32',count=npress)
+    if not filename.endswith('.lta'):
+        filename += '.lta'
     
-    if ntemp > 0:
-        templevels = np.fromfile(f,dtype='float32',count=ntemp)
-    else:
-        templevels = np.zeros((npress,2))
-        for i in range(npress):
-            templevels[i] = np.fromfile(f,dtype='float32',count=-ntemp)
+    with open(filename, 'rb') as f:
 
-    #Calculating the wavenumbers to be read
-    vmax = vmin + delv * (nwavelta-1)
-    wavelta = np.linspace(vmin,vmax,nwavelta)
+        nbytes_int32 = 4
+        nbytes_float32 = 4
 
-    ins = np.where( (wavelta>=wavemin) & (wavelta<=wavemax) )[0]
-    nwave = len(ins)
-    wave = np.zeros(nwave)
-    wave[:] = wavelta[ins]
+        #Reading header
+        irec0 = np.fromfile(f,dtype='int32',count=1)[0]
+        nwavelta = np.fromfile(f,dtype='int32',count=1)[0]
+        vmin = np.fromfile(f,dtype='float32',count=1)[0]
+        delv = np.fromfile(f,dtype='float32',count=1)[0]
+        npress = np.fromfile(f,dtype='int32',count=1)[0]
+        ntemp = np.fromfile(f,dtype='int32',count=1)[0]
+        gasID = np.fromfile(f,dtype='int32',count=1)[0]
+        isoID = np.fromfile(f,dtype='int32',count=1)[0]
 
-    #Reading the absorption coefficients
-    #######################################
-    k = np.zeros([nwave,npress,abs(ntemp)])
+        # Convert explicitly rounding to 7 decimals (float32 precision)
+        vmin = np.round(np.float64(vmin), decimals=7)
+        delv = np.round(np.float64(delv), decimals=7)
 
-    #Jumping until we get to the minimum wavenumber
-    njump = npress*abs(ntemp)*(ins[0])
-    ioff = njump*nbytes_float32 + (irec0-1)*nbytes_float32
-    f.seek(ioff,0)
+        presslevels = np.fromfile(f,dtype='float32',count=npress)
+        
+        if ntemp > 0:
+            templevels = np.fromfile(f,dtype='float32',count=ntemp)
+        else:
+            templevels = np.zeros((npress,2))
+            for i in range(npress):
+                templevels[i] = np.fromfile(f,dtype='float32',count=-ntemp)
 
-    #Reading the coefficients we require
-    k_out = np.fromfile(f,dtype='float32',count=abs(ntemp)*npress*nwave)
-    il = 0
-    for ik in range(nwave):
-        for i in range(npress):
-            k[ik,i,:] = k_out[il:il+abs(ntemp)]
-            il = il + abs(ntemp)
+        #Calculating the wavenumbers to be read
+        vmax = vmin + delv * (nwavelta-1)
+        wavelta = np.linspace(vmin,vmax,nwavelta)
 
-    f.close()
+        ins = np.where( (wavelta>=wavemin) & (wavelta<=wavemax) )[0]
+        nwave = len(ins)
+        wave = np.zeros(nwave)
+        wave[:] = wavelta[ins]
+
+        #Reading the absorption coefficients
+        #######################################
+        k = np.zeros([nwave,npress,abs(ntemp)])
+
+        #Jumping until we get to the minimum wavenumber
+        njump = npress*abs(ntemp)*(ins[0])
+        ioff = njump*nbytes_float32 + (irec0-1)*nbytes_float32
+        f.seek(ioff,0)
+
+        #Reading the coefficients we require
+        k_out = np.fromfile(f,dtype='float32',count=abs(ntemp)*npress*nwave)
+        il = 0
+        for ik in range(nwave):
+            for i in range(npress):
+                k[ik,i,:] = k_out[il:il+abs(ntemp)]
+                il = il + abs(ntemp)
     
     return npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wave,k
 
@@ -1797,90 +1790,86 @@ def read_ktable(filename,wavemin,wavemax):
         MODIFICATION HISTORY : Juan Alday (05/03/2021)
 
     """
-
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-3:strlen] == 'kta':
-        f = open(filename,'rb')
-    else:
-        f = open(filename+'.kta','rb')
+    if not filename.endswith('.kta'):
+        filename += '.kta'
+    
+    with open(filename, 'rb') as f:
 
-    nbytes_int32 = 4
-    nbytes_float32 = 4
-    ioff = 0
+        nbytes_int32 = 4
+        nbytes_float32 = 4
+        ioff = 0
 
-    #Reading header
-    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
-    nwavekta = int(np.fromfile(f,dtype='int32',count=1)[0])
-    vmin = np.fromfile(f,dtype='float32',count=1)[0]
-    delv = np.fromfile(f,dtype='float32',count=1)[0]
-    fwhm = float(np.fromfile(f,dtype='float32',count=1)[0])
-    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ng = int(np.fromfile(f,dtype='int32',count=1)[0])
-    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
-    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        #Reading header
+        irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
+        nwavekta = int(np.fromfile(f,dtype='int32',count=1)[0])
+        vmin = np.fromfile(f,dtype='float32',count=1)[0]
+        delv = np.fromfile(f,dtype='float32',count=1)[0]
+        fwhm = float(np.fromfile(f,dtype='float32',count=1)[0])
+        npress = int(np.fromfile(f,dtype='int32',count=1)[0])
+        ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
+        ng = int(np.fromfile(f,dtype='int32',count=1)[0])
+        gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
 
-    # Convert explicitly rounding to 7 decimals (float32 precision)
-    vmin = np.round(np.float64(vmin), decimals=7)
-    delv = np.round(np.float64(delv), decimals=7)
+        # Convert explicitly rounding to 7 decimals (float32 precision)
+        vmin = np.round(np.float64(vmin), decimals=7)
+        delv = np.round(np.float64(delv), decimals=7)
 
-    ioff = ioff + 10 * nbytes_int32
+        ioff = ioff + 10 * nbytes_int32
 
-    g_ord = np.zeros(ng)
-    del_g = np.zeros(ng)
-    templevels = np.zeros(ntemp)
-    presslevels = np.zeros(npress)
-    g_ord[:] = np.fromfile(f,dtype='float32',count=ng)
-    del_g[:] = np.fromfile(f,dtype='float32',count=ng)
+        g_ord = np.zeros(ng)
+        del_g = np.zeros(ng)
+        templevels = np.zeros(ntemp)
+        presslevels = np.zeros(npress)
+        g_ord[:] = np.fromfile(f,dtype='float32',count=ng)
+        del_g[:] = np.fromfile(f,dtype='float32',count=ng)
 
-    ioff = ioff + 2*ng*nbytes_float32
+        ioff = ioff + 2*ng*nbytes_float32
 
-    dummy = np.fromfile(f,dtype='float32',count=1)[0]
-    dummy = np.fromfile(f,dtype='float32',count=1)[0]
+        dummy = np.fromfile(f,dtype='float32',count=1)[0]
+        dummy = np.fromfile(f,dtype='float32',count=1)[0]
 
-    ioff = ioff + 2*nbytes_float32
+        ioff = ioff + 2*nbytes_float32
 
-    presslevels[:] = np.fromfile(f,dtype='float32',count=npress)
-    templevels[:] = np.fromfile(f,dtype='float32',count=ntemp)
+        presslevels[:] = np.fromfile(f,dtype='float32',count=npress)
+        templevels[:] = np.fromfile(f,dtype='float32',count=ntemp)
 
-    ioff = ioff + npress*nbytes_float32+ntemp*nbytes_float32
+        ioff = ioff + npress*nbytes_float32+ntemp*nbytes_float32
 
-    #Reading central wavelengths in non-uniform grid
-    if delv>0.0:
-        vmax = delv*(nwavekta-1) + vmin
-        wavetot = np.linspace(vmin,vmax,nwavekta)
-    else:
-        wavetot = np.zeros([nwavekta])
-        wavetot[:] = np.fromfile(f,dtype='float32',count=nwavekta)
-        ioff = ioff + nwavekta*nbytes_float32
+        #Reading central wavelengths in non-uniform grid
+        if delv>0.0:
+            vmax = delv*(nwavekta-1) + vmin
+            wavetot = np.linspace(vmin,vmax,nwavekta)
+        else:
+            wavetot = np.zeros([nwavekta])
+            wavetot[:] = np.fromfile(f,dtype='float32',count=nwavekta)
+            ioff = ioff + nwavekta*nbytes_float32
 
-    #Calculating the wavenumbers to be read
-    ins = np.where( (wavetot>=wavemin) & (wavetot<=wavemax) )[0]
-    nwave = len(ins)
-    wave = np.zeros([nwave])
-    wave[:] = wavetot[ins]
+        #Calculating the wavenumbers to be read
+        ins = np.where( (wavetot>=wavemin) & (wavetot<=wavemax) )[0]
+        nwave = len(ins)
+        wave = np.zeros([nwave])
+        wave[:] = wavetot[ins]
 
-    #Reading the k-coefficients
-    #######################################
+        #Reading the k-coefficients
+        #######################################
 
-    k_g = np.zeros([nwave,ng,npress,ntemp])
+        k_g = np.zeros([nwave,ng,npress,ntemp])
 
-    #Jumping until we get to the minimum wavenumber
-    njump = npress*ntemp*ng*ins[0]
-    ioff = njump*nbytes_float32 + (irec0-1)*nbytes_float32
-    f.seek(ioff,0)
+        #Jumping until we get to the minimum wavenumber
+        njump = npress*ntemp*ng*ins[0]
+        ioff = njump*nbytes_float32 + (irec0-1)*nbytes_float32
+        f.seek(ioff,0)
 
-    #Reading the coefficients we require
-    k_out = np.fromfile(f,dtype='float32',count=ntemp*npress*ng*nwave)
-    il = 0
-    for ik in range(nwave):
-        for i in range(npress):
-            for j in range(ntemp):
-                k_g[ik,:,i,j] = k_out[il:il+ng]
-                il = il + ng
-
-    f.close()
+        #Reading the coefficients we require
+        k_out = np.fromfile(f,dtype='float32',count=ntemp*npress*ng*nwave)
+        il = 0
+        for ik in range(nwave):
+            for i in range(npress):
+                for j in range(ntemp):
+                    k_g[ik,:,i,j] = k_out[il:il+ng]
+                    il = il + ng
 
     return gasID,isoID,nwave,wave,fwhm,ng,g_ord,del_g,npress,presslevels,ntemp,templevels,k_g
 
@@ -1926,58 +1915,56 @@ def write_lbltable(filename,npress,ntemp,gasID,isoID,presslevels,templevels,nwav
     import struct
 
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-3:strlen] == 'lta':
-        f = open(filename,'w+b')
-    else:
-        f = open(filename+'.lta','w+b')
+    if not filename.endswith('.lta'):
+        filename += '.lta'
+    
+    with open(filename, 'wb') as f:
 
-    irec0 = 9 + npress + ntemp    #Don't know why this 9 is like this, but it works for a Linux/Ubuntu machine
-    bin=struct.pack('i',irec0) #IREC0
-    f.write(bin)
+        irec0 = 9 + npress + ntemp    #Don't know why this 9 is like this, but it works for a Linux/Ubuntu machine
+        bin=struct.pack('i',irec0) #IREC0
+        f.write(bin)
 
-    bin=struct.pack('i',nwave) #NWAVE
-    f.write(bin)
+        bin=struct.pack('i',nwave) #NWAVE
+        f.write(bin)
 
-    if DOUBLE==True:
-        df = 'd'
-    else:
-        df = 'f'
+        if DOUBLE==True:
+            df = 'd'
+        else:
+            df = 'f'
 
-    bin=struct.pack(df,vmin) #VMIN
-    f.write(bin)
+        bin=struct.pack(df,vmin) #VMIN
+        f.write(bin)
 
-    bin=struct.pack(df,delv) #DELV
-    f.write(bin)
+        bin=struct.pack(df,delv) #DELV
+        f.write(bin)
 
-    bin=struct.pack('i',npress) #NPRESS
-    f.write(bin)
+        bin=struct.pack('i',npress) #NPRESS
+        f.write(bin)
 
-    bin=struct.pack('i',ntemp) #NTEMP
-    f.write(bin)
+        bin=struct.pack('i',ntemp) #NTEMP
+        f.write(bin)
 
-    bin=struct.pack('i',gasID) #GASID
-    f.write(bin)
+        bin=struct.pack('i',gasID) #GASID
+        f.write(bin)
 
-    bin=struct.pack('i',isoID) #ISOID
-    f.write(bin)
+        bin=struct.pack('i',isoID) #ISOID
+        f.write(bin)
 
-    myfmt=df*len(presslevels)
-    bin=struct.pack(myfmt,*presslevels) #PRESSLEVELS
-    f.write(bin)
+        myfmt=df*len(presslevels)
+        bin=struct.pack(myfmt,*presslevels) #PRESSLEVELS
+        f.write(bin)
 
-    myfmt=df*len(templevels)
-    bin=struct.pack(myfmt,*templevels) #TEMPLEVELS
-    f.write(bin)
+        myfmt=df*len(templevels)
+        bin=struct.pack(myfmt,*templevels) #TEMPLEVELS
+        f.write(bin)
 
-    for i in range(nwave):
-        for j in range(npress):
-            tmp = k[i,j,:] * 1.0e20
-            myfmt=df*len(tmp)
-            bin=struct.pack(myfmt,*tmp) #K
-            f.write(bin)
+        for i in range(nwave):
+            for j in range(npress):
+                tmp = k[i,j,:] * 1.0e20
+                myfmt=df*len(tmp)
+                bin=struct.pack(myfmt,*tmp) #K
+                f.write(bin)
 
-    f.close()
     
 ######################################################################################################
     
