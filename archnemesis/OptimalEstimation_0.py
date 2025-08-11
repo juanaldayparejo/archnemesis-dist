@@ -32,7 +32,6 @@ import pickle
 from archnemesis.enums import WaveUnit, SpectraUnit
 from archnemesis.helpers.maths_helper import is_diagonal
 
-
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
@@ -251,29 +250,28 @@ class OptimalEstimation_0:
         #Assessing that all the parameters have the correct type and dimension
         self.assess_input()
 
-        f = h5py.File(runname+'.h5','a')
-        #Checking if Retrieval already exists
-        if ('/Retrieval' in f)==True:
-            del f['Retrieval']   #Deleting the Atmosphere information that was previously written in the file
+        with h5py.File(runname+'.h5','a') as f:
+            #Checking if Retrieval already exists
+            if ('/Retrieval' in f)==True:
+                del f['Retrieval']   #Deleting the Atmosphere information that was previously written in the file
 
-        grp = f.create_group("Retrieval")
+            grp = f.create_group("Retrieval")
 
-        dset = grp.create_dataset('NITER',data=self.NITER)
-        dset.attrs['title'] = "Maximum number of iterations"
-        
-        dset = grp.create_dataset('NCORES',data=self.NCORES)
-        dset.attrs['title'] = "Number of cores available for parallel computations"
+            dset = grp.create_dataset('NITER',data=self.NITER)
+            dset.attrs['title'] = "Maximum number of iterations"
+            
+            dset = grp.create_dataset('NCORES',data=self.NCORES)
+            dset.attrs['title'] = "Number of cores available for parallel computations"
 
-        dset = grp.create_dataset('PHILIMIT',data=self.PHILIMIT)
-        dset.attrs['title'] = "Percentage convergence limit"
-        dset.attrs['units'] = "%"
+            dset = grp.create_dataset('PHILIMIT',data=self.PHILIMIT)
+            dset.attrs['title'] = "Percentage convergence limit"
+            dset.attrs['units'] = "%"
 
-        dset = grp.create_dataset('IRET',data=self.IRET)
-        dset.attrs['title'] = "Retrieval engine type"
-        if self.IRET==0:
-            dset.attrs['type'] = "Optimal Estimation"
+            dset = grp.create_dataset('IRET',data=self.IRET)
+            dset.attrs['title'] = "Retrieval engine type"
+            if self.IRET==0:
+                dset.attrs['type'] = "Optimal Estimation"
 
-        f.close()
 
     def write_output_hdf5(self,runname,Variables,write_cov=True):
         """
@@ -282,133 +280,132 @@ class OptimalEstimation_0:
 
         import h5py
 
-        f = h5py.File(runname+'.h5','a')
-        
-        #Checking if Retrieval already exists
-        if ('/Retrieval' in f)==True:
-            del f['Retrieval']   #Deleting the Atmosphere information that was previously written in the file
-
-        grp = f.create_group("Retrieval")
-
-        dset = grp.create_dataset('NITER',data=self.NITER)
-        dset.attrs['title'] = "Maximum number of iterations"
-
-        dset = grp.create_dataset('PHILIMIT',data=self.PHILIMIT)
-        dset.attrs['title'] = "Percentage convergence limit"
-        dset.attrs['units'] = "%"
-
-        dset = grp.create_dataset('IRET',data=self.IRET)
-        dset.attrs['title'] = "Retrieval engine type"
-        if self.IRET==0:
-            dset.attrs['type'] = "Optimal Estimation"
-
-        #Optimal Estimation
-        #####################################################################
-
-        if self.IRET==0:
+        with h5py.File(runname+'.h5','a') as f:
             
-            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/PHI', data=self.PHI)
-            dset.attrs['title'] = "'Cost' of retrieved state vector (calculated by cost function, is a balance of fitting modelled spectra and similarity of retrieved state vector to apriori values)."
-            
-            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/CHISQ', data=self.CHISQ)
-            dset.attrs['title'] = "Goodness of fit between modelled spectra and measured spectra"
-            
-            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/NY', data=self.NY)
-            dset.attrs['title'] = "Number of elements in measurement vector"
+            #Checking if Retrieval already exists
+            if ('/Retrieval' in f)==True:
+                del f['Retrieval']   #Deleting the Atmosphere information that was previously written in the file
 
-            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/Y', data=self.Y)
-            dset.attrs['title'] = "Measurement vector"
+            grp = f.create_group("Retrieval")
 
-            assert is_diagonal(self.SE), f"Measurement vector covariance matrix must be diagonal"
+            dset = grp.create_dataset('NITER',data=self.NITER)
+            dset.attrs['title'] = "Maximum number of iterations"
 
-            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/SE', data=np.sqrt(np.diagonal(self.SE)))
-            dset.attrs['title'] = "Uncertainty in Measurement vector (is the square root of the diagonal of the Measurement covariance matrix, which is always a diagonal matrix)"
+            dset = grp.create_dataset('PHILIMIT',data=self.PHILIMIT)
+            dset.attrs['title'] = "Percentage convergence limit"
+            dset.attrs['units'] = "%"
 
-            dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/YN', data=self.YN)
-            dset.attrs['title'] = "Modelled measurement vector"
-            
-            if write_cov==True:
+            dset = grp.create_dataset('IRET',data=self.IRET)
+            dset.attrs['title'] = "Retrieval engine type"
+            if self.IRET==0:
+                dset.attrs['type'] = "Optimal Estimation"
 
-                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/NX', data=self.NX)
-                dset.attrs['title'] = "Number of elements in state vector"
+            #Optimal Estimation
+            #####################################################################
 
-                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/XN', data=self.XN)
-                dset.attrs['title'] = "Retrieved state vector"
-
-                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/SX', data=self.ST)
-                dset.attrs['title'] = "Retrieved covariance matrix"
-
-                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/XA', data=self.XA)
-                dset.attrs['title'] = "A priori state vector"
-
-                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/SA', data=self.SA)
-                dset.attrs['title'] = "A priori covariance matrix"
+            if self.IRET==0:
                 
-                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/KK', data=self.KK)
-                dset.attrs['title'] = "Jacobian matrix"
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/PHI', data=self.PHI)
+                dset.attrs['title'] = "'Cost' of retrieved state vector (calculated by cost function, is a balance of fitting modelled spectra and similarity of retrieved state vector to apriori values)."
                 
-                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/AA', data=self.AA)
-                dset.attrs['title'] = "Averaging kernel"
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/CHISQ', data=self.CHISQ)
+                dset.attrs['title'] = "Goodness of fit between modelled spectra and measured spectra"
                 
-                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/DD', data=self.DD)
-                dset.attrs['title'] = "Gain matrix"
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/NY', data=self.NY)
+                dset.attrs['title'] = "Number of elements in measurement vector"
 
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/Y', data=self.Y)
+                dset.attrs['title'] = "Measurement vector"
 
-        #Writing the parameters in the same form as the input .apr file
-        APRPARAM = np.zeros((Variables.NXVAR.max(),Variables.NVAR))
-        APRERRPARAM = np.zeros((Variables.NXVAR.max(),Variables.NVAR))
-        RETPARAM = np.zeros((Variables.NXVAR.max(),Variables.NVAR))
-        RETERRPARAM = np.zeros((Variables.NXVAR.max(),Variables.NVAR))
-        ix = 0
-        for ivar in range(Variables.NVAR):
+                assert is_diagonal(self.SE), f"Measurement vector covariance matrix must be diagonal"
 
-            for i in range(Variables.NXVAR[ivar]):
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/SE', data=np.sqrt(np.diagonal(self.SE)))
+                dset.attrs['title'] = "Uncertainty in Measurement vector (is the square root of the diagonal of the Measurement covariance matrix, which is always a diagonal matrix)"
+
+                dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/YN', data=self.YN)
+                dset.attrs['title'] = "Modelled measurement vector"
                 
-                xa1 = self.XA[ix]
-                ea1 = np.sqrt(abs(self.SA[ix,ix]))
-                xn1 = self.XN[ix] if self.XN is not None else np.nan
-                en1 = np.sqrt(abs(self.ST[ix,ix])) if self.ST is not None else np.nan
-                if Variables.LX[ix]==1:
-                    xa1 = np.exp(xa1)
-                    ea1 = xa1*ea1
-                    xn1 = np.exp(xn1)
-                    en1 = xn1*en1
+                if write_cov==True:
 
-                RETPARAM[i,ivar] = xn1
-                RETERRPARAM[i,ivar] = en1
-                APRPARAM[i,ivar] = xa1
-                APRERRPARAM[i,ivar] = ea1
+                    dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/NX', data=self.NX)
+                    dset.attrs['title'] = "Number of elements in state vector"
 
-                ix = ix + 1
+                    dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/XN', data=self.XN)
+                    dset.attrs['title'] = "Retrieved state vector"
 
-        RETPARAM = None if np.any(np.isnan(RETPARAM)) else RETPARAM
-        RETERRPARAM = None if np.any(np.isnan(RETERRPARAM)) else RETERRPARAM
+                    dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/SX', data=self.ST)
+                    dset.attrs['title'] = "Retrieved covariance matrix"
 
-        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/NVAR', data=Variables.NVAR)
-        dset.attrs['title'] = "Number of retrieved model parameterisations"
+                    dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/XA', data=self.XA)
+                    dset.attrs['title'] = "A priori state vector"
 
-        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/NXVAR', data=Variables.NXVAR)
-        dset.attrs['title'] = "Number of parameters associated with each model parameterisation"
+                    dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/SA', data=self.SA)
+                    dset.attrs['title'] = "A priori covariance matrix"
+                    
+                    dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/KK', data=self.KK)
+                    dset.attrs['title'] = "Jacobian matrix"
+                    
+                    dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/AA', data=self.AA)
+                    dset.attrs['title'] = "Averaging kernel"
+                    
+                    dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/DD', data=self.DD)
+                    dset.attrs['title'] = "Gain matrix"
 
-        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/VARIDENT', data=Variables.VARIDENT)
-        dset.attrs['title'] = "Variable parameterisation ID"
 
-        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/VARPARAM', data=Variables.VARPARAM)
-        dset.attrs['title'] = "Extra parameters required to model the parameterisations (not retrieved)"
+            #Writing the parameters in the same form as the input .apr file
+            APRPARAM = np.zeros((Variables.NXVAR.max(),Variables.NVAR))
+            APRERRPARAM = np.zeros((Variables.NXVAR.max(),Variables.NVAR))
+            RETPARAM = np.zeros((Variables.NXVAR.max(),Variables.NVAR))
+            RETERRPARAM = np.zeros((Variables.NXVAR.max(),Variables.NVAR))
+            ix = 0
+            for ivar in range(Variables.NVAR):
 
-        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/RETPARAM', data=RETPARAM)
-        dset.attrs['title'] = "Retrieved parameters required to model the parameterisations"
+                for i in range(Variables.NXVAR[ivar]):
+                    
+                    xa1 = self.XA[ix]
+                    ea1 = np.sqrt(abs(self.SA[ix,ix]))
+                    xn1 = self.XN[ix] if self.XN is not None else np.nan
+                    en1 = np.sqrt(abs(self.ST[ix,ix])) if self.ST is not None else np.nan
+                    if Variables.LX[ix]==1:
+                        xa1 = np.exp(xa1)
+                        ea1 = xa1*ea1
+                        xn1 = np.exp(xn1)
+                        en1 = xn1*en1
 
-        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/RETERRPARAM', data=RETERRPARAM)
-        dset.attrs['title'] = "Uncertainty in the retrieved parameters required to model the parameterisations"
+                    RETPARAM[i,ivar] = xn1
+                    RETERRPARAM[i,ivar] = en1
+                    APRPARAM[i,ivar] = xa1
+                    APRERRPARAM[i,ivar] = ea1
 
-        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/APRPARAM', data=APRPARAM)
-        dset.attrs['title'] = "A priori parameters required to model the parameterisations"
+                    ix = ix + 1
 
-        dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/APRERRPARAM', data=APRERRPARAM)
-        dset.attrs['title'] = "Uncertainty in the a priori parameters required to model the parameterisations"
+            RETPARAM = None if np.any(np.isnan(RETPARAM)) else RETPARAM
+            RETERRPARAM = None if np.any(np.isnan(RETERRPARAM)) else RETERRPARAM
 
-        f.close()
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/NVAR', data=Variables.NVAR)
+            dset.attrs['title'] = "Number of retrieved model parameterisations"
+
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/NXVAR', data=Variables.NXVAR)
+            dset.attrs['title'] = "Number of parameters associated with each model parameterisation"
+
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/VARIDENT', data=Variables.VARIDENT)
+            dset.attrs['title'] = "Variable parameterisation ID"
+
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/VARPARAM', data=Variables.VARPARAM)
+            dset.attrs['title'] = "Extra parameters required to model the parameterisations (not retrieved)"
+
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/RETPARAM', data=RETPARAM)
+            dset.attrs['title'] = "Retrieved parameters required to model the parameterisations"
+
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/RETERRPARAM', data=RETERRPARAM)
+            dset.attrs['title'] = "Uncertainty in the retrieved parameters required to model the parameterisations"
+
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/APRPARAM', data=APRPARAM)
+            dset.attrs['title'] = "A priori parameters required to model the parameterisations"
+
+            dset = h5py_helper.store_data(f, 'Retrieval/Output/Parameters/APRERRPARAM', data=APRERRPARAM)
+            dset.attrs['title'] = "Uncertainty in the a priori parameters required to model the parameterisations"
+
 
     def read_hdf5(self,runname):
         """
@@ -1191,6 +1188,9 @@ def coreretOE(
 
     from archnemesis import OptimalEstimation_0
     from archnemesis import ForwardModel_0
+    
+    # Reset the warning flag each time we do a retrieval
+    ForwardModel_0.reset_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG()
 
     #Creating class and including inputs
     #############################################
@@ -1214,8 +1214,14 @@ def coreretOE(
     
     progress_file = f'progress.txt'
     progress_w_iter = max(4, int(np.ceil(np.log10(NITER))))
-    progress_fmt = f'{{:0{progress_w_iter}}} | {{:09.3E}} | {{:09.3E}} | {{}}\n'
+    progress_iter_states = {
+        'initial' : 'PHI INITIAL     ',
+        True :      'PHI REDUCED     ',
+        False :     'PHI INCREASED   '
+    }
+    progress_fmt = f'{{:0{progress_w_iter}}} | {{}} | {{:09.3E}} | {{:09.3E}} | {{}}\n'
     progress_head = ('iter' + ('' if progress_w_iter <= 4 else ' '*(progress_w_iter-4))
+        +' | iter_state      '
         +' | phi      '
         +' | chisq    '
         +' | state vector '
@@ -1236,7 +1242,19 @@ def coreretOE(
     #Calculate the first measurement vector and jacobian matrix
     #################################################################
 
-    ForwardModel = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables,Telluric=Telluric)
+    ForwardModel = ForwardModel_0(
+        runname=runname, 
+        Atmosphere=Atmosphere,
+        Surface=Surface,
+        Measurement=Measurement,
+        Spectroscopy=Spectroscopy,
+        Stellar=Stellar,
+        Scatter=Scatter,
+        CIA=CIA,
+        Layer=Layer,
+        Variables=Variables,
+        Telluric=Telluric,
+    )
     _lgr.info('nemesis :: Calculating Jacobian matrix KK')
     YN,KK = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
     
@@ -1262,7 +1280,7 @@ def coreretOE(
     chisq_history[0] = OptimalEstimation.CHISQ
     state_vector_history[0,:] = OptimalEstimation.XN
     
-    progress_line = progress_fmt.format(0, OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))
+    progress_line = progress_fmt.format(0, progress_iter_states['initial'], OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))
     _lgr.info(f'\t{progress_head}')
     _lgr.info(f'\t{progress_line}')
             
@@ -1285,8 +1303,11 @@ def coreretOE(
     NY1 = np.zeros(OptimalEstimation.NY)
     YN1 = deepcopy(OptimalEstimation.YN)
 
-    for it in range(OptimalEstimation.NITER):
+    successful_iteration = False
+    n_successful_iterations = 0
 
+    for it in range(OptimalEstimation.NITER):
+        successful_iteration = False
         _lgr.info('nemesis :: Iteration '+str(it)+'/'+str(OptimalEstimation.NITER))
 
         #Writing into .itr file
@@ -1333,7 +1354,19 @@ def coreretOE(
                 Variables1 = deepcopy(Variables)
                 Variables1.XN = XN1
 
-                ForwardModel1 = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Telluric=Telluric,Variables=Variables1)
+                ForwardModel1 = ForwardModel_0(
+                    runname=runname, 
+                    Atmosphere=Atmosphere,
+                    Surface=Surface,
+                    Measurement=Measurement,
+                    Spectroscopy=Spectroscopy,
+                    Stellar=Stellar,
+                    Scatter=Scatter,
+                    CIA=CIA,
+                    Layer=Layer,
+                    Telluric=Telluric,
+                    Variables=Variables1,
+                )
                 ForwardModel1.subprofretg()
 
                 if np.any(ForwardModel1.AtmosphereX.T < 0.0):
@@ -1349,7 +1382,19 @@ def coreretOE(
         Variables.edit_XN(XN1)
         _lgr.info('nemesis :: Calculating Jacobian matrix KK')
 
-        ForwardModel = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Telluric=Telluric,Variables=Variables)
+        ForwardModel = ForwardModel_0(
+            runname=runname, 
+            Atmosphere=Atmosphere,
+            Surface=Surface,
+            Measurement=Measurement,
+            Spectroscopy=Spectroscopy,
+            Stellar=Stellar,
+            Scatter=Scatter,
+            CIA=CIA,
+            Layer=Layer,
+            Telluric=Telluric,
+            Variables=Variables,
+        )
         YN1,KK1 = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
 
         OptimalEstimation1 = deepcopy(OptimalEstimation)
@@ -1362,6 +1407,9 @@ def coreretOE(
         #Does the trial solution fit the data better?
         if (OptimalEstimation1.PHI <= OPHI):
             _lgr.info('Successful iteration. Updating xn,yn and kk')
+            successful_iteration = True
+            n_successful_iterations += 1
+            
             OptimalEstimation.edit_XN(XN1)
             OptimalEstimation.edit_YN(YN1)
             OptimalEstimation.edit_KK(KK1)
@@ -1388,11 +1436,12 @@ def coreretOE(
             #Leave xn and kk alone and try again with more braking
             alambda *= 10.0  #increase Marquardt brake
         
-        phi_history[it+1] = OptimalEstimation.PHI
-        chisq_history[it+1] = OptimalEstimation.CHISQ
-        state_vector_history[it+1,:] = OptimalEstimation.XN
-        
-        progress_line = progress_fmt.format(0, OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))
+        if successful_iteration:
+            phi_history[n_successful_iterations] = OptimalEstimation.PHI
+            chisq_history[n_successful_iterations] = OptimalEstimation.CHISQ
+            state_vector_history[n_successful_iterations,:] = OptimalEstimation.XN
+            
+        progress_line = progress_fmt.format(it, progress_iter_states[successful_iteration], OptimalEstimation1.PHI, OptimalEstimation1.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation1.XN)))
         _lgr.info(f'\t{progress_head}')
         _lgr.info(f'\t{progress_line}')
                 

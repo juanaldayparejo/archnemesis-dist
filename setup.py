@@ -31,11 +31,13 @@ setup(
       'h5py',
       'basemap',
       'pytest',
-      'corner'],
+      'corner',
+      'typing_extensions'
+    ],
     extras_require={
         'grib': ['pygrib'],
         'docs': ['sphinx', 'sphinx_rtd_theme'],
-        'spectroscopy': ['hapi'],
+        'spectroscopy': ['hitran-api'], # The HITRAN api module "hapi" is called "hitran-api" on pypi
     },
     classifiers=[
         "Programming Language :: Python :: 3",

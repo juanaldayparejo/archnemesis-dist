@@ -1,3 +1,5 @@
+from __future__ import annotations #  for 3.9 compatability
+
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 

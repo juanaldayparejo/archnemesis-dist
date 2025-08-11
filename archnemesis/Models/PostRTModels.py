@@ -16,7 +16,8 @@ _lgr.setLevel(logging.INFO)
 
 class PostRTModelBase(ModelBase):
     """
-    Abstract base class of all parameterised models used by ArchNemesis that interact with the calculated spectrum in the forward model.
+    Abstract base class of all parameterised models used by ArchNemesis that interact 
+    with components after radiative transfer calculations are performed.
     """
     
     
