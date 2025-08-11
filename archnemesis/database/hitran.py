@@ -399,6 +399,7 @@ class HITRAN(LineDatabaseProtocol):
                 n_str,
                 delta_str,
                 'gamma_self',
+                'n_self',
                 'elower'
             )
             _lgr.debug(f'Fetching the following parameters from HITRAN: {parameters}')
@@ -475,6 +476,7 @@ class HITRAN(LineDatabaseProtocol):
                 n_str,
                 delta_str,
                 'gamma_self',
+                'n_self',
                 'elower'
             )
             
@@ -500,6 +502,7 @@ class HITRAN(LineDatabaseProtocol):
                         ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
                         ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
                         ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
+                        ('N_SELF', float), # temperature dependent exponent for `gamma_self` (NUMBER)
                         ('ELOWER', float), # lower state energy (cm^{-1})
                     ]
                 ).view(np.recarray)

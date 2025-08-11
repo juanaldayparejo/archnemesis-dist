@@ -247,7 +247,52 @@ class LineData_0:
     
     ###########################################################################################################################
     
-    def calculate_partition_sums(self,T):
+    def calculate_doppler_width(
+            self, 
+            temp: float, 
+        ) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
+        """
+        Calculate Doppler width (HWHM)
+        """
+        
+        gas_isotopes = GasIsotopes(self.ID, self.ISO)
+        dws = dict() # result
+        
+        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+            gas_line_data = self.line_data[gas_desc]
+            
+            dws[gas_desc] = gas_line_data.NU * np.sqrt( 2*np.log(2)*Data.constants.k_boltzmann*temp / (gas_desc.mass*Data.constants.c_light**2) )
+        
+        return dws
+    
+    def calculate_lorentz_width(
+            self, 
+            press: float, 
+            temp: float,
+            frac: float,
+            tref : float = 296,
+        ) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
+        """
+        Calculate pressure-broadened width
+        """
+        
+        gas_isotopes = GasIsotopes(self.ID, self.ISO)
+        lws = dict() # result
+        
+        tratio = temp/tref
+        
+        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+            gas_line_data = self.line_data[gas_desc]
+            
+            lws[gas_desc] = (
+                gas_line_data.GAMMA_AMB * tratio**gas_line_data.N_AMB * (1-frac) 
+                + gas_line_data.GAMMA_SELF * tratio**gas_line_data.N_SELF * frac
+            ) * press
+        
+        return lws
+    
+    
+    def calculate_partition_sums(self,T) -> dict[RadtranGasDescriptor, float]:
         """
         Calculate the partition functions at any arbitrary temperature
 
@@ -259,16 +304,16 @@ class LineData_0:
                 Partition functions for each of the isotopes at temperature T 
         """
         gas_isotopes = GasIsotopes(self.ID, self.ISO)
-        QTs = np.zeros(gas_isotopes.n_isotopes)
+        QTs = dict() # result
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
             gas_partition_data = self.partition_data[gas_desc]
-            QTs[i] = np.interp(T, gas_partition_data.TEMP, gas_partition_data.Q)
+            QTs[gas_desc] = np.interp(T, gas_partition_data.TEMP, gas_partition_data.Q)
         
         return QTs
         
     ###########################################################################################################################
     
-    def calculate_line_strength(self,T,Tref=296.):
+    def calculate_line_strength(self,T,Tref=296.) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
         """
         Calculate the line strengths at any arbitrary temperature
 
@@ -281,23 +326,77 @@ class LineData_0:
                 Line strengths at temperature T
         """
         
-        c2 = 1.4388028496642257  #cm K
-        
-        #Calculating the partition function
-        QTs = self.calculate_partition_sums(T)
-        QTrefs = self.calculate_partition_sums(Tref)
-        
         gas_isotopes = GasIsotopes(self.ID, self.ISO)
-        line_strengths = dict()
+        line_strengths = dict() # result
+        
+        qT = self.calculate_partition_sums(T)
+        qTref = self.calculate_partition_sums(Tref)
+        
+        
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
             gas_line_data = self.line_data[gas_desc]
-            num = np.exp(-c2*gas_line_data.ELOWER/T) * ( 1 - np.exp(-c2*gas_line_data.NU/T))
-            den = np.exp(-c2*gas_line_data.ELOWER/Tref) * ( 1 - np.exp(-c2*gas_line_data.NU/Tref))
-        
-            line_strengths[gas_desc] = gas_line_data.SW * QTrefs[i]/QTs[i] * num / den
+            
+            # Partition function ratio
+            q_ratio = qT[gas_desc] / qTref[gas_desc]
+            
+            #part = boltzman factor                    * stimulated emission 
+            num   = np.exp(-Data.constants.c2*gas_line_data.ELOWER/T) * ( 1 - np.exp(-Data.constants.c2*gas_line_data.NU/T))
+            den   = np.exp(-Data.constants.c2*gas_line_data.ELOWER/Tref) * ( 1 - np.exp(-Data.constants.c2*gas_line_data.NU/Tref))
+            
+            line_strengths[gas_desc] = gas_line_data.SW * q_ratio * num/den
         
         return line_strengths
+    
+    
+    def calculate_absorption(
+            self,
+            wavenumbers : np.ndarray,
+            temp: float, 
+            press: float,
+            frac: float,
+            lineshape_fn: Callable[[np.ndarray, float], np.ndarray] = Data.lineshapes.voigt,
+            wavenumber_window_cutoff: float = 25.0,
+            tref : float = 296,
+        ) -> np.ndarray:
+        """
+        Calculate total absorption coefficient spectrum for wavenumbers
+        """
         
+        gas_isotopes = GasIsotopes(self.ID, self.ISO)
+        abs_coeffs = dict()
+        
+        k_total = np.zeros_like(wavenumbers, dtype=float)
+        
+        strengths = self.calculate_line_strength(temp, tref)
+        alpha_ds = self.calculate_doppler_width(temp)
+        gamma_ls = self.calculate_lorentz_width(press, temp, frac, tref)
+        
+        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+            gas_line_data = self.line_data[gas_desc]
+        
+            strength = strengths[gas_desc]
+            alpha_d = alpha_ds[gas_desc]
+            gamma_l = gamma_ls[gas_desc]
+            
+            for j in gas_line_data.NU.size:
+                wavenumber_window_mask = np.abs(wavenumbers - gas_line_data.NU[i]) < wavenumber_window_cutoff
+                
+                if not np.any(wavenumber_window_mask):
+                    continue
+                
+                x = (wavenumbers[wavenumber_window_mask] - gas_line_data.NU[j]) /  alpha_d
+                y = gamma_l / alpha_d
+                
+                lineshape = lineshape_fn(x,y)
+                
+                k_total[mask] += lineshape * strength / alpha_d
+                
+                # Add in continuum absorption here if required
+            
+        return k_total
+    
+    
+    
     ###########################################################################################################################
     
     def plot_linedata(

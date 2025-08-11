@@ -36,6 +36,18 @@ class RadtranGasDescriptor(NamedTuple):
     def isotope_name(self):
         return Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['name']
 
+    @property
+    def mass(self):
+        return float(Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['mass'])
+    
+    @property
+    def abundance(self):
+        return float(Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['abun'])
+    
+    @property
+    def global_id(self):
+        return int(Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['id'])
+
 
 class HitranGasDescriptor(NamedTuple):
     gas_id : int

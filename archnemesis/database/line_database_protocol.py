@@ -35,6 +35,7 @@ class LineDataProtocol(Protocol):
                 ('N_AMB', float), # temperature dependent exponent for `GAMMA_AMB` (NUMBER)
                 ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
                 ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
+                ('N_SELF', float), # temperature dependent exponent for `GAMMA_SELF` (NUMBER)
                 ('ELOWER', float), # lower state energy (cm^{-1})
             ]
         ]
@@ -46,6 +47,7 @@ class LineDataProtocol(Protocol):
     N_AMB : np.ndarray[['N_LINES_OF_GAS'],float] # temperature dependent exponent for `GAMMA_AMB` (NUMBER)
     DELTA_AMB : np.ndarray[['N_LINES_OF_GAS'],float] # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
     GAMMA_SELF : np.ndarray[['N_LINES_OF_GAS'],float] # self broadening coefficient (cm^{-1} atm^{-1})
+    N_SELF : np.ndarray[['N_LINES_OF_GAS'],float] # temperature dependent exponent for `GAMMA_SELF` (NUMBER)
     ELOWER : np.ndarray[['N_LINES_OF_GAS'],float] # lower state energy (cm^{-1})
 
 
