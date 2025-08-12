@@ -44,7 +44,13 @@ _lgr.setLevel(logging.DEBUG)
 
 
 
-
+# TODO: 
+# * Account for HITRAN weighting by terrestrial abundances .
+#   NOTE: do this in the HITRAN.py file, not here as ideally LineData_0 would give 
+#         line strengths and absorption coefficients per unit of gas (e.g. per column density,
+#         per gram, per mole, something like that) the exact unit to be worked out later.
+# * Natural Broadening
+# * Pressure shift
 
 class LineData_0:
     """
@@ -252,8 +258,23 @@ class LineData_0:
             temp: float, 
         ) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
         """
-        Calculate Doppler width (HWHM)
+        Calculate Doppler width (HWHM), broadening due to thermal motion.
+        
+            dlambda/lambda_0 = sqrt(2 ln(2) * (k_b * T)/(m_0 * c^2) )
+                             = sqrt(T/m_0) * 1/c * sqrt(2 ln(2) k_b)
+                             = sqrt(T/M_0) * 1/c * sqrt(2 ln(2) N_A k_b)
+        dlambda - half-width-half-maximum in wavelength space
+        lambda_0 - wavelength of line transition
+        k_b - boltzmann const
+        T - temperature (Kelvin)
+        m_0 - molecular mass
+        c - speed of light
+        M_0 - molecular mass
+        N_A - avogadro's constant
+        
         """
+        
+        doppler_width_const : float  = 1/Data.constants.c_light * np.sqrt(2*np.log(2)*Data.constants.N_avogadro*Data.constants.k_boltzmann)
         
         gas_isotopes = GasIsotopes(self.ID, self.ISO)
         dws = dict() # result
@@ -261,7 +282,7 @@ class LineData_0:
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
             gas_line_data = self.line_data[gas_desc]
             
-            dws[gas_desc] = gas_line_data.NU * np.sqrt( 2*np.log(2)*Data.constants.k_boltzmann*temp / (gas_desc.mass*Data.constants.c_light**2) )
+            dws[gas_desc] = gas_line_data.NU * np.sqrt( temp / (gas_desc.molecular_mass*1E-3) ) * doppler_width_const
         
         return dws
     
@@ -275,6 +296,7 @@ class LineData_0:
         """
         Calculate pressure-broadened width
         """
+        _lgr.debug(f'{press=} {temp=} {frac=} {tref=}')
         
         gas_isotopes = GasIsotopes(self.ID, self.ISO)
         lws = dict() # result
@@ -283,6 +305,11 @@ class LineData_0:
         
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
             gas_line_data = self.line_data[gas_desc]
+            
+            _lgr.debug(f'{np.all(np.isnan(gas_line_data.GAMMA_AMB))=} ')
+            _lgr.debug(f'{np.all(np.isnan(gas_line_data.N_AMB))=} ')
+            _lgr.debug(f'{np.all(np.isnan(gas_line_data.GAMMA_SELF))=} ')
+            _lgr.debug(f'{np.all(np.isnan(gas_line_data.N_SELF))=} ')
             
             lws[gas_desc] = (
                 gas_line_data.GAMMA_AMB * tratio**gas_line_data.N_AMB * (1-frac) 
@@ -359,9 +386,11 @@ class LineData_0:
             tref : float = 296,
         ) -> np.ndarray:
         """
-        Calculate total absorption coefficient spectrum for wavenumbers
-        """
+        Calculate total absorption coefficient spectrum for wavenumbers.
         
+        For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
+        """
+        DEBUG_ONCE_FLAG = False
         gas_isotopes = GasIsotopes(self.ID, self.ISO)
         abs_coeffs = dict()
         
@@ -372,24 +401,43 @@ class LineData_0:
         gamma_ls = self.calculate_lorentz_width(press, temp, frac, tref)
         
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+            _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=}')
             gas_line_data = self.line_data[gas_desc]
         
             strength = strengths[gas_desc]
             alpha_d = alpha_ds[gas_desc]
             gamma_l = gamma_ls[gas_desc]
             
-            for j in gas_line_data.NU.size:
-                wavenumber_window_mask = np.abs(wavenumbers - gas_line_data.NU[i]) < wavenumber_window_cutoff
+            #_lgr.debug(f'{strength.shape=}')
+            #_lgr.debug(f'{alpha_d.shape=}')
+            #_lgr.debug(f'{gamma_l.shape=}')
+            
+            for j in range(gas_line_data.NU.size):
+                #_lgr.debug(f'Line Number {j=}')
+                wn_mask = np.abs(wavenumbers - gas_line_data.NU[j]) < wavenumber_window_cutoff
                 
-                if not np.any(wavenumber_window_mask):
+                #_lgr.debug(f'{np.count_nonzero(wn_mask)=}')
+                if not np.any(wn_mask):
                     continue
                 
-                x = (wavenumbers[wavenumber_window_mask] - gas_line_data.NU[j]) /  alpha_d
-                y = gamma_l / alpha_d
+                #_lgr.debug(f'{wavenumbers[wn_mask]=}')
+                #_lgr.debug(f'{gas_line_data.NU[j]=}')
+                #_lgr.debug(f'{alpha_d[j]=}')
+                
+                x = (wavenumbers[wn_mask] - gas_line_data.NU[j]) /  alpha_d[j]
+                y = gamma_l[j] / alpha_d[j]
+                
+                if np.all(np.isnan(y)) and not DEBUG_ONCE_FLAG:
+                    _lgr.debug(f'{j=}')
+                    _lgr.debug(f'{alpha_d[j]=}')
+                    _lgr.debug(f'{gamma_l[j]=}')
+                    _lgr.debug(f'{x=}')
+                    _lgr.debug(f'{y=}')
+                    DEBUG_ONCE_FLAG = True
                 
                 lineshape = lineshape_fn(x,y)
                 
-                k_total[mask] += lineshape * strength / alpha_d
+                k_total[wn_mask] += lineshape * strength[j] / alpha_d[j]
                 
                 # Add in continuum absorption here if required
             

@@ -399,8 +399,9 @@ class HITRAN(LineDatabaseProtocol):
                 n_str,
                 delta_str,
                 'gamma_self',
-                'n_self',
-                'elower'
+                'n_self', # NOTE: This may be missing, in that case it is assumed to be equal to n_air
+                'elower',
+                'n_air', # NOTE: here so we always fetch this value as we do not know if 'n_self' will be different or not
             )
             _lgr.debug(f'Fetching the following parameters from HITRAN: {parameters}')
             try:
@@ -476,8 +477,9 @@ class HITRAN(LineDatabaseProtocol):
                 n_str,
                 delta_str,
                 'gamma_self',
-                'n_self',
-                'elower'
+                'n_self', # NOTE: This may be missing, in that case it is assumed to be equal to n_air
+                'elower',
+                'n_air', # NOTE: here as we always fetch this value as we do not know if 'n_self' will be different or not
             )
             
             cols = hapi.getColumns(
@@ -485,12 +487,26 @@ class HITRAN(LineDatabaseProtocol):
                 col_names
             )
             
-            
-            _lgr.debug(f'{len(cols)=} {[len(c) for c in cols]=}')
-            
-            
             with warnings.catch_warnings():
                 warnings.simplefilter('default', UserWarning)
+                
+                # If we don't have any 'n_self' values, replace 'n_self' with final 'n_air' column
+                # Then, drop final 'n_air' column as we don't need it
+                n_self_tmp = np.ma.array(cols[-3], dtype=float)
+                n_self = np.array(cols[-1], dtype=float)
+                n_self[~n_self_tmp.mask] = n_self_tmp[~n_self_tmp.mask]
+                
+                cols[-3] = n_self
+                cols = cols[:-1]
+                
+                _lgr.debug(f'{len(cols)=} {[len(c) for c in cols]=}')
+                
+                for i, c in enumerate(cols):
+                    missing_col_names = []
+                    if isinstance(c[0], np.ma.core.MaskedConstant):
+                        missing_col_names.append(col_names[i])
+                    if len(missing_col_names) > 0:
+                        raise RuntimeError(f'Gas {gas_desc.gas_name} isotope {gas_desc.iso_id} "{gas_desc.isotope_name}" with ambient gas "{ambient_gas.name}" has NULL entries in the HITRAN database for the following columns: {missing_col_names}')
             
                 line_data[gas_desc] = np.array(
                     list(zip(*cols)),

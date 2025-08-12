@@ -382,6 +382,7 @@ atom_mass = {
     'ZERO': 0,
 }
 
+# 'mass' is molecular mass in grams / mol
 gas_info = {
     "1": {
         "name": "H2O",
