@@ -21,7 +21,10 @@ import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 
-
+# NOTE: HAPI does not differentiate between an actual failure to retrieve data because of a problem vs
+#       not retrieving any data because there is no data in a wavelength range. Until I can handle those
+#       cases differently, there will always be some annoying exceptions when no lines are present in a 
+#       requested wavelength range.
 
 class HITRAN(LineDatabaseProtocol):
     """
@@ -414,7 +417,20 @@ class HITRAN(LineDatabaseProtocol):
                     Parameters=parameters
                 )
             except Exception as e:
-                raise RuntimeError('Something went wrong when attempting to download data from HITRAN servers.') from e
+                msg = '\n'.join((
+                    'HAPI failed to retrieve data from HITRAN servers, possible reasons are listed below:',
+                    '',
+                    f'    1) There may be no transitions (lines) in your chosen wavelength range, try again with a different range. {wave_range=}',
+                    '',
+                    f'    2) One of the parameter names may be misspelled (unlikely), the parameter names used were: {parameters}',
+                    '',
+                    f'    3) There may be no gas with the requested gas_id {ht_gas.gas_id} and iso_id {ht_gas.iso_id} numbers, see "https://hitran.org/docs/iso-meta/" for accepted hitran gas codes (NOTE: these are different to Radtran gas codes, but they should be converted internally)',
+                    '',
+                    f'    4) The internet connection may have dropped',
+                    '',
+                    'For more detailed troubleshooting change line 22 of archnemesis/database/wrappers/hapi.py to "_lgr.setLevel(logging.DEBUG)" and re-run. More detailed output from HAPI will be displayed.'
+                ))
+                raise RuntimeError(msg) from e
             else:
                 hapi.db_commit()
             

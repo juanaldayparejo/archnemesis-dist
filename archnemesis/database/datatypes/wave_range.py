@@ -2,6 +2,8 @@ from __future__ import annotations #  for 3.9 compatability
 
 from typing import Self, NamedTuple
 
+import numpy as np
+
 import archnemesis as ans
 import archnemesis.enums
 
@@ -56,5 +58,8 @@ class WaveRange(NamedTuple):
             if result.max < other.max:
                 result.max = other.max
         return result
+    
+    def linspace(self, n : 50, endpoint=True):
+        return np.linspace(self.min, self.max, n, endpoint=True)
 
 

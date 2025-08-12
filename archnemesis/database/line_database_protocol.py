@@ -29,7 +29,7 @@ class LineDataProtocol(Protocol):
             ['N_LINES_OF_GAS'],
             [
                 ('NU', float), # Transition wavenumber (cm^{-1})
-                ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} molec^{-1} cm^{-2}) at standard temperature and pressure (STP)
+                ('SW', float), # transition intensity per molecule (weighted by terrestrial isotopologue abundance) (cm^{-1} molecule^{-1} cm^{-2}) at standard temperature and pressure (STP)
                 ('A', float), # einstein-A coefficient for spontaneous emission (s^{-1})
                 ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
                 ('N_AMB', float), # temperature dependent exponent for `GAMMA_AMB` (NUMBER)

@@ -168,6 +168,10 @@ class LineData_0:
     @ambient_gas.setter
     def ambient_gas(self, value : int | AmbientGas):
         self._ambient_gas = AmbientGas(value)
+    
+    @property
+    def gas_isotopes(self) -> GasIsotopes:
+        return GasIsotopes(self.ID, self.ISO)
 
     def __repr__(self) -> str:
         return f'LineData_0(ID={self.ID}, ISO={self.ISO}, ambient_gas={self.ambient_gas}, is_line_data_ready={self.is_line_data_ready()}, is_partition_function_ready={self.is_partition_function_ready()}, database={self._database})'
@@ -212,13 +216,14 @@ class LineData_0:
                 If True will retrieve data from database again, even if data
                 is already present.
         """
-        gas_isotopes = GasIsotopes(self.ID, self.ISO)
+        assert vmin < vmax, f'Mimimum wavenumber ({vmin}) must be less than maximum wavenumber ({vmax})'
+        
         wave_range = WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm)
         
     
         if refresh or not self.is_line_data_ready():
             self.line_data = self.DATABASE.get_line_data(
-                gas_isotopes.as_radtran_gasses(), 
+                self.gas_isotopes.as_radtran_gasses(), 
                 wave_range,
                 self.ambient_gas, 
             )
@@ -241,11 +246,10 @@ class LineData_0:
                 is already present.
         """
         
-        gas_isotopes = GasIsotopes(self.ID, self.ISO)
         
         if refresh or not self.is_partition_function_ready():
             self.partition_data = self.DATABASE.get_partition_function_data(
-                gas_isotopes.as_radtran_gasses()
+                self.gas_isotopes.as_radtran_gasses()
             )
             _lgr.info(f'Retrieved partition function data from database {self.DATABASE}')
         else:
@@ -276,10 +280,9 @@ class LineData_0:
         
         doppler_width_const : float  = 1/Data.constants.c_light * np.sqrt(2*np.log(2)*Data.constants.N_avogadro*Data.constants.k_boltzmann)
         
-        gas_isotopes = GasIsotopes(self.ID, self.ISO)
         dws = dict() # result
         
-        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
             gas_line_data = self.line_data[gas_desc]
             
             dws[gas_desc] = gas_line_data.NU * np.sqrt( temp / (gas_desc.molecular_mass*1E-3) ) * doppler_width_const
@@ -298,18 +301,12 @@ class LineData_0:
         """
         _lgr.debug(f'{press=} {temp=} {frac=} {tref=}')
         
-        gas_isotopes = GasIsotopes(self.ID, self.ISO)
         lws = dict() # result
         
         tratio = temp/tref
         
-        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
             gas_line_data = self.line_data[gas_desc]
-            
-            _lgr.debug(f'{np.all(np.isnan(gas_line_data.GAMMA_AMB))=} ')
-            _lgr.debug(f'{np.all(np.isnan(gas_line_data.N_AMB))=} ')
-            _lgr.debug(f'{np.all(np.isnan(gas_line_data.GAMMA_SELF))=} ')
-            _lgr.debug(f'{np.all(np.isnan(gas_line_data.N_SELF))=} ')
             
             lws[gas_desc] = (
                 gas_line_data.GAMMA_AMB * tratio**gas_line_data.N_AMB * (1-frac) 
@@ -330,9 +327,8 @@ class LineData_0:
             QT : np.ndarray[['N_GAS_ISOTOPES'], float]
                 Partition functions for each of the isotopes at temperature T 
         """
-        gas_isotopes = GasIsotopes(self.ID, self.ISO)
         QTs = dict() # result
-        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
             gas_partition_data = self.partition_data[gas_desc]
             QTs[gas_desc] = np.interp(T, gas_partition_data.TEMP, gas_partition_data.Q)
         
@@ -353,14 +349,13 @@ class LineData_0:
                 Line strengths at temperature T
         """
         
-        gas_isotopes = GasIsotopes(self.ID, self.ISO)
         line_strengths = dict() # result
         
         qT = self.calculate_partition_sums(T)
         qTref = self.calculate_partition_sums(Tref)
         
         
-        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
             gas_line_data = self.line_data[gas_desc]
             
             # Partition function ratio
@@ -384,64 +379,50 @@ class LineData_0:
             lineshape_fn: Callable[[np.ndarray, float], np.ndarray] = Data.lineshapes.voigt,
             wavenumber_window_cutoff: float = 25.0,
             tref : float = 296,
-        ) -> np.ndarray:
+        ) -> dict[RadtranGasDescriptor, np.ndarray]:
         """
         Calculate total absorption coefficient spectrum for wavenumbers.
         
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
-        DEBUG_ONCE_FLAG = False
-        gas_isotopes = GasIsotopes(self.ID, self.ISO)
         abs_coeffs = dict()
-        
-        k_total = np.zeros_like(wavenumbers, dtype=float)
         
         strengths = self.calculate_line_strength(temp, tref)
         alpha_ds = self.calculate_doppler_width(temp)
         gamma_ls = self.calculate_lorentz_width(press, temp, frac, tref)
         
-        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
             _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=}')
             gas_line_data = self.line_data[gas_desc]
+        
+            k_total = np.zeros_like(wavenumbers, dtype=float)
+            
         
             strength = strengths[gas_desc]
             alpha_d = alpha_ds[gas_desc]
             gamma_l = gamma_ls[gas_desc]
             
-            #_lgr.debug(f'{strength.shape=}')
-            #_lgr.debug(f'{alpha_d.shape=}')
-            #_lgr.debug(f'{gamma_l.shape=}')
             
             for j in range(gas_line_data.NU.size):
-                #_lgr.debug(f'Line Number {j=}')
                 wn_mask = np.abs(wavenumbers - gas_line_data.NU[j]) < wavenumber_window_cutoff
                 
-                #_lgr.debug(f'{np.count_nonzero(wn_mask)=}')
                 if not np.any(wn_mask):
                     continue
-                
-                #_lgr.debug(f'{wavenumbers[wn_mask]=}')
-                #_lgr.debug(f'{gas_line_data.NU[j]=}')
-                #_lgr.debug(f'{alpha_d[j]=}')
-                
+
                 x = (wavenumbers[wn_mask] - gas_line_data.NU[j]) /  alpha_d[j]
                 y = gamma_l[j] / alpha_d[j]
-                
-                if np.all(np.isnan(y)) and not DEBUG_ONCE_FLAG:
-                    _lgr.debug(f'{j=}')
-                    _lgr.debug(f'{alpha_d[j]=}')
-                    _lgr.debug(f'{gamma_l[j]=}')
-                    _lgr.debug(f'{x=}')
-                    _lgr.debug(f'{y=}')
-                    DEBUG_ONCE_FLAG = True
                 
                 lineshape = lineshape_fn(x,y)
                 
                 k_total[wn_mask] += lineshape * strength[j] / alpha_d[j]
                 
                 # Add in continuum absorption here if required
-            
-        return k_total
+                
+                
+            # put into absorption coefficient dictionary
+            abs_coeffs[gas_desc] = k_total
+        
+        return abs_coeffs
     
     
     
