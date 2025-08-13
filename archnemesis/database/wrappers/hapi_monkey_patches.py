@@ -1,14 +1,25 @@
 from __future__ import annotations #  for 3.9 compatability
 
 import json
+import re
+import urllib.request
+import ssl
+
+
 import numpy as np
 import numpy.ma
-import re
 
 import hapi.hapi as hapi
 
 
+"""
+Monkey patches for HAPI functions.
 
+Locations of changes are denoted with a comment that starts with `# FIX`
+"""
+
+# "position" dictionary for table was not being constructed correctly, leading to
+# database corruption when `hapi.db_commit()` was called
 def storage2cache_MONKEYPATCH(TableName,cast=True,ext=None,nlines=None,pos=None):
     """ edited by NHL
     TableName: name of the HAPI table to read in
@@ -95,7 +106,7 @@ def storage2cache_MONKEYPATCH(TableName,cast=True,ext=None,nlines=None,pos=None)
         for qnt, fmt in zip(quantities, formats):
             # pre-defined positions are needed to skip the existing parameters in headers (new feature)
             if 'position' in header:
-                start = header['position'].get(qnt, None) # fix for `qnt` not in header['position']
+                start = header['position'].get(qnt, None) # FIX for `qnt` not in header['position']
                 if start is None:
                     start = end
                     header['position'][qnt] = start
@@ -207,3 +218,82 @@ def storage2cache_MONKEYPATCH(TableName,cast=True,ext=None,nlines=None,pos=None)
     InfileHeader.close()
     print('                     Lines parsed: %d' % line_count)
     return flag_EOF
+
+
+
+# Original fails when using HTTPS instead of HTTP (some network admins enforce only using HTTPS),
+# added SSL context to fix this. Fix taken from https://github.com/hitranonline/hapi/issues/52
+def queryHITRAN_MONKEYPATCH(TableName, iso_id_list, numin, numax, pargroups=[], params=[], dotpar=True, head=False):
+    ParameterList = hapi.prepareParlist(pargroups=pargroups, params=params, dotpar=dotpar)
+    TableHeader = hapi.prepareHeader(ParameterList)
+    TableHeader['table_name'] = TableName
+    DataFileName = hapi.VARIABLES['BACKEND_DATABASE_NAME'] + '/' + TableName + '.data'
+    HeaderFileName = hapi.VARIABLES['BACKEND_DATABASE_NAME'] + '/' + TableName + '.header'
+    
+    iso_id_list_str = [str(iso_id) for iso_id in iso_id_list]
+    iso_id_list_str = ','.join(iso_id_list_str)
+    print('\nData is fetched from %s\n' % hapi.VARIABLES['GLOBAL_HOST'])
+    
+    if pargroups or params:  # custom par search
+        url = hapi.VARIABLES['GLOBAL_HOST'] + '/lbl/api?' + \
+            'iso_ids_list=' + iso_id_list_str + '&' + \
+            'numin=' + str(numin) + '&' + \
+            'numax=' + str(numax) + '&' + \
+            'head=' + str(head) + '&' + \
+            'fixwidth=0&sep=[comma]&' + \
+            'request_params=' + ','.join(ParameterList)
+    else:  # old-fashioned .par search
+        url = hapi.VARIABLES['GLOBAL_HOST'] + '/lbl/api?' + \
+            'iso_ids_list=' + iso_id_list_str + '&' + \
+            'numin=' + str(numin) + '&' + \
+            'numax=' + str(numax)
+    
+    if hapi.VARIABLES['DISPLAY_FETCH_URL']:
+        print(url + '\n')
+    
+    try:
+        
+        context = ssl._create_unverified_context() # FIX, created SSL context
+        
+        if hapi.VARIABLES['PROXY']:
+            print('Using proxy ' + str(hapi.VARIABLES['PROXY']))
+            proxy = urllib.request.ProxyHandler(hapi.VARIABLES['PROXY'])
+            opener = urllib.request.build_opener(proxy)
+            urllib.request.install_opener(opener)
+        
+        req = urllib.request.urlopen(url, context=context) # FIX, added SSL context to URL request
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            raise RuntimeError('Daily API query limit exceeded') from e
+        else:
+            raise RuntimeError(f'Failed to retrieve data for given parameters. Code : {e.code} URL : "{e.url}" Error : {e.reason}') from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f'Cannot connect to {hapi.VARIABLES['GLOBAL_HOST']}. Try again or edit GLOBAL_HOST variable. Error: {e.reason}' ) from e
+    
+    CHUNK = 64 * 1024
+    print('BEGIN DOWNLOAD: ' + TableName)
+    
+    with open(DataFileName, 'w') as fp:
+        while True:
+            chunk = req.read(CHUNK)
+            if not chunk:
+                break
+            fp.write(chunk.decode('utf-8'))
+            print('  %d bytes written to %s' % (CHUNK, DataFileName))
+    
+    with open(HeaderFileName, 'w') as fp:
+        fp.write(json.dumps(TableHeader, indent=2))
+        print('Header written to %s' % HeaderFileName)
+    
+    print('END DOWNLOAD')
+    
+    hapi.storage2cache(TableName)
+    print('PROCESSED')
+
+
+
+
+
+
+
+
