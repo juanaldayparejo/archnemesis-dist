@@ -37,6 +37,10 @@ class RadtranGasDescriptor(NamedTuple):
         return Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['name']
 
     @property
+    def label(self):
+        return f'Gas{{{self.gas_id} : {self.gas_name}, {self.iso_id} : {self.isotope_name}}}'
+
+    @property
     def molecular_mass(self):
         """
         in grams / mol

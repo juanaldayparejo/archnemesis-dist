@@ -7,10 +7,6 @@ import numpy as np
 import archnemesis as ans
 import archnemesis.enums
 
-import logging
-_lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
-
 class WaveRange(NamedTuple):
     
     min : float = 0
@@ -59,7 +55,10 @@ class WaveRange(NamedTuple):
                 result.max = other.max
         return result
     
-    def linspace(self, n : 50, endpoint=True):
+    def linspace(self, n : float = 50, endpoint=True):
         return np.linspace(self.min, self.max, n, endpoint=True)
+    
+    def arange(self, step : float):
+        return np.arange(self.min, self.max, step, endpoint=False)
 
 

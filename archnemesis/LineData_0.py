@@ -32,8 +32,10 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from archnemesis import Data
 from archnemesis import *
 from archnemesis.enums import SpectroscopicLineList, AmbientGas
+import archnemesis.helpers.maths_helper as maths_helper
 import archnemesis.database
 import archnemesis.database.hitran
+from archnemesis.database.datatypes.wave_point import WavePoint
 from archnemesis.database.datatypes.wave_range import WaveRange
 from archnemesis.database.datatypes.gas_isotopes import GasIsotopes
 from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
@@ -51,6 +53,11 @@ _lgr.setLevel(logging.DEBUG)
 #         per gram, per mole, something like that) the exact unit to be worked out later.
 # * Natural Broadening
 # * Pressure shift
+# * Multiple ambient gasses. At the moment can only have one, but should be able to define
+#   a gas mixture.
+# * Additional lineshapes, have a look at https://www.degruyterbrill.com/document/doi/10.1515/pac-2014-0208/html
+
+
 
 class LineData_0:
     """
@@ -278,7 +285,7 @@ class LineData_0:
         
         """
         
-        doppler_width_const : float  = 1/Data.constants.c_light * np.sqrt(2*np.log(2)*Data.constants.N_avogadro*Data.constants.k_boltzmann)
+        doppler_width_const : float  = 1/Data.constants.c_light_cgs * np.sqrt(2*np.log(2)*Data.constants.N_avogadro*Data.constants.k_boltzmann_cgs)
         
         dws = dict() # result
         
@@ -293,13 +300,13 @@ class LineData_0:
             self, 
             press: float, 
             temp: float,
-            frac: float,
+            amb_frac: float, # fraction of ambient gas
             tref : float = 296,
         ) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
         """
         Calculate pressure-broadened width
         """
-        _lgr.debug(f'{press=} {temp=} {frac=} {tref=}')
+        _lgr.debug(f'{press=} {temp=} {amb_frac=} {tref=}')
         
         lws = dict() # result
         
@@ -309,8 +316,8 @@ class LineData_0:
             gas_line_data = self.line_data[gas_desc]
             
             lws[gas_desc] = (
-                gas_line_data.GAMMA_AMB * tratio**gas_line_data.N_AMB * (1-frac) 
-                + gas_line_data.GAMMA_SELF * tratio**gas_line_data.N_SELF * frac
+                gas_line_data.GAMMA_AMB * tratio**gas_line_data.N_AMB * amb_frac 
+                + gas_line_data.GAMMA_SELF * tratio**gas_line_data.N_SELF * (1-amb_frac)
             ) * press
         
         return lws
@@ -354,48 +361,59 @@ class LineData_0:
         qT = self.calculate_partition_sums(T)
         qTref = self.calculate_partition_sums(Tref)
         
+        _lgr.debug(f'{Data.constants.c2_cgs=}')
+        
+        
+        t_factor = Data.constants.c2_cgs * (T - Tref)/(T*Tref)
         
         for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
             gas_line_data = self.line_data[gas_desc]
             
             # Partition function ratio
-            q_ratio = qT[gas_desc] / qTref[gas_desc]
+            q_ratio = qTref[gas_desc] / qT[gas_desc]
             
-            #part = boltzman factor                    * stimulated emission 
-            num   = np.exp(-Data.constants.c2*gas_line_data.ELOWER/T) * ( 1 - np.exp(-Data.constants.c2*gas_line_data.NU/T))
-            den   = np.exp(-Data.constants.c2*gas_line_data.ELOWER/Tref) * ( 1 - np.exp(-Data.constants.c2*gas_line_data.NU/Tref))
+            boltz = np.exp(t_factor*gas_line_data.ELOWER)
             
-            line_strengths[gas_desc] = gas_line_data.SW * q_ratio * num/den
+            stim = ( 1 - np.exp(-Data.constants.c2_cgs*gas_line_data.NU/T)) / ( 1 - np.exp(-Data.constants.c2_cgs*gas_line_data.NU/Tref))
+            
+            line_strengths[gas_desc] = gas_line_data.SW * q_ratio * boltz * stim
+            
+            # Take into account abundances here?
         
         return line_strengths
     
     
     def calculate_absorption(
             self,
-            wavenumbers : np.ndarray,
+            waves : np.ndarray,
             temp: float, 
             press: float,
-            frac: float,
+            amb_frac: float = 1, # fraction of ambient gas
+            wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
             lineshape_fn: Callable[[np.ndarray, float], np.ndarray] = Data.lineshapes.voigt,
-            wavenumber_window_cutoff: float = 25.0,
+            wavenumber_window_cutoff: float = 25.0, # cm^{-1}
             tref : float = 296,
+            line_strength_cutoff = 1E-32,
         ) -> dict[RadtranGasDescriptor, np.ndarray]:
         """
-        Calculate total absorption coefficient spectrum for wavenumbers.
+        Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}). Returns the value for a single molecule
+        at the specified temperature and pressure.
         
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
         abs_coeffs = dict()
         
+        waves = WavePoint(waves, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value
+        
         strengths = self.calculate_line_strength(temp, tref)
         alpha_ds = self.calculate_doppler_width(temp)
-        gamma_ls = self.calculate_lorentz_width(press, temp, frac, tref)
+        gamma_ls = self.calculate_lorentz_width(press, temp, amb_frac, tref)
         
         for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
             _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=}')
             gas_line_data = self.line_data[gas_desc]
         
-            k_total = np.zeros_like(wavenumbers, dtype=float)
+            k_total = np.zeros_like(waves, dtype=float)
             
         
             strength = strengths[gas_desc]
@@ -404,17 +422,20 @@ class LineData_0:
             
             
             for j in range(gas_line_data.NU.size):
-                wn_mask = np.abs(wavenumbers - gas_line_data.NU[j]) < wavenumber_window_cutoff
+                if strength[j] < line_strength_cutoff:
+                    continue
+            
+                wn_mask = np.abs(waves - gas_line_data.NU[j]) < wavenumber_window_cutoff
                 
                 if not np.any(wn_mask):
                     continue
 
-                x = (wavenumbers[wn_mask] - gas_line_data.NU[j]) /  alpha_d[j]
+                x = (waves[wn_mask] - gas_line_data.NU[j]) /  alpha_d[j]
                 y = gamma_l[j] / alpha_d[j]
                 
                 lineshape = lineshape_fn(x,y)
                 
-                k_total[wn_mask] += lineshape * strength[j] / alpha_d[j]
+                k_total[wn_mask] += lineshape * strength[j] / alpha_d[j] # absorption coefficient (cm^2)
                 
                 # Add in continuum absorption here if required
                 
