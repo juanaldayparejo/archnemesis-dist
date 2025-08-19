@@ -382,3 +382,4 @@ class AmbientGas(IntEnum):
     """
     AIR = 0
     CO2 = 1
+    H2 = 2

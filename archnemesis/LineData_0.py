@@ -26,6 +26,8 @@ import time
 from typing import Self, Iterator, Any
 # Third party
 import numpy as np
+import scipy as sp
+import scipy.integrate
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 # This package
@@ -67,7 +69,7 @@ class LineData_0:
             self, 
             ID: int = 1,
             ISO: int = 0,
-            ambient_gas=AmbientGas.AIR,
+            ambient_gas=AmbientGas.H2,
             DATABASE : None | archnemsis.database.LineDatabaseProtocol = None
         ):
         """
@@ -270,6 +272,7 @@ class LineData_0:
         ) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
         """
         Calculate Doppler width (HWHM), broadening due to thermal motion.
+        NOTE: To get the standard deviation of the gaussian, multiply HWHM by 1/sqrt(2*ln(2))
         
             dlambda/lambda_0 = sqrt(2 ln(2) * (k_b * T)/(m_0 * c^2) )
                              = sqrt(T/m_0) * 1/c * sqrt(2 ln(2) k_b)
@@ -304,7 +307,7 @@ class LineData_0:
             tref : float = 296,
         ) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
         """
-        Calculate pressure-broadened width
+        Calculate pressure-broadened width HWHM (half-width-half-maximum) of cauchy-lorentz distribution.
         """
         _lgr.debug(f'{press=} {temp=} {amb_frac=} {tref=}')
         
@@ -383,6 +386,245 @@ class LineData_0:
         return line_strengths
     
     
+    def calculate_line_absorption_separate_bins(
+            self,
+            delta_wn_edges : np.ndarray, # wavenumber difference from line center (cm^{-1}), (NWAVE+1) edges of wavenumber bin
+            strength : float, # line strength
+            alpha_d : float, # line doppler width (gaussinan HWHM)
+            gamma_l : float, # line lorentz width (cauchy-lorentz HWHM)
+            lineshape_fn : Callable[[np.ndarray, float], np.ndarray], # function that calculates line shape
+            line_integral_points_delta_wn : np.ndarray,
+            TEST : bool = False,
+        ) -> np.ndarray:
+        """
+        Calculates line absorbtion at `delta_wn` wavenumber difference from line center
+        for a `lineshape_fn`. Return absorption coefficient (cm^2 at `delta_wn` cm^{-1})
+        """
+        #_lgr.debug(f'{delta_wn_edges=}')
+        
+        # Get value of absorption coefficient at all integration points
+        # do this here so we don't have to repeat the calculation of endpoints.
+        ls_at_ip = lineshape_fn(line_integral_points_delta_wn, alpha_d, gamma_l)
+        integral_ls_at_ip = sp.integrate.cumulative_simpson(ls_at_ip, x=line_integral_points_delta_wn, initial=0)
+        
+        #_lgr.debug(f'{line_integral_points_delta_wn=}')
+        #_lgr.debug(f'{ls_at_ip=}')
+        #_lgr.debug(f'{integral_ls_at_ip=}')
+        
+        # Assume symmetric so perform small fix
+        integral_ls_at_ip += (1 - integral_ls_at_ip[-1])/2
+        
+        #_lgr.debug(f'after fix: {integral_ls_at_ip=}')
+        
+        
+        wn_edges_int = np.interp(
+            delta_wn_edges,
+            line_integral_points_delta_wn,
+            integral_ls_at_ip,
+            left=0,
+            right=1
+        )
+        #_lgr.debug(f'{cumulative_low=}')
+        #_lgr.debug(f'{cumulative_high=}')
+        
+        lineshape = np.diff(wn_edges_int) / np.diff(delta_wn_edges) #/ (delta_wn_edges[:,1] - delta_wn_edges[:,0])
+        #_lgr.debug(f'{lineshape=}')
+        
+        if TEST:
+            fix, ax = plt.subplots(1,2, figsize=(12,12), squeeze=False)
+            ax = ax.flatten()
+        
+            delta_wn_midpoints = 0.5*(delta_wn_edges[1:] + delta_wn_edges[:-1])
+            _lgr.debug(f'{strength=}')
+            _lgr.debug(f'{alpha_d=}')
+            _lgr.debug(f'{gamma_l=}')
+            _lgr.debug(f'{delta_wn_edges=}')
+            _lgr.debug(f'{wn_edges_int=}')
+            _lgr.debug(f'{delta_wn_midpoints=}')
+            _lgr.debug(f'{lineshape=}')
+            
+            ax[0].set_title('lineshape and frac of lineshape in bin')
+            ax[0].plot(
+                line_integral_points_delta_wn,
+                ls_at_ip,
+                '.-',
+                color='tab:blue',
+                linewidth=1,
+                alpha=0.6,
+            )
+            
+            ax[0].plot(
+                delta_wn_midpoints,
+                lineshape,
+                '.-',
+                color='tab:orange',
+                linewidth=1,
+                alpha=0.6,
+            )
+            
+            for x in delta_wn_edges:
+                ax[0].axvline(
+                    x, 
+                    color='tab:red',
+                    linewidth=1,
+                    alpha=0.6,
+                )
+                
+            ax[0].set_yscale('log')
+            
+            
+            ax[1].set_title('Cumulative prob.')
+            ax[1].plot(
+                line_integral_points_delta_wn,
+                integral_ls_at_ip,
+                '.-',
+                color='tab:blue',
+                linewidth=1,
+                alpha=0.6,
+            )
+            
+            ax[1].plot(
+                delta_wn_edges,
+                wn_edges_int,
+                '.-',
+                color='tab:red',
+                linewidth=1,
+                alpha=0.6,
+            )
+            
+            plt.show()
+            
+            raise RuntimeError("TESTING")
+        
+        #sys.exit()
+        return strength * lineshape# / alpha_d # absorption coefficient (cm^2)
+    
+    
+    def calculate_line_absorption_overlapping_bins(
+            self,
+            delta_wn_edges : np.ndarray, # wavenumber difference from line center (cm^{-1}), (NWAVE,2) edges of wavenumber bin
+            strength : float, # line strength
+            alpha_d : float, # line doppler width (gaussinan HWHM)
+            gamma_l : float, # line lorentz width (cauchy-lorentz HWHM)
+            lineshape_fn : Callable[[np.ndarray, float], np.ndarray], # function that calculates line shape
+            line_integral_points_delta_wn : np.ndarray,
+            TEST : bool = False,
+        ) -> np.ndarray:
+        """
+        Calculates line absorbtion at `delta_wn` wavenumber difference from line center
+        for a `lineshape_fn`. Return absorption coefficient (cm^2 at `delta_wn` cm^{-1})
+        """
+        #return strength* lineshape_fn(0.5*np.sum(delta_wn_edges,axis=0), alpha_d, gamma_l) # TESTING just using lineshape, no integral
+        
+        # Get value of absorption coefficient at all integration points
+        # do this here so we don't have to repeat the calculation of endpoints.
+        ls_at_ip = lineshape_fn(line_integral_points_delta_wn, alpha_d, gamma_l)
+        integral_ls_at_ip = sp.integrate.cumulative_simpson(ls_at_ip, x=line_integral_points_delta_wn, initial=0)
+        
+        # Assume symmetric so perform small fix
+        integral_ls_at_ip += (1 - integral_ls_at_ip[-1])/2
+        
+        wn_edges_int = np.interp(
+            delta_wn_edges,
+            line_integral_points_delta_wn,
+            integral_ls_at_ip,
+            left=0,
+            right=1
+        )
+        
+        lineshape = (wn_edges_int[1] - wn_edges_int[0]) / (delta_wn_edges[1]-delta_wn_edges[0])
+        
+        if TEST:
+            fix, ax = plt.subplots(1,2, figsize=(12,12), squeeze=False)
+            ax = ax.flatten()
+        
+            delta_wn_midpoints = 0.5*np.sum(delta_wn_edges, axis=0)
+            _lgr.debug(f'{strength=}')
+            _lgr.debug(f'{alpha_d=}')
+            _lgr.debug(f'{gamma_l=}')
+            _lgr.debug(f'{delta_wn_edges=}')
+            _lgr.debug(f'{wn_edges_int.shape=}')
+            _lgr.debug(f'{wn_edges_int=}')
+            _lgr.debug(f'{delta_wn_midpoints=}')
+            _lgr.debug(f'{(wn_edges_int[1] - wn_edges_int[0])=}')
+            _lgr.debug(f'{(delta_wn_edges[1] - delta_wn_edges[0])=}')
+            _lgr.debug(f'{lineshape=}')
+            
+            ax[0].set_title('lineshape and frac of lineshape in bin')
+            ax[0].plot(
+                line_integral_points_delta_wn,
+                ls_at_ip,
+                '.-',
+                color='tab:blue',
+                linewidth=1,
+                alpha=0.6,
+            )
+            
+            ax[0].plot(
+                delta_wn_midpoints,
+                lineshape,
+                '.-',
+                color='tab:orange',
+                linewidth=1,
+                alpha=0.6,
+            )
+            
+            """
+            for x in delta_wn_edges[0]:
+                ax[0].axvline(
+                    x, 
+                    color='tab:red',
+                    linewidth=0.5,
+                    alpha=0.2,
+                )
+            for x in delta_wn_edges[1]:
+                ax[0].axvline(
+                    x, 
+                    color='tab:red',
+                    linestyle=':',
+                    linewidth=0.5,
+                    alpha=0.2,
+                )
+            """
+            ax[0].set_yscale('log')
+            
+            
+            ax[1].set_title('Cumulative prob.')
+            ax[1].plot(
+                line_integral_points_delta_wn,
+                integral_ls_at_ip,
+                '.-',
+                color='tab:blue',
+                linewidth=1,
+                alpha=0.6,
+            )
+            
+            ax[1].plot(
+                delta_wn_edges[0],
+                wn_edges_int[0],
+                '.-',
+                color='tab:red',
+                linewidth=1,
+                alpha=0.6,
+            )
+            
+            ax[1].plot(
+                delta_wn_edges[1],
+                wn_edges_int[1],
+                'x-',
+                color='tab:red',
+                linewidth=1,
+                alpha=0.6,
+            )
+            
+            plt.show()
+            
+            raise RuntimeError("TESTING")
+        
+        #sys.exit()
+        return strength * lineshape# / alpha_d # absorption coefficient (cm^2)
+    
+    
     def calculate_absorption(
             self,
             waves : np.ndarray,
@@ -391,57 +633,161 @@ class LineData_0:
             amb_frac: float = 1, # fraction of ambient gas
             wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
             lineshape_fn: Callable[[np.ndarray, float], np.ndarray] = Data.lineshapes.voigt,
-            wavenumber_window_cutoff: float = 25.0, # cm^{-1}
+            line_calculation_wavenumber_window: float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
             tref : float = 296,
-            line_strength_cutoff = 1E-32,
+            line_strength_cutoff : float = 1E-32,
+            n_line_integral_points : int = 51,
+            wn_bin : float = 1E-3,
+            TEST : bool = False,
         ) -> dict[RadtranGasDescriptor, np.ndarray]:
         """
         Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}). Returns the value for a single molecule
-        at the specified temperature and pressure.
+        at the specified temperature, pressure, and ambient gas fraction.
         
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
+        warn_once = False
+        info_once = False
+        time_last = 0
+        time_this = None
+        n_line_progress = 1000
+        
         abs_coeffs = dict()
         
         waves = WavePoint(waves, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value
+        wav_sort_idxs = np.argsort(waves)
+        waves = waves[wav_sort_idxs]
+        
+        _lgr.debug(f'{waves.size=} [{waves[0]}, ..., {waves[-1]}]')
+        
+        assert waves.size >= 3, "Must have at least three wavenumbers in wavenumber grid"
+        
+        wave_edges = np.empty((2,waves.size), dtype=float)
+        if wn_bin < 0:
+            wn_bin = (-1*wn_bin)*(waves[1:]-waves[:-1])*0.5
+            wave_edges[0,:-1] = waves[:-1] - wn_bin
+            wave_edges[0,-1] = waves[-1] - wn_bin[-1]
+            wave_edges[1,1:] = waves[1:] + wn_bin
+            wave_edges[1,0] = waves[0] + wn_bin[0]
+        else:
+            wave_edges[0] = waves - (wn_bin/2)
+            wave_edges[1] = waves + (wn_bin/2)
+        
+        _lgr.debug(f'{wave_edges=}')
+        
+        lip_factor = 1/(np.e*np.log(2*line_calculation_wavenumber_window))
+        lip_n1 = n_line_integral_points//2
+        lip_n2 = n_line_integral_points - (lip_n1 + 1)
+        min_step = lip_factor*(1+line_calculation_wavenumber_window/(2*n_line_integral_points))
+        line_integral_points_delta_wn = np.zeros(n_line_integral_points, dtype=float)
+        line_integral_points_delta_wn[:lip_n1] = -(np.geomspace(min_step, line_calculation_wavenumber_window+lip_factor, num=lip_n1) - lip_factor)[::-1]
+        line_integral_points_delta_wn[lip_n1 + 1:] = np.geomspace(min_step, line_calculation_wavenumber_window+lip_factor, num=lip_n2) - lip_factor
+
+        _lgr.debug(f'line_integral_points_delta_wn={line_integral_points_delta_wn}')
+        #for i, x in enumerate(line_integral_points_delta_wn):
+        #    _lgr.debug(f'\t{i} : {x}')
+        #_lgr.debug(f'{line_integral_points_delta_wn=}')
+        
         
         strengths = self.calculate_line_strength(temp, tref)
         alpha_ds = self.calculate_doppler_width(temp)
         gamma_ls = self.calculate_lorentz_width(press, temp, amb_frac, tref)
         
+        k_total = np.zeros_like(waves, dtype=float)
+        
         for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=}')
+            _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
             gas_line_data = self.line_data[gas_desc]
         
-            k_total = np.zeros_like(waves, dtype=float)
+            abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float)
+            
+            k_total *= 0.0 # reset 
             
         
             strength = strengths[gas_desc]
             alpha_d = alpha_ds[gas_desc]
             gamma_l = gamma_ls[gas_desc]
             
+            idx_min = np.min(np.nonzero(gas_line_data.NU >= (np.min(waves) - line_calculation_wavenumber_window)))
+            idx_max = np.max(np.nonzero(gas_line_data.NU <= (np.max(waves) + line_calculation_wavenumber_window)))
+            n_lines = idx_max - idx_min
+            _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
             
-            for j in range(gas_line_data.NU.size):
-                if strength[j] < line_strength_cutoff:
+            time_last = time.time()
+            
+            for line_idx in range(idx_min, idx_max):
+                if ((line_idx-idx_min) % n_line_progress == 0):
+                    if ((line_idx-idx_min)!=0):
+                        time_this = time.time()
+                        tuc = (n_lines - (line_idx-idx_min)) * (time_this - time_last)/(line_idx-idx_min) # time until completion
+                        tuc_h = int(tuc // 3600)
+                        tuc -= 3600 * tuc_h
+                        tuc_m = int(tuc // 60)
+                        tuc -= 60*tuc_m
+                        _lgr.info(f'Computing contribution from line {line_idx-idx_min} / {n_lines}, {tuc_h:02}:{tuc_m:02}:{tuc:06.3f}(sec) remaining...')
+                        #time_last = time_this
+                
+                if strength[line_idx] < line_strength_cutoff:
                     continue
             
-                wn_mask = np.abs(waves - gas_line_data.NU[j]) < wavenumber_window_cutoff
+                line_wn_mask = np.abs(waves - gas_line_data.NU[line_idx]) < line_calculation_wavenumber_window
+                n_line_wn_mask = np.count_nonzero(line_wn_mask)
+                 
                 
-                if not np.any(wn_mask):
-                    continue
-
-                x = (waves[wn_mask] - gas_line_data.NU[j]) /  alpha_d[j]
-                y = gamma_l[j] / alpha_d[j]
+                #line_wn_mask_idxs = np.nonzero(line_wn_mask)
                 
-                lineshape = lineshape_fn(x,y)
+                """
+                if ((line_idx-idx_min) % n_line_progress == 0):
+                    _lgr.debug(f'{n_line_wn_mask=}')
+                    #_lgr.debug(f'{line_wn_mask_idxs=}')
+                    _lgr.debug(f'{waves[line_wn_mask]=}')
+                    _lgr.debug(f'{line_integral_points_delta_wn=}')
+                """
                 
-                k_total[wn_mask] += lineshape * strength[j] / alpha_d[j] # absorption coefficient (cm^2)
+                if n_line_wn_mask > 0:
+                    # as edges are contiguous can do this
+                    """
+                    line_wn_mask_idxs = np.nonzero(line_wn_mask)[0]
+                    wave_edges_idx_min, wave_edges_idx_max = np.min(line_wn_mask_idxs), np.max(line_wn_mask_idxs) + 2 # always add 2 as we are creating the limits of a slice
+                
+                    wn = wave_edges[wave_edges_idx_min:wave_edges_idx_max]
+                    
+                    k_total[line_wn_mask] += self.calculate_line_absorption_separate_bins(
+                        (wn - gas_line_data.NU[line_idx]),
+                        strength[line_idx],
+                        alpha_d[line_idx],
+                        gamma_l[line_idx],
+                        lineshape_fn,
+                        line_integral_points_delta_wn,
+                        TEST = TEST and (np.abs(1/(2.371 * 1E-4) - gas_line_data.NU[line_idx]) < 0.001)
+                    ) 
+                    """
+                    
+                    wn = wave_edges[:, line_wn_mask]
+                    
+                    k_total[line_wn_mask] += self.calculate_line_absorption_overlapping_bins(
+                        (wn - gas_line_data.NU[line_idx]),
+                        strength[line_idx],
+                        alpha_d[line_idx],
+                        gamma_l[line_idx],
+                        lineshape_fn,
+                        line_integral_points_delta_wn,
+                        TEST = TEST and (np.abs(1/(2.371 * 1E-4) - gas_line_data.NU[line_idx]) < 0.001)
+                    ) 
                 
                 # Add in continuum absorption here if required
+                if (10*gamma_l[line_idx]) > line_calculation_wavenumber_window:
+                    if not warn_once:
+                        _lgr.warning(f'Continuum calculation not implemented yet, increase `line_calculation_wavenumber_window` until >= 10 * `gamma_l`.  (10*gamma_l = {10*gamma_l[line_idx]})')
+                        warn_once = True
+                else:
+                    if not info_once:
+                        _lgr.info(f'No continuum calculation performed as `line_calculation_wavenumber_window` >= 10 * `gamma_l`. ({line_calculation_wavenumber_window} >= {10*gamma_l[line_idx]})')
+                        info_once = True
                 
                 
             # put into absorption coefficient dictionary
-            abs_coeffs[gas_desc] = k_total
+            abs_coeffs[gas_desc][wav_sort_idxs] = k_total
         
         return abs_coeffs
     

@@ -147,7 +147,10 @@ class HITRAN(LineDatabaseProtocol):
             n_str = 'n_CO2'
             delta_str = 'delta_CO2'
         else:
-            raise ValueError(f'Unrecognised ambient gas {ambient_gas}')
+            gamma_str = f'gamma_{ambient_gas.name.upper()}'
+            n_str = f'n_{ambient_gas.name.upper()}'
+            delta_str = f'delta_{ambient_gas.name.upper()}'
+            #raise ValueError(f'Unrecognised ambient gas {ambient_gas}')
         
         return gamma_str, n_str, delta_str
     
@@ -165,7 +168,10 @@ class HITRAN(LineDatabaseProtocol):
             n_str = 'n_co2'
             delta_str = 'delta_co2'
         else:
-            raise ValueError(f'Unrecognised ambient gas {ambient_gas}')
+            gamma_str = f'gamma_{ambient_gas.name.lower()}'
+            n_str = f'n_{ambient_gas.name.lower()}'
+            delta_str = f'delta_{ambient_gas.name.lower()}'
+            #raise ValueError(f'Unrecognised ambient gas {ambient_gas}')
         
         return gamma_str, n_str, delta_str
     
