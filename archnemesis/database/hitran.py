@@ -258,9 +258,13 @@ class HITRAN(LineDatabaseProtocol):
             self._init_database()
         
         self._check_available_data(gd, wave_range, ambient_gas)
-        self._fetch_line_data()
+        gas_exists_in_db = self._fetch_line_data()
         
-        return self._read_line_data(gd, wave_range, ambient_gas)
+        return self._read_line_data(
+            gd, 
+            wave_range, 
+            ambient_gas
+        )
     
     
     def get_partition_function_data(
@@ -377,11 +381,13 @@ class HITRAN(LineDatabaseProtocol):
                     self._gas_wavenumber_interval_to_download[gda_pair] = self._downloaded_gas_wavenumber_interval[gda_pair].union(wave_range)
     
     
-    def _fetch_line_data(self):
+    def _fetch_line_data(self) -> dict[bool,...]:
         if not self.db_init_flag:
             raise RuntimeError(f'Cannot fetch line data as database {self} is not initalised yet.')
         
-        for gda_pair, wave_range in tuple(self._gas_wavenumber_interval_to_download.items()):
+        gas_exists_in_db = [False]*len(self._gas_wavenumber_interval_to_download)
+        
+        for gas_idx, (gda_pair, wave_range) in enumerate(tuple(self._gas_wavenumber_interval_to_download.items())):
             if gda_pair not in self._gas_wavenumber_interval_to_download:
                 continue
             saved_wave_range = self._downloaded_gas_wavenumber_interval.get(gda_pair, None)
@@ -396,6 +402,11 @@ class HITRAN(LineDatabaseProtocol):
             gas_desc, ambient_gas = gda_pair
         
             ht_gas = gas_desc.to_hitran()
+            if ht_gas is None:
+                gas_exists_in_db[gas_idx] = False
+                continue # cannot download data for a gas that is not present in HITRAN database
+            else:
+                gas_exists_in_db[gas_idx] = True
             
             vmin, vmax = wave_range.as_unit(ans.enums.WaveUnit.Wavenumber_cm).values()
             
@@ -449,7 +460,7 @@ class HITRAN(LineDatabaseProtocol):
         # Cache to downloaded_gas_wavenumber_interval_cache_file for future
         self.store_downloaded_gas_wavenumber_interval_to_cache()
         
-        return
+        return gas_exists_in_db
 
 
     
@@ -470,6 +481,7 @@ class HITRAN(LineDatabaseProtocol):
             _lgr.debug(f'{gas_desc=}')
             ht_gas_desc = gas_desc.to_hitran()
             if ht_gas_desc is None:
+                line_data[gas_desc] = None
                 continue
             
             if _lgr.level <= logging.DEBUG:
@@ -556,6 +568,7 @@ class HITRAN(LineDatabaseProtocol):
         for gas_desc in gas_descs:
             ht_gas = gas_desc.to_hitran()
             if ht_gas is None:
+                partition_function_data[gas_desc] = None
                 continue
             
             temps = hapi.TIPS_2021_ISOT_HASH[(ht_gas.gas_id,ht_gas.iso_id)]

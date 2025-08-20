@@ -35,6 +35,9 @@ def is_diagonal(a : np.ndarray) -> bool:
     
     return result
 
+def is_monotonically_increasing(a : np.ndarray, axis=-1) -> bool:
+    v = np.lib.stride_tricks.sliding_window_view(a, 2, axis=axis)
+    return np.all(v[...,0] < v[...,1])
 
 def ngauss(npx,x,ng,iamp,imean,ifwhm,MakePlot=False):
 

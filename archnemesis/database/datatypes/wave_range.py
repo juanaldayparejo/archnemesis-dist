@@ -46,19 +46,19 @@ class WaveRange(NamedTuple):
         return self.min <= other.min and other.max <= self.max
     
     def union(self, *others) -> Self:
-        result = WaveRange(self.min, self.max, self.unit)
+        vmin, vmax = self.values()
         for another in others:
             other = another.as_unit(self.unit)
-            if other.min < result.min:
-                result.min = other.min
-            if result.max < other.max:
-                result.max = other.max
-        return result
+            if other.min < vmin:
+                vmin = other.min
+            if vmax < other.max:
+                vmax = other.max
+        return WaveRange(vmin, vmax, self.unit)
     
     def linspace(self, n : float = 50, endpoint=True):
         return np.linspace(self.min, self.max, n, endpoint=True)
     
     def arange(self, step : float):
-        return np.arange(self.min, self.max, step, endpoint=False)
+        return np.arange(self.min, self.max, step)
 
 

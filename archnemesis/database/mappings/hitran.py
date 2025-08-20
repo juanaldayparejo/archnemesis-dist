@@ -45,7 +45,7 @@ radtran_to_hitran : dict[tuple[int,int], tuple[int,int]] = {
     (6, 1): (6, 1),   #(12C)H4
     (6, 2): (6, 2),   #(13C)H4
     (6, 3): (6, 3),   #(12C)H3D
-    (6, 4): (6, 4),   #(13C)H3D
+    #(6, 4): (6, 4),   #(13C)H3D Does not exist in HITRAN but is in RADTRAN
     
     (7, 1): (7, 1),   #(16O)2
     (7, 2): (7, 2),   #(16O)(18O)

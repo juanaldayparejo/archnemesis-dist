@@ -7,6 +7,7 @@ import struct
 
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import archnemesis as ans
 from archnemesis.database.datatypes.wave_point import WavePoint
@@ -81,35 +82,45 @@ class LblDataTProfilesAtPressure(NamedTuple):
     def write_legacy(self, f : str | io.IOBase):
         if not isinstance(f, io.IOBase):
             with open(f, 'wb') as g:
-                return self.write_legacy_header(g)
+                return self.write_legacy(g)
+        print(f'Writing {self.__class__.__name__} to {f.name}')
         
         self.write_legacy_header(f)
         
-        fortran_record_shape, p_struct, t_struct, k_struct = _get_body_structs(self.wave.size, self.press.size, self.temp.shape[1])
+        fortran_record_shape, p_struct, t_struct, k_struct = _get_body_structs(self.wave.size, self.press.size, -self.temp.shape[1])
         
+        print(f'{p_struct=}')
         f.write(
             p_struct.pack(
-                self.press
+                *self.press
             )
         )
         
+        print(f'{t_struct=}')
         f.write(
             t_struct.pack(
-                self.temp
+                *self.temp.flat
             )
         )
         
+        print(f'{k_struct=}')
         f.write(
-            l_struct.pack(
-                self.k # already multiplied by 1E20 to avoid underflow when saving single precision floats
+            k_struct.pack(
+                *self.k.flat # already multiplied by 1E20 to avoid underflow when saving single precision floats
             )
         )
+        
+        _lgr.info(f'Written {self.__class__.__name__} to {f.name}')
+        return
     
-    def plot(self, wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavelength_um):
+    def plot(self, wave_unit : None | ans.enums.WaveUnit = None, z_logscale=True):
         """
         Show a map of `k` (color axis) vs pressure (y-axis) and wave (x-axis) for each temperature 
         profile. Also plots the temperature profile as a red-line on a shared y-axis.
         """
+        if wave_unit is None:
+            wave_unit = self.wave_unit
+        
         fig, ax = plt.subplots(self.k.shape[2],1, figsize=(12,6*self.k.shape[2]), squeeze=False)
         ax = ax.flatten()
         ax2 = [a.twiny() for a in ax]
@@ -134,25 +145,47 @@ class LblDataTProfilesAtPressure(NamedTuple):
         fig.suptitle(f'Opacities for {RadtranGasDescriptor(self.gas_id, self.iso_id).label} at each temperature profile.')
         
         for i in range(self.k.shape[2]):
-            ax[i].pcolormesh(
+            im = ax[i].pcolormesh(
                 w_edges,
                 p_edges,
-                #self.k[:,:,i].T
-                np.log(self.k[:,:,i].T)
+                (np.log(self.k[:,:,i].T)) if z_logscale else (self.k[:,:,i].T)
             )
+            
+            div = make_axes_locatable(ax[i])
+            cax = div.append_axes('right', size=0.05, pad=0.0)
+            fig.colorbar(im, cax=cax, orientation='vertical')
+            
             if wave_points.unit == ans.enums.WaveUnit.Wavenumber_cm:
                 ax[i].set_xlabel('Wavenumber ($cm^{-1}$)')
+                if z_logscale:
+                    cax.set_ylabel('log[Absorption Coefficient] log(cm$^{-2}$ / $cm^{-1}$)')
+                else:
+                    cax.set_ylabel('Absorption Coefficient] (cm$^{-2}$ / $cm^{-1}$)')
             elif wave_points.unit == ans.enums.WaveUnit.Wavelength_um:
                 ax[i].set_xlabel(r'Wavelength ($\mu$m)')
+                if z_logscale:
+                    cax.set_ylabel(r'log[Absorption Coefficient] log(cm$^{-2}$ / $\mu$m)')
+                else:
+                    cax.set_ylabel(r'Absorption Coefficient (cm$^{-2}$ / $\mu$m)')
             else:
                 raise RuntimeError(f'Unknown {wave_unit}. Should be one of {ans.enums.WaveUnit.values()}')
+            
+            
+            
+            
             
             ax[i].set_ylabel('Pressure (atm)')
             ax[i].set_yscale('log')
             ax[i].invert_yaxis()
             
+            
             ax2[i].plot(self.temp[:,i], self.press, color='red', linestyle='--', alpha=0.6)
             ax2[i].set_xlabel('Temperature (K)')
+            
+            
+            
+            
+            
         
         plt.show()
 
@@ -191,7 +224,7 @@ class LblDataTPGrid(NamedTuple):
     def write_legacy(self, f : str | io.IOBase):
         if not isinstance(f, io.IOBase):
             with open(f, 'wb') as g:
-                return self.write_legacy_header(g)
+                return self.write_legacy(g)
         
         self.write_legacy_header(f)
         
@@ -199,19 +232,19 @@ class LblDataTPGrid(NamedTuple):
         
         f.write(
             p_struct.pack(
-                self.press
+                *self.press.flat
             )
         )
         
         f.write(
             t_struct.pack(
-                self.temp
+                *self.temp.flat
             )
         )
         
         f.write(
-            l_struct.pack(
-                self.k # already multiplied by 1E20 to avoid underflow when saving single precision floats
+            k_struct.pack(
+                *self.k.flat # already multiplied by 1E20 to avoid underflow when saving single precision floats
             )
         )
 
@@ -298,6 +331,7 @@ def read_legacy(
         with open(f, 'rb') as g:
             return read_legacy(g, wave_unit)
     
+    _lgr.debug(f'{f.tell()=}')
     hdr = read_legacy_header(f)
     _lgr.debug(f'{hdr=}')
     
@@ -329,11 +363,14 @@ def read_legacy(
         lbl_data_type = LblDataTPGrid
     
     _lgr.debug(f'{p_shape=} {t_shape=} {k_shape=} {lbl_data_type=}')
+    _lgr.debug(f'{f.tell()=}')
     
     # Read in pressure and temperature data, these start directly after the header
     for i, (x_struct, x_shape) in enumerate([(p_struct, p_shape), (t_struct, t_shape)]):
         _lgr.debug(f'{i=} {x_struct=} {x_shape=}')
         buf = f.read(x_struct.size)
+        _lgr.debug(f'{f.tell()=}')
+        
         ptk[i] = np.array(x_struct.unpack_from(buf), dtype=float).reshape(x_shape)
     
     # Absorption coefficients start at `hdr.irec0` records into the file. THIS IS NOT THE SAME AS AFTER THE PRESSURE AND TEMPERATURE DATA!!

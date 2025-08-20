@@ -107,7 +107,7 @@ class LineDatabaseProtocol(Protocol):
             gas_descriptors : tuple[RadtranGasDescriptor,...], 
             wave_range : WaveRange, 
             ambient_gas : ans.enums.AmbientGas
-        ) -> dict[RadtranGasDescriptor, LineDataProtocol]:
+        ) -> dict[RadtranGasDescriptor, None | LineDataProtocol]:
         """
         Returns a dictionary where the keys are the `gas_descriptors`, and the values
         are the line data for the `gas_descriptor` in the specified `wave_range` with
@@ -128,9 +128,10 @@ class LineDatabaseProtocol(Protocol):
         
         ## RETURNS  ##
             
-            line_data : dict[RadtranGasDescriptor, LineDataProtocol]
+            line_data : dict[RadtranGasDescriptor, None | LineDataProtocol]
                 A dictionary where the keys are the passed `gas_descriptors` and the values are objects that follow
-                the `LineDataProtocol` i.e. an object that has the following attributes:
+                the `LineDataProtocol`. If gas is not present in database, associates to None. The
+                `LineDataProtocol` is defined as any object that has the following attributes:
                 
                     NU : np.ndarray[['N_LINES_OF_GAS'],float]
                         Transition wavenumber (cm^{-1})
@@ -162,7 +163,7 @@ class LineDatabaseProtocol(Protocol):
     def get_partition_function_data(
             self, 
             gas_descriptors : tuple[RadtranGasDescriptor,...]
-        ) -> dict[RadtranGasDescriptor, PartitionFunctionDataProtocol]:
+        ) -> dict[RadtranGasDescriptor, None | PartitionFunctionDataProtocol]:
         """
         Returns a dictionary where the keys are the `gas_descriptors`, and the values
         are the partition function data for the `gas_descriptor`.
@@ -176,9 +177,10 @@ class LineDatabaseProtocol(Protocol):
         
         ## RETURNS  ##
             
-            line_data : dict[RadtranGasDescriptor, PartitionFunctionDataProtocol]
+            line_data : dict[RadtranGasDescriptor, None | PartitionFunctionDataProtocol]
                 A dictionary where the keys are the passed `gas_descriptors` and the values are objects that follow
-                the `PartitionFunctionDataProtocol` i.e. an object that has the following attributes:
+                the `PartitionFunctionDataProtocol`. If the gas is not present in the database the associated value
+                is None. The `LineDataProtocol` is defined as any object that has the following attributes:
                 
                     TEMP : np.ndarray[['N_TEMPS_OF_GAS'],float]
                         Temperature of tablulated partition function (Kelvin)
