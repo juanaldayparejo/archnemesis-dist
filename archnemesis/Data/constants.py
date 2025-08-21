@@ -1,6 +1,5 @@
 from __future__ import annotations #  for 3.9 compatability
 
-import numpy as np # incase it's needed
 
 k_boltzmann          : float    = 1.380649e-23                                   # J/K
 k_boltzmann_cgs      : float    = 1.380649e-16                                   # erg/K

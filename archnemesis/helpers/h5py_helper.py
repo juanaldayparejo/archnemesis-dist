@@ -10,7 +10,7 @@ _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.WARN)
 
 def retrieve_data(
-        h5py_file : h5py.File,
+        h5py_file : h5py.File | h5py.Group,
         item_path : str,
         mutator : Callable[[Any], Any] = lambda x: x, # default is identity function
         default : Any = None,
@@ -28,12 +28,14 @@ def retrieve_data(
 
 
 def store_data(
-        h5py_file : h5py.File,
+        h5py_file : h5py.File | h5py.Group,
         item_path : str,
         data : Any
     ) -> None:
     """
     Stores `data` at `item_path` in `h5py_file`. Values of "None" create an empty dataset
+    
+    Regex replacement for previous version "(\w*?)\.create_dataset\(('.*?'),\s*data\s*=\s*(.*)\)" -> "h5py_helper.store_data($1, $2, $3)"
     """
     #f.create_dataset('Retrieval/Output/OptimalEstimation/NX',data=self.NX)
     

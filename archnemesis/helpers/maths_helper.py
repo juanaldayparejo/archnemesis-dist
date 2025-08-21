@@ -82,8 +82,8 @@ def ngauss(npx,x,ng,iamp,imean,ifwhm,MakePlot=False):
     #Make plot if keyword is specified
     if MakePlot == True:
         axis_font = {'size':'20'}
-        cm = plt.cm.get_cmap('RdYlBu')
-        fig = plt.figure(figsize=(15,8))
+        plt.cm.get_cmap('RdYlBu')
+        plt.figure(figsize=(15,8))
         wavemin = x.min()
         wavemax = x.max()
         ax = plt.axes()
@@ -92,7 +92,7 @@ def ngauss(npx,x,ng,iamp,imean,ifwhm,MakePlot=False):
         ax.ticklabel_format(useOffset=False)
         plt.xlabel('x',**axis_font)
         plt.ylabel('f(x)',**axis_font)
-        im = ax.plot(x,fun)
+        ax.plot(x,fun)
         plt.grid()
         plt.show()    
     

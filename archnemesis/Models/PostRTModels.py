@@ -4,7 +4,36 @@ from __future__ import annotations #  for 3.9 compatability
 Contains models that alter the replica after radiative transfer has been calculated
 """
 
-from .ModelBase import *
+from typing import TYPE_CHECKING, IO, Self#, Any
+import abc
+
+import numpy as np
+#import matplotlib.pyplot as plt
+
+
+from .ModelBase import ModelBase
+from .ModelParameter import ModelParameter
+
+if TYPE_CHECKING:
+    # NOTE: This is just here to make 'flake8' play nice with the type hints
+    # the problem is that importing Variables_0 or ForwardModel_0 creates a circular import
+    # this actually means that I should possibly redesign how those work to avoid circular imports
+    # but that is outside the scope of what I want to accomplish here
+    from archnemesis.Variables_0 import Variables_0
+    from archnemesis.ForwardModel_0 import ForwardModel_0
+    from archnemesis.Spectroscopy_0 import Spectroscopy_0
+    
+    nx = 'number of elements in state vector'
+    m = 'an undetermined number, but probably less than "nx"'
+    mx = 'synonym for nx'
+    mparam = 'the number of parameters a model has'
+    nparam = 'the number of parameters a model has'
+    NCONV = 'number of spectral bins'
+    NGEOM = 'number of geometries'
+    NX = 'number of elements in state vector'
+    NDEGREE = 'number of degrees in a polynomial'
+    NWINDOWS = 'number of spectral windows'
+
 
 
 import logging
@@ -68,7 +97,7 @@ class PostRTModelBase(ModelBase):
             SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
             dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
         ) -> None:
-        raise NotImplementedError(f'calculate_from_subspecret should be implemented for all Spectral models')
+        raise NotImplementedError('calculate_from_subspecret should be implemented for all Spectral models')
 
 
 class TemplatePostRTModel(PostRTModelBase):
@@ -285,7 +314,7 @@ class TemplatePostRTModel(PostRTModelBase):
         """
         
         raise NotImplementedError('This is a template model and should never be used')
-
+        ix_0 = NotImplemented
         return cls(ix_0, ix-ix_0)
 
 
@@ -366,8 +395,8 @@ class TemplatePostRTModel(PostRTModelBase):
         
             # Example code for packing the results of the calculation back into the spectra
             # and the matrix that holds functional derivatives.
-            SPECMOD[:,i] = specmod
-            dSPECMOD[:,i,:] = dspecmod
+            SPECMOD[:,i_geom] = specmod
+            dSPECMOD[:,i_geom,:] = dspecmod
         
         return
 
@@ -818,7 +847,7 @@ class Model232(PostRTModelBase):
                 )
 
         else:
-            T0 = forward_model.Variables.XN[ix]
+            TAU0 = forward_model.Variables.XN[ix]
             ALPHA = forward_model.Variables.XN[ix+1]
             WAVE0 = forward_model.Variables.VARPARAM[ivar,1]
             

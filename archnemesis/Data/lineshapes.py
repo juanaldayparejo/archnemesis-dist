@@ -1,7 +1,7 @@
 from __future__ import annotations #  for 3.9 compatability
 
 import numpy as np
-from scipy.special import wofz, dawsn, voigt_profile
+from scipy.special import voigt_profile#, wofz, dawsn
 
 SQRT_2 = np.sqrt(2)
 SQRT_PI = np.sqrt(np.pi)

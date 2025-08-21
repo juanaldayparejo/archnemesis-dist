@@ -1,6 +1,6 @@
 from __future__ import annotations #  for 3.9 compatability
 
-import sys, os
+import os
 import os.path
 import pickle
 import warnings
@@ -14,8 +14,8 @@ import archnemesis.enums
 import archnemesis.database.wrappers.hapi as hapi
 from .line_database_protocol import LineDatabaseProtocol, LineDataProtocol, PartitionFunctionDataProtocol
 from .datatypes.wave_range import WaveRange
-from .datatypes.gas_isotopes import GasIsotopes
-from .datatypes.gas_descriptor import RadtranGasDescriptor, HitranGasDescriptor
+#from .datatypes.gas_isotopes import GasIsotopes
+from .datatypes.gas_descriptor import RadtranGasDescriptor
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ class HITRAN(LineDatabaseProtocol):
     @classmethod
     def set_class_local_storage_dir(cls, local_storage_dir : str):
         if cls._class_db_init_flag:
-            raise RuntimeError(f'Cannot change location of HITRAN database after it has been initialised as HAPI does not have a way of using multiple databases at once.')
+            raise RuntimeError('Cannot change location of HITRAN database after it has been initialised as HAPI does not have a way of using multiple databases at once.')
         else:
             cls._class_local_storage_dir = os.path.abspath(local_storage_dir)
     
@@ -193,7 +193,7 @@ class HITRAN(LineDatabaseProtocol):
         Required by LineDatabaseProtocol. Remove all local data and make it so the database must be reinitalised
         """
         if not self.db_init_flag:
-            _lgr.warning(f'HITRAN database is not initialised yet, so cannot purge it.')
+            _lgr.warning('HITRAN database is not initialised yet, so cannot purge it.')
             return
         
         tablenames = list(hapi.tableList())
@@ -258,7 +258,7 @@ class HITRAN(LineDatabaseProtocol):
             self._init_database()
         
         self._check_available_data(gd, wave_range, ambient_gas)
-        gas_exists_in_db = self._fetch_line_data()
+        self._fetch_line_data()
         
         return self._read_line_data(
             gd, 
@@ -342,7 +342,7 @@ class HITRAN(LineDatabaseProtocol):
             # Assume tables conform to our naming format
             try:
                 gas_desc, ambient_gas = self.get_props_from_tablename(tablename)
-            except Exception as e:
+            except Exception:
                 _lgr.warning(f'HITRAN database found table "{tablename}" that does not conform to our naming format. Skipping...')
                 continue
             
@@ -443,7 +443,7 @@ class HITRAN(LineDatabaseProtocol):
                     '',
                     f'    3) There may be no gas with the requested gas_id {ht_gas.gas_id} and iso_id {ht_gas.iso_id} numbers, see "https://hitran.org/docs/iso-meta/" for accepted hitran gas codes (NOTE: these are different to Radtran gas codes, but they should be converted internally)',
                     '',
-                    f'    4) The internet connection may have dropped',
+                    '    4) The internet connection may have dropped',
                     '',
                     'For more detailed troubleshooting change line 22 of archnemesis/database/wrappers/hapi.py to "_lgr.setLevel(logging.DEBUG)" and re-run. More detailed output from HAPI will be displayed.'
                 ))
@@ -451,7 +451,7 @@ class HITRAN(LineDatabaseProtocol):
             else:
                 hapi.db_commit()
             
-            _lgr.info(f'Data downloaded.')
+            _lgr.info('Data downloaded.')
             
             self._downloaded_gas_wavenumber_interval[gda_pair] = wave_range
             if gda_pair in self._gas_wavenumber_interval_to_download:

@@ -19,11 +19,10 @@
 
 from __future__ import annotations #  for 3.9 compatability
 
-from archnemesis import *
+#from archnemesis import *
 from archnemesis.enums import WaveUnit
 import numpy as np
 import matplotlib.pyplot as plt
-import os
 import h5py
 
 from archnemesis.helpers import h5py_helper
@@ -240,7 +239,7 @@ class Stellar_0:
                 grp = f.create_group("Stellar")
 
                 #Writing the spectral units
-                dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
+                dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
                 dset.attrs['title'] = "Spectral units"
                 if self.ISPACE == WaveUnit.Wavenumber_cm:
                     dset.attrs['units'] = 'Wavenumber / cm-1'
@@ -248,21 +247,21 @@ class Stellar_0:
                     dset.attrs['units'] = 'Wavelength / um'
 
                 #Writing the Planet-Star distance
-                dset = grp.create_dataset('DIST',data=self.DIST)
+                dset = h5py_helper.store_data(grp, 'DIST', self.DIST)
                 dset.attrs['title'] = "Planet-Star distance"
                 dset.attrs['units'] = 'Astronomical Units'
 
                 #Writing the Star radius
-                dset = grp.create_dataset('RADIUS',data=self.RADIUS)
+                dset = h5py_helper.store_data(grp, 'RADIUS', self.RADIUS)
                 dset.attrs['title'] = "Star radius"
                 dset.attrs['units'] = 'km'
 
                 #Writing the number of points in stellar spectrum
-                dset = grp.create_dataset('NWAVE',data=self.NWAVE)
+                dset = h5py_helper.store_data(grp, 'NWAVE', self.NWAVE)
                 dset.attrs['title'] = "Number of spectral points in stellar spectrum"
 
                 #Writing the spectral array
-                dset = grp.create_dataset('WAVE',data=self.WAVE)
+                dset = h5py_helper.store_data(grp, 'WAVE', self.WAVE)
                 dset.attrs['title'] = "Spectral array"
                 if self.ISPACE == WaveUnit.Wavenumber_cm:
                     dset.attrs['units'] = 'Wavenumber / cm-1'
@@ -270,7 +269,7 @@ class Stellar_0:
                     dset.attrs['units'] = 'Wavelength / um' 
 
                 #Writing the solar spectrum
-                dset = grp.create_dataset('SOLSPEC',data=self.SOLSPEC)
+                dset = h5py_helper.store_data(grp, 'SOLSPEC', self.SOLSPEC)
                 dset.attrs['title'] = "Stellar power spectrum"
                 if self.ISPACE == WaveUnit.Wavenumber_cm:
                     dset.attrs['units'] = 'W (cm-1)-1'

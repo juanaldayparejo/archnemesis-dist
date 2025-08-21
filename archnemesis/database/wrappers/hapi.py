@@ -61,17 +61,17 @@ try:
     # Must import this way to avoid hapi.__init__ shadowing various bits of the module.
     import hapi.hapi as hapi
 except ModuleNotFoundError:
-    _lgr.warning(f'HAPI (hitran-api) module was not installed, therefore HITRAN online backend is NOT available. All attempts to use the backend will raise a `ModuleNotFoundError` exception')
+    _lgr.warning('HAPI (hitran-api) module was not installed, therefore HITRAN online backend is NOT available. All attempts to use the backend will raise a `ModuleNotFoundError` exception')
     HAPI_MODULE_INSTALLED = False
 finally:
     builtins.print = __builtin_print
 
 if not HAPI_MODULE_INSTALLED:
     def __getattr__(name):
-        raise ModuleNotFoundError(f'HAPI (hitran-api) module was not installed, therefore HITRAN online backend is NOT available.')
+        raise ModuleNotFoundError('HAPI (hitran-api) module was not installed, therefore HITRAN online backend is NOT available.')
     
     def __setattr__(name, value):
-        raise ModuleNotFoundError(f'HAPI (hitran-api) module was not installed, therefore HITRAN online backend is NOT available.')
+        raise ModuleNotFoundError('HAPI (hitran-api) module was not installed, therefore HITRAN online backend is NOT available.')
 
 else:
     if _lgr.level <= logging.DEBUG:

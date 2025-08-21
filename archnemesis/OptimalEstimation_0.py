@@ -19,18 +19,17 @@
 
 from __future__ import annotations #  for 3.9 compatability
 
-import sys
+#import sys
 
-from archnemesis import *
+from archnemesis import Variables_0, ForwardModel_0
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib as matplotlib
-from copy import *
-import pickle
+from copy import deepcopy
 
 
 from archnemesis.enums import WaveUnit, SpectraUnit
 from archnemesis.helpers.maths_helper import is_diagonal
+import archnemesis.helpers.h5py_helper as h5py_helper
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -257,17 +256,17 @@ class OptimalEstimation_0:
 
             grp = f.create_group("Retrieval")
 
-            dset = grp.create_dataset('NITER',data=self.NITER)
+            dset = h5py_helper.store_data(grp, 'NITER', self.NITER)
             dset.attrs['title'] = "Maximum number of iterations"
             
-            dset = grp.create_dataset('NCORES',data=self.NCORES)
+            dset = h5py_helper.store_data(grp, 'NCORES', self.NCORES)
             dset.attrs['title'] = "Number of cores available for parallel computations"
 
-            dset = grp.create_dataset('PHILIMIT',data=self.PHILIMIT)
+            dset = h5py_helper.store_data(grp, 'PHILIMIT', self.PHILIMIT)
             dset.attrs['title'] = "Percentage convergence limit"
             dset.attrs['units'] = "%"
 
-            dset = grp.create_dataset('IRET',data=self.IRET)
+            dset = h5py_helper.store_data(grp, 'IRET', self.IRET)
             dset.attrs['title'] = "Retrieval engine type"
             if self.IRET==0:
                 dset.attrs['type'] = "Optimal Estimation"
@@ -288,14 +287,14 @@ class OptimalEstimation_0:
 
             grp = f.create_group("Retrieval")
 
-            dset = grp.create_dataset('NITER',data=self.NITER)
+            dset = h5py_helper.store_data(grp, 'NITER', self.NITER)
             dset.attrs['title'] = "Maximum number of iterations"
 
-            dset = grp.create_dataset('PHILIMIT',data=self.PHILIMIT)
+            dset = h5py_helper.store_data(grp, 'PHILIMIT', self.PHILIMIT)
             dset.attrs['title'] = "Percentage convergence limit"
             dset.attrs['units'] = "%"
 
-            dset = grp.create_dataset('IRET',data=self.IRET)
+            dset = h5py_helper.store_data(grp, 'IRET', self.IRET)
             dset.attrs['title'] = "Retrieval engine type"
             if self.IRET==0:
                 dset.attrs['type'] = "Optimal Estimation"
@@ -317,7 +316,7 @@ class OptimalEstimation_0:
                 dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/Y', data=self.Y)
                 dset.attrs['title'] = "Measurement vector"
 
-                assert is_diagonal(self.SE), f"Measurement vector covariance matrix must be diagonal"
+                assert is_diagonal(self.SE), "Measurement vector covariance matrix must be diagonal"
 
                 dset = h5py_helper.store_data(f, 'Retrieval/Output/OptimalEstimation/SE', data=np.sqrt(np.diagonal(self.SE)))
                 dset.attrs['title'] = "Uncertainty in Measurement vector (is the square root of the diagonal of the Measurement covariance matrix, which is always a diagonal matrix)"
@@ -742,7 +741,7 @@ class OptimalEstimation_0:
         for ispec in range(nspec):
  
             #Writing first lines
-            ispec1 = ispec + 1
+            #ispec1 = ispec + 1
             str2 = '! ispec,ngeom,ny,nx,ny'
             f.write("\t %i %i %i %i %i \t %s \n" % (ispec,Measurement.NGEOM,self.NY,self.NX,self.NY,str2)) 
             str3 = 'Latitude, Longitude'
@@ -812,7 +811,7 @@ class OptimalEstimation_0:
                         relerr = abs(100.0*(self.Y[i]-self.YN[i])/self.Y[i])
                     else:
                         xerr1=-1.0
-                        relerr1=-1.0
+                        #relerr1=-1.0
 
                     if Measurement.IFORM==SpectraUnit.Radiance: #0
                         strspec = "\t %4i %14.8f %15.8e %15.8e %7.2f %15.8e %9.5f \n"
@@ -1062,10 +1061,9 @@ class OptimalEstimation_0:
         Function to plot the comparison between modelled and measured spectra
         """
 
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
 
         #fig,ax1 = plt.subplots(1,1,figsize=(10,3))
-        fig = plt.figure(figsize=(10,4))
+        plt.figure(figsize=(10,4))
         ax1 = plt.subplot2grid((2,3),(0,0),rowspan=1,colspan=2)
         ax1.set_title('Measured and modelled spectra')
         ax2 = plt.subplot2grid((2,3),(1,0),rowspan=1,colspan=2)
@@ -1212,7 +1210,7 @@ def coreretOE(
     chisq_history = np.full((NITER+1,), fill_value=np.nan)
     state_vector_history = np.full((NITER+1, OptimalEstimation.NX), fill_value=np.nan)
     
-    progress_file = f'progress.txt'
+    progress_file = 'progress.txt'
     progress_w_iter = max(4, int(np.ceil(np.log10(NITER))))
     progress_iter_states = {
         'initial' : 'PHI INITIAL     ',
@@ -1298,9 +1296,9 @@ def coreretOE(
 
     #Initializing some variables
     alambda = 1.0   #Marquardt-Levenberg-type 'braking parameter'
-    NX11 = np.zeros(OptimalEstimation.NX)
+    #NX11 = np.zeros(OptimalEstimation.NX)
     XN1 = deepcopy(OptimalEstimation.XN)
-    NY1 = np.zeros(OptimalEstimation.NY)
+    #NY1 = np.zeros(OptimalEstimation.NY)
     YN1 = deepcopy(OptimalEstimation.YN)
 
     successful_iteration = False
@@ -1448,8 +1446,8 @@ def coreretOE(
         with open(progress_file, 'a') as f:
             f.write(progress_line)
     
-    _lgr.info(f'coreretOE :: Completed Optimal Estimation retrieval. Showing phi and chisq evolution')
-    with open(f'phi_chisq.txt', 'w') as f:
+    _lgr.info('coreretOE :: Completed Optimal Estimation retrieval. Showing phi and chisq evolution')
+    with open('phi_chisq.txt', 'w') as f:
         w_iter = max(4, int(np.ceil(np.log10(NITER))))
         fmt = f'{{:0{w_iter}}} | {{:09.3E}} | {{:09.3E}} | {{}}\n'
         head = ('iter' + ('' if w_iter <= 4 else ' '*(w_iter-4))

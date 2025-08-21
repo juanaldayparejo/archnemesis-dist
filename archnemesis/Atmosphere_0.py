@@ -26,11 +26,13 @@ Atmosphere Class.
 """
 from __future__ import annotations #  for 3.9 compatability
 from archnemesis import Data
-from archnemesis import *
+#from archnemesis import *
 import numpy as np
 from scipy.special import legendre
+import matplotlib.pyplot as plt
 
 from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileType
+from archnemesis.helpers import h5py_helper
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -343,7 +345,6 @@ class Atmosphere_0:
         """
 
         import h5py
-        from archnemesis.Data.gas_data import gas_info
         from archnemesis.Data.planet_data import planet_info
 
         #Assessing that all the parameters have the correct type and dimension
@@ -369,27 +370,27 @@ class Atmosphere_0:
                 grp = f.create_group("Telluric/Atmosphere")
 
             #Writing the main dimensions
-            dset = grp.create_dataset('NP',data=self.NP)
+            dset = h5py_helper.store_data(grp, 'NP', self.NP)
             dset.attrs['title'] = "Number of vertical points in profiles"
 
-            dset = grp.create_dataset('NVMR',data=self.NVMR)
+            dset = h5py_helper.store_data(grp, 'NVMR', self.NVMR)
             dset.attrs['title'] = "Number of gaseous species in atmosphere"
 
-            dset = grp.create_dataset('NLOCATIONS',data=self.NLOCATIONS)
+            dset = h5py_helper.store_data(grp, 'NLOCATIONS', self.NLOCATIONS)
             dset.attrs['title'] = "Number of different vertical profiles in atmosphere"
 
-            dset = grp.create_dataset('NDUST',data=self.NDUST)
+            dset = h5py_helper.store_data(grp, 'NDUST', self.NDUST)
             dset.attrs['title'] = "Number of aerosol populations in atmosphere"
 
-            dset = grp.create_dataset('IPLANET',data=self.IPLANET)
+            dset = h5py_helper.store_data(grp, 'IPLANET', self.IPLANET)
             dset.attrs['title'] = "Planet ID"
             dset.attrs['type'] = planet_info[str(int(self.IPLANET))]["name"]
 
-            dset = grp.create_dataset('AMFORM',data=self.AMFORM)
+            dset = h5py_helper.store_data(grp, 'AMFORM', self.AMFORM)
             dset.attrs['title'] = "Type of Molecular Weight calculation"
             if self.AMFORM==AtmosphericProfileFormatEnum.MOLECULAR_WEIGHT_DEFINED:
                 dset.attrs['type'] = "Explicit definition of the molecular weight MOLWT"
-                dset = grp.create_dataset('MOLWT',data=self.MOLWT)
+                dset = h5py_helper.store_data(grp, 'MOLWT', self.MOLWT)
                 dset.attrs['title'] = "Molecular weight"
                 dset.attrs['units'] = "kg mol-1"
             elif self.AMFORM==AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE:
@@ -397,43 +398,43 @@ class Atmosphere_0:
             elif self.AMFORM==AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_DO_NOT_SCALE_VMR:
                 dset.attrs['type'] = "Internal calculation of molecular weight without scaling of VMRs"
 
-            dset = grp.create_dataset('ID',data=self.ID)
+            dset = h5py_helper.store_data(grp, 'ID', self.ID)
             dset.attrs['title'] = "ID of the gaseous species"
 
-            dset = grp.create_dataset('ISO',data=self.ISO)
+            dset = h5py_helper.store_data(grp, 'ISO', self.ISO)
             dset.attrs['title'] = "Isotope ID of the gaseous species"
 
-            dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
+            dset = h5py_helper.store_data(grp, 'LATITUDE', self.LATITUDE)
             dset.attrs['title'] = "Latitude of each vertical profile"
             dset.attrs['units'] = "Degrees"
 
-            dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
+            dset = h5py_helper.store_data(grp, 'LONGITUDE', self.LONGITUDE)
             dset.attrs['title'] = "Longitude of each vertical profile"
             dset.attrs['units'] = "Degrees"
 
-            dset = grp.create_dataset('P',data=self.P)
+            dset = h5py_helper.store_data(grp, 'P', self.P)
             dset.attrs['title'] = "Pressure"
             dset.attrs['units'] = "Pa"
 
-            dset = grp.create_dataset('T',data=self.T)
+            dset = h5py_helper.store_data(grp, 'T', self.T)
             dset.attrs['title'] = "Temperature"
             dset.attrs['units'] = "K"
 
-            dset = grp.create_dataset('H',data=self.H)
+            dset = h5py_helper.store_data(grp, 'H', self.H)
             dset.attrs['title'] = "Altitude"
             dset.attrs['units'] = "m"
 
-            dset = grp.create_dataset('VMR',data=self.VMR)
+            dset = h5py_helper.store_data(grp, 'VMR', self.VMR)
             dset.attrs['title'] = "Volume mixing ratio"
             dset.attrs['units'] = ""
 
             if self.NDUST>0:
-                dset = grp.create_dataset('DUST',data=self.DUST)
+                dset = h5py_helper.store_data(grp, 'DUST', self.DUST)
                 dset.attrs['title'] = "Aerosol abundance"
                 dset.attrs['units'] = "particles m-3"
                 
             if self.PARAH2 is not None:
-                dset = grp.create_dataset('PARAH2',data=self.PARAH2)
+                dset = h5py_helper.store_data(grp, 'PARAH2', self.PARAH2)
                 dset.attrs['title'] = "Para-H2 fraction"
 
     ##################################################################################
@@ -819,8 +820,8 @@ class Atmosphere_0:
         xcoeff[1] = Jcoeff[1] / 1.0e6
         xcoeff[2] = Jcoeff[2] / 1.0e8
         xradius = data["radius"] * 1.0e5   #cm
-        isurf = data["isurf"]
-        name = data["name"]
+        #isurf = data["isurf"]
+        #name = data["name"]
 
 
         #Calculating some values to account for the latitude dependence
@@ -974,7 +975,7 @@ class Atmosphere_0:
         Note : Only valid if NLOCATIONS = 1
         """
 
-        from archnemesis.Data.gas_data import gas_info, const
+        from archnemesis.Data.gas_data import const#, gas_info
 
         if self.NLOCATIONS==1:
 
@@ -1005,7 +1006,7 @@ class Atmosphere_0:
                 if ((ialt>0) & (ialt<self.NP-1)):
                     h[ialt] = 0.0
 
-                nupper = self.NP - ialt - 1
+                #nupper = self.NP - ialt - 1
                 for i in range(ialt+1,self.NP):
                     sh = 0.5 * (scale[i-1] + scale[i])
                     #self.H[i] = self.H[i-1] - sh * np.log(self.P[i]/self.P[i-1])
@@ -1072,7 +1073,7 @@ class Atmosphere_0:
                 if ((ialt>0) & (ialt<self.NP-1)):
                     h[ialt,:] = 0.0
 
-                nupper = self.NP - ialt - 1
+                #nupper = self.NP - ialt - 1
                 for i in range(ialt+1,self.NP):
                     sh = 0.5 * (scale[i-1,:] + scale[i,:])
                     h[i,:] = h[i-1,:] - sh[:] * np.log(p[i,:]/p[i-1,:])
@@ -1316,7 +1317,7 @@ class Atmosphere_0:
         
         #Skipping all lines starting with #
         for i in range(i0):
-            header = f.readline()
+            f.readline() # header
          
         #Reading first and second lines
         tmp = np.fromfile(f,sep=' ',count=1,dtype='int')
@@ -1345,7 +1346,7 @@ class Atmosphere_0:
         press = np.zeros(npro)
         temp = np.zeros(npro)
         vmr = np.zeros((npro,ngas))
-        s = f.readline().split()
+        _ = f.readline().split()
         for i in range(npro):
             tmp = np.fromfile(f,sep=' ',count=ngas+3,dtype='float')
             height[i] = float(tmp[0])
@@ -1408,7 +1409,7 @@ class Atmosphere_0:
         else:
             raise ValueError(f'Atmosphere_0.AMFORM must be one of {tuple(AtmosphericProfileFormatEnum)}')
             
-        gasname = [''] * self.NVMR
+        #gasname = [''] * self.NVMR
         header = [''] * (3+self.NVMR)
         header[0] = 'height(km)'
         header[1] = 'press(atm)'
@@ -1459,7 +1460,7 @@ class Atmosphere_0:
 
         #Reading header
         for i in range(i0):
-            header = f.readline()
+            f.readline() # header
 
         #Reading first line
         tmp = np.fromfile(f,sep=' ',count=2,dtype='int')
@@ -1544,7 +1545,7 @@ class Atmosphere_0:
                         continue
                     self.PARAH2.append(float(line.split()[-1]))          
             
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             return
         self.PARAH2 = np.array(self.PARAH2)
         if len(self.PARAH2) != len(self.P):
@@ -1585,7 +1586,7 @@ class Atmosphere_0:
                 svpflag = int(svpflag)
                 self.SVP[(gas_id,iso_id)] = (vp,svpflag)
                 
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             return
     
     
@@ -1649,7 +1650,7 @@ class Atmosphere_0:
         Makes a summary plot of the current atmospheric profiles
         """
         
-        from archnemesis.Data.gas_data import gas_info, const
+        from archnemesis.Data.gas_data import gas_info#, const
 
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True,figsize=(10,4))
 
@@ -1676,7 +1677,7 @@ class Atmosphere_0:
         ax2.set_xlabel('Temperature (K)')
         ax3.set_xlabel('Volume mixing ratio')
         plt.subplots_adjust(left=0.08,bottom=0.12,right=0.88,top=0.96,wspace=0.16,hspace=0.20)
-        legend = ax3.legend(bbox_to_anchor=(1.01, 1.02))
+        ax3.legend(bbox_to_anchor=(1.01, 1.02))
         ax1.grid()
         ax2.grid()
         ax3.grid()
@@ -1709,7 +1710,7 @@ class Atmosphere_0:
             ax1.grid()
             ax1.set_xlabel('Aerosol density (particles m$^{-3}$)')
             ax1.set_ylabel('Altitude (km)')
-            legend = ax1.legend(loc='upper right', bbox_to_anchor=(1.0, 1.0))
+            ax1.legend(loc='upper right', bbox_to_anchor=(1.0, 1.0))
             plt.tight_layout()
             if SavePlot is not None:
                 fig.savefig(SavePlot)
@@ -1745,8 +1746,8 @@ class Atmosphere_0:
             map = Basemap(projection='ortho', resolution=None,
                 lat_0=np.mean(self.LATITUDE), lon_0=np.mean(self.LONGITUDE))
             
-        lats = map.drawparallels(np.linspace(-90, 90, 13))
-        lons = map.drawmeridians(np.linspace(-180, 180, 13))
+        map.drawparallels(np.linspace(-90, 90, 13)) # lats
+        map.drawmeridians(np.linspace(-180, 180, 13)) # lons
 
         im = map.scatter(self.LONGITUDE,self.LATITUDE,latlon=True,c=varplot,cmap=cmap,vmin=vmin,vmax=vmax)
 

@@ -1,7 +1,7 @@
 from __future__ import annotations #  for 3.9 compatability
 
 import io
-from typing import NamedTuple, TYPE_CHECKING, Self, ClassVar
+from typing import NamedTuple, TYPE_CHECKING
 import struct
 
 
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     NPRESS = "Number of points in pressure grid"
     NTEMP_PER_PRESSURE = "Number of temperatures per pressure point, i.e. number of temperature profiles"
     NTEMP = "Number of points in temperature grid"
+    NWAVE = "Number of wave points"
 
 
 _header_struct = struct.Struct('<2i2f4i')
@@ -32,7 +33,8 @@ def _get_body_structs(nwave, npress, ntemp):
         ntemp if ntemp > 0 else -ntemp*npress, 
         nwave * npress * abs(ntemp)
     )
-    return (fortran_record_shape,
+    return (
+        fortran_record_shape,
         struct.Struct(f'<{fortran_record_shape[0]}f'),
         struct.Struct(f'<{fortran_record_shape[1]}f'),
         struct.Struct(f'<{fortran_record_shape[2]}f'),
@@ -304,10 +306,10 @@ def read_legacy_header(f : str | io.IOBase) -> LblHeader:
 
 
 def read_legacy(
-        f : str | ioBase, 
+        f : str | io.ioBase, 
         wave_unit : None | ans.enums.WaveUnit =  None,
         fortran_record_byte_size = 4, # number of bytes in a fortran record, normally 4
-    ) -> LblDataTProfilesAtPressure | LblDataTPGrid:
+) -> LblDataTProfilesAtPressure | LblDataTPGrid:
     """
     Read line-by-line table written in legacy format. NOTE: factor of 1E-20 (reverse of 
     factor applied when storing to avoid underflow in single precision floats) IS NOT 

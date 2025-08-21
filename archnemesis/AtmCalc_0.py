@@ -18,7 +18,6 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations #  for 3.9 compatability
-import sys
 import numpy as np
 
 from archnemesis.enums import ZenithAngleOrigin, PathObserverPointing, PathCalc
@@ -148,7 +147,7 @@ class AtmCalc_0:
             -------
 
         """
-        _lgr.info(f'Sent to AtmCalc_0', stacklevel=2)
+        _lgr.info('Sent to AtmCalc_0', stacklevel=2)
         _lgr.info(f'AtmCalc_0 :: {path_observer_pointing=}, {BOTLAY=}, {ANGLE=}, {EMISS_ANG=}, {SOL_ANG=}, {AZI_ANG=}, {IPZEN=}, {path_calc=}')
         
         #parameters

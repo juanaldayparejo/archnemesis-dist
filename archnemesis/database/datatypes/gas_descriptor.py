@@ -6,7 +6,6 @@ import archnemesis.database.wrappers.hapi as hapi
 
 from ..mappings.hitran import radtran_to_hitran, hitran_to_radtran
 from archnemesis import Data
-import archnemesis.Data.gas_data
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -34,6 +33,8 @@ class RadtranGasDescriptor(NamedTuple):
     
     @property
     def isotope_name(self):
+        if self.iso_id == 0:
+            return "(all isotopes in terrestrial abundance)"
         return Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['name']
 
     @property

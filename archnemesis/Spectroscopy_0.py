@@ -19,16 +19,16 @@
 
 from __future__ import annotations #  for 3.9 compatability
 
-from archnemesis import *
+#from archnemesis import *
 from archnemesis.enums import (
     WaveUnit,
-    SpectraUnit,
+    #SpectraUnit,
     SpectralCalculationMode,
-    Gas
+    #Gas
 )
 import numpy as np
 import scipy
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import os
 import os.path
 from numba import jit, njit
@@ -132,7 +132,7 @@ class Spectroscopy_0:
 
         # Attributes with proper typing
         #self.ISPACE: Optional[WaveUnit] = None
-        self.ID: Optional[np.ndarray] = None  # Array of Gas enum values (NGAS)
+        self.ID: None | np.ndarray = None  # Array of Gas enum values (NGAS)
         self.ISO = None       #(NGAS)
         self._locations = path_redirect.PathRedirectList() #(NGAS)
         self.NWAVE = None     
@@ -331,7 +331,7 @@ class Spectroscopy_0:
         for new_location in new_locations:
             _lgr.debug(f'Adding table location {new_location=}')
             if self.LOCATION is None or self.NGAS is None:
-                _lgr.error(f'Spectroscopy_0 instance cannot add a table location before it has been fully initialised. Run one of the following routines first: `self.read_hdf5(...)`, `self.read_lls(...)`, `self.read_kls(...)`.')
+                _lgr.error('Spectroscopy_0 instance cannot add a table location before it has been fully initialised. Run one of the following routines first: `self.read_hdf5(...)`, `self.read_lls(...)`, `self.read_kls(...)`.')
                 return
             
             add_new_loc_flag = True
@@ -386,10 +386,10 @@ class Spectroscopy_0:
                 grp = f.create_group("Telluric/Spectroscopy")
 
             #Writing the main dimensions
-            dset = grp.create_dataset('NGAS',data=self.NGAS)
+            dset = h5py_helper.store_data(grp, 'NGAS', self.NGAS)
             dset.attrs['title'] = "Number of radiatively active gases in atmosphere"
 
-            dset = grp.create_dataset('ILBL',data=int(self.ILBL))
+            dset = h5py_helper.store_data(grp, 'ILBL', int(self.ILBL))
             dset.attrs['title'] = "Spectroscopy calculation type"
             if self.ILBL==SpectralCalculationMode.K_TABLES:
                 dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
@@ -401,7 +401,7 @@ class Spectroscopy_0:
             if self.NGAS>0:
                 if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
                     dt = h5py.special_dtype(vlen=str)
-                    dset = grp.create_dataset('LOCATION',data=self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
+                    dset = h5py_helper.store_data(grp, 'LOCATION', self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
                     dset.attrs['title'] = "Location of the pre-tabulated tables"
 
     ######################################################################################################
@@ -1211,7 +1211,6 @@ class Spectroscopy_0:
             #Getting the levels just above and below the desired points
             lpress  = np.log(press1)
             ip = np.argmin(np.abs(self.PRESS-press1))
-            press0 = self.PRESS[ip]
 
             if self.PRESS[ip]>=press1:
                 iphi = ip
@@ -1231,7 +1230,6 @@ class Spectroscopy_0:
                     iphi = ip + 1
 
             it = np.argmin(np.abs(self.TEMP-temp1))
-            temp0 = self.TEMP[it]
 
             if self.TEMP[it]>=temp1:
                 ithi = it
@@ -1350,8 +1348,6 @@ class Spectroscopy_0:
             If True, the interpolation is done linearly. If False, it is done in log-space
         """
 
-        from scipy import interpolate
-
         #Interpolating the k-coefficients to the correct pressure and temperature
         #############################################################################
 
@@ -1362,7 +1358,7 @@ class Spectroscopy_0:
         NT = self.NT
         
         kgood = np.zeros([self.NWAVE,self.NG,npoints,self.NGAS])
-        dkgooddT = np.zeros([self.NWAVE,self.NG,npoints,self.NGAS])
+        #dkgooddT = np.zeros([self.NWAVE,self.NG,npoints,self.NGAS])
         for ipoint in range(npoints):
             press1 = press[ipoint]
             temp1 = temp[ipoint]
@@ -1442,8 +1438,6 @@ class Spectroscopy_0:
         ##########################################################################################
         
         NWAVEC = len(WAVECALC)
-        NG = self.NG
-        del_g = self.DELG
         kret = np.zeros([NWAVEC,self.NG,npoints,self.NGAS])
         # Precompute indices and weights for WAVECALC
         precomputed_indices = np.zeros((NWAVEC,2),dtype=int)
@@ -1466,7 +1460,7 @@ class Spectroscopy_0:
             precomputed_weights[iwave] = (w)
 
         kret = interpolate_k_values(npoints, self.NGAS, NWAVEC, precomputed_indices,
-                                             precomputed_weights, kgood, del_g, kret)
+                                             precomputed_weights, kgood, self.DELG, kret)
         return kret
 
 
@@ -1496,7 +1490,7 @@ def read_ltahead(filename):
     
     with open(filename, 'rb') as f:
         
-        irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
+        _ = int(np.fromfile(f,dtype='int32',count=1)[0]) # irec0
         nwave = np.fromfile(f,dtype='int32',count=1)[0]
         vmin = np.fromfile(f,dtype='float32',count=1)[0]
         delv = np.fromfile(f,dtype='float32',count=1)[0]
@@ -1559,7 +1553,7 @@ def read_ktahead(filename):
     
     with open(filename, 'rb') as f:
 
-        irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
+        _ = int(np.fromfile(f,dtype='int32',count=1)[0]) # irec0
         nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
         vmin = np.fromfile(f,dtype='float32',count=1)[0]
         delv = np.fromfile(f,dtype='float32',count=1)[0]
@@ -1577,8 +1571,8 @@ def read_ktahead(filename):
         g_ord = np.fromfile(f,dtype='float32',count=ng)
         del_g = np.fromfile(f,dtype='float32',count=ng)
 
-        dummy = np.fromfile(f,dtype='float32',count=1)
-        dummy = np.fromfile(f,dtype='float32',count=1)
+        _ = np.fromfile(f,dtype='float32',count=1)
+        _ = np.fromfile(f,dtype='float32',count=1)
 
         presslevels = np.fromfile(f,dtype='float32',count=npress)
 
@@ -1696,7 +1690,7 @@ def read_lbltable(filename,wavemin,wavemax):
     
     with open(filename, 'rb') as f:
 
-        nbytes_int32 = 4
+        #nbytes_int32 = 4
         nbytes_float32 = 4
 
         #Reading header
@@ -1827,8 +1821,8 @@ def read_ktable(filename,wavemin,wavemax):
 
         ioff = ioff + 2*ng*nbytes_float32
 
-        dummy = np.fromfile(f,dtype='float32',count=1)[0]
-        dummy = np.fromfile(f,dtype='float32',count=1)[0]
+        _ = np.fromfile(f,dtype='float32',count=1)[0]
+        _ = np.fromfile(f,dtype='float32',count=1)[0]
 
         ioff = ioff + 2*nbytes_float32
 

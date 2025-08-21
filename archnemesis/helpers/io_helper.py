@@ -1,11 +1,9 @@
 from __future__ import annotations #  for 3.9 compatability
 
 import sys, os
-import dataclasses as dc
 from typing import IO, Any, Callable
 import time
 
-import numpy as np
 
 import logging
 _lgr = logging.getLogger(__name__)

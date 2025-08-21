@@ -9,7 +9,7 @@ from __future__ import annotations #  for 3.9 compatability
 # Copyright (C) 2025 Juan Alday, Joseph Penn, Patrick Irwin,
 # Jack Dobinson, Jon Mason, Jingxuan Yang
 #
-# This file is part of archNEMESIS.
+# This file is part of ans.
 #
 # archNEMESIS is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,23 +22,22 @@ from __future__ import annotations #  for 3.9 compatability
 
 ## Imports
 # Standard library
-import time
-from typing import Self, Iterator, Any
+from typing import Any, Callable, TYPE_CHECKING
 # Third party
 import numpy as np
 import scipy as sp
 import scipy.integrate
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 # This package
 from archnemesis import Data
-from archnemesis import *
-from archnemesis.enums import SpectroscopicLineList, AmbientGas
-import archnemesis.helpers.maths_helper as maths_helper
+#from archnemesis import *
+import archnemesis as ans
+from archnemesis.enums import AmbientGas
+#import archnemesis.helpers.maths_helper as maths_helper
 from archnemesis.helpers.io_helper import SimpleProgressTracker
 import archnemesis.database
 import archnemesis.database.hitran
-from archnemesis.database.filetypes.lbltable import LblDataTProfilesAtPressure, LblDataTPGrid
+from archnemesis.database.filetypes.lbltable import LblDataTProfilesAtPressure#, LblDataTPGrid
 from archnemesis.database.datatypes.wave_point import WavePoint
 from archnemesis.database.datatypes.wave_range import WaveRange
 from archnemesis.database.datatypes.gas_isotopes import GasIsotopes
@@ -48,7 +47,8 @@ import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 
-
+if TYPE_CHECKING:
+    NWAVE = "Number of wave points"
 
 # TODO: 
 # * Account for HITRAN weighting by terrestrial abundances .
@@ -72,7 +72,7 @@ class LineData_0:
             ID: int = 1,
             ISO: int = 0,
             ambient_gas=AmbientGas.H2,
-            DATABASE : None | archnemsis.database.LineDatabaseProtocol = None
+            DATABASE : None | ans.database.LineDatabaseProtocol = None
     ):
         """
         Class to store line data for a specific gas and isotope.
@@ -158,15 +158,15 @@ class LineData_0:
     ##################################################################################
 
     @property
-    def DATABASE(self) -> archnemsis.database.LineDatabaseProtocol:
+    def DATABASE(self) -> ans.database.LineDatabaseProtocol:
         if self._database is None:
             raise RuntimeError('No database attached to LineData_0 instance')
         return self._database
 
     @DATABASE.setter
-    def DATABASE(self, value : archnemsis.database.LineDatabaseProtocol):
+    def DATABASE(self, value : ans.database.LineDatabaseProtocol):
         if value is None:
-            db = archnemesis.database.hitran.HITRAN()
+            db = ans.database.hitran.HITRAN()
             _lgr.info(f'Using default database {db}')
             self._database = db
         else:
@@ -240,7 +240,7 @@ class LineData_0:
             )
             _lgr.info(f'Retrieved line data from database {self.DATABASE}')
         else:
-            _lgr.info(f'Line data already loaded')
+            _lgr.info('Line data already loaded')
         
         for gas_desc,v in self.line_data:
             if v is None:
@@ -268,7 +268,7 @@ class LineData_0:
             )
             _lgr.info(f'Retrieved partition function data from database {self.DATABASE}')
         else:
-            _lgr.info(f'Partition function data already loaded')
+            _lgr.info('Partition function data already loaded')
     
     ###########################################################################################################################
     
@@ -554,8 +554,6 @@ class LineData_0:
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
         INFO_ONCE_FLAG = False
-        time_last = 0
-        time_this = None
         n_line_progress = 1000
         
         abs_coeffs = dict()
@@ -618,7 +616,7 @@ class LineData_0:
             _lgr.debug(f'"Right" edges: [({wave_edges[1,0]:012.6E}, ..., {wave_edges[1,wave_midpoints.size//2]:012.6E}, ..., {wave_edges[1,-1]:012.6E}]')
             
         
-        _lgr.info(f'Getting lineshape integral points...')
+        _lgr.info('Getting lineshape integral points...')
         lip_factor = 1/(np.e*line_calculation_wavenumber_window)
         lip_n1 = n_line_integral_points//2
         lip_n2 = n_line_integral_points - (lip_n1 + 1)
@@ -662,8 +660,6 @@ class LineData_0:
             n_lines = idx_max - idx_min
             _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
             
-            time_last = time.time()
-            
             progress_tracker = SimpleProgressTracker(n_lines, f"Computing line contributions from {gas_desc}. ", 5, target_logger=_lgr)
             
             for _j, line_idx in enumerate(range(idx_min, idx_max)):
@@ -705,7 +701,7 @@ class LineData_0:
                 
                 # Add in continuum absorption here if required
                 if not INFO_ONCE_FLAG:
-                    _lgr.info(f'NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
+                    _lgr.info('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
                     INFO_ONCE_FLAG = True
             
             # Ensure abs coeff are not less than zero
@@ -751,7 +747,7 @@ class LineData_0:
         
         k_total = np.zeros((len(gas_descs), n_waves, pressure_profile.size, 2), dtype=float)
         
-        progress_tracker = SimpleProgressTracker(temp_points.size, f"Computing absorption coefficients of temperature-pressure profile. ", target_logger=_lgr)
+        progress_tracker = SimpleProgressTracker(temp_points.size, "Computing absorption coefficients of temperature-pressure profile. ", target_logger=_lgr)
         
         for i, press in enumerate(pressure_profile):
             for j, temp in enumerate(temp_points[i]):
@@ -773,8 +769,8 @@ class LineData_0:
         if self.ISO == 0: # In this case, we can put all of the absorption coefficients into a single file
             result.append(
                 LblDataTProfilesAtPressure(
-                    gas_desc.gas_id,
-                    0,
+                    self.ID,
+                    self.ISO,
                     wave_unit,
                     mid_w,
                     pressure_profile,
@@ -810,7 +806,7 @@ class LineData_0:
             scatter_style_kw : dict[str,Any] = {},
             ax_style_kw : dict[str,Any] = {},
             legend_style_kw : dict[str,Any] = {},
-        ) -> None:
+    ) -> None:
         """
         Create diagnostic plots of the line data.
         
@@ -864,7 +860,7 @@ class LineData_0:
         ax_array = ax_array.flatten()
         
         combined_ax = ax_array[0]
-        combined_ax.set_title(f'Line data coloured by isotopologue')
+        combined_ax.set_title('Line data coloured by isotopologue')
         
         line_strengths_max = 0
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
@@ -877,7 +873,7 @@ class LineData_0:
             line_strengths_max = ls_max if ls_max > line_strengths_max else line_strengths_max
             
             # Combined plot, all isotopes on one figure, coloured by isotope
-            p0 = combined_ax.scatter(
+            combined_ax.scatter(
                 wavenumbers,
                 line_strengths,
                 label=f'${ans.Data.gas_data.molecule_to_latex(gas_desc.isotope_name)}$ (ID={int(gas_desc.gas_id)}, ISO={gas_desc.iso_id})',

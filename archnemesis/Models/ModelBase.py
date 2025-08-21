@@ -1,19 +1,12 @@
 from __future__ import annotations #  for 3.9 compatability
-import sys, os
 import abc
 from typing import TYPE_CHECKING, IO, Any, Self
-from collections import namedtuple
 import textwrap
 import inspect
 
 
-import matplotlib.pyplot as plt # used in some of the models, I should really remove the plotting code or at least separate it from the calculation code
-
 import numpy.ma
 import numpy as np
-from archnemesis.Scatter_0 import kk_new_sub
-from archnemesis.helpers.maths_helper import ngauss
-from archnemesis.enums import WaveUnit
 from archnemesis.helpers.io_helper import OutWidth
 
 from .ModelParameterEntry import ModelParameterEntry
@@ -28,9 +21,6 @@ if TYPE_CHECKING:
     # but that is outside the scope of what I want to accomplish here
     from archnemesis.Variables_0 import Variables_0
     from archnemesis.ForwardModel_0 import ForwardModel_0
-    from archnemesis.Scatter_0 import Scatter_0
-    from archnemesis.Spectroscopy_0 import Spectroscopy_0
-    from archnemesis.Measurement_0 import Measurement_0
     
     nx = 'number of elements in state vector'
     m = 'an undetermined number, but probably less than "nx"'

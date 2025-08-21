@@ -19,15 +19,19 @@
 
 
 from __future__ import annotations #  for 3.9 compatability
-from archnemesis import *
-from archnemesis.enums import InstrumentLineshape, WaveUnit, SpectraUnit
+
+import os.path
+
+
 import numpy as np
+import scipy as sp
+import scipy.interpolate
 import matplotlib.pyplot as plt
 import matplotlib as matplotlib
-import os
 from numba import jit
 
 from archnemesis.helpers import h5py_helper
+from archnemesis.enums import InstrumentLineshape, WaveUnit, SpectraUnit
 
 
 import logging
@@ -407,30 +411,30 @@ class Measurement_0:
             
 
             #Writing the latitude/longitude at the centre of FOV
-            dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
+            dset = h5py_helper.store_data(grp, 'LATITUDE', self.LATITUDE)
             dset.attrs['title'] = "Latitude at centre of FOV"
             dset.attrs['units'] = 'degrees'
 
-            dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
+            dset = h5py_helper.store_data(grp, 'LONGITUDE', self.LONGITUDE)
             dset.attrs['title'] = "Longitude at centre of FOV"
             dset.attrs['units'] = 'degrees'
             
             # Write optional sub observer lat/lon so we can plot the measurement easily
-            dset = grp.create_dataset('SUBOBS_LAT',data=self.SUBOBS_LAT)
+            dset = h5py_helper.store_data(grp, 'SUBOBS_LAT', self.SUBOBS_LAT)
             dset.attrs['title'] = "Latitude at point directly below the observer (optional)"
             dset.attrs['units'] = 'degrees'
 
-            dset = grp.create_dataset('SUBOBS_LON',data=self.SUBOBS_LON)
+            dset = h5py_helper.store_data(grp, 'SUBOBS_LON', self.SUBOBS_LON)
             dset.attrs['title'] = "Longitude at point directly below the observer (optional)"
             dset.attrs['units'] = 'degrees'
             
             #Writing the Doppler velocity
-            dset = grp.create_dataset('V_DOPPLER',data=self.V_DOPPLER)
+            dset = h5py_helper.store_data(grp, 'V_DOPPLER', self.V_DOPPLER)
             dset.attrs['title'] = "Doppler velocity between the observed body and the observer"
             dset.attrs['units'] = 'km s-1'
 
             #Writing the spectral units
-            dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
+            dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
             dset.attrs['title'] = "Spectral units"
             if self.ISPACE==WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
@@ -438,7 +442,7 @@ class Measurement_0:
                 dset.attrs['units'] = 'Wavelength / um'
 
             #Writing the measurement units
-            dset = grp.create_dataset('IFORM',data=int(self.IFORM))
+            dset = h5py_helper.store_data(grp, 'IFORM', int(self.IFORM))
             dset.attrs['title'] = "Measurement units"
             
             if self.ISPACE==WaveUnit.Wavenumber_cm:  #Wavenumber space
@@ -472,7 +476,7 @@ class Measurement_0:
             dset.attrs['units'] = lunit
             
             if self.IFORM==SpectraUnit.Normalised_radiance:
-                dset = grp.create_dataset('VNORM',data=self.VNORM)
+                dset = h5py_helper.store_data(grp, 'VNORM', self.VNORM)
                 if self.ISPACE==WaveUnit.Wavenumber_cm:
                     dset.attrs['title'] = "Wavenumber for normalisation"
                     dset.attrs['units'] = 'cm-1'
@@ -481,71 +485,71 @@ class Measurement_0:
                     dset.attrs['units'] = 'um'
 
             #Writing the number of geometries
-            dset = grp.create_dataset('NGEOM',data=self.NGEOM)
+            dset = h5py_helper.store_data(grp, 'NGEOM', self.NGEOM)
             dset.attrs['title'] = "Number of measurement geometries"
 
             #Defining the averaging points required to reconstruct the field of view 
-            dset = grp.create_dataset('NAV',data=self.NAV)
+            dset = h5py_helper.store_data(grp, 'NAV', self.NAV)
             dset.attrs['title'] = "Number of averaging points needed to reconstruct the field-of-view"
 
-            dset = grp.create_dataset('FLAT',data=self.FLAT)
+            dset = h5py_helper.store_data(grp, 'FLAT', self.FLAT)
             dset.attrs['title'] = "Latitude of each averaging point needed to reconstruct the field-of-view"
             dset.attrs['unit'] = "Degrees"
     
-            dset = grp.create_dataset('FLON',data=self.FLON)
+            dset = h5py_helper.store_data(grp, 'FLON', self.FLON)
             dset.attrs['title'] = "Longitude of each averaging point needed to reconstruct the field-of-view"
             dset.attrs['unit'] = "Degrees"
 
-            dset = grp.create_dataset('WGEOM',data=self.WGEOM)
+            dset = h5py_helper.store_data(grp, 'WGEOM', self.WGEOM)
             dset.attrs['title'] = "Weight of each averaging point needed to reconstruct the field-of-view"
             dset.attrs['unit'] = ""
 
-            dset = grp.create_dataset('EMISS_ANG',data=self.EMISS_ANG)
+            dset = h5py_helper.store_data(grp, 'EMISS_ANG', self.EMISS_ANG)
             dset.attrs['title'] = "Emission angle of each averaging point needed to reconstruct the field-of-view"
             dset.attrs['unit'] = "Degrees"
 
             #Checking if there are any limb-viewing geometries
             if np.nanmin(self.EMISS_ANG)<0.0:
 
-                dset = grp.create_dataset('TANHE',data=self.TANHE)
+                dset = h5py_helper.store_data(grp, 'TANHE', self.TANHE)
                 dset.attrs['title'] = "Tangent height of each averaging point needed to reconstruct the field-of-view"
                 dset.attrs['unit'] = "km"
 
             #Checking if there are any nadir-viewing / upward looking geometries
             if np.nanmax(self.EMISS_ANG) >= 0.0:
 
-                dset = grp.create_dataset('SOL_ANG',data=self.SOL_ANG)
+                dset = h5py_helper.store_data(grp, 'SOL_ANG', self.SOL_ANG)
                 dset.attrs['title'] = "Solar zenith angle of each averaging point needed to reconstruct the field-of-view"
                 dset.attrs['unit'] = "Degrees"
 
-                dset = grp.create_dataset('AZI_ANG',data=self.AZI_ANG)
+                dset = h5py_helper.store_data(grp, 'AZI_ANG', self.AZI_ANG)
                 dset.attrs['title'] = "Azimuth angle of each averaging point needed to reconstruct the field-of-view"
                 dset.attrs['unit'] = "Degrees"
 
-            dset = grp.create_dataset('NCONV',data=self.NCONV)
+            dset = h5py_helper.store_data(grp, 'NCONV', self.NCONV)
             dset.attrs['title'] = "Number of spectral bins in each geometry"
 
-            dset = grp.create_dataset('WOFF',data=self.WOFF)
+            dset = h5py_helper.store_data(grp, 'WOFF', self.WOFF)
             dset.attrs['title'] = "Wavelength/Wavenumber offset to add to each measurement"
 
 
-            dset = grp.create_dataset('VCONV',data=self.VCONV)
+            dset = h5py_helper.store_data(grp, 'VCONV', self.VCONV)
             dset.attrs['title'] = "Spectral bins"
             if self.ISPACE==WaveUnit.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
             elif self.ISPACE==WaveUnit.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um'
 
-            dset = grp.create_dataset('MEAS',data=self.MEAS)
+            dset = h5py_helper.store_data(grp, 'MEAS', self.MEAS)
             dset.attrs['title'] = "Measured spectrum in each geometry"
             dset.attrs['units'] = lunit
 
-            dset = grp.create_dataset('ERRMEAS',data=self.ERRMEAS)
+            dset = h5py_helper.store_data(grp, 'ERRMEAS', self.ERRMEAS)
             dset.attrs['title'] = "Uncertainty in the measured spectrum in each geometry"
             dset.attrs['units'] = lunit
 
             if self.FWHM > 0.0:
-                dset = grp.create_dataset('ISHAPE',data=int(self.ISHAPE))
+                dset = h5py_helper.store_data(grp, 'ISHAPE', int(self.ISHAPE))
                 dset.attrs['title'] = "Instrument lineshape"
                 if self.ISHAPE==InstrumentLineshape.Square:
                     lils = 'Square function'
@@ -559,7 +563,7 @@ class Measurement_0:
                     lils = 'Hanning function'
                 dset.attrs['type'] = lils
 
-            dset = grp.create_dataset('FWHM',data=self.FWHM)
+            dset = h5py_helper.store_data(grp, 'FWHM', self.FWHM)
             dset.attrs['title'] = "FWHM of instrument lineshape"
             if self.FWHM > 0.0:
                 if self.ISPACE==WaveUnit.Wavenumber_cm:
@@ -573,19 +577,19 @@ class Measurement_0:
                 dset.attrs['type'] = 'Explicit definition of instrument lineshape in each spectral bin'
 
             if self.FWHM < 0.0:
-                dset = grp.create_dataset('NFIL',data=self.NFIL)
+                dset = h5py_helper.store_data(grp, 'NFIL', self.NFIL)
                 dset.attrs['title'] = "Number of points required to define the ILS in each spectral bin"
 
                 if self.ISPACE==WaveUnit.Wavenumber_cm:
-                    dset = grp.create_dataset('VFIL',data=self.VFIL)
+                    dset = h5py_helper.store_data(grp, 'VFIL', self.VFIL)
                     dset.attrs['title'] = "Wavenumber of the points required to define the ILS in each spectral bin"
                     dset.attrs['unit'] = "Wavenumber / cm-1"
                 elif self.ISPACE==WaveUnit.Wavelength_um:
-                    dset = grp.create_dataset('VFIL',data=self.VFIL)
+                    dset = h5py_helper.store_data(grp, 'VFIL', self.VFIL)
                     dset.attrs['title'] = "Wavelength of the points required to define the ILS in each spectral bin"
                     dset.attrs['unit'] = "Wavelength / um"
 
-                dset = grp.create_dataset('AFIL',data=self.AFIL)
+                dset = h5py_helper.store_data(grp, 'AFIL', self.AFIL)
                 dset.attrs['title'] = "ILS in each spectral bin"
                 dset.attrs['unit'] = ""
 
@@ -782,7 +786,7 @@ class Measurement_0:
         for i in range(ngeom):
             nconv[i] = int(f.readline().strip())
             for j in range(nav):
-                navsel = int(f.readline().strip())
+                _ = int(f.readline().strip()) # navsel
                 tmp = np.fromfile(f,sep=' ',count=6,dtype='float')
                 flat[i,j] = float(tmp[0])
                 flon[i,j] = float(tmp[1])
@@ -854,7 +858,7 @@ class Measurement_0:
         """
 
         if self.TANHE is None:
-            _lgr.warning(f'Not writing *.spx (Solar Occultation) file as self.TANHE is NONE')
+            _lgr.warning('Not writing *.spx (Solar Occultation) file as self.TANHE is NONE')
             return
 
         fspx = open(self.runname+'.spx','w')
@@ -986,7 +990,7 @@ class Measurement_0:
         """
         
         if self.NFIL is None:
-            _lgr.warning(f'Not writing *.fil file as self.NFIL is NONE')
+            _lgr.warning('Not writing *.fil file as self.NFIL is NONE')
             return
 
         f = open(self.runname+'.fil','w')
@@ -1847,8 +1851,6 @@ class Measurement_0:
             Convolved spectrum with the instrument lineshape
         """
 
-        import os.path
-        from scipy import interpolate
 
         nstep = 20
         NWAVE = len(Wave)
@@ -1869,7 +1871,7 @@ class Measurement_0:
                 #Channel Integrator mode where the k-tables have been previously
                 #tabulated INCLUDING the filter profile. In which case all we
                 #need do is just transfer the outputs
-                s = scipy.interpolate.interp1d(Wave,ModSpec,axis=0)
+                s = sp.interpolate.interp1d(Wave,ModSpec,axis=0)
                 yout[:,:] = s(self.VCONV[0:self.NCONV[IG],IG])
 
             elif self.FWHM<0.0:
@@ -1884,10 +1886,10 @@ class Measurement_0:
             if self.FWHM>0.0:
 
                 nwave1 = NWAVE
-                wave1 = np.zeros(nwave+2)
-                y1 = np.zeros(nwave+2)
-                wave1[1:nwave+1] = Wave
-                y1[1:nwave+1] = ModSpec[0:NWAVE]
+                wave1 = np.zeros(nwave1+2)
+                y1 = np.zeros(nwave1+2)
+                wave1[1:nwave1+1] = Wave
+                y1[1:nwave1+1] = ModSpec[0:NWAVE]
 
                 #Extrapolating the last wavenumber
                 iup = 0
@@ -1895,7 +1897,7 @@ class Measurement_0:
                     nwave1 = nwave1 +1
                     wave1[nwave1-1] = self.VCONV[self.NCONV[IGEOM],IGEOM] + self.FWHM
                     frac = (ModSpec[NWAVE-1]-ModSpec[NWAVE-2])/(Wave[NWAVE-1]-Wave[NWAVE-2])
-                    y1[nwave-1] = ModSpec[NWAVE-1] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
+                    y1[nwave1-1] = ModSpec[NWAVE-1] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
                     iup=1
 
                 #Extrapolating the first wavenumber
@@ -1909,8 +1911,8 @@ class Measurement_0:
 
                 #Re-shaping the spectrum
                 nwave = self.NWAVE + iup + idown
-                wave = wave1[1-idown:nwave_max-(1-iup)]
-                y = y1[1-idown:nwave_max-(1-iup)]
+                wave = wave1[1-idown:nwave-(1-iup)]
+                y = y1[1-idown:nwave-(1-iup)]
 
                 #Checking if .fwh file exists (indicating that FWHM varies with wavelength)
                 ifwhm = 0
@@ -1924,14 +1926,14 @@ class Measurement_0:
                     xfwhm = np.zeros(nfwhm)
                     for ifwhm in range(nfwhm):
                         s = f.readline().split()
-                        vfwhm[i] = float(s[0])
-                        xfwhm[i] = float(s[1])
+                        vfwhm[ifwhm] = float(s[0])
+                        xfwhm[ifwhm] = float(s[1])
                     f.close()
 
-                    ffwhm = interpolate.interp1d(vfwhm,xfwhm)
+                    ffwhm = sp.interpolate.interp1d(vfwhm,xfwhm)
                     ifwhm==1
 
-                fy = interpolate.CubicSpline(wave,y)
+                fy = sp.interpolate.CubicSpline(wave,y)
                 for ICONV in range(self.NCONV[IGEOM]):
                     
                     if ifwhm==1:
@@ -1944,6 +1946,8 @@ class Measurement_0:
                     delx = (x2-x1)/(nstep-1)
                     xi = np.linspace(x1,x2,nstep)
                     yi = fy(xi)
+                    
+                    yold=None
                     for j in range(nstep):
                         if j==0:
                             sum1 = 0.0 
@@ -2075,12 +2079,12 @@ class Measurement_0:
             if self.FWHM>0.0:
 
                 nwave1 = NWAVE
-                wave1 = np.zeros(nwave+2)
-                y1 = np.zeros(nwave+2)
-                grad1 = np.zeros((nwave+2,NX))
-                wave1[1:nwave+1] = Wave
-                y1[1:nwave+1] = ModSpec[0:NWAVE]
-                grad1[1:nwave+1,:] = ModGrad[0:NWAVE,:]
+                wave1 = np.zeros(nwave1+2)
+                y1 = np.zeros(nwave1+2)
+                grad1 = np.zeros((nwave1+2,NX))
+                wave1[1:nwave1+1] = Wave
+                y1[1:nwave1+1] = ModSpec[0:NWAVE]
+                grad1[1:nwave1+1,:] = ModGrad[0:NWAVE,:]
 
                 #Extrapolating the last wavenumber
                 iup = 0
@@ -2088,8 +2092,8 @@ class Measurement_0:
                     nwave1 = nwave1 +1
                     wave1[nwave1-1] = self.VCONV[self.NCONV[IGEOM],IGEOM] + self.FWHM
                     frac = (ModSpec[NWAVE-1]-ModSpec[NWAVE-2])/(Wave[NWAVE-1]-Wave[NWAVE-2])
-                    y1[nwave-1] = ModSpec[NWAVE-1] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
-                    grad1[nwave-1,:] = ModGrad[NWAVE-1,:] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
+                    y1[nwave1-1] = ModSpec[NWAVE-1] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
+                    grad1[nwave1-1,:] = ModGrad[NWAVE-1,:] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
                     iup=1
 
                 #Extrapolating the first wavenumber
@@ -2136,8 +2140,8 @@ class Measurement_0:
                     xfwhm = np.zeros(nfwhm)
                     for ifwhm in range(nfwhm):
                         s = f.readline().split()
-                        vfwhm[i] = float(s[0])
-                        xfwhm[i] = float(s[1])
+                        vfwhm[ifwhm] = float(s[0])
+                        xfwhm[ifwhm] = float(s[1])
                     f.close()
 
                     ffwhm = interpolate.interp1d(vfwhm,xfwhm)
@@ -2165,7 +2169,8 @@ class Measurement_0:
                     delx = (x2-x1)/(nstep-1)
                     xi = np.linspace(x1,x2,nstep)
                     yi = fy(xi)
-                    yg
+                    
+                    yold=None
                     for j in range(nstep):
                         if j==0:
                             sum1 = 0.0 
@@ -2362,7 +2367,7 @@ class Measurement_0:
             color = (self.TANHE[igeom,0]-cmin)/(cmax-cmin)
             
             #ax1.plot(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom],c=s_m.to_rgba([self.TANHE[igeom,0]]))
-            im1 = ax1.plot(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom],color=cmap(color))
+            ax1.plot(self.VCONV[0:self.NCONV[igeom],igeom],self.MEAS[0:self.NCONV[igeom],igeom],color=cmap(color))
 
         if np.mean(self.VCONV)>30.:
             ax1.set_xlabel(r'Wavenumber (cm$^{-1}$)')
@@ -2420,15 +2425,15 @@ class Measurement_0:
         #Making a figure for each geometry
         for igeom in range(self.NGEOM):
 
-            fig = plt.figure(figsize=(12,7))
+            plt.figure(figsize=(12,7))
 
             #Plotting the geometry
             ax1 = plt.subplot2grid((2,3),(0,0),rowspan=2,colspan=1)
             map = Basemap(projection='ortho', resolution=None,
                 lat_0=subobs_lat, lon_0=subobs_lon)
             
-            lats = map.drawparallels(np.linspace(-90, 90, 13))
-            lons = map.drawmeridians(np.linspace(-180, 180, 13))
+            map.drawparallels(np.linspace(-90, 90, 13)) # lats
+            map.drawmeridians(np.linspace(-180, 180, 13)) #  lons
 
             if self.NAV[igeom]>1:
                 im = map.scatter(self.FLON[igeom,:],self.FLAT[igeom,:],latlon=True,c=self.WGEOM[igeom,:])
@@ -2493,7 +2498,7 @@ class Measurement_0:
         #Making a figure for each geometry
         for igeom in range(self.NGEOM):
 
-            fig = plt.figure(figsize=(15,7))
+            plt.figure(figsize=(15,7))
 
             #Plotting the geometry
             ax1 = plt.subplot2grid((2,4),(0,0),rowspan=1,colspan=1)
@@ -2505,8 +2510,8 @@ class Measurement_0:
                     lat_0=self.LATITUDE, lon_0=self.LONGITUDE)
 
 
-            lats = map1.drawparallels(np.linspace(-90, 90, 13))
-            lons = map1.drawmeridians(np.linspace(-180, 180, 13))
+            map1.drawparallels(np.linspace(-90, 90, 13)) # lats
+            map1.drawmeridians(np.linspace(-180, 180, 13)) # lons
             im1 = map1.scatter(self.FLON[igeom,:],self.FLAT[igeom,:],latlon=True,c=self.WGEOM[igeom,:],cmap=colormap)
 
             # create an axes on the right side of ax. The width of cax will be 5%
@@ -2528,8 +2533,8 @@ class Measurement_0:
                     lat_0=self.LATITUDE, lon_0=self.LONGITUDE)
 
             
-            lats = map2.drawparallels(np.linspace(-90, 90, 13))
-            lons = map2.drawmeridians(np.linspace(-180, 180, 13))
+            map2.drawparallels(np.linspace(-90, 90, 13)) # lats
+            map2.drawmeridians(np.linspace(-180, 180, 13)) # lons
             im2 = map2.scatter(self.FLON[igeom,:],self.FLAT[igeom,:],latlon=True,c=self.EMISS_ANG[igeom,:],cmap=colormap)
 
             # create an axes on the right side of ax. The width of cax will be 5%
@@ -2553,8 +2558,8 @@ class Measurement_0:
                     lat_0=self.LATITUDE, lon_0=self.LONGITUDE)
 
             
-            lats = map3.drawparallels(np.linspace(-90, 90, 13))
-            lons = map3.drawmeridians(np.linspace(-180, 180, 13))
+            map3.drawparallels(np.linspace(-90, 90, 13)) # lats
+            map3.drawmeridians(np.linspace(-180, 180, 13)) # lons
             im3 = map3.scatter(self.FLON[igeom,:],self.FLAT[igeom,:],latlon=True,c=self.SOL_ANG[igeom,:],cmap=colormap)
 
             # create an axes on the right side of ax. The width of cax will be 5%
@@ -2578,8 +2583,8 @@ class Measurement_0:
                     lat_0=self.LATITUDE, lon_0=self.LONGITUDE)
 
             
-            lats = map4.drawparallels(np.linspace(-90, 90, 13))
-            lons = map4.drawmeridians(np.linspace(-180, 180, 13))
+            map4.drawparallels(np.linspace(-90, 90, 13)) # lats
+            map4.drawmeridians(np.linspace(-180, 180, 13)) # lons
             im4 = map4.scatter(self.FLON[igeom,:],self.FLAT[igeom,:],latlon=True,c=self.AZI_ANG[igeom,:],cmap=colormap)
 
             # create an axes on the right side of ax. The width of cax will be 5%
@@ -2713,7 +2718,7 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
                 #Gaussian instrument shape
                 f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
             else:
-                dummy = 1
+                pass
 
             if f1>0.0:
                 yout[j] = yout[j] + f1*y[inwave[i]]
@@ -2764,7 +2769,7 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
     if y.ndim==2:
 
         #It is assumed all geometries cover the same spectral range
-        nconv1 = y.shape[0]
+        #nconv1 = y.shape[0]
         ngeom = y.shape[1]
 
         yout = np.zeros((nconv,ngeom))
@@ -2921,7 +2926,7 @@ def lblconv_fil_ngeom(nwave,vwave,y,nconv,vconv,nfil,vfil,afil):
     if y.ndim==2:
 
         #It is assumed all geometries cover the same spectral range
-        nconv1 = y.shape[0]
+        #nconv1 = y.shape[0]
         ngeom = y.shape[1]
 
         yout = np.zeros((nconv,ngeom))

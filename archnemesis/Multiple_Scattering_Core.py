@@ -17,9 +17,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import os
 import numpy as np
-from numba import njit,prange
+from numba import njit#, prange
 
 
 # @njit(fastmath=True, error_model='numpy')
@@ -711,7 +710,7 @@ def scloud11wave_core(phasarr, radg, sol_angs, emiss_angs, solar, aphis, lowbc, 
     ng = taus.shape[1]
     nlay = taus.shape[2]
     ncont = phasarr.shape[0]
-    pi = np.pi
+    #pi = np.pi
 
     ltot = nlay
     if lowbc > 0:
@@ -886,7 +885,7 @@ def scloud11wave_core(phasarr, radg, sol_angs, emiss_angs, solar, aphis, lowbc, 
             #calculating the spectra
             for ipath in range(ngeom):
             
-                converged = False
+                #converged = False
                 conv1 = False
                 defconv = 1e-5
                 

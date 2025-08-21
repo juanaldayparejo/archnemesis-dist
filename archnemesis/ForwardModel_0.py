@@ -18,16 +18,26 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations #  for 3.9 compatability
-from archnemesis import *
-from archnemesis.Models import Models
-import numpy as np
-import matplotlib.pyplot as plt
+#from archnemesis import *
+#from archnemesis.Models import Models
+
+from typing import Callable
 import os
-from numba import jit
-from multiprocessing import Pool
-from joblib import Parallel, delayed
-import sys
 from copy import deepcopy
+
+import numpy as np
+import scipy as sp
+import scipy.interpolate
+
+import matplotlib.pyplot as plt
+
+from numba import jit
+from joblib import Parallel, delayed
+
+
+import archnemesis as ans
+from archnemesis.AtmCalc_0 import AtmCalc_0
+from archnemesis.Path_0 import Path_0
 
 import archnemesis.enums
 from archnemesis.enums import (
@@ -40,6 +50,8 @@ from archnemesis.enums import (
     WaveUnit,
     PathObserverPointing,
     RayleighScatteringMode,
+    ZenithAngleOrigin,
+    AerosolPhaseFunctionCalculationMode,
 )
 
 import logging
@@ -168,7 +180,6 @@ class ForwardModel_0:
             ForwardModel_0.nemesisLfm()
             ForwardModel_0.nemesisLfmg()
             ForwardModel_0.nemesisCfm()
-            ForwardModel_0.nemesisMAPfm()
             ForwardModel_0.jacobian_nemesis(nemesisSO=False)
 
         Mapping models into reference classes
@@ -204,8 +215,6 @@ class ForwardModel_0:
         ###########################################
 
             ForwardModel_0.scloud11wave()
-            ForwardModel_0.scloud11flux()
-            ForwardModel_0.streamflux()
             
         Error checks
         ###########################################
@@ -233,31 +242,31 @@ class ForwardModel_0:
         
         
         if not self.get_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG():
-            _lgr.info(f'Checking atmospheric gasses have spectroscopy data.')
+            _lgr.info('Checking atmospheric gasses have spectroscopy data.')
             should_warn = False
             
             # Test that the forward model has Spectroscopy data for each
             # gas in the atmosphere.
             if self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:
                 spect_table_type_str = 'k-table'
-                spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
+                #spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
                 spect_legacy_filename = f'{self.runname}.kls'
             elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
                 spect_table_type_str = 'line-by-line-table'
                 spect_legacy_filename = f'{self.runname}.lls'
             else:
                 raise RuntimeError(f'Unknown SpectralCalculationMode: {self.Spectroscopy.ILBL}.')
-            spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
+            #spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
             
             atmos_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Atmosphere.ID, self.Atmosphere.ISO))
             spect_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Spectroscopy.ID, self.Spectroscopy.ISO))
             
             warning_lines = [
-                f'Not all atmospheric gasses have spectroscopy data.',
-                f'# WARNING #########################################################################',
-                f'',
-                f'The following atmospheric gasses ARE NOT PRESENT in the spectroscopy data and WILL NOT CONTRIBUTE TO OPACITY:',
-                f'',
+                'Not all atmospheric gasses have spectroscopy data.',
+                '# WARNING #########################################################################',
+                '',
+                'The following atmospheric gasses ARE NOT PRESENT in the spectroscopy data and WILL NOT CONTRIBUTE TO OPACITY:',
+                '',
             ]
             for gas_spec in atmos_gas_specifiers:
                 if gas_spec not in spect_gas_specifiers:
@@ -268,17 +277,17 @@ class ForwardModel_0:
             
             if should_warn:
                 warning_lines.extend([
-                    f'',
+                    '',
                     f'To deactivate this warning place a path to a {spect_table_type_str} file for these gasses in one of the following locations (depending upon your input file type):',
-                    f'',
-                    f'    [HDF5 Input]',
+                    '',
+                    '    [HDF5 Input]',
                     f'        In the "{self.runname}.h5" file, add an entry to "/Spectroscopy/LOCATION"',
-                    f'        and update "/Spectroscopy/NGAS" appropriately.',
-                    f'',
-                    f'    [LEGACY Input]',
+                    '        and update "/Spectroscopy/NGAS" appropriately.',
+                    '',
+                    '    [LEGACY Input]',
                     f'        Add an entry to the "{spect_legacy_filename}" file.',
-                    f'',
-                    f'# END WARNING #####################################################################',
+                    '',
+                    '# END WARNING #####################################################################',
                 ])
                 _lgr.warning('\n'.join(warning_lines))
                 self.set_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG()
@@ -383,7 +392,7 @@ class ForwardModel_0:
 
         """
 
-        from copy import copy, deepcopy
+        from copy import deepcopy
         
         #Errors and checks
         if self.Atmosphere.NLOCATIONS!=1:
@@ -422,7 +431,7 @@ class ForwardModel_0:
                 self.LayerX = deepcopy(self.Layer)
                 self.CIAX = deepcopy(self.CIA)
                 self.TelluricX = deepcopy(self.Telluric)
-                flagh2p = False
+                #flagh2p = False
 
                 #Updating the required parameters based on the current geometry
                 if self.MeasurementX.EMISS_ANG[0,0]>=0.0:
@@ -434,7 +443,7 @@ class ForwardModel_0:
                     self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
 
                 #Changing the different classes taking into account the parameterisations in the state vector
-                xmap = self.subprofretg()
+                _ = self.subprofretg() # xmap
                 
                 #Calling gsetpat to split the new reference atmosphere and calculate the path
                 self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
@@ -484,7 +493,7 @@ class ForwardModel_0:
                 else:
                     FWHMEXIST=''
 
-                SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST='')
+                SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
             elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
                 SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
@@ -553,7 +562,7 @@ class ForwardModel_0:
         
         #Estimating the number of calculations that will need to be computed to model the spectra
         #included in the Measurement class (taking into account al geometries and averaging points)
-        NCALC = np.sum(self.Measurement.NAV)
+        #NCALC = np.sum(self.Measurement.NAV)
         SPECONV = np.zeros(self.Measurement.MEAS.shape) #Initalise the array where the spectra will be stored (NWAVE,NGEOM)
         dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX)) #Initalise the array where the gradients will be stored (NWAVE,NGEOM,NX)
         for IGEOM in range(self.Measurement.NGEOM):
@@ -583,7 +592,7 @@ class ForwardModel_0:
                 self.LayerX = deepcopy(self.Layer)
                 self.CIAX = deepcopy(self.CIA)
                 self.TelluricX = deepcopy(self.Telluric)
-                flagh2p = False
+                #flagh2p = False
 
                 #Updating the required parameters based on the current geometry
                 if self.MeasurementX.EMISS_ANG[0,0]>=0.0:
@@ -665,7 +674,7 @@ class ForwardModel_0:
                 else:
                     FWHMEXIST=''
 
-                SPECONV1,dSPECONV1 = self.Measurement.convg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM,FWHMEXIST='')
+                SPECONV1,dSPECONV1 = self.Measurement.convg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
             elif self.Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
 
@@ -704,7 +713,7 @@ class ForwardModel_0:
 
         """
 
-        from scipy import interpolate
+        #from scipy import interpolate
         from copy import deepcopy
 
         #First we change the reference atmosphere taking into account the parameterisations in the state vector
@@ -717,7 +726,7 @@ class ForwardModel_0:
         self.LayerX = deepcopy(self.Layer)
         self.SpectroscopyX = deepcopy(self.Spectroscopy)
         self.CIAX = deepcopy(self.CIA)
-        flagh2p = False
+        #flagh2p = False
 
         #Errors and checks
         self.check_gas_spec_atm()
@@ -734,7 +743,7 @@ class ForwardModel_0:
         self.adjust_hydrostat = False
 
         #Mapping variables into different classes
-        xmap = self.subprofretg()
+        _ = self.subprofretg() # xmap
 
         #Calculating the atmospheric paths
         self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
@@ -772,10 +781,11 @@ class ForwardModel_0:
         #Convolving the spectrum with the instrument line shape
         _lgr.info('Convolving spectra and gradients with instrument line shape')
         if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
-            SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+            SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
         elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
             SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
-            dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
+        
+        dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
 
         #Applying any changes to the spectra required by the state vector
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
@@ -835,7 +845,7 @@ class ForwardModel_0:
 
         """
 
-        from scipy import interpolate
+        #from scipy import interpolate
         from copy import deepcopy
 
         #First we change the reference atmosphere taking into account the parameterisations in the state vector
@@ -848,7 +858,7 @@ class ForwardModel_0:
         self.LayerX = deepcopy(self.Layer)
         self.SpectroscopyX = deepcopy(self.Spectroscopy)
         self.CIAX = deepcopy(self.CIA)
-        flagh2p = False
+        #flagh2p = False
 
         #Errors and checks
         self.check_gas_spec_atm()
@@ -987,7 +997,7 @@ class ForwardModel_0:
 
         """
 
-        from scipy import interpolate
+        #from scipy import interpolate
         from copy import deepcopy
 
         #First we change the reference atmosphere taking into account the parameterisations in the state vector
@@ -1000,7 +1010,7 @@ class ForwardModel_0:
         self.LayerX = deepcopy(self.Layer)
         self.SpectroscopyX = deepcopy(self.Spectroscopy)
         self.CIAX = deepcopy(self.CIA)
-        flagh2p = False
+        #flagh2p = False
 
         #Errors and checks
         self.check_gas_spec_atm()
@@ -1017,7 +1027,7 @@ class ForwardModel_0:
         self.adjust_hydrostat = False
 
         #Mapping variables into different classes
-        xmap = self.subprofretg()
+        self.subprofretg() # xmap
 
         #Calculating the atmospheric paths
         self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
@@ -1104,7 +1114,7 @@ class ForwardModel_0:
 
         """
 
-        from scipy import interpolate
+        #from scipy import interpolate
         from copy import deepcopy
 
         #First we change the reference atmosphere taking into account the parameterisations in the state vector
@@ -1117,7 +1127,7 @@ class ForwardModel_0:
         self.LayerX = deepcopy(self.Layer)
         self.SpectroscopyX = deepcopy(self.Spectroscopy)
         self.CIAX = deepcopy(self.CIA)
-        flagh2p = False
+        #flagh2p = False
 
         #Errors and checks
         self.check_gas_spec_atm()
@@ -1234,7 +1244,7 @@ class ForwardModel_0:
 
         """
 
-        from scipy import interpolate
+        #from scipy import interpolate
         from copy import deepcopy
 
         #First we change the reference atmosphere taking into account the parameterisations in the state vector
@@ -1247,7 +1257,7 @@ class ForwardModel_0:
         self.LayerX = deepcopy(self.Layer)
         self.SpectroscopyX = deepcopy(self.Spectroscopy)
         self.CIAX = deepcopy(self.CIA)
-        flagh2p = False
+        #flagh2p = False
 
         #Errors and checks
         self.check_gas_spec_atm()
@@ -1264,7 +1274,7 @@ class ForwardModel_0:
         self.adjust_hydrostat = True
 
         #Mapping variables into different classes
-        xmap = self.subprofretg()
+        self.subprofretg() # xmap
         
         #Selecting the first angle to calculate the path (the actual geometry will be carried with the Measurement class)
         self.ScatterX.SOL_ANG = self.MeasurementX.SOL_ANG[0,0]
@@ -1292,121 +1302,6 @@ class ForwardModel_0:
 
 
     ###############################################################################################
-
-    def nemesisMAPfm(self,NCores=1):
-
-        """
-            FUNCTION NAME : nemesisMAPfm()
-
-            DESCRIPTION : This function computes a forward model of a map with several pixels. 
-                          The method implemented here assumes that ALL forward models required to
-                          construct the map coincide exactly with the locations at which the Atmosphere
-                          and Surface are defined. Namely, this means that:
-
-                            - Measurement.FLAT = Atmosphere.LATITUDE = Surface.LATITUDE
-                            - Measurement.FLON = Atmosphere.LONGITUDE = Surface.LONGITUDE
-                            
-                          The only exception for FLAT and FLON not to be equal to the points in the Atmosphere
-                          and Surface is if they are equal to -999. In this case, that particular forward model
-                          will be zero at all wavelengths. This exception is included to properly reconstruct
-                          the FOV of the instrument, in the case that it includes points outside the planet's disk.
-                          
-                          In order to optimise the computations, a forward model is calculated at every LOCATION
-                          defined in Atmosphere/Surface (or at every unique FLAT/FLON). The forward models are
-                          then combined as required to perform the convolution with the Point Spread Function (WGEOM)
-                          of the instrument.
-
-            INPUTS : none
-
-            OPTIONAL INPUTS:
-            
-                NCores :: Number of cores to use to compute the forward models in different locations in parallel
-
-            OUTPUTS :
-
-                SPECMOD(NCONV,NGEOM) :: Modelled spectra
-
-            CALLING SEQUENCE:
-
-                ForwardModel.nemesisMAPfm()
-
-            MODIFICATION HISTORY : Juan Alday (18/04/2023)
-
-        """
-
-        from copy import copy
-        
-        #Errors and checkcs
-        self.check_gas_spec_atm()
-        
-        #Checking that all FLAT and FLON points exist in the Atmosphere and Surface
-        for iGEOM in range(self.Measurement.NGEOM):
-            for iAV in range(self.Measurement.NAV[iGEOM]):
-                
-                #If FLAT is nan it means measurement is outside the disk
-                if np.isnan(self.Measurement.FLAT[iGEOM,iAV])==False:
-                
-                    iex = np.where( (self.Atmosphere.LATITUDE==self.Measurement.FLAT[iGEOM,iAV]) & (self.Atmosphere.LONGITUDE==self.Measurement.FLON[iGEOM,iAV]) &
-                                (self.Surface.LATITUDE==self.Measurement.FLAT[iGEOM,iAV]) & (self.Surface.LONGITUDE==self.Measurement.FLON[iGEOM,iAV]))[0]
-                
-                    if len(iex)==0:
-                        raise ValueError('error in nemesisMAPfm :: All FLAT/FLON points for the forward model must coincide with the locations in Atmosphere and Surface')
-                    
-        #Calculating a forward model for each LOCATION on the planet
-        SPEC = np.zeros((self.Spectroscopy.NWAVE,self.Atmosphere.NLOCATIONS))  #Modelled spectra at each of the locations
-        
-        if NCores==1:    #Only one available core
-        
-            for ISPEC in range(self.Atmosphere.NLOCATIONS):
-                
-                _lgr.info(f"nemesisMAPfm :: Calculating spectrum {(ISPEC,'of ',self.Atmosphere.NLOCATIONS)}")
-                SPEC[:,ISPEC] = calc_spectrum_location(ISPEC,self.Atmosphere,self.Surface,self.Measurement,self.Scatter,self.Spectroscopy,self.CIA,self.Stellar,self.Variables,self.Layer)
-                
-        else:            #Parallel computation of the forward models
-
-            _lgr.info('nemesisMAPfm :: Calculating spectra at different locations in parallel')
-
-            #ray.init(num_cpus=NCores)
-            #SPECtot_ids = []
-            #for ISPEC in range(self.Atmosphere.NLOCATIONS):
-            #    SPECtot_ids.append(calc_spectrum_location_parallel.remote(ISPEC,self.Atmosphere,self.Surface,self.Measurement,self.Scatter,self.Spectroscopy,self.CIA,self.Stellar,self.Variables,self.Layer))
-            
-            #Block until the results have finished and get the results.
-            #SPECtot1 = ray.get(SPECtot_ids)
-            #for ix in range(self.Atmosphere.NLOCATIONS):
-            #    SPEC[0:self.Spectroscopy.NWAVE,ix] = SPECtot1[ix]
-            #ray.shutdown()
-            
-            
-        #Convolving the spectra with the point spread function (WGEOM) for each geometry
-        _lgr.info('nemesisMAPfm :: Convolving the measurements with the Point Spread Function')
-        SPECMOD = np.zeros((self.Spectroscopy.NWAVE,self.Measurement.NGEOM))
-        for iGEOM in range(self.Measurement.NGEOM):
-            
-            #Going through each point within the instantaneous FOV
-            for iAV in range(self.Measurement.NAV[iGEOM]):
-                
-                if((np.isnan(self.Measurement.FLAT[iGEOM,iAV])==False) and (np.isnan(self.Measurement.FLON[iGEOM,iAV])==False)):
-                    iloc = np.where((self.Atmosphere.LATITUDE==self.Measurement.FLAT[iGEOM,iAV]) & (self.Atmosphere.LONGITUDE==self.Measurement.FLON[iGEOM,iAV]))[0]
-                    SPECMOD[:,iGEOM] = SPECMOD[:,iGEOM] + SPEC[:,iloc[0]] * self.Measurement.WGEOM[iGEOM,iAV]
-        
-            SPECMOD[:,iGEOM] = SPECMOD[:,iGEOM] / np.sum(self.Measurement.WGEOM[iGEOM,0:self.Measurement.NAV[iGEOM]])
-            
-            
-        #Applying any changes to the spectra required by the state vector
-        self.MeasurementX = copy(self.Measurement)
-        dSPECMOD = np.zeros((self.Spectroscopy.NWAVE,self.Measurement.NGEOM,self.Variables.NX))
-        SPECPSF,dSPEC = self.subspecret(SPECMOD,dSPECMOD,IGEOM=None)
-        
-        #Convolving the spectrum with the instrument line shape
-        _lgr.info('nemesisMAPfm :: Convolving spectra and gradients with instrument line shape')
-        if self.Spectroscopy.ILBL == SpectralCalculationMode.K_TABLES:
-            SPECONV,dSPECONV = self.MeasurementX.convg(SPECMOD,dSPECMOD,IGEOM='All')
-        elif self.Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            SPECONV,dSPECONV = self.MeasurementX.lblconvg(SPECMOD,dSPECMOD,IGEOM='All')
-
-        return SPECONV
-
 
     def chunked_execution(self, args):
         
@@ -1537,7 +1432,7 @@ class ForwardModel_0:
 
         """
 
-        from copy import deepcopy
+        #from copy import deepcopy
 
         #################################################################################
         # Making some calculations for storing all the arrays
@@ -1754,7 +1649,7 @@ class ForwardModel_0:
                     ix += self.Variables.models[ivar].n_state_vector_entries
 
         #Calculate atmospheric density
-        rho = self.AtmosphereX.calc_rho() #kg/m3
+        self.AtmosphereX.calc_rho() #rho kg/m3
 
 
         # NOTE: instead of having two different versions of `xmap`, just use the multiple location version.
@@ -1941,6 +1836,8 @@ class ForwardModel_0:
 
         """
 
+        model229 = NotImplemented
+        model230 = NotImplemented
         #Going through the different variables an updating the spectra and gradients accordingly
         ix = 0
         for ivar in range(self.Variables.NVAR):
@@ -2000,7 +1897,7 @@ class ForwardModel_0:
                 SPECONV1 = self.MeasurementX.lblconv(WAVE,SPECMOD,IGEOM='All')
                 dSPECONV[:,:,ix+6] = (SPECONV1-SPECONV_ref)/(par71-par7)
 
-                ipar = -1
+                #ipar = -1
                 ix = ix + self.Variables.NXVAR[ivar]
 
             elif self.Variables.VARIDENT[ivar,0]==230:
@@ -2237,6 +2134,7 @@ class ForwardModel_0:
         ##################################################
         
         self.LayerX.RADIUS = self.Layer.RADIUS[ILOC]
+        _lgr.info('CIRSrad :: Downwards flux calculation at the bottom of the atmosphere')
 
     ###############################################################################################
 
@@ -2341,7 +2239,7 @@ class ForwardModel_0:
         ##############################################################################
 
         #Based on the atmospheric layering, we calculate each atmospheric path (at each tangent height)
-        NCALC = 1    #Number of calculations (geometries) to be performed
+        #NCALC = 1    #Number of calculations (geometries) to be performed
         AtmCalc_List = []
         iAtmCalc = AtmCalc_0(
             Layer,
@@ -2391,8 +2289,8 @@ class ForwardModel_0:
         MODIFICATION HISTORY : Juan Alday (15/03/2021)
         """
 
-        from archnemesis import AtmCalc_0,Path_0
-        import numpy as np
+        
+        #import numpy as np
 
         #Initialise variables
         if Atmosphere is None:
@@ -2453,7 +2351,7 @@ class ForwardModel_0:
         ##############################################################################
 
         #Based on the atmospheric layering, we calculate each atmospheric path (at each tangent height)
-        NCALC = 1    #Number of calculations (geometries) to be performed
+        #NCALC = 1    #Number of calculations (geometries) to be performed
         AtmCalc_List = []
         iAtmCalc = AtmCalc_0(
             Layer,
@@ -2961,14 +2859,14 @@ class ForwardModel_0:
         #Nadir observation
         if Scatter.EMISS_ANG>=0.0:
             path_observer_pointing = PathObserverPointing.NADIR 
-            angle=Scatter.EMISS_ANG
+            #angle=Scatter.EMISS_ANG
 
 
         #Performing the calculation of the atmospheric path
         ##############################################################################
 
         #Based on the atmospheric layering, we calculate each atmospheric path (at each tangent height)
-        NCALC = Measurement.NGEOM    #Number of calculations (geometries) to be performed
+        #NCALC = Measurement.NGEOM    #Number of calculations (geometries) to be performed
         AtmCalc_List = []
         
         for iGEOM in range(Measurement.NGEOM):
@@ -3039,7 +2937,7 @@ class ForwardModel_0:
                 k_gas = self.SpectroscopyX.calc_k(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE) # (NWAVE,NG,NLAY,NGAS) 
 
             f_gas = np.zeros([self.SpectroscopyX.NGAS,self.LayerX.NLAY])
-            utotl = np.zeros(self.LayerX.NLAY)
+            #utotl = np.zeros(self.LayerX.NLAY)
             for i in range(self.SpectroscopyX.NGAS):
                 IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
                 f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * 1.0e-24  #Vertical column density of the radiatively active gases in cm-2
@@ -3192,6 +3090,7 @@ class ForwardModel_0:
     def calculate_transmission_spectrum(
             self,
             TAUTOT_PATH,
+            dTAUTOT_LAYINC,
             return_grad = False
         ) -> tuple[np.ndarray, None|np.ndarray]:
         SPECOUT = np.exp(-(TAUTOT_PATH))  #(NWAVE,NG,NPATH)
@@ -3201,7 +3100,7 @@ class ForwardModel_0:
         if self.MeasurementX.IFORM==SpectraUnit.Atmospheric_transmission:  #If IFORM=4 we should multiply the transmission by solar flux
             self.StellarX.calc_solar_flux()
             #Interpolating to the calculation wavelengths
-            f = interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
+            f =sp.interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
             solflux = f(self.SpectroscopyX.WAVE)
             xfac = solflux
             for ipath in range(self.PathX.NPATH):
@@ -3222,7 +3121,7 @@ class ForwardModel_0:
         SPECOUT = 1.0 - np.exp(-(TAUTOT_PATH)) #(NWAVE,NG,NPATH)
         return SPECOUT, None
     
-    def calculate_thermal_emission_spectrum(
+    def calculate_thermalscloud11flux_emission_spectrum(
             self,
             TAUTOT_LAYINC,
             dTAUTOT_LAYINC,
@@ -3387,44 +3286,7 @@ class ForwardModel_0:
             self,
             return_grad = False
         ) -> np.ndarray:
-        _lgr.info('CIRSrad :: Downwards flux calculation at the bottom of the atmosphere')
-
-        #The codes below calculates the downwards flux
-        #spectrum in units of W cm-2 (cm-1)-1 or W cm-2 um-1.
-
-        #Calculating spectrum
-        SPECOUT = np.zeros((self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.PathX.NPATH))
-        for ipath in range(self.PathX.NPATH):
-
-            #Calculating the solar flux at the top of the atmosphere
-            solar = np.zeros(self.SpectroscopyX.NWAVE)
-            if self.StellarX.SOLEXIST==True:
-                self.StellarX.calc_solar_flux()
-                f = scipy.interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
-                solar[:] = f(self.SpectroscopyX.WAVE)  #W cm-2 (cm-1)-1 or W cm-2 um-1
-
-
-            #Defining the units of the output spectrum
-            xfac = 1.
-            if self.MeasurementX.IFORM==SpectraUnit.FluxRatio:
-                xfac=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2.
-                f = scipy.interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLSPEC)
-                solpspec = f(self.SpectroscopyX.WAVE)  #Stellar power spectrum (W (cm-1)-1 or W um-1)
-                xfac = xfac / solpspec
-            elif self.MeasurementX.IFORM==SpectraUnit.Integrated_spectral_power:
-                xfac=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2.
-
-            #Calculating the radiance at the boundaries of each layer
-            #Uplf(NWAVE,NG,NMU,NLAY,NF)   Donward radiance in the bottom boundary of each layer
-            #Umif(NWAVE,NG,NMU,NLAY,NF)   Upward radiance in the top boundary of each layer
-            Uplf,Umif = self.scloud11flux(self.ScatterX,self.SurfaceX,self.LayerX,self.MeasurementX,solar,diffuse=True)
-
-            #Calculating the fluxes at the boundaries of each layer
-            fup,fdown = self.streamflux(self.LayerX.NLAY,self.ScatterX.NMU,self.ScatterX.MU,self.ScatterX.WTMU,Umif,Uplf)  #(NWAVE,NG,NLAY)
-
-            #Getting the downward flux at the bottom layer 
-            SPECOUT[:,:,ipath] = fdown[:,:,0]*xfac
-        return SPECOUT
+        raise NotImplementedError('Downwards flux calculation at the bottom of the atmosphere is not implemented')
 
     def calculate_multiple_scattering_spectrum(
             self,
@@ -3490,8 +3352,8 @@ class ForwardModel_0:
         """
 
         #import matplotlib as matplotlib
-        from scipy import interpolate
-        from copy import copy
+        #from scipy import interpolate
+        #from copy import copy
 
         #Initialise some arrays
         ###################################
@@ -3552,7 +3414,7 @@ class ForwardModel_0:
                 | PathCalc.MULTIPLE_SCATTERING
                 | PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL
             ) & IMODM:  #Pure transmission
-            SPECOUT, dSPECOUT = self.calculate_transmission_spectrum(TAUTOT_PATH, return_grad)
+            SPECOUT, dSPECOUT = self.calculate_transmission_spectrum(TAUTOT_PATH, dTAUTOT_LAYINC, return_grad)
         
         elif PathCalc.ABSORBTION in IMODM: #Absorbtion (useful for small transmissions) 
             SPECOUT, dSPECOUT = self.calculate_absorption_spectrum(TAUTOT_PATH, return_grad)
@@ -3619,9 +3481,8 @@ class ForwardModel_0:
 
         """
 
-        from scipy import interpolate
-        #from NemesisPy import nemesisf
-        from copy import copy
+        #from scipy import interpolate
+        #from copy import copy
         
 
         #Calculating the vertical opacity of each self.LayerX
@@ -3686,7 +3547,7 @@ class ForwardModel_0:
 
         #Adding the opacity by the different dust populations
         TAUDUST = np.sum(TAUDUST1,2)  #(NWAVE,NLAYER)
-        TAUSCAT = np.sum(TAUCLSCAT,2)  #(NWAVE,NLAYER)
+        #TAUSCAT = np.sum(TAUCLSCAT,2)  #(NWAVE,NLAYER)
 
         for i in range(self.ScatterX.NDUST):
             dTAUCON[:,self.AtmosphereX.NVMR+1+i,:] = dTAUCON[:,self.AtmosphereX.NVMR+1+i,:] + dTAUDUST1[:,:,i]  #dTAUDUST/dAMOUNT (m2)
@@ -3730,7 +3591,7 @@ class ForwardModel_0:
             k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP) # (NWAVE,NG,NLAY,NGAS)
             
             f_gas = np.zeros([self.SpectroscopyX.NGAS,self.LayerX.NLAY])
-            utotl = np.zeros(self.LayerX.NLAY)
+            #utotl = np.zeros(self.LayerX.NLAY)
             for i in range(self.SpectroscopyX.NGAS):
                 IGAS = np.where( (self.AtmosphereX.ID==self.SpectroscopyX.ID[i]) & (self.AtmosphereX.ISO==self.SpectroscopyX.ISO[i]) )[0][0]
                 f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * 1.0e-4 * 1.0e-20  #Vertical column density of the radiatively active gases in cm-2
@@ -3830,7 +3691,7 @@ class ForwardModel_0:
             if self.MeasurementX.IFORM==SpectraUnit.Atmospheric_transmission:  #If IFORM=4 we should multiply the transmission by solar flux
                 self.StellarX.calc_solar_flux()
                 #Interpolating to the calculation wavelengths
-                f = interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
+                f =sp.interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
                 solflux = f(self.SpectroscopyX.WAVE)
                 xfac = solflux
                 for ipath in range(self.PathX.NPATH):
@@ -3859,13 +3720,13 @@ class ForwardModel_0:
             xfac = np.ones(self.SpectroscopyX.NWAVE)
             if self.MeasurementX.IFORM==SpectraUnit.FluxRatio:
                 xfac*=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2.
-                f = interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLSPEC)
+                f =sp.interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLSPEC)
                 solpspec = f(self.SpectroscopyX.WAVE)  #self.StellarX power spectrum (W (cm-1)-1 or W um-1)
                 xfac = xfac / solpspec
 
             #Interpolating the emissivity of the self.SurfaceX to the calculation wavelengths
             if self.SurfaceX.TSURF>0.0:
-                f = interpolate.interp1d(self.SurfaceX.VEM,self.SurfaceX.EMISSIVITY)
+                f =sp.interpolate.interp1d(self.SurfaceX.VEM,self.SurfaceX.EMISSIVITY)
                 EMISSIVITY = f(self.SpectroscopyX.WAVE)
             else:
                 EMISSIVITY = np.zeros(self.SpectroscopyX.NWAVE)
@@ -3920,7 +3781,7 @@ class ForwardModel_0:
                                  (NVMR+1) para-H2 fraction
         """
 
-        from scipy import interpolate
+        #from scipy import interpolate
         from archnemesis.CIA_0 import co2cia,n2h2cia,n2n2cia
 
        #Initialising variables
@@ -3941,26 +3802,26 @@ class ForwardModel_0:
         #Calculating index of some specific species
         ico2 = -1
         ih2 = -1
-        ihe = -1
-        ich4 = -1
+        #ihe = -1
+        #ich4 = -1
         in2 = -1
         for i in range(Atmosphere.NVMR):
 
-            if Atmosphere.ID[i]==Gas.H2:
+            if Atmosphere.ID[i]==ans.enums.Gas.H2:
                 if((Atmosphere.ISO[i]==0) or (Atmosphere.ISO[i]==1)):
                     ih2 = i
 
-            if Atmosphere.ID[i]==Gas.He:
-                ihe = i
+            if Atmosphere.ID[i]==ans.enums.Gas.He:
+                pass#ihe = i
 
-            if Atmosphere.ID[i]==Gas.N2:
+            if Atmosphere.ID[i]==ans.enums.Gas.N2:
                 in2 = i
 
-            if Atmosphere.ID[i]==Gas.CH4:
+            if Atmosphere.ID[i]==ans.enums.Gas.CH4:
                 if((Atmosphere.ISO[i]==0) or (Atmosphere.ISO[i]==1)):
-                    ich4 = i
+                    pass#ich4 = i
 
-            if Atmosphere.ID[i]==Gas.CO2:
+            if Atmosphere.ID[i]==ans.enums.Gas.CO2:
                 if((Atmosphere.ISO[i]==0) or (Atmosphere.ISO[i]==1)):
                     ico2 = i
         
@@ -3992,7 +3853,7 @@ class ForwardModel_0:
             #Interpolating to the correct temperature
             temp1 = Layer.TEMP[ilay]
             it = np.argmin(np.abs(CIA.TEMP-temp1))
-            temp0 = CIA.TEMP[it]
+            #temp0 = CIA.TEMP[it]
 
             if CIA.TEMP[it]>=temp1:
                 ithi = it
@@ -4014,7 +3875,7 @@ class ForwardModel_0:
             
             frac1 = Layer.FRAC[ilay]
             ip = np.argmin(np.abs(CIA.FRAC-frac1))
-            frac0 = CIA.FRAC[ip]
+            #frac0 = CIA.FRAC[ip]
             
             if CIA.FRAC[ip]>=frac1:
                 iphi = ip
@@ -4048,19 +3909,19 @@ class ForwardModel_0:
             fhl_temp = (temp1 - CIA.TEMP[itl]) / (CIA.TEMP[ithi] - CIA.TEMP[itl])
             fhh_temp = (CIA.TEMP[ithi] - temp1) / (CIA.TEMP[ithi] - CIA.TEMP[itl])
             dfhldT = 1.0 / (CIA.TEMP[ithi] - CIA.TEMP[itl])
-            dfhhdT = -1.0 / (CIA.TEMP[ithi] - CIA.TEMP[itl])
+            #dfhhdT = -1.0 / (CIA.TEMP[ithi] - CIA.TEMP[itl])
 
             # Interpolation factors for para fraction
             if len(CIA.FRAC) > 1:
                 fhl_frac = (frac1 - CIA.FRAC[ipl]) / (CIA.FRAC[iphi] - CIA.FRAC[ipl])
                 fhh_frac = (CIA.FRAC[iphi] - frac1) / (CIA.FRAC[iphi] - CIA.FRAC[ipl])
-                dfhldF = 1.0 / (CIA.FRAC[iphi] - CIA.FRAC[ipl])
-                dfhhdF = -1.0 / (CIA.FRAC[iphi] - CIA.FRAC[ipl])
+                #dfhldF = 1.0 / (CIA.FRAC[iphi] - CIA.FRAC[ipl])
+                #dfhhdF = -1.0 / (CIA.FRAC[iphi] - CIA.FRAC[ipl])
             else:
                 fhl_frac = 0.5
                 fhh_frac = 0.5
-                dfhldF = 0.0
-                dfhhdF = 0.0
+                #dfhldF = 0.0
+                #dfhhdF = 0.0
 
             # Final interpolation for kt and dktdT considering both temperature and para fraction
             ktlo = ktloplo * fhh_temp + kthiplo * fhl_temp
@@ -4071,7 +3932,7 @@ class ForwardModel_0:
             dktdT = (kthi - ktlo) * dfhldT
 
             # Derivative with respect to fraction
-            dktdF = (kthi - ktlo) * dfhldF + (ktlophi - ktloplo) * dfhhdF
+            #dktdF = (kthi - ktlo) * dfhldF + (ktlophi - ktloplo) * dfhhdF
                         
             #Cheking that interpolation can be performed to the calculation wavenumbers
             if( (CIA.WAVEN.min()<=WAVEN.min()) & (CIA.WAVEN.max()>=WAVEN.max()) ):
@@ -4105,9 +3966,9 @@ class ForwardModel_0:
                         k_cia = np.zeros(NWAVEC)
                         dkdT_cia = np.zeros(NWAVEC)
                         
-                        f = interpolate.interp1d(CIA.WAVEN,kt[ipair,:])
+                        f =sp.interpolate.interp1d(CIA.WAVEN,kt[ipair,:])
                         k_cia[inwave1] = f(WAVEN[inwave1])
-                        f = interpolate.interp1d(CIA.WAVEN,dktdT[ipair,:])
+                        f =sp.interpolate.interp1d(CIA.WAVEN,dktdT[ipair,:])
                         dkdT_cia[inwave1] = f(WAVEN[inwave1])
                 
                         if INORMALD[ipair]==True:
@@ -4196,7 +4057,7 @@ class ForwardModel_0:
         if Layer is None:
             Layer = self.LayerX
 
-        from scipy import interpolate
+        #from scipy import interpolate
 
         if (WAVEC.min() < Scatter.WAVE.min()) & (WAVEC.max() > Scatter.WAVE.min()):
             _lgr.info(f"spectral range for calculation =  {(WAVEC.min(),'-',WAVEC.max())}")
@@ -4215,11 +4076,11 @@ class ForwardModel_0:
                 Layer.CONT[:, i] = Layer.CONT[:, i] / Layer.CONT[:, i].sum() * 1e4 * self.AtmosphereX.DUST_RENORMALISATION[i]
 
             if Scatter.NWAVE > 2:
-                f_kext = interpolate.interp1d(Scatter.WAVE, Scatter.KEXT[:, i], kind='cubic')
-                f_ksca = interpolate.interp1d(Scatter.WAVE, Scatter.KSCA[:, i], kind='cubic')
+                f_kext =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KEXT[:, i], kind='cubic')
+                f_ksca =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KSCA[:, i], kind='cubic')
             else:
-                f_kext = interpolate.interp1d(Scatter.WAVE, Scatter.KEXT[:, i])
-                f_ksca = interpolate.interp1d(Scatter.WAVE, Scatter.KSCA[:, i])
+                f_kext =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KEXT[:, i])
+                f_ksca =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KSCA[:, i])
 
             kext = f_kext(WAVEC)
             ksca = f_ksca(WAVEC)
@@ -4230,12 +4091,12 @@ class ForwardModel_0:
             invalid_both = (kext < ksca)
 
             if np.any(invalid_ksca):
-                ksca[invalid_ksca] = interpolate.interp1d(Scatter.WAVE, Scatter.KSCA[:, i], fill_value="extrapolate")(WAVEC[invalid_ksca])
+                ksca[invalid_ksca] =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KSCA[:, i], fill_value="extrapolate")(WAVEC[invalid_ksca])
             if np.any(invalid_kext):
-                kext[invalid_kext] = interpolate.interp1d(Scatter.WAVE, Scatter.KEXT[:, i], fill_value="extrapolate")(WAVEC[invalid_kext])
+                kext[invalid_kext] =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KEXT[:, i], fill_value="extrapolate")(WAVEC[invalid_kext])
             if np.any(invalid_both):
-                kext[invalid_both] = interpolate.interp1d(Scatter.WAVE, Scatter.KEXT[:, i], fill_value="extrapolate")(WAVEC[invalid_both])
-                ksca[invalid_both] = interpolate.interp1d(Scatter.WAVE, Scatter.KSCA[:, i], fill_value="extrapolate")(WAVEC[invalid_both])
+                kext[invalid_both] =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KEXT[:, i], fill_value="extrapolate")(WAVEC[invalid_both])
+                ksca[invalid_both] =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KSCA[:, i], fill_value="extrapolate")(WAVEC[invalid_both])
 
             # Calculating the opacity at each layer
             for j in range(Layer.NLAY):
@@ -4335,7 +4196,6 @@ class ForwardModel_0:
 
         """
 
-        #from NemesisPy.nemesisf import spectroscopy
         #Calculating the gaseous line opacity in each layer
         ########################################################################################################
 
@@ -4368,7 +4228,7 @@ class ForwardModel_0:
             k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE) # (NWAVE,NG,NLAY,NGAS)
 
             f_gas = np.zeros((self.SpectroscopyX.NGAS,self.LayerX.NLAY))
-            utotl = np.zeros(self.LayerX.NLAY)
+            #utotl = np.zeros(self.LayerX.NLAY)
             for i in range(self.SpectroscopyX.NGAS):
                 IGAS = np.where( (self.AtmosphereX.ID==self.SpectroscopyX.ID[i]) & (self.AtmosphereX.ISO==self.SpectroscopyX.ISO[i]) )
                 IGAS = IGAS[0]
@@ -4466,7 +4326,7 @@ class ForwardModel_0:
             RADGROUND[:,:] = planck(Measurement.ISPACE, WAVE, Layer.TEMP[0])[:, None]
         else:
             bbsurf = planck(Measurement.ISPACE, WAVE, Surface.TSURF)
-            EMISSIVITY[:] = interp1d(Surface.VEM, Surface.EMISSIVITY)(WAVE)
+            EMISSIVITY[:] = sp.interpolate.interp1d(Surface.VEM, Surface.EMISSIVITY)(WAVE)
             for imu in range(Scatter.NMU):
                 RADGROUND[:,imu] = bbsurf * EMISSIVITY
 
@@ -4545,829 +4405,6 @@ class ForwardModel_0:
 
         SPEC = np.transpose(SPEC, (2, 1, 0))
         return SPEC
-
-    ###############################################################################################
-    def scloud11flux(self,Scatter,Surface,Layer,Measurement,SOLAR,diffuse=True):
-        """
-        Compute and return internal radiation fields in a scattering atmosphere
-        Code uses matrix operator algorithm.  Diffuse incident radiation 
-        is allowed at the bottom and single-beam incident radiation 
-        (sunlight) at the top. 
- 
-        The layer numbers here are 1 at the top increasing to NLAY at the 
-        bottom. If a Lambertian reflector is added at the bottom then the 
-        number of layers is increased by 1.
-
-        NOTE:  the angle arrays passed from the calling pgm. are assumed to be 
-        in order of increasing MU.  However, the CLOUD subroutines use the 
-        opposite convention, so we must reverse the order.  (The order has no 
-        effect within this routine, other than in using the supplied boundary 
-        conditions, but it does affect pre-/post-processing in the calling s/w.)
-
-        Optimised for maximum speed by cutting out any code from scloud6
-        which is not actually used for NIMS retrieval runs.
- 
-        Inputs
-        ________
-
-        Scatter :: Python class defining the scattering setup
-        Surface :: Python class defining the surface setup
-        Layer :: Python class defining the properties of each layer including the optical depths
-        Measurement :: Python class defining the measurement
-        SOLAR(NWAVE) :: Solar flux 
-
-        Optional inputs
-        _______________
-
-        diffuse :: If False, scattering is turned off so that results is only the direct component
-
-        Outputs
-        ________
-
-        Uplf(NWAVE,NG,NMU,NLAY,NF) :: Internal radiances in each viewing direction (downwards)
-        Umif(NWAVE,NG,NMU,NLAY,NF) :: Internal radiances in each viewing direction (upwards)
-        """
-
-        from scipy.interpolate import interp1d
-        #from NemesisPy import nemesisf
-
-        ################################################################################
-        #INITIALISING VARIABLES AND PERFORMING INITIAL CALCULATIONS
-        ##############################################################################
-
-        #Defining the number of scattering species
-        if Scatter.IRAY != RayleighScatteringMode.NOT_INCLUDED:
-            NCONT = Scatter.NDUST + 1
-        else:
-            NCONT = Scatter.NDUST
-
-        #Find correction for any quadrature errors
-        xfac = np.sum(Scatter.MU*Scatter.WTMU)
-        xfac = 0.5/xfac
-
-        LTOT = Layer.NLAY     # Set internal number of layers
-        LT1 = LTOT
-
-        #In case of surface reflection, add extra dummy layer at bottom,
-        #whose transmission matrix = (1-A)*Unit-Matrix. This layer must be
-        #omitted from computation by doubling
-
-        if Surface.LOWBC != LowerBoundaryCondition.THERMAL:
-            LTOT = LTOT + 1
-
-        #Reset the order of angles
-        Scatter.MU = Scatter.MU[::-1]
-        Scatter.WTMU = Scatter.WTMU[::-1]
-
-        #Setting up constant matrices
-        E = np.identity(Scatter.NMU)
-        MM = np.zeros((Scatter.NMU,Scatter.NMU))
-        MMINV = np.zeros((Scatter.NMU,Scatter.NMU))
-        CC = np.zeros((Scatter.NMU,Scatter.NMU))
-        CCINV = np.zeros((Scatter.NMU,Scatter.NMU))
-        np.fill_diagonal(MM,[Scatter.MU])
-        np.fill_diagonal(MMINV,[1./Scatter.MU])
-        np.fill_diagonal(CC,[Scatter.WTMU])
-        np.fill_diagonal(CCINV,[1./Scatter.WTMU])
-
-
-
-        ################################################################################
-        #CALCULATE THE ALBEDO, EMISSIVITY AND GROUND EMISSION AT THE SURFACE
-        ################################################################################
-
-        _lgr.info('scloud11flux :: Calculating surface properties')
-
-        #Calculating the surface properties at each wavelength (emissivity, albedo and thermal emission)
-        RADGROUND = np.zeros(Spectroscopy.NWAVE)
-        ALBEDO = np.zeros(Spectroscopy.NWAVE)
-        EMISSIVITY = np.zeros(Spectroscopy.NWAVE)
-
-        if Surface.TSURF<=0.0:  #No surface
-            RADGROUND[:] = planck(Measurement.ISPACE,Spectroscopy.WAVE,Layer.TEMP[0])
-        else:
-            #Calculating the blackbody at given temperature
-            bbsurf = planck(Measurement.ISPACE,Spectroscopy.WAVE,Surface.TSURF)
-
-            #Calculating the emissivity
-            f = interp1d(Surface.VEM,Surface.EMISSIVITY)
-            EMISSIVITY[:] = f(Spectroscopy.WAVE)
-
-            #Calculating thermal emission from surface
-            RADGROUND[:] = bbsurf * EMISSIVITY
-
-            #Calculating ground albedo
-            if Surface.GALB<0.0:
-                ALBEDO[:] = 1.0 - EMISSIVITY[:]
-            else:
-                ALBEDO[:] = Surface.GALB
-
-
-
-        ################################################################################
-        #CALCULATING THE THERMAL EMISSION OF EACH LAYER
-        ################################################################################
-
-        _lgr.info('scloud11flux :: Calculating thermal emission of each layer')
-
-        #Calculating the thermal emission of each atmospheric layer
-        BB = np.zeros((Spectroscopy.NWAVE,Layer.NLAY))  #Blackbody in each layer
-        for ilay in range(Layer.NLAY):
-            BB[:,ilay] = planck(Measurement.ISPACE, Spectroscopy.WAVE, Layer.TEMP[ilay])
-
-
-
-        ################################################################################
-        #CALCULATING THE EFFECTIVE PHASE FUNCTION IN EACH LAYER
-        ################################################################################
-
-        _lgr.info('scloud11flux :: Calculating phase matrix and scattering properties of each layer')
-
-        #Calculating the phase matrices for each aerosol population and Rayleigh scattering
-        PPLPL,PPLMI = self.calc_phase_matrix(Scatter,Spectroscopy.WAVE)  #(NWAVE,NCONT,NF+1,NMU,NMU)
-
-        #Calculating the fraction of scattering by each aerosol type and rayleigh
-        FRAC = np.zeros((Spectroscopy.NWAVE,Layer.NLAY,NCONT))
-        iiscat = np.where((Layer.TAUSCAT+Layer.TAURAY)>0.0)
-        if(len(iiscat[0])>0):
-            FRAC[iiscat[0],iiscat[1],0:Scatter.NDUST] = np.transpose(np.transpose(Layer.TAUCLSCAT[iiscat[0],iiscat[1],:],axes=[1,0]) / ((Layer.TAUSCAT[iiscat[0],iiscat[1]]+Layer.TAURAY[iiscat[0],iiscat[1]])),axes=[1,0])  #Fraction of each aerosol scattering FRAC = TAUCLSCAT/(TAUSCAT+TAURAY)
-            if Scatter.IRAY != RayleighScatteringMode.NOT_INCLUDED:
-                FRAC[iiscat[0],iiscat[1],Scatter.NDUST] = Layer.TAURAY[iiscat[0],iiscat[1]] / ((Layer.TAUSCAT[iiscat[0],iiscat[1]]+Layer.TAURAY[iiscat[0],iiscat[1]])) #Fraction of Rayleigh scattering FRAC = TAURAY/(TAUSCAT+TAURAY)
-
-        #Calculating the weighted averaged phase matrix in each layer and direction
-        _lgr.info('scloud11flux :: Calculating weighted average phase matrix in each layer')
-        PPLPLS = np.zeros((Spectroscopy.NWAVE,Layer.NLAY,Scatter.NF+1,Scatter.NMU,Scatter.NMU))
-        PPLMIS = np.zeros((Spectroscopy.NWAVE,Layer.NLAY,Scatter.NF+1,Scatter.NMU,Scatter.NMU))
-
-        for ilay in range(Layer.NLAY):
-            PPLPLS[:,ilay,:,:,:] =  np.transpose(np.sum(np.transpose(PPLPL,axes=[2,3,4,0,1])*FRAC[:,ilay,:],axis=4),axes=[3,0,1,2])  #SUM(PPLPL*FRAC)
-            PPLMIS[:,ilay,:,:,:] =  np.transpose(np.sum(np.transpose(PPLMI,axes=[2,3,4,0,1])*FRAC[:,ilay,:],axis=4),axes=[3,0,1,2])  #SUM(PPLMI*FRAC)
-
-        #Calculating the single scattering albedo of each layer (TAURAY+TAUSCAT/TAUTOT)
-        NG = Layer.TAUTOT.shape[1]
-        OMEGA = np.zeros((Spectroscopy.NWAVE,NG,Layer.NLAY))
-        iin = np.where(Layer.TAUTOT>0.0)
-        if(len(iin[0])>0):
-            OMEGA[iin[0],iin[1],iin[2]] = (Layer.TAURAY[iin[0],iin[2]]+Layer.TAUSCAT[iin[0],iin[2]]) / Layer.TAUTOT[iin[0],iin[1],iin[2]]
-
-
-        if diffuse==False:
-            OMEGA[:,:,:] = 0.0  #No scattering if diffuse component is turned off
-        
-        ################################################################################
-        #CALCULATING THE REFLECTION, TRANSMISSION AND SOURCE MATRICES FOR EACH LAYER
-        #################################################################################
-
-        RL1,TL1,JL1,ISCL1 = nemesisf.mulscatter.calc_rtf_matrix(Scatter.MU,Scatter.WTMU,\
-                                                    Layer.TAUTOT,OMEGA,Layer.TAURAY,BB,PPLPLS,PPLMIS)
-        #(NWAVE,NG,NLAY,NF+1,NMU,NMU)
-        
-        
-        #################################################################################
-        #CALCULATING THE REFLECTION, TRANSMISSION AND SOURCE MATRICES FOR SURFACE
-        #################################################################################
-
-        JL = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NF+1,Scatter.NMU,1))  #Source function of atmosphere + surface
-        RL = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NF+1,Scatter.NMU,Scatter.NMU))  #Reflection matrix of atmosphere + surface
-        TL = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NF+1,Scatter.NMU,Scatter.NMU))  #Transmission matrix of atmosphere + surface 
-        ISCL = np.zeros((Spectroscopy.NWAVE,NG,LTOT),dtype='int32')  #Flag indicating if the layer is scattering
-
-        if Surface.GASGIANT==False:
-
-            _lgr.info('scloud11flux :: Calculating the reflection, transmission and source matrices of the surface')
-
-            JS = np.zeros((Spectroscopy.NWAVE,Scatter.NF+1,Scatter.NMU,1))  #Source function
-            RS = np.zeros((Spectroscopy.NWAVE,Scatter.NF+1,Scatter.NMU,Scatter.NMU))  #Reflection matrix
-            TS = np.zeros((Spectroscopy.NWAVE,Scatter.NF+1,Scatter.NMU,Scatter.NMU))  #Transmission matrix
-
-            if Surface.LOWBC == LowerBoundaryCondition.LAMBERTIAN:  #Lambertian reflection
-
-                IC = 0   #For the rest of the NF values, it is zero
-                for j in range(Scatter.NMU):
-
-                    JS[:,IC,j,0] = (1.0-ALBEDO[:])*RADGROUND[:]  #Source function is considered isotropic
-
-                    for i in range(Scatter.NMU):
-
-                        TS[:,IC,i,j] = 0.0    #Transmission at the surface is zero
-                        RS[:,IC,i,j] = 2.0*ALBEDO[:]*Scatter.MU[j]*Scatter.WTMU[j]  #Sum of MU*WTMU = 0.5
-                        #Make any quadrature correction
-                        RS[:,IC,i,j] = RS[:,IC,i,j]*xfac
-
-            elif Surface.LOWBC == LowerBoundaryCondition.HAPKE:  #Hapke surface
-
-                Reflectivity = self.calc_hapke_reflectivity(Scatter,Surface,Spectroscopy.WAVE)
-
-                #REFLECTION
-                for j in range(Scatter.NMU):
-                    for i in range(Scatter.NMU):
-                        for kl in range(Scatter.NF+1):
-                            RS[:,kl,i,j] = 2.0*Reflectivity[:,kl,i,j]*Scatter.MU[j]*Scatter.WTMU[j]  #Sum of MU*WTMU = 0.5
-                            #Make any quadrature correction
-                            RS[:,kl,i,j] = RS[:,kl,i,j]*xfac
-
-                #THERMAL EMISSION
-                IC = 0   #For the rest of the NF values, it is zero
-                for j in range(Scatter.NMU):
-                    JS[:,IC,j,0] = EMISSIVITY[:]*RADGROUND[:]  #Source function is considered isotropic
-
-
-
-            #Adding the surface matrix to the combined atmosphere + surface system
-            JL[:,:,0,:,:,:] = np.repeat(JS[:,np.newaxis,:,:,:],NG,axis=1)
-            RL[:,:,0,:,:,:] = np.repeat(RS[:,np.newaxis,:,:,:],NG,axis=1)
-            TL[:,:,0,:,:,:] = np.repeat(TS[:,np.newaxis,:,:,:],NG,axis=1)
-
-            #Adding the atmosphere to the combined atmosphere + surface system
-            JL[:,:,1:LTOT,:,:,:] = JL1[:,:,:,:,:,:]
-            TL[:,:,1:LTOT,:,:,:] = TL1[:,:,:,:,:,:]
-            RL[:,:,1:LTOT,:,:,:] = RL1[:,:,:,:,:,:]
-            #ISCL[:,:,1:LTOT] = ISCL1[:,:,:]
-            ISCL[:,:,:] = 1
-
-        else:
-
-            #Adding the atmosphere to the combined atmosphere + surface system
-            JL[:,:,:,:,:,:] = JL1[:,:,:,:,:,:]
-            TL[:,:,:,:,:,:] = TL1[:,:,:,:,:,:]
-            RL[:,:,:,:,:,:] = RL1[:,:,:,:,:,:]
-            ISCL[:,:,:] = ISCL1[:,:,:]
-
-        ###############################################################################
-        # CALCULATING THE INTERNAL RADIATION FIELDS
-        ###############################################################################
-
-        Uplf = np.zeros((Spectroscopy.NWAVE,NG,Scatter.NMU,Layer.NLAY,Scatter.NF+1))  #Internal radiances in each viewing direction (downwards)
-        Umif = np.zeros((Spectroscopy.NWAVE,NG,Scatter.NMU,Layer.NLAY,Scatter.NF+1))  #Internal radiances in each viewing direction (upwards)
-
-        _lgr.info('scloud11flux :: Calculating spectra')
-        for IC in range(Scatter.NF+1):
-
-            #***********************************************************************
-            #CALCULATE UPWARD MATRICES FOR COMPOSITE OF L LAYERS FROM BASE OF CLOUD.
-            #XBASE(I,J,L) IS THE X MATRIX FOR THE BOTTOM L LAYERS OF THE CLOUD.
-            #AS FOR "TOP", R01 = R10 & T01 = T10 IS VALID FOR LAYER BEING ADDED ONLY.
-
-            #i.e. XBASE(I,J,L) is the effective reflectivity, transmission and emission
-            #of the bottom L layers of the atmosphere (i.e. layers LTOT-L+1 to LTOT)
-            #***********************************************************************
-
-            JBASE = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NMU,1))  #Source function
-            RBASE = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NMU,Scatter.NMU))  #Reflection matrix
-            TBASE = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NMU,Scatter.NMU))  #Transmission matrix            
-
-            #Filling the first value with the surface or lowest layer
-            JBASE[:,:,0,:,:] = JL[:,:,0,IC,:,:]
-            RBASE[:,:,0,:,:] = RL[:,:,0,IC,:,:]
-            TBASE[:,:,0,:,:] = TL[:,:,0,IC,:,:]
-
-            #Combining the adjacent layers
-            for ILAY in range(LTOT-1):
-
-                #In the Fortran version of NEMESIS the layers are defined from top to 
-                #bottom while here they are from bottom to top, therefore the indexing
-                #in this part of the code differs with respect to the Fortran version
-
-                for iwave in range(Spectroscopy.NWAVE):
-                    for ig in range(NG):
-                        RBASE[iwave,ig,ILAY+1,:,:],TBASE[iwave,ig,ILAY+1,:,:],JBASE[iwave,ig,ILAY+1,:,:] = nemesisf.mulscatter.addp_layer(\
-                            E,RL[iwave,ig,ILAY+1,IC,:,:],TL[iwave,ig,ILAY+1,IC,:,:],JL[iwave,ig,ILAY+1,IC,:,:],ISCL[iwave,ig,ILAY+1],RBASE[iwave,ig,ILAY,:,:],TBASE[iwave,ig,ILAY,:,:],JBASE[iwave,ig,ILAY,:,:])
-
-            if IC!=0:
-                JBASE[:,:,:,:,:] = 0.0
-
-            #***********************************************************************
-            #CALCULATE DOWNWARD MATRICES FOR COMPOSITE OF L LAYERS FROM TOP OF CLOUD.
-            #XTOP(I,J,L) IS THE X MATRIX FOR THE TOP L LAYERS OF CLOUD.
-            #NOTE THAT R21 = R12 & T21 = T12 VALID FOR THE HOMOGENEOUS LAYER BEING ADD$
-            #BUT NOT FOR THE INHOMOGENEOUS RESULTING "TOP" LAYER
-
-            #i.e. XTOP(I,J,L) is the effective reflectivity, transmission and emission
-            #of the top L layers of the atmosphere (i.e. layers 1-L)
-
-            #Specifically
-            #RTOP(I,J,L) is RL0
-            #TTOP(I,J,L) is T0L
-            #JTOP(J,1,L) is JP0L
-            #***********************************************************************
-  
-            JTOP = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NMU,1))  #Source function
-            RTOP = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NMU,Scatter.NMU))  #Reflection matrix
-            TTOP = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NMU,Scatter.NMU))  #Transmission matrix            
-
-            #Filling the first value with the surface 
-            JTOP[:,:,0,:,:] = JL[:,:,LTOT-1,IC,:,:]
-            RTOP[:,:,0,:,:] = RL[:,:,LTOT-1,IC,:,:]
-            TTOP[:,:,0,:,:] = TL[:,:,LTOT-1,IC,:,:]
-
-            #Combining the adjacent layers
-            for ILAY in range(LTOT-1):
-
-                #In the Fortran version of NEMESIS the layers are defined from top to 
-                #bottom while here they are from bottom to top, therefore the indexing
-                #in this part of the code differs with respect to the Fortran version
-
-                for iwave in range(Spectroscopy.NWAVE):
-                    for ig in range(NG):
-                        RTOP[iwave,ig,ILAY+1,:,:],TTOP[iwave,ig,ILAY+1,:,:],JTOP[iwave,ig,ILAY+1,:,:] = nemesisf.mulscatter.addp_layer(\
-                            E,RL[iwave,ig,LTOT-2-ILAY,IC,:,:],TL[iwave,ig,LTOT-2-ILAY,IC,:,:],JL[iwave,ig,LTOT-2-ILAY,IC,:,:],ISCL[iwave,ig,LTOT-2-ILAY],RTOP[iwave,ig,ILAY,:,:],TTOP[iwave,ig,ILAY,:,:],JTOP[iwave,ig,ILAY,:,:])
-
-            if IC!=0:
-                JTOP[:,:,:,:,:] = 0.0
-
-            #Calculating the observing angles
-            if Scatter.SOL_ANG>90.0:
-                ZMU0 = np.cos((180.0 - Scatter.SOL_ANG)*np.pi/180.0)
-                SOLAR[:] = 0.0
-            else:
-                ZMU0 = np.cos(Scatter.SOL_ANG*np.pi/180.0)
-
-
-            #Finding the coefficients for interpolating the spectrum
-            #at the correct angles
-            ISOL = 0
-            for j in range(Scatter.NMU-1):
-                if((ZMU0<=Scatter.MU[j]) & (ZMU0>Scatter.MU[j+1])):
-                    ISOL = j
-
-            if ZMU0<=Scatter.MU[Scatter.NMU-1]:
-                ISOL = Scatter.NMU-2
-
-            FSOL = (Scatter.MU[ISOL]-ZMU0)/(Scatter.MU[ISOL]-Scatter.MU[ISOL+1])
-
-
-            #Bottom of the atmosphere surface contribution
-            UTMI = np.zeros((Spectroscopy.NWAVE,Scatter.NMU,1))
-            if IC==0:
-                for imu in range(Scatter.NMU):
-                    UTMI[:,imu,0] = RADGROUND[:]   #Assumed to be equal in all directions
-            UTMI = np.repeat(UTMI[:,np.newaxis,:,:],NG,axis=1)
-
-            
-            #Calculating the spectrum in the direction ISOL
-            for IMU0 in range(ISOL,ISOL+2,1):
-
-                #Top of the atmosphere solar contribution
-                U0PL = np.zeros((Spectroscopy.NWAVE,Scatter.NMU,1))
-                U0PL[:,IMU0,0] = SOLAR[:]/(2.0*np.pi*Scatter.WTMU[IMU0])
-                U0PL = np.repeat(U0PL[:,np.newaxis,:,:],NG,axis=1)
-
-                #Calculating the interior intensities for cloud (within layers)
-                #UPL goes down of layer L
-                #UMI goes up of layer L
-
-                UMI = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NMU,1))
-                UPL = np.zeros((Spectroscopy.NWAVE,NG,LTOT,Scatter.NMU,1))
-
-                UMI[:,:,0,:,:] = JBASE[:,:,0,:,:]   #Upwards intensity of surface is already calculated
-
-                for ILAY in range(LTOT-1):
-
-                    #Calculate I(ILAY+1)-
-                    UMI[:,:,ILAY+1,:,:] = nemesisf.mulscatter.iup(\
-                        E,U0PL,UTMI,\
-                        RTOP[:,:,ILAY,:,:],TTOP[:,:,ILAY,:,:],JTOP[:,:,ILAY,:,:],\
-                        RBASE[:,:,LTOT-2-ILAY,:,:],TBASE[:,:,LTOT-2-ILAY,:,:],JBASE[:,:,LTOT-2-ILAY,:,:])
-
-                    #Calculate I(ILAY)+
-                    UPL[:,:,ILAY,:,:] = nemesisf.mulscatter.idown(\
-                        E,U0PL,UTMI,\
-                        RTOP[:,:,ILAY,:,:],TTOP[:,:,ILAY,:,:],JTOP[:,:,ILAY,:,:],\
-                        RBASE[:,:,LTOT-2-ILAY,:,:],TBASE[:,:,LTOT-2-ILAY,:,:],JBASE[:,:,LTOT-2-ILAY,:,:])
-
-                #Calculating the exterior intensities (upward intensity at top of atmosphere and downward at bottom of atmosphere)
-                U0MI = nemesisf.mulscatter.itop(U0PL,UTMI,RBASE[:,:,LTOT-1,:,:],TBASE[:,:,LTOT-1,:,:],JBASE[:,:,LTOT-1,:,:])
-                UTPL = nemesisf.mulscatter.ibottom(U0PL,UTMI,RTOP[:,:,LT1-1,:,:],TTOP[:,:,LT1-1,:,:],JTOP[:,:,LT1-1,:,:])
-
-                #Calculating the radiance in each viewing angle
-                for IMU in range(Scatter.NMU):
-
-                    JMU  = Scatter.NMU-1-IMU  #Using this since the MU angles were reversed at the beginning of this subroutine
-
-                    #Uplf = np.zeros((Spectroscopy.NWAVE,NG,Scatter.NMU,Layer.NLAY,Scatter.NF+1))
-                    if IMU0==ISOL:
-                        Umif[:,:,JMU,0,IC] = (1.0-FSOL)*(U0MI[:,:,IMU,0])
-                    else:
-                        Umif[:,:,JMU,0,IC] = Umif[:,:,JMU,0,IC] + FSOL*U0MI[:,:,IMU,0]
-
-                    for ILAY in range(LT1): #Going through each atmospheric layer
-                        
-                        if IMU0==ISOL:
-                            if ILAY!=LT1-1:
-                                Uplf[:,:,JMU,ILAY,IC] = (1.0-FSOL)*UPL[:,:,ILAY,IMU,0]
-                            if ILAY!=0:
-                                Umif[:,:,JMU,ILAY,IC] = (1.0-FSOL)*UMI[:,:,ILAY,IMU,0]
-                        else:
-                            if ILAY!=LT1-1:
-                                Uplf[:,:,JMU,ILAY,IC] = Uplf[:,:,JMU,ILAY,IC] + (FSOL)*UPL[:,:,ILAY,IMU,0]
-                            if ILAY!=0:
-                                Umif[:,:,JMU,ILAY,IC] = Umif[:,:,JMU,ILAY,IC] + (FSOL)*UMI[:,:,ILAY,IMU,0]
-
-
-                    if IMU0==ISOL:
-                        Uplf[:,:,JMU,LT1-1,IC] = (1.0-FSOL)*(UTPL[:,:,IMU,0])
-                    else:
-                        Uplf[:,:,JMU,LT1-1,IC] = Uplf[:,:,JMU,LT1-1,IC] + (FSOL)*(UTPL[:,:,IMU,0])
-
-
-                U0PL[:,:,IMU0,0] = 0.0
-
-        #The order of the layers in Uplf and Umif goes from top to bottom.
-        #In order to reconcile it with the order of the layers in the Layer class, we reverse them
-        Uplfout = Uplf[:,:,:,::-1,:]
-        Umifout = Umif[:,:,:,::-1,:]
-
-        #Reset the order of angles
-        Scatter.MU = Scatter.MU[::-1]
-        Scatter.WTMU = Scatter.WTMU[::-1]
-
-        return Umifout,Uplfout
-
-    ###############################################################################################
-    def streamflux(self,NLAY,NMU,MU,WTMU,Umif,Uplf):
-        r"""
-        Subroutine to calculate the upward and downward flux in the boundaries of each layer.
-
-        The output of scloud11flux is the radiance observed in each viewing direction in the
-        boundaries of each layer (both upwards and downwards).
-
-        This function integrates the radiance over solar zenith angle to get the total 
-        upward and downward fluxes at the boundaries of each layer.
-
-        Inputs
-        ------
-
-        NLAY :: Number of atmospheric layers
-        NMU :: Number of zenith quadrature angles
-        MU(NMU) :: Zenith quadrature angles
-        WTMU(NMU) :: Zenith angle quadrature weights
-        Umif(NWAVE,NG,NMU,NLAY,NF+1) :: Upward intensity in the boundaries of each layer (from bottom to top)
-        Uplf(NWAVE,NG,NMU,NLAY,NF+1) :: Downward intensity in the boundaries of each layer (from bottom to top)
-
-        Outputs
-        -------
-
-        fup(NWAVE,NG,NLAY) :: Upward flux from the top of each layer
-        fdown(NWAVE,NG,NLAY) :: Downward flux from the bottom of each layer
-
-                                        /\
-                                        || Flux_UP
-                                        ||
-                                --------------------------------
-                                                Layer
-                                --------------------------------
-                                        ||
-                                        || Flux_DOWN
-                                        \/
-
-        """
-
-        NWAVE = Umif.shape[0]
-        NG = Umif.shape[1]
-        NF = Umif.shape[4]-1
-
-        #Calculating any quadrature error
-        xfac = 0.
-        for i in range(NMU):
-            xfac = xfac + MU[i]*WTMU[i]
-        xnorm = np.pi/xfac   #XFAC should be 0.5 so this is 2pi
-
-        
-        #Integrating over zenith angle
-        fdown = np.zeros((NWAVE,NG,NLAY))
-        fup = np.zeros((NWAVE,NG,NLAY))
-        for i in range(NMU):
-            fdown[:,:,:] = fdown[:,:,:] + MU[i]*WTMU[i]*Uplf[:,:,i,:,0]
-            fup[:,:,:] = fup[:,:,:] + MU[i]*WTMU[i]*Umif[:,:,i,:,0]
-
-        fdown = fdown*xnorm
-        fup = fup*xnorm
-
-        return fup,fdown
-
-
-    ###############################################################################################
-    def calc_phase_matrix_v2(self,Scatter,WAVE,normalise=True):
-        """
-
-        Calculate the phase matrix at the different angles required for the multiple
-        scattering calculations. These are the P++ and P+- matrices in Plass et al. (1973).
- 
-        Inputs
-        ________
-
-        Scatter :: Python class defining the scattering setup
-        WAVE(NWAVE) :: Calculation wavelengths
-
-        Outputs
-        ________
-
-        PPLPL(NWAVE,NDUST+1,NF,NMU,NMU) :: Phase matrix (aerosol and Rayleigh) in the + direction (i.e. downward)
-        PPLMI(NWAVE,NDUST+1,NF,NMU,NMU) :: Phase matrix (aerosol and Rayleigh) in the - direction (i.e. upward)
-
-        """
-
-        #Calculating the phase function at the scattering angles
-        #######################################################################
-
-        NWAVE = len(WAVE)
-        dphi = 2.0*np.pi/Scatter.NPHI
-
-        #Defining the angles at which the phase functions must be calculated
-        cpl = np.zeros(Scatter.NMU*Scatter.NMU*(Scatter.NPHI+1))
-        cmi = np.zeros(Scatter.NMU*Scatter.NMU*(Scatter.NPHI+1))
-        ix = 0
-
-        for j in range(Scatter.NMU):
-            for i in range(Scatter.NMU):
-                sthi = np.sqrt(1.0-Scatter.MU[i]*Scatter.MU[i])   #sin(theta(i))
-                sthj = np.sqrt(1.0-Scatter.MU[j]*Scatter.MU[j])   #sin(theta(j))
-
-                for k in range(Scatter.NPHI+1):
-                    phi = k*dphi
-                    cpl[ix] = sthi*sthj*np.cos(phi) + Scatter.MU[i]*Scatter.MU[j]
-                    cmi[ix] = sthi*sthj*np.cos(phi) - Scatter.MU[i]*Scatter.MU[j]
-                    ix = ix + 1
-
-        #Calculating the phase function at the required wavelengths and scattering angles
-        cpl[np.where(cpl>1.0)]=1.0
-        cmi[np.where(cmi>1.0)]=1.0
-        cpl[np.where(cpl<-1.0)]=-1.0
-        cmi[np.where(cmi<-1.0)]=-1.0
-        apl = np.arccos(cpl) / np.pi * 180.
-        ami = np.arccos(cmi) / np.pi * 180.
-        
-        
-        ppl = Scatter.calc_phase(apl,WAVE)  #(NWAVE,NTHETA,NDUST)
-        pmi = Scatter.calc_phase(ami,WAVE)  #(NWAVE,NTHETA,NDUST)
-
-        #Normalising phase function (OLD, THE PHASE FUNCTION FROM SCATTER IS NORMALISED TO 1)
-        #ppl = ppl / (4.0*np.pi)
-        #pmi = pmi / (4.0*np.pi)
-
-        if Scatter.IRAY != RayleighScatteringMode.NOT_INCLUDED:
-            ncont = Scatter.NDUST + 1
-            pplr = Scatter.calc_phase_ray(apl) #(NTHETA)
-            pmir = Scatter.calc_phase_ray(ami) #(NTHETA)
-
-            #Normalising phase function (OLD, THE PHASE FUNCTION FROM SCATTER IS NORMALISED TO 1)
-            #pplr = pplr / (4.0*np.pi)
-            #pmir = pmir / (4.0*np.pi)
-        else:
-            ncont = Scatter.NDUST
-
-
-        #Integrating the phase function over the azimuth direction
-        #####################################################################################
-
-        PPLPL = np.zeros((NWAVE,ncont,Scatter.NF+1,Scatter.NMU,Scatter.NMU)) #Integrated phase function coefficients in + direction (i.e. downwards)
-        PPLMI = np.zeros((NWAVE,ncont,Scatter.NF+1,Scatter.NMU,Scatter.NMU)) #Integrated phase function coefficients in - direction (i.e. upwards)
-        ix = 0
-        for j in range(Scatter.NMU):
-            for i in range(Scatter.NMU):
-                for k in range(Scatter.NPHI+1):
-                    phi = k*dphi
-                    for kl in range(Scatter.NF+1):
-
-                        plx = ppl[:,ix,:] * np.cos(kl*phi)
-                        pmx = pmi[:,ix,:] * np.cos(kl*phi)
-
-                        wphi = 1.0*dphi
-                        if k==0:
-                            wphi = 0.5*dphi
-                        elif k==Scatter.NPHI:
-                            wphi = 0.5*dphi
-
-                        #_lgr.info(wphi,plx.min())
-
-                        if kl==0:
-                            wphi = wphi/(2.0*np.pi)
-                        else:
-                            wphi = wphi/np.pi
-
-                        PPLPL[:,0:Scatter.NDUST,kl,i,j] = PPLPL[:,0:Scatter.NDUST,kl,i,j] + wphi*plx[:,:]
-                        PPLMI[:,0:Scatter.NDUST,kl,i,j] = PPLMI[:,0:Scatter.NDUST,kl,i,j] + wphi*pmx[:,:]
-
-                        if Scatter.IRAY != RayleighScatteringMode.NOT_INCLUDED:
-                            plrx = pplr[ix] * np.cos(kl*phi)
-                            pmrx = pmir[ix] * np.cos(kl*phi)
-                            PPLPL[:,Scatter.NDUST,kl,i,j] = PPLPL[:,Scatter.NDUST,kl,i,j] + wphi*plrx
-                            PPLMI[:,Scatter.NDUST,kl,i,j] = PPLMI[:,Scatter.NDUST,kl,i,j] + wphi*pmrx
-
-                    ix = ix + 1
-
-        
-        if normalise==True:
-        
-            #Normalising the phase matrices using the method of Hansen (1971,J.ATM.SCI., V28, 1400)
-            ###############################################################################################
-
-            #PPL,PMI ARE THE FORWARD AND BACKWARD PARTS OF THE AZIMUTHALLY-INTEGRATED
-            #PHASE FUNCTION.  THE NORMALIZATION OF THE TRUE PHASE FCN. IS:
-            #integral over sphere [ P(mu,mu',phi) * dO] = 1
-            #WHERE dO IS THE ELEMENT OF SOLID ANGLE AND phi IS THE AZIMUTHAL ANGLE.
-    
-            IC = 0
-
-            RSUM = np.zeros((NWAVE,ncont,Scatter.NMU))
-            for j in range(Scatter.NMU):
-                for i in range(Scatter.NMU):
-                    RSUM[:,:,j] = RSUM[:,:,j] + PPLMI[:,:,IC,i,j] * Scatter.WTMU[i]*2.0*np.pi
-
-            for icont in range(ncont):
-                FC = np.ones((NWAVE,Scatter.NMU,Scatter.NMU))
-                niter = 1
-                converged = False
-                while converged==False:
-                    test = np.zeros(NWAVE)
-                    TSUM = np.zeros((NWAVE,Scatter.NMU))
-                    for j in range(Scatter.NMU):
-                        for i in range(Scatter.NMU):
-                            TSUM[:,j] = TSUM[:,j] + PPLPL[:,icont,IC,i,j]*Scatter.WTMU[i]*FC[:,i,j]*2.0*np.pi
-
-                        testj = np.abs(  RSUM[:,icont,j] + TSUM[:,j] - 1.0 )
-                        isup = np.where(testj>test)[0]
-                        test[isup] = testj[isup]
-
-                    #_lgr.info(test)
-                    if test.max()<=1.0e-14:
-                        converged=True
-                    else:
-                        for j in range(Scatter.NMU):
-                            xj = (1.0-RSUM[:,icont,j])/TSUM[:,j]
-                            for i in range(j+1):
-                                xi = (1.0-RSUM[:,icont,i])/TSUM[:,i]
-                                FC[:,i,j] = 0.5*(FC[:,i,j]*xj[:]+FC[:,j,i]*xi[:])
-                                FC[:,j,i] = FC[:,i,j]
-
-                    if niter>10000:
-                        raise ValueError('error in calc_phase_matrix :: Normalisation of phase matrix did not converge')
-
-                    niter = niter + 1
-
-                for kl in range(Scatter.NF+1):
-                    for j in range(Scatter.NMU):
-                        for i in range(Scatter.NMU):
-                            PPLPL[:,icont,kl,i,j] = PPLPL[:,icont,kl,i,j] * FC[:,i,j]
-        
-
-        return PPLPL,PPLMI
-
-    ###############################################################################################
-    def calc_phase_matrix(self,Scatter,WAVE):
-        """
-
-        Calculate the phase matrix at the different angles required for the multiple
-        scattering calculations. These are the P++ and P+- matrices in Plass et al. (1973).
- 
-        Inputs
-        ________
-
-        Scatter :: Python class defining the scattering setup
-        WAVE(NWAVE) :: Calculation wavelengths
-
-        Outputs
-        ________
-
-        PPLPL(NWAVE,NDUST+1,NF,NMU,NMU) :: Phase matrix (aerosol and Rayleigh) in the + direction (i.e. downward)
-        PPLMI(NWAVE,NDUST+1,NF,NMU,NMU) :: Phase matrix (aerosol and Rayleigh) in the - direction (i.e. upward)
-
-        """
-
-        #from NemesisPy import nemesisf
-
-        #Calculating the phase function at the scattering angles
-        #######################################################################
-
-        NWAVE = len(WAVE)
-        dphi = 2.0*np.pi/Scatter.NPHI
-
-        
-        #Defining the angles at which the phase functions must be calculated
-        apl,ami = nemesisf.mulscatter.define_scattering_angles(nmu=Scatter.NMU,nphi=Scatter.NPHI,mu=Scatter.MU)
-        
-        #Calculating the phase function at the scattering angles
-        ppl = Scatter.calc_phase(apl,WAVE)  #(NWAVE,NTHETA,NDUST)
-        pmi = Scatter.calc_phase(ami,WAVE)  #(NWAVE,NTHETA,NDUST)
-
-        #Normalising phase function (OLD, THE PHASE FUNCTION IN SCATTER IS ALREADY NORMALISED TO 1)
-        #ppl = ppl / (4.0*np.pi)
-        #pmi = pmi / (4.0*np.pi)
-
-        #Calculating the phase function for Rayleigh scattering
-        if Scatter.IRAY != RayleighScatteringMode.NOT_INCLUDED:
-            ncont = Scatter.NDUST + 1
-            pplr = Scatter.calc_phase_ray(apl) #(NTHETA)
-            pmir = Scatter.calc_phase_ray(ami) #(NTHETA)
-
-            #(OLD, THE PHASE FUNCTION IN SCATTER IS ALREADY NORMALISED TO 1)
-            #pplr = pplr / (4.0*np.pi)
-            #pmir = pmir / (4.0*np.pi)
-        else:
-            ncont = Scatter.NDUST
-         
-        #Comparison with NEMESIS (fortran)   
-        #ix = 0
-        #for j in range(Scatter.NMU):
-        #    for i in range(Scatter.NMU):
-        #        for k in range(Scatter.NPHI+1):
-        #            _lgr.info(j,i,k,np.cos(apl[ix]/180.*np.pi),ppl[0,ix,0],np.cos(ami[ix]/180.*np.pi),pmi[0,ix,0])
-        #            input()
-        #            ix = ix + 1
-                    
-
-
-        #Integrating the phase function over the azimuth direction
-        #####################################################################################
-
-        PPLPL = np.zeros((NWAVE,ncont,Scatter.NF+1,Scatter.NMU,Scatter.NMU)) #Integrated phase function coefficients in + direction (i.e. downwards)
-        PPLMI = np.zeros((NWAVE,ncont,Scatter.NF+1,Scatter.NMU,Scatter.NMU)) #Integrated phase function coefficients in - direction (i.e. upwards)
-
-        #Aerosol phase functions
-        for icont in range(Scatter.NDUST):
-            PPLPL[:,icont,:,:,:],PPLMI[:,icont,:,:,:] = nemesisf.mulscatter.integrate_phase_function(nwave=NWAVE,nmu=Scatter.NMU,nphi=Scatter.NPHI,nf=Scatter.NF,ppl=ppl[:,:,icont],pmi=pmi[:,:,icont])
-
-        #To be compare with calc_pmat6 without hansen normalisation
-        #for icont in range(Scatter.NDUST):
-        #    for j in range(Scatter.NMU):
-        #        for i in range(Scatter.NMU):
-        #            _lgr.info(icont,i,j,'PTPL',PPLPL[0,icont,0,i,j],'PPLMI',PPLMI[0,icont,0,i,j])
-        #    input()
-
-        #Rayleigh phase function
-        if Scatter.IRAY != RayleighScatteringMode.NOT_INCLUDED:
-            pplrx = np.repeat(pplr[np.newaxis,:],NWAVE,axis=0)
-            pmirx = np.repeat(pmir[np.newaxis,:],NWAVE,axis=0)
-            PPLPL[:,Scatter.NDUST,:,:,:],PPLMI[:,Scatter.NDUST,:,:,:] = nemesisf.mulscatter.integrate_phase_function(nwave=NWAVE,nmu=Scatter.NMU,nphi=Scatter.NPHI,nf=Scatter.NF,ppl=pplrx[:,:],pmi=pmirx[:,:])
-
-        #Normalising the phase matrices using the method of Hansen (1971,J.ATM.SCI., V28, 1400)
-        ###############################################################################################
-
-        #PPL,PMI ARE THE FORWARD AND BACKWARD PARTS OF THE AZIMUTHALLY-INTEGRATED
-        #PHASE FUNCTION.  THE NORMALIZATION OF THE TRUE PHASE FCN. IS:
-        #integral over sphere [ P(mu,mu',phi) * dO] = 1
-        #WHERE dO IS THE ELEMENT OF SOLID ANGLE AND phi IS THE AZIMUTHAL ANGLE.
-        for icont in range(ncont):
-            PPLPL[:,icont,:,:,:],PPLMI[:,icont,:,:,:] = nemesisf.mulscatter.normalise_phase_function(nwave=NWAVE,nmu=Scatter.NMU,nf=Scatter.NF,wtmu=Scatter.WTMU,pplpl=PPLPL[:,icont,:,:,:],pplmi=PPLMI[:,icont,:,:,:])
-        
-        #To be compare with calc_pmat6 after hansen normalisation
-        #for icont in range(Scatter.NDUST):
-        #    for j in range(Scatter.NMU):
-        #        for i in range(Scatter.NMU):
-        #            _lgr.info(icont,i,j,'PTPL',PPLPL[0,icont,0,i,j],'PPLMI',PPLMI[0,icont,0,i,j])
-        #    input()
-
-        return PPLPL,PPLMI
-
-    ###############################################################################################
-    def calc_layer_scatt_matrix(self,WAVE,Layer):
-        """
-
-        Calculate the effective scattering matrix (phase matrix and single scattering albedo) of
-        an atmospheric layer composed of different aerosol and gaseous species (including Rayleigh scattering)
- 
-        Inputs
-        ________
-
-        WAVE(NWAVE) :: Calculation wavelengths
-        Scatter :: Python class defining the atmospheric layer properties (including their opacities)
-
-        Outputs
-        ________
-
-        PPLPL(NWAVE,NDUST+1,NF,NMU,NMU) :: Phase matrix (aerosol and Rayleigh) in the + direction (i.e. downward)
-        PPLMI(NWAVE,NDUST+1,NF,NMU,NMU) :: Phase matrix (aerosol and Rayleigh) in the - direction (i.e. upward)
-
-        """
-        
-        NWAVE = len(WAVE)
-        
-        #Calculating the fraction of scattering by each aerosol type and rayleigh
-        FRAC = np.zeros((Spectroscopy.NWAVE,Layer.NLAY,NCONT))
-        iiscat = np.where((Layer.TAUSCAT+Layer.TAURAY)>0.0)
-        if(len(iiscat[0])>0):
-            FRAC[iiscat[0],iiscat[1],0:Scatter.NDUST] = np.transpose(np.transpose(Layer.TAUCLSCAT[iiscat[0],iiscat[1],:],axes=[1,0]) / ((Layer.TAUSCAT[iiscat[0],iiscat[1]]+Layer.TAURAY[iiscat[0],iiscat[1]])),axes=[1,0])  #Fraction of each aerosol scattering FRAC = TAUCLSCAT/(TAUSCAT+TAURAY)
-            if Scatter.IRAY != RayleighScatteringMode.NOT_INCLUDED:
-                FRAC[iiscat[0],iiscat[1],Scatter.NDUST] = Layer.TAURAY[iiscat[0],iiscat[1]] / ((Layer.TAUSCAT[iiscat[0],iiscat[1]]+Layer.TAURAY[iiscat[0],iiscat[1]])) #Fraction of Rayleigh scattering FRAC = TAURAY/(TAUSCAT+TAURAY)
-
-        #Calculating the weighted averaged phase matrix in each layer and direction
-        _lgr.info('scloud11flux :: Calculating weighted average phase matrix in each layer')
-        PPLPLS = np.zeros((Spectroscopy.NWAVE,Layer.NLAY,Scatter.NF+1,Scatter.NMU,Scatter.NMU))
-        PPLMIS = np.zeros((Spectroscopy.NWAVE,Layer.NLAY,Scatter.NF+1,Scatter.NMU,Scatter.NMU))
-
-        for ilay in range(Layer.NLAY):
-            PPLPLS[:,ilay,:,:,:] =  np.transpose(np.sum(np.transpose(PPLPL,axes=[2,3,4,0,1])*FRAC[:,ilay,:],axis=4),axes=[3,0,1,2])  #SUM(PPLPL*FRAC)
-            PPLMIS[:,ilay,:,:,:] =  np.transpose(np.sum(np.transpose(PPLMI,axes=[2,3,4,0,1])*FRAC[:,ilay,:],axis=4),axes=[3,0,1,2])  #SUM(PPLMI*FRAC)
-
-        #Calculating the single scattering albedo of each layer (TAURAY+TAUSCAT/TAUTOT)
-        NG = Layer.TAUTOT.shape[1]
-        OMEGA = np.zeros((Spectroscopy.NWAVE,NG,Layer.NLAY))
-        iin = np.where(Layer.TAUTOT>0.0)
-        if(len(iin[0])>0):
-            OMEGA[iin[0],iin[1],iin[2]] = (Layer.TAURAY[iin[0],iin[2]]+Layer.TAUSCAT[iin[0],iin[2]]) / Layer.TAUTOT[iin[0],iin[1],iin[2]]
-
-        if diffuse==False:
-            OMEGA[:,:,:] = 0.0  #No scattering if diffuse component is turned off
 
     ###############################################################################################
     def calc_brdf_matrix(self,WAVEC=None,Scatter=None,Surface=None):
@@ -5624,200 +4661,6 @@ def map2xvec(dSPECIN,NWAVE,NVMR,NDUST,NPRO,NPATH,NX,xmap):
 
     return dSPECOUT
 
-###############################################################################################
-@jit(nopython=True)
-def add_layer(R1,T1,J1,R2,T2,J2):
-    """
-
-    Subroutine to add the diffuse reflection, transmission and reflection
-    matrices for two adjacent atmospheric layers
-
-    Note that this routine will also work if there are other dimensions
-    on the left of each matrix (e.g. NWAVE, NLAY, etc.)
-
-    Inputs
-    ________
-
-    R1(NMU,NMU) :: Diffuse reflection operator for 1st layer
-    T1(NMU,NMU) :: Diffuse transmission operator for 1st layer
-    J1(NMU,1) :: Diffuse source function for 1st layer
-    R2(NMU,NMU) :: Diffuse reflection operator for 2nd layer
-    T2(NMU,NMU) :: Diffuse transmission operator for 2nd layer
-    J2(NMU,1) :: Diffuse source function for 2nd layer
-
-    Outputs
-    ________
-
-    RANS(NMU,NMU) :: Combined diffuse reflection operator
-    TANS(NMU,NMU) :: Combined diffuse transmission operator
-    JANS(NMU,1) :: Combined diffuse source function
-
-    """
-
-    NMU = int(R1.shape[-1])
-    E = np.identity(NMU)
-
-    #BCOM = -np.matmul(R2,R1)
-    BCOM = R2 @ R1
-    BCOM = E + BCOM
-    ACOM = np.linalg.inv(BCOM)
-    BCOM = ACOM
-    #CCOM = np.matmul(T1,BCOM)
-    CCOM = T1 @ BCOM
-    #RANS = np.matmul(CCOM,R2)
-    RANS = CCOM @ R2
-    #ACOM = np.matmul(RANS,T1)
-    ACOM = RANS @ T1
-    RANS = R1 + ACOM
-    #TANS = np.matmul(CCOM,T2)
-    TANS = CCOM @ T2
-    #JCOM = np.matmul(R2,J1)
-    JCOM = R2 @ J1
-    JCOM = J2 + JCOM
-    #JANS = np.matmul(CCOM,JCOM)
-    JANS = CCOM @ JCOM
-    JANS = J1 + JANS
-    
-    return RANS,TANS,JANS
-
-###############################################################################################
-#@jit(nopython=True,parallel=True)
-def add_layer_jit(R1,T1,J1,R2,T2,J2):
-    """
-
-    Subroutine to add the diffuse reflection, transmission and reflection
-    matrices for two adjacent atmospheric layers
-
-    Note that this routine will also work if there are other dimensions
-    on the left of each matrix (e.g. NWAVE, NLAY, etc.)
-
-    Inputs
-    ________
-
-    R1(NMU,NMU) :: Diffuse reflection operator for 1st layer
-    T1(NMU,NMU) :: Diffuse transmission operator for 1st layer
-    J1(NMU,1) :: Diffuse source function for 1st layer
-    R2(NMU,NMU) :: Diffuse reflection operator for 2nd layer
-    T2(NMU,NMU) :: Diffuse transmission operator for 2nd layer
-    J2(NMU,1) :: Diffuse source function for 2nd layer
-
-    Outputs
-    ________
-
-    RANS(NMU,NMU) :: Combined diffuse reflection operator
-    TANS(NMU,NMU) :: Combined diffuse transmission operator
-    JANS(NMU,1) :: Combined diffuse source function
-
-    """
-
-    NMU = int(R1.shape[-1])
-    E = np.identity(NMU)
-
-    RANS = np.zeros(R1.shape,dtype='float64')
-    TANS = np.zeros(T1.shape,dtype='float64')
-    JANS = np.zeros(J1.shape,dtype='float64')
-
-    ACOM = np.zeros((NMU,NMU),dtype='float64')
-    BCOM = np.zeros((NMU,NMU),dtype='float64')
-    CCOM = np.zeros((NMU,NMU),dtype='float64')
-    JCOM = np.zeros((NMU,1),dtype='float64')
-
-    for i in range(R1.shape[0]):
-        for j in range(R1.shape[1]):
-
-            BCOM[:,:] = -np.dot(R2[i,j,:,:],R1[i,j,:,:])
-            BCOM[:,:] = E[:,:] + BCOM[:,:]
-            ACOM[:,:] = np.linalg.inv(BCOM[:,:])
-            BCOM[:,:] = ACOM[:,:]
-            CCOM[:,:] = np.dot(T1[i,j,:,:],BCOM[:,:])
-            RANS[i,j,:,:] = np.dot(CCOM,R2[i,j,:,:])
-            ACOM[:,:] = np.dot(RANS[i,j,:,:],T1[i,j,:,:])
-            RANS[i,j,:,:] = R1[i,j,:,:] + ACOM[:,:]
-            TANS[i,j,:,:] = np.dot(CCOM[:,:],T2[i,j,:,:])
-            JCOM[:,:] = np.dot(R2[i,j,:,:],J1[i,j,:,:])
-            JCOM[:,:] = J2[i,j,:,:] + JCOM[:,:]
-            JANS[i,j,:,:] = np.dot(CCOM[:,:],JCOM[:,:])
-            JANS[i,j,:,:] = J1[i,j,:,:] + JANS[i,j,:,:]
-
-    return RANS,TANS,JANS
-
-###############################################################################################
-@jit(nopython=True)
-def double_layer(NN,R1,T1,J1):
-    """
-
-    Subroutine to double the 
-
-    Inputs
-    ________
-
-    R1(NPOINTS,NF+1,NMU,NMU) :: Diffuse reflection operator for 1st layer
-    T1(NPOINTS,NF+1,NMU,NMU) :: Diffuse transmission operator for 1st layer
-    J1(NPOINTS,NF+1,NMU,NMU) :: Diffuse source function for 1st layer
-    NN(NPOINTS) :: Number of times the layer needs to be doubled
-
-    Outputs
-    ________
-
-    RANS(NMU,NMU) :: Combined diffuse reflection operator
-    TANS(NMU,NMU) :: Combined diffuse transmission operator
-    JANS(NMU,1) :: Combined diffuse source function
-
-    """
-
-    #Compute the R and T matrices for subsequent layers (doubling method)
-    #**********************************************************************
-
-    #Doing all points with equal NN simultaneously
-    NNMAX = NN.max()
-
-    NF = R1.shape[1]
-
-    RFIN = np.zeros(R1.shape)
-    TFIN = np.zeros(T1.shape)
-    JFIN = np.zeros(J1.shape)
-
-    for N in range(1,NNMAX+1,1):
-
-        idouble = np.where(NN>=N)[0]
-
-        #Doubling the layer
-        #RNEXT,TNEXT,JNEXT = add_layer_jit(R1[idouble,:,:,:],T1[idouble,:,:,:],J1[idouble,:,:,:],R1[idouble,:,:,:],T1[idouble,:,:,:],J1[idouble,:,:,:])
-        RNEXT = np.zeros(R1.shape)
-        TNEXT = np.zeros(T1.shape)
-        JNEXT = np.zeros(J1.shape)
-        for i in range(len(idouble)):
-            for ic in range(NF):
-                RNEXT[idouble[i],ic,:,:],TNEXT[idouble[i],ic,:,:],JNEXT[idouble[i],ic,:,:] = add_layer(R1[idouble[i],ic,:,:],T1[idouble[i],ic,:,:],J1[idouble[i],ic,:,:],R1[idouble[i],ic,:,:],T1[idouble[i],ic,:,:],J1[idouble[i],ic,:,:])
-
-        iseleq2 = np.where(NN[idouble]==N)[0]
-        iseleq = np.where(NN==N)[0]
-
-        if len(iseleq)>0:
-            JFIN[iseleq,:,:,:] = JNEXT[iseleq,:,:,:]
-            TFIN[iseleq,:,:,:] = TNEXT[iseleq,:,:,:]
-            RFIN[iseleq,:,:,:] = RNEXT[iseleq,:,:,:]
-
-        #Updating matrices for next iteration
-        R1[:,:,:,:] = RNEXT[:,:,:,:]
-        T1[:,:,:,:] = TNEXT[:,:,:,:]
-        J1[:,:,:,:] = JNEXT[:,:,:,:]
-
-    return RFIN,TFIN,JFIN
-
-###############################################################################################
-@jit(nopython=True,parallel=True)
-def matmul(A, B):
-    """Perform square matrix multiplication of C = A * B
-    """
-    i, j = cuda.grid(2)
-    if i < C.shape[0] and j < C.shape[1]:
-        tmp = 0.
-        for k in range(A.shape[1]):
-            tmp += A[i, k] * B[k, j]
-        C[i, j] = tmp
-
-    return C
 
 ###############################################################################################
 def calc_spectrum_location(iLOCATION,Atmosphere,Surface,Measurement,Scatter,Spectroscopy,CIA,Stellar,Variables,Layer):
@@ -5871,19 +4714,19 @@ def calc_spectrum_location(iLOCATION,Atmosphere,Surface,Measurement,Scatter,Spec
     FM.Layer = None
     FM.CIAX = copy(FM.CIA)
     FM.CIA = None
-    flagh2p = False
+    #flagh2p = False
         
     #Updating the forward model in all locations according to state vector
-    _lgr.info('nemesisMAPfm :: calling subprofretg')
-    xmap = FM.subprofretg()
-    _lgr.info('nemesisMAPfm :: subprofretg is done')
+    _lgr.info('calling subprofretg')
+    FM.subprofretg() # xmap
+    _lgr.info('subprofretg is done')
         
     #Selecting only one measurement specific for the desired location
     isel = np.where((FM.MeasurementX.FLAT==FM.AtmosphereX.LATITUDE[iLOCATION]) & (FM.MeasurementX.FLON==FM.AtmosphereX.LONGITUDE[iLOCATION]))
     IGEOM = isel[0][0]
     IAV = isel[1][0]
     
-    _lgr.info('nemesisMAPfm :: selecting measurement')
+    _lgr.info('selecting measurement')
     FM.select_Measurement(IGEOM,IAV)
     FM.Measurement = None
         
@@ -5893,111 +4736,22 @@ def calc_spectrum_location(iLOCATION,Atmosphere,Surface,Measurement,Scatter,Spec
     FM.ScatterX.AZI_ANG = FM.MeasurementX.AZI_ANG[0,0]
     
     #Selecting only one specific location in the Atmosphere and Surface
-    _lgr.info('nemesisMAPfm :: selecting location on Atmosphere and Surface')
+    _lgr.info('selecting location on Atmosphere and Surface')
     FM.select_location(iLOCATION)
     FM.Atmosphere = None
     FM.Surface = None
     
     
     #Calculating the path for this particular measurement and location
-    _lgr.info('nemesisMAPfm :: calculating path')
+    _lgr.info('calculating path')
     FM.calc_path()
     
     #Calling CIRSrad to perform radiative transfer calculations
-    _lgr.info('nemesisMAPfm :: calculating forward model')
+    _lgr.info('calculating forward model')
     SPEC = FM.CIRSrad() #()
      
     return SPEC[:,0]
 
-###############################################################################################
-#@ray.remote
-def calc_spectrum_location_parallel(iLOCATION,Atmosphere,Surface,Measurement,Scatter,Spectroscopy,CIA,Stellar,Variables,Layer):
-    """
-
-    Subroutine to calculate a forward model in a given location of the planet (as defined in Atmosphere and Surface)
-    This function is made for being used in parallel. For normal use, please see calc_spectrum_location() 
-
-    Inputs
-    ________
-
-    iLOCATION :: Integer indicating the location to be used in the Atmosphere and Surface classes
-    Variables :: Python class defining the parameterisations and state vector
-    Measurement :: Python class defining the measurements
-    Atmosphere :: Python class defining the reference atmosphere
-    Spectroscopy :: Python class defining the parameters required for the spectroscopic calculations
-    Scatter :: Python class defining the parameters required for scattering calculations
-    Stellar :: Python class defining the stellar spectrum
-    Surface :: Python class defining the surface
-    CIA :: Python class defining the Collision-Induced-Absorption cross-sections
-    Layer :: Python class defining the layering scheme to be applied in the calculations 
-
-    Outputs
-    ________
-
-    RANS(NMU,NMU) :: Combined diffuse reflection operator
-    TANS(NMU,NMU) :: Combined diffuse transmission operator
-    JANS(NMU,1) :: Combined diffuse source function
-
-    """
-    
-    from copy import copy
-    from archnemesis import ForwardModel_0
-    
-    runname = 'dummy'
-    FM = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
-    
-    #Calculating a forward model for each LOCATION on the planet
-    FM.MeasurementX = copy(FM.Measurement)
-    #FM.Measurement = None
-    FM.AtmosphereX = copy(FM.Atmosphere)
-    #FM.Atmosphere = None
-    FM.ScatterX = copy(FM.Scatter)
-    FM.Scatter = None
-    FM.StellarX = copy(FM.Stellar)
-    FM.Stellar = None
-    FM.SurfaceX = copy(FM.Surface)
-    #FM.Surface = None
-    FM.SpectroscopyX = copy(FM.Spectroscopy)
-    FM.Spectroscopy = None
-    FM.LayerX = copy(FM.Layer)
-    FM.Layer = None
-    FM.CIAX = copy(FM.CIA)
-    FM.CIA = None
-    flagh2p = False
-    
-    #Making some changes to make ray work
-    FM.AtmosphereX.H = FM.AtmosphereX.H.copy()
-    FM.AtmosphereX.VMR = FM.AtmosphereX.VMR.copy()
-    FM.AtmosphereX.P = FM.AtmosphereX.P.copy()
-        
-    #Updating the forward model in all locations according to state vector
-    xmap = FM.subprofretg()
-        
-    #Selecting only one measurement specific for the desired location
-    isel = np.where((FM.MeasurementX.FLAT==FM.AtmosphereX.LATITUDE[iLOCATION]) & (FM.MeasurementX.FLON==FM.AtmosphereX.LONGITUDE[iLOCATION]))
-    IGEOM = isel[0][0]
-    IAV = isel[1][0]
-        
-    FM.select_Measurement(IGEOM,IAV)
-    FM.Measurement = None
-        
-    #Updating the required parameters based on the current geometry
-    FM.ScatterX.SOL_ANG = FM.MeasurementX.SOL_ANG[0,0]
-    FM.ScatterX.EMISS_ANG = FM.MeasurementX.EMISS_ANG[0,0]
-    FM.ScatterX.AZI_ANG = FM.MeasurementX.AZI_ANG[0,0]
-    
-    #Selecting only one specific location in the Atmosphere and Surface
-    FM.select_location(iLOCATION)
-    FM.Atmosphere = None
-    FM.Surface = None
-    
-    #Calculating the path for this particular measurement and location
-    FM.calc_path()
-    
-    #Calling CIRSrad to perform radiative transfer calculations
-    SPEC = FM.CIRSrad() #()
-     
-    return SPEC[:,0]
 
 
 ###############################################################################################
@@ -6045,7 +4799,7 @@ def calc_tau_rayleighj(ISPACE,WAVEC,TOTAM):
         LAMBDA = WAVEC * 1.0e-6 #Wavelength in metres
         x = 1.0/(LAMBDA*1.0e6)
     else:
-        raise NotImplementedError(f'calc_tau_rayleigh :: Unknown value for ISPACE')
+        raise NotImplementedError('calc_tau_rayleigh :: Unknown value for ISPACE')
 
     nH2 = AH2*(1.0+BH2*x*x)
     nHe = AHe*(1.0+BHe*x*x)
@@ -6104,11 +4858,11 @@ def calc_tau_rayleighv(ISPACE,WAVEC,TOTAM):
 
     if ISPACE==WaveUnit.Wavenumber_cm:
         LAMBDA = 1./WAVEC * 1.0e-2 * 1.0e6  #Wavelength in microns
-        x = 1.0/(LAMBDA*1.0e6)
+        #x = 1.0/(LAMBDA*1.0e6)
     elif ISPACE == WaveUnit.Wavelength_um:
         LAMBDA = WAVEC #Wavelength in microns
     else:
-        raise NotImplementedError(f'calc_tau_rayleighv :: Unknown value for ISPACE')
+        raise NotImplementedError('calc_tau_rayleighv :: Unknown value for ISPACE')
 
     C = 8.8e-28   #provided by B. Bezard
 
@@ -6154,11 +4908,11 @@ def calc_tau_rayleighv2(ISPACE,WAVEC,TOTAM):
 
     if ISPACE==WaveUnit.Wavenumber_cm:
         LAMBDA = 1./WAVEC * 1.0e-2 * 1.0e6  #Wavelength in microns
-        x = 1.0/(LAMBDA*1.0e6)
+        #x = 1.0/(LAMBDA*1.0e6)
     elif ISPACE == WaveUnit.Wavelength_um:
         LAMBDA = WAVEC #Wavelength in microns
     else:
-        raise NotImplementedError(f'calc_tau_rayleighv2 :: Unknown value for ISPACE')
+        raise NotImplementedError('calc_tau_rayleighv2 :: Unknown value for ISPACE')
 
     #dens = 1.01325d6 / (288.15 * 1.3803e-16)
     dens = 2.5475605e+19
@@ -6274,7 +5028,7 @@ def calc_tau_rayleighls(ISPACE,WAVEC,ID,ISO,VMR,TOTAM):
     elif ISPACE == WaveUnit.Wavelength_um:
         wl = WAVEC #Wavelength in microns
     else:
-        raise NotImplementedError(f'calc_tau_rayleighls :: Unknown value for ISPACE')
+        raise NotImplementedError('calc_tau_rayleighls :: Unknown value for ISPACE')
     
     
     #refractive index equation coefficients from Allen, Astrophys. Quant., p 87 (1964)
@@ -6315,73 +5069,6 @@ def calc_tau_rayleighls(ISPACE,WAVEC,ID,ISO,VMR,TOTAM):
     dtau_ray[:,:] = k_rayleighls[:,:]               #dTAURAY/dTOTAM (m2)
                 
     return tau_ray, dtau_ray
-
-
-###############################################################################################
-###############################################################################################
-#INTERPOLATIONS
-###############################################################################################
-###############################################################################################
-
-@jit(nopython=True)
-def bilinear_xy(Q00, Q10, Q01, Q11, x1, x2, y1, y2, x, y):
-    fxy1 = ((x2 - x + 1e-30) / (x2 - x1 + 2e-30)) * Q00 + ((x - x1 + 1e-30) / (x2 - x1 + 2e-30)) * Q10
-    fxy2 = ((x2 - x + 1e-30) / (x2 - x1 + 2e-30)) * Q01 + ((x - x1 + 1e-30) / (x2 - x1 + 2e-30)) * Q11
-    return ((y2 - y + 1e-30) / (y2 - y1 + 2e-30)) * fxy1 + ((y - y1 + 1e-30) / (y2 - y1 + 2e-30)) * fxy2
-
-@jit(nopython=True)
-def trilinear_interpolation(grid, x_values, y_values, z_values, x_array, y_array, z_array):
-    """
-    Performs trilinear interpolation on a 3D grid for arrays of x, y, and z coordinates.
-    Points outside the grid are assigned a value of 0.
-
-    :param grid: 3D array of grid values.
-    :param x_values: 1D array of x-axis values in the grid.
-    :param y_values: 1D array of y-axis values in the grid.
-    :param z_values: 1D array of z-axis values in the grid.
-    :param x_array: 1D array of x-coordinates for interpolation.
-    :param y_array: 1D array of y-coordinates for interpolation.
-    :param z_array: 1D array of z-coordinates for interpolation.
-    :return: 3D array of interpolated values.
-    """
-    result = np.zeros((z_array.size, x_array.size))
-
-    for k in range(z_array.size):
-        for i in range(x_array.size):
-            x = x_array[i]
-            if grid.shape[0] == 1:
-                x = 0
-            y = y_array[i]
-            z = z_array[k]
-
-            if x < x_values[0] or x > x_values[-1] \
-            or y < y_values[0] or y > y_values[-1] \
-            or z < z_values[0] or z > z_values[-1]:
-                result[k, i] = 0
-            else:
-                ix = np.searchsorted(x_values, x) - 1
-                iy = np.searchsorted(y_values, y) - 1
-                iz = np.searchsorted(z_values, z) - 1
-
-                ix = max(min(ix, grid.shape[0] - 2), 0)
-                if ix == 0 and grid.shape[0] == 1:
-                    ix = -1
-
-                iy = max(min(iy, grid.shape[1] - 2), 0)
-                iz = max(min(iz, grid.shape[2] - 2), 0)
-
-                x1, x2 = x_values[ix], x_values[ix + 1]
-                y1, y2 = y_values[iy], y_values[iy + 1]
-                z1, z2 = z_values[iz], z_values[iz + 1]
-
-                Q000, Q100, Q010, Q110 = grid[ix, iy, iz], grid[ix+1, iy, iz], grid[ix, iy+1, iz], grid[ix+1, iy+1, iz]
-                Q001, Q101, Q011, Q111 = grid[ix, iy, iz+1], grid[ix+1, iy, iz+1], grid[ix, iy+1, iz+1], grid[ix+1, iy+1, iz+1]
-
-                fz1 = bilinear_xy(Q000, Q100, Q010, Q110, x1, x2, y1, y2, x, y)
-                fz2 = bilinear_xy(Q001, Q101, Q011, Q111, x1, x2, y1, y2, x, y)
-
-                result[k, i] = ((z2 - z + 1e-30) / (z2 - z1 + 2e-30)) * fz1 + ((z - z1 + 1e-30) / (z2 - z1 + 2e-30)) * fz2
-    return result
 
 
 ###############################################################################################
@@ -7146,3 +5833,8 @@ def calc_singlescatt_plane_spectrum(ISPACE,WAVE,TAUTOT_PATH,TEMP,OMEGA,PHASE,TSU
             SPECOUT[iwave,ig] = specg
             
     return SPECOUT
+
+
+
+
+

@@ -18,10 +18,16 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations #  for 3.9 compatability
-from archnemesis import *
+
+import os
+
+#from archnemesis import *
 import numpy as np
+import h5py
 
 from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnit, SpectralCalculationMode
+import archnemesis.helpers.h5py_helper as h5py_helper
+
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -82,9 +88,9 @@ class Telluric_0:
         Function to write the HDF5 file for the Telluric class
         """
         
-        import h5py
-        from archnemesis.Data.gas_data import gas_info
-        from archnemesis.Data.planet_data import planet_info
+        
+        #from archnemesis.Data.gas_data import gas_info
+        #from archnemesis.Data.planet_data import planet_info
 
         #Assessing that all the parameters have the correct type and dimension
         #self.assess()
@@ -98,22 +104,22 @@ class Telluric_0:
             
             #Writing the parameters about the observation and observatory
             dt = h5py.special_dtype(vlen=str)
-            dset = grp.create_dataset('DATE',data=self.DATE,dtype=dt)
+            dset = h5py_helper.store_data(grp, 'DATE', self.DATE,dtype=dt)
             dset.attrs['title'] = "UTC date of the observation (DD-MM-YYYY)"
             
-            dset = grp.create_dataset('TIME',data=self.TIME,dtype=dt)
+            dset = h5py_helper.store_data(grp, 'TIME', self.TIME,dtype=dt)
             dset.attrs['title'] = "UTC time of the observation (HH:MM:SS)"
             
-            dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
+            dset = h5py_helper.store_data(grp, 'LATITUDE', self.LATITUDE)
             dset.attrs['title'] = "Latitude of the observatory (degrees)"
             
-            dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
+            dset = h5py_helper.store_data(grp, 'LONGITUDE', self.LONGITUDE)
             dset.attrs['title'] = "Longitude of the observatory (degrees)"
             
-            dset = grp.create_dataset('ALTITUDE',data=self.ALTITUDE)
+            dset = h5py_helper.store_data(grp, 'ALTITUDE', self.ALTITUDE)
             dset.attrs['title'] = "Altitude of the observatory (metres)"
             
-            dset = grp.create_dataset('EMISS_ANG',data=self.EMISS_ANG)
+            dset = h5py_helper.store_data(grp, 'EMISS_ANG', self.EMISS_ANG)
             dset.attrs['title'] = "Emission angle (degrees)"
     
         
@@ -190,7 +196,7 @@ class Telluric_0:
         from archnemesis.Data.path_data import archnemesis_path 
         from archnemesis import Atmosphere_0
         from archnemesis.Data.gas_data import const
-        import cdsapi,pygrib
+        import cdsapi
         
         #Defining the inputs
         ##############################################################################################################
@@ -463,7 +469,7 @@ class Telluric_0:
             k_gas = self.Spectroscopy.calc_k(len(tlay),play/101325.,tlay,WAVECALC=self.Spectroscopy.WAVE) # (NWAVE,NG,NLAY,NGAS)
             
             f_gas = np.zeros((self.Spectroscopy.NGAS,len(tlay)))
-            utotl = np.zeros(len(tlay))
+            #utotl = np.zeros(len(tlay))
             for i in range(self.Spectroscopy.NGAS):
                 igas = np.where( (self.Atmosphere.ID==self.Spectroscopy.ID[i]) & (self.Atmosphere.ISO==self.Spectroscopy.ISO[i]) )[0][0]
                 f_gas[i,:] = amounts[igas,:] * 1.0e-4 * 1.0e-20  #Vertical column density of the radiatively active gases in cm-2

@@ -3,6 +3,8 @@ from __future__ import annotations #  for 3.9 compatability
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
+# flake8: noqa
+
 from .cfg import logs
 
 from .Spectroscopy_0 import *

@@ -4,17 +4,48 @@ from __future__ import annotations #  for 3.9 compatability
 Contains models that alter the replica before radiative transfer is calculated
 """
 
+from typing import TYPE_CHECKING, IO, Self, Any
+import abc
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+from .ModelBase import ModelBase
+from .ModelParameter import ModelParameter
 
 from archnemesis.helpers import h5py_helper
-
-from .ModelBase import *
+from archnemesis.helpers.maths_helper import ngauss
+from archnemesis.Scatter_0 import kk_new_sub
 from archnemesis.enums import AtmosphericProfileType
+from archnemesis.enums import WaveUnit
 
 import logging
 _lgr = logging.getLogger(__name__)
 #_lgr.setLevel(logging.DEBUG)
 _lgr.setLevel(logging.INFO)
 
+
+if TYPE_CHECKING:
+    # NOTE: This is just here to make 'flake8' play nice with the type hints
+    # the problem is that importing Variables_0 or ForwardModel_0 creates a circular import
+    # this actually means that I should possibly redesign how those work to avoid circular imports
+    # but that is outside the scope of what I want to accomplish here
+    from archnemesis.Variables_0 import Variables_0
+    from archnemesis.ForwardModel_0 import ForwardModel_0
+    from archnemesis.Scatter_0 import Scatter_0
+    from archnemesis.Atmosphere_0 import Atmosphere_0
+    
+    nx = 'number of elements in state vector'
+    m = 'an undetermined number, but probably less than "nx"'
+    mx = 'synonym for nx'
+    mparam = 'the number of parameters a model has'
+    nparam = 'the number of parameters a model has'
+    NCONV = 'number of spectral bins'
+    NGEOM = 'number of geometries'
+    NX = 'number of elements in state vector'
+    NDEGREE = 'number of degrees in a polynomial'
+    NWINDOWS = 'number of spectral windows'
 
 class PreRTModelBase(ModelBase):
     """
@@ -81,7 +112,7 @@ class PreRTModelBase(ModelBase):
             ivar : int,
             xmap : np.ndarray,
         ) -> None:
-        raise NotImplementedError(f'calculate_from_subprofretg must be implemented for all Atmospheric models')
+        raise NotImplementedError('calculate_from_subprofretg must be implemented for all Atmospheric models')
 
 
 class TemplatePreRTModel(PreRTModelBase):
@@ -219,7 +250,7 @@ class TemplatePreRTModel(PreRTModelBase):
         
         raise NotImplementedError('This is a template model and should never be used')
         
-        
+        xmap = NotImplemented
         return atm, xmap
 
 
@@ -308,6 +339,7 @@ class TemplatePreRTModel(PreRTModelBase):
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
         assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
 
+        ix_0 = NotImplemented
         return cls(ix_0, ix-ix_0, model_classification[1])
 
 
@@ -912,7 +944,7 @@ class Model0(PreRTModelBase):
             *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
         )
         
-        _lgr.debug(f'Result calculated, setting values...')
+        _lgr.debug('Result calculated, setting values...')
         
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
@@ -1463,7 +1495,7 @@ class Model9(PreRTModelBase):
             hknee = href
 
             if itest==0:
-                dummy = 1
+                _ = 1
             elif itest==1: #For calculating the gradient wrt tau
                 dx = 0.05 * np.log(tau)  #In the state vector this variable is passed in log-scale
                 if dx==0.0:
@@ -1739,7 +1771,7 @@ class Model32(PreRTModelBase):
         _lgr.debug(f'{frac_scale_height=}')
         _lgr.debug(f'{tau=}')
 
-        from scipy.integrate import simpson
+        #from scipy.integrate import simpson
         from archnemesis.Data.gas_data import const
         
         if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
@@ -1754,7 +1786,7 @@ class Model32(PreRTModelBase):
 
         #This gradient is calcualted numerically (in this function) as it is too hard otherwise
         xprof = np.zeros(atm.NP)
-        npar = atm.NVMR+2+atm.NDUST
+        #npar = atm.NVMR+2+atm.NDUST
         xmap = np.zeros((3,atm.NP))
         for itest in range(4):
 
@@ -1762,7 +1794,7 @@ class Model32(PreRTModelBase):
             xfrac_scale_height = frac_scale_height
             pknee = p_ref
             if itest==0:
-                dummy = 1
+                pass
             elif itest==1: #For calculating the gradient wrt tau
                 dx = 0.05 * np.log(tau)  #In the state vector this variable is passed in log-scale
                 if dx==0.0:
@@ -1826,7 +1858,7 @@ class Model32(PreRTModelBase):
 
             #Now we integrate the optical thickness (calculate column density essentially)
             OD[atm.NP-1] = ND[atm.NP-1] * (scale[atm.NP-1] * xfrac_scale_height * 1.0e2)  #the factor 1.0e2 is for converting from m to cm
-            jfrac_scale_height = -1
+            #jfrac_scale_height = -1
             for j in range(atm.NP-2,-1,-1):
                 if j>jknee:
                     delh = atm.H[j+1] - atm.H[j]   #m
@@ -3121,8 +3153,8 @@ class Model110(PreRTModelBase):
         Hlo1 = 1.            #Lower scale height (km)
         n01 = 193.5          #Particle number density at zb (cm-3)
 
-        N1 = 3982.04e5       #Total column particle density (cm-2)
-        tau1 = 3.88          #Total column optical depth at 1 um
+        #N1 = 3982.04e5       #Total column particle density (cm-2)
+        #tau1 = 3.88          #Total column optical depth at 1 um
 
         n1 = np.zeros(nh)
 
@@ -3143,8 +3175,8 @@ class Model110(PreRTModelBase):
         Hlo2 = 3.             #Lower scale height (km)
         n02 = 100.            #Particle number density at zb (cm-3)
 
-        N2 = 748.54e5         #Total column particle density (cm-2)
-        tau2 = 7.62           #Total column optical depth at 1 um
+        #N2 = 748.54e5         #Total column particle density (cm-2)
+        #tau2 = 7.62           #Total column optical depth at 1 um
 
         n2 = np.zeros(nh)
 
@@ -3165,8 +3197,8 @@ class Model110(PreRTModelBase):
         Hlo2p = 0.1             #Lower scale height (km)
         n02p = 50.              #Particle number density at zb (cm-3)
 
-        N2p = 613.71e5          #Total column particle density (cm-2)
-        tau2p = 9.35            #Total column optical depth at 1 um
+        #N2p = 613.71e5          #Total column particle density (cm-2)
+        #tau2p = 9.35            #Total column optical depth at 1 um
 
         n2p = np.zeros(nh)
 
@@ -3187,8 +3219,8 @@ class Model110(PreRTModelBase):
         Hlo3 = 0.5              #Lower scale height (km)
         n03 = 14.               #Particle number density at zb (cm-3)
 
-        N3 = 133.86e5           #Total column particle density (cm-2)
-        tau3 = 14.14            #Total column optical depth at 1 um
+        #N3 = 133.86e5           #Total column particle density (cm-2)
+        #tau3 = 14.14            #Total column optical depth at 1 um
 
         n3 = np.zeros(nh)
 
@@ -3358,8 +3390,8 @@ class Model111(PreRTModelBase):
         Hlo1 = 1.            #Lower scale height (km)
         n01 = 193.5          #Particle number density at zb (cm-3)
 
-        N1 = 3982.04e5       #Total column particle density (cm-2)
-        tau1 = 3.88          #Total column optical depth at 1 um
+        #N1 = 3982.04e5       #Total column particle density (cm-2)
+        #tau1 = 3.88          #Total column optical depth at 1 um
 
         n1 = np.zeros(nh)
 
@@ -3380,8 +3412,8 @@ class Model111(PreRTModelBase):
         Hlo2 = 3.             #Lower scale height (km)
         n02 = 100.            #Particle number density at zb (cm-3)
 
-        N2 = 748.54e5         #Total column particle density (cm-2)
-        tau2 = 7.62           #Total column optical depth at 1 um
+        #N2 = 748.54e5         #Total column particle density (cm-2)
+        #tau2 = 7.62           #Total column optical depth at 1 um
 
         n2 = np.zeros(nh)
 
@@ -3402,8 +3434,8 @@ class Model111(PreRTModelBase):
         Hlo2p = 0.1             #Lower scale height (km)
         n02p = 50.              #Particle number density at zb (cm-3)
 
-        N2p = 613.71e5          #Total column particle density (cm-2)
-        tau2p = 9.35            #Total column optical depth at 1 um
+        #N2p = 613.71e5          #Total column particle density (cm-2)
+        #tau2p = 9.35            #Total column optical depth at 1 um
 
         n2p = np.zeros(nh)
 
@@ -3424,8 +3456,8 @@ class Model111(PreRTModelBase):
         Hlo3 = 0.5              #Lower scale height (km)
         n03 = 14.               #Particle number density at zb (cm-3)
 
-        N3 = 133.86e5           #Total column particle density (cm-2)
-        tau3 = 14.14            #Total column optical depth at 1 um
+        #N3 = 133.86e5           #Total column particle density (cm-2)
+        #tau3 = 14.14            #Total column optical depth at 1 um
 
         n3 = np.zeros(nh)
 
@@ -3732,7 +3764,7 @@ class Model1002(PreRTModelBase):
 
         npar = atm.NVMR+2+atm.NDUST
         xmap = np.zeros((atm.NLOCATIONS,npar,atm.NP,atm.NLOCATIONS))
-        xmap1 = np.zeros((atm.NLOCATIONS,npar,atm.NP,atm.NLOCATIONS))
+        #xmap1 = np.zeros((atm.NLOCATIONS,npar,atm.NP,atm.NLOCATIONS))
 
         if len(scf)!=atm.NLOCATIONS:
             raise ValueError('error in model 1002 :: The number of scaling factors must be the same as the number of locations in Atmosphere')
@@ -3845,7 +3877,7 @@ class Model1002(PreRTModelBase):
 
         #Including the parameters in the state vector
         varparam[0] = nlocs
-        iparj = 1
+        #iparj = 1
         for iloc in range(nlocs):
             #Including surface temperature in the state vector
             x0[ix+iloc] = sfactor[iloc]
@@ -3869,7 +3901,7 @@ class Model1002(PreRTModelBase):
                     sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac[k]
                     sx[ix+k,ix+j] = sx[ix+j,ix+k]
 
-        jsurf = ix
+        #jsurf = ix
 
         ix = ix + nlocs
 
@@ -4172,7 +4204,7 @@ class Model228(PreRTModelBase):
 
         forward_model.MeasurementX,forward_model.SpectroscopyX = self.calculate(forward_model.MeasurementX,forward_model.SpectroscopyX,V0,C0,C1,C2,P0,P1,P2,P3)
 
-        ipar = -1
+        #ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
@@ -4469,7 +4501,7 @@ class Model229(PreRTModelBase):
 
         forward_model.MeasurementX = self.calculate(forward_model.MeasurementX,par1,par2,par3,par4,par5,par6,par7)
 
-        ipar = -1
+        #ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
@@ -4765,7 +4797,7 @@ class Model230(PreRTModelBase):
 
         forward_model.MeasurementX = self.calculate(forward_model.MeasurementX,nwindows,liml,limh,par1)
 
-        ipar = -1
+        #ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
@@ -5091,7 +5123,7 @@ class Model446(PreRTModelBase):
         #Reading the look-up table file
         with h5py.File(lookupfile,'r') as f:
 
-            NWAVE = h5py_helper.retrieve_data(f, 'NWAVE', np.int32)
+            #NWAVE = h5py_helper.retrieve_data(f, 'NWAVE', np.int32)
             NSIZE = h5py_helper.retrieve_data(f, 'NSIZE', np.int32)
 
             WAVE = h5py_helper.retrieve_data(f, 'WAVE', np.array)
@@ -5241,7 +5273,7 @@ class Model446(PreRTModelBase):
 
         forward_model.ScatterX = self.calculate(forward_model.ScatterX,idust0,wavenorm,xwave,rsize,self.lookup_table_fpath,MakePlot=False)
 
-        ipar = -1
+        #ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
@@ -5612,7 +5644,7 @@ class Model666(PreRTModelBase):
             raise ValueError('error in read_apr_nemesis() :: pressure must be > 0')
     
         sx[ix,ix] = (ptanerr/ptan)**2.
-        jpre = ix
+        #jpre = ix
     
         ix = ix + 1
 
@@ -5633,7 +5665,7 @@ class Model666(PreRTModelBase):
 
         forward_model.AtmosphereX = self.calculate(forward_model.AtmosphereX,self.htan,ptan)
 
-        ipar = -1
+        #ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
@@ -5747,7 +5779,7 @@ class Model777(PreRTModelBase):
 
         forward_model.MeasurementX = self.calculate(forward_model.MeasurementX,hcorr)
 
-        ipar = -1
+        #ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 
@@ -5879,7 +5911,7 @@ class Model887(PreRTModelBase):
                     sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
                     sx[ix+k,ix+j] = sx[ix+j,ix+k]
 
-        jxsc = ix
+        #jxsc = ix
 
         ix = ix + nwv
 
@@ -6009,7 +6041,7 @@ class Model999(PreRTModelBase):
 
         forward_model.SurfaceX = self.calculate(forward_model.SurfaceX,tsurf)
 
-        ipar = -1
+        #ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 

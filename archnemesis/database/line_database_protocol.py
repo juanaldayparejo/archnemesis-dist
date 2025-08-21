@@ -1,14 +1,12 @@
 from __future__ import annotations #  for 3.9 compatability
 
-import os.path
-from typing import Self, Protocol, ClassVar, TYPE_CHECKING
+from typing import Protocol, TYPE_CHECKING
 
 import numpy as np
 
 import archnemesis as ans
 import archnemesis.enums
 from .datatypes.wave_range import WaveRange
-from .datatypes.gas_isotopes import GasIsotopes
 from .datatypes.gas_descriptor import RadtranGasDescriptor
 
 import logging

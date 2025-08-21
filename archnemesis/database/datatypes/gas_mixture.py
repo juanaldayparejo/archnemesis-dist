@@ -1,9 +1,11 @@
 from __future__ import annotations #  for 3.9 compatability
 
+from typing import Self
+
 import numpy as np
 
-
 import archnemesis.helpers.maths_helper as maths_helper
+from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
 
 
 class GasMixture:
@@ -45,9 +47,9 @@ class GasMixture:
         a = np.sum([f for g,f in self._gf.items()])
         return (a - 1) < 1E-30
     
-    def set(gas_frac_pairs : tuple[tuple[RadtranGasDescriptor, float],...]) -> Self:
+    def set(self, gas_frac_pairs : tuple[tuple[RadtranGasDescriptor, float],...]) -> Self:
         for g, f in gas_frac_pairs:
-            self._gf[gas] = frac
+            self._gf[g] = f
         
         self.normalise()
         return self
