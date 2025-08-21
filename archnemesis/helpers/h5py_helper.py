@@ -30,20 +30,22 @@ def retrieve_data(
 def store_data(
         h5py_file : h5py.File | h5py.Group,
         item_path : str,
-        data : Any
+        data : Any,
+        dtype = None, # will guess data type
     ) -> None:
-    """
+    r"""
     Stores `data` at `item_path` in `h5py_file`. Values of "None" create an empty dataset
     
     Regex replacement for previous version "(\w*?)\.create_dataset\(('.*?'),\s*data\s*=\s*(.*)\)" -> "h5py_helper.store_data($1, $2, $3)"
     """
     #f.create_dataset('Retrieval/Output/OptimalEstimation/NX',data=self.NX)
     
-    dtype = float
-    if issubclass(type(data), np.ndarray):
-        dtype = data.dtype
-    elif type(data) is int:
-        dtype = int
+    if dtype is None:
+        dtype = float
+        if issubclass(type(data), np.ndarray):
+            dtype = data.dtype
+        elif type(data) is int:
+            dtype = int
     
     
     if data is not None:
