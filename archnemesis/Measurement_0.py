@@ -200,9 +200,20 @@ class Measurement_0:
     
     """
 
-    def __init__(self, runname='', NGEOM=1, FWHM=0.0, ISHAPE=InstrumentLineshape.Gaussian, 
-                 IFORM=SpectraUnit.Radiance, ISPACE=WaveUnit.Wavenumber_cm, 
-                 LATITUDE=0.0, LONGITUDE=0.0, V_DOPPLER=0.0, NCONV=[1], NAV=[1]):
+    def __init__(
+            self, 
+            runname='', 
+            NGEOM=1, 
+            FWHM=0.0, 
+            ISHAPE=InstrumentLineshape.Gaussian, 
+            IFORM=SpectraUnit.Radiance, 
+            ISPACE=WaveUnit.Wavenumber_cm, 
+            LATITUDE=0.0, 
+            LONGITUDE=0.0, 
+            V_DOPPLER=0.0, 
+            NCONV=[1], 
+            NAV=[1]
+    ):
 
         #Input parameters
         self.runname = runname
@@ -325,6 +336,12 @@ class Measurement_0:
 
         if self.FWHM > 0.0: #Analytical instrument lineshape
             assert isinstance(self.ISHAPE, (int, np.integer, InstrumentLineshape)), 'ISHAPE must be int'
+        elif self.FWHM == 0.0: # Lineshape baked into K-tables
+            pass
+        elif self.FWHM < 0.0: # lineshape described by files
+            assert self.NFIL is not None, "NFIL must be defined for FWHM < 0"
+            assert self.VFIL is not None, "VFIL must be defined for FWHM < 0"
+            assert self.AFIL is not None, "AFIL must be defined for FWHM < 0"
 
     #################################################################################################################
             
@@ -885,8 +902,8 @@ class Measurement_0:
         """
 
         #Opening file
-        f = open(self.runname+'.sha','r')
-        s = f.readline().split()
+        with open(self.runname+'.sha','r') as f:
+            s = f.readline().split()
         lineshape = int(s[0])
         self.ISHAPE = InstrumentLineshape(lineshape)
         self.build_ils()
@@ -903,9 +920,8 @@ class Measurement_0:
         if self.FWHM < 0.0:
             raise ValueError('error in write_sha() :: The .sha file is only used if FWHM>0')
 
-        f = open(self.runname+'.sha','w')
-        f.write("%i \n" %  (int(self.ISHAPE)))
-        f.close()
+        with open(self.runname+'.sha','w') as f:
+            f.write("%i \n" %  (int(self.ISHAPE)))
 
     #################################################################################################################
 
@@ -917,22 +933,22 @@ class Measurement_0:
         """
 
         #Opening file
-        f = open(self.runname+'.fil','r')
+        with open(self.runname+'.fil','r') as f:
     
-        #Reading first and second lines
-        nconv = int(np.fromfile(f,sep=' ',count=1,dtype='int'))
-        wave = np.zeros([nconv],dtype='d')
-        nfil = np.zeros([nconv],dtype='int')
-        nfilmax = 100000
-        vfil1 = np.zeros([nfilmax,nconv],dtype='d')
-        afil1 = np.zeros([nfilmax,nconv],dtype='d')
-        for i in range(nconv):
-            wave[i] = np.fromfile(f,sep=' ',count=1,dtype='d')
-            nfil[i] = np.fromfile(f,sep=' ',count=1,dtype='int')
-            for j in range(nfil[i]):
-                tmp = np.fromfile(f,sep=' ',count=2,dtype='d')
-                vfil1[j,i] = tmp[0]
-                afil1[j,i] = tmp[1]
+            #Reading first and second lines
+            nconv = int(np.fromfile(f,sep=' ',count=1,dtype='int'))
+            wave = np.zeros([nconv],dtype='d')
+            nfil = np.zeros([nconv],dtype='int')
+            nfilmax = 100000
+            vfil1 = np.zeros([nfilmax,nconv],dtype='d')
+            afil1 = np.zeros([nfilmax,nconv],dtype='d')
+            for i in range(nconv):
+                wave[i] = np.fromfile(f,sep=' ',count=1,dtype='d')
+                nfil[i] = np.fromfile(f,sep=' ',count=1,dtype='int')
+                for j in range(nfil[i]):
+                    tmp = np.fromfile(f,sep=' ',count=2,dtype='d')
+                    vfil1[j,i] = tmp[0]
+                    afil1[j,i] = tmp[1]
 
         nfil1 = nfil.max()
         vfil = np.zeros([nfil1,nconv],dtype='d')
@@ -993,17 +1009,16 @@ class Measurement_0:
             _lgr.warning('Not writing *.fil file as self.NFIL is NONE')
             return
 
-        f = open(self.runname+'.fil','w')
-        f.write("%i \n" %  (self.NCONV[IGEOM]))
+        with open(self.runname+'.fil','w') as f:
+            f.write("%i \n" %  (self.NCONV[IGEOM]))
 
-        #Running for each spectral point
-        for i in range(self.NCONV[IGEOM]):
-            f.write("%10.7f\n" % self.VCONV[i,IGEOM])
+            #Running for each spectral point
+            for i in range(self.NCONV[IGEOM]):
+                f.write("%10.7f\n" % self.VCONV[i,IGEOM])
 
-            f.write("%i \n" %  (self.NFIL[i]))
-            for j in range(self.NFIL[i]):
-                f.write("%10.10f %10.10e\n" % (self.VFIL[j,i], self.AFIL[j,i]) )
-        f.close()
+                f.write("%i \n" %  (self.NFIL[i]))
+                for j in range(self.NFIL[i]):
+                    f.write("%10.10f %10.10e\n" % (self.VFIL[j,i], self.AFIL[j,i]) )
 
     #################################################################################################################
             

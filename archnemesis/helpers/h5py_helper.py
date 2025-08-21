@@ -47,12 +47,21 @@ def store_data(
         elif type(data) is int:
             dtype = int
     
+    if item_path not in h5py_file:
+        
+        if data is not None:
+            return h5py_file.create_dataset(item_path, data=data, dtype=dtype)
+        else:
+            return h5py_file.create_dataset(item_path, shape=None, dtype=dtype)
     
     if data is not None:
-        return h5py_file.create_dataset(item_path, data=data, dtype=dtype)
+        dset = h5py_file[item_path]
+        dset[...] = data
+        return dset
     else:
+        del h5py_file[item_path]
         return h5py_file.create_dataset(item_path, shape=None, dtype=dtype)
-    
+        
     
     
 

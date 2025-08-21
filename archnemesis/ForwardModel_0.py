@@ -102,7 +102,7 @@ class ForwardModel_0:
             Variables=None, 
             Telluric=None, 
             adjust_hydrostat=True,
-        ):
+    ):
 
         """Forward Model class
 
@@ -239,6 +239,11 @@ class ForwardModel_0:
         self.Layer = Layer
         self.Telluric = Telluric
         self.adjust_hydrostat=adjust_hydrostat
+        
+        
+        # Check that Measurement has an instrument response function when LBL tables are used
+        if self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            assert self.Measurement.FWHM != 0.0, "LINE_BY_LINE spectral calculation mode requires a non-zero Measurement_0.FWHM"
         
         
         if not self.get_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG():
