@@ -294,7 +294,7 @@ class LineData_0:
         
         """
         
-        doppler_width_const : float  = 1/Data.constants.c_light_cgs * np.sqrt(2*np.log(2)*Data.constants.N_avogadro*Data.constants.k_boltzmann_cgs)
+        doppler_width_const_cgs : float  = 1/Data.constants.c_light_cgs * np.sqrt(2*np.log(2)*Data.constants.N_avogadro*Data.constants.k_boltzmann_cgs)
         
         dws = dict() # result
         
@@ -304,7 +304,7 @@ class LineData_0:
                 dws[gas_desc] = np.nan
                 continue
             
-            dws[gas_desc] = gas_line_data.NU * np.sqrt( temp / (gas_desc.molecular_mass*1E-3) ) * doppler_width_const
+            dws[gas_desc] = gas_line_data.NU * np.sqrt( temp / (gas_desc.molecular_mass) ) * doppler_width_const_cgs
         
         return dws
     
