@@ -43,7 +43,7 @@ class WaveRange(NamedTuple):
     
     def contains(self, other) -> bool:
         other = other.as_unit(self.unit)
-        return self.min <= other.min and other.max <= self.max
+        return (self.min - other.min) <= 1E-30 and (other.max - self.max) <= 1E-30
     
     def union(self, *others) -> Self:
         vmin, vmax = self.values()
@@ -60,5 +60,4 @@ class WaveRange(NamedTuple):
     
     def arange(self, step : float):
         return np.arange(self.min, self.max, step)
-
 

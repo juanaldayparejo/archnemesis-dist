@@ -1742,6 +1742,18 @@ def read_lbltable(filename,wavemin,wavemax):
                 k[ik,i,:] = k_out[il:il+abs(ntemp)]
                 il = il + abs(ntemp)
     
+    _lgr.debug(f'{filename=}')
+    _lgr.debug(f'{npress=}')
+    _lgr.debug(f'{ntemp=}')
+    _lgr.debug(f'{gasID=}')
+    _lgr.debug(f'{isoID=}')
+    _lgr.debug(f'{presslevels=}')
+    _lgr.debug(f'{templevels=}')
+    _lgr.debug(f'{nwave=}')
+    _lgr.debug(f'{wave=}')
+    _lgr.debug(f'{k=}')
+    
+    
     return npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wave,k
 
 

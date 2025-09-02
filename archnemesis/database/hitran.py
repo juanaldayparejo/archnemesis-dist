@@ -374,11 +374,10 @@ class HITRAN(LineDatabaseProtocol):
     def _check_available_data(self, gas_descs : tuple[RadtranGasDescriptor,...], wave_range : WaveRange, ambient_gas : ans.enums.AmbientGas):
         for gas_desc in gas_descs:
             gda_pair = (gas_desc, ambient_gas)
-            if gda_pair not in self._gas_wavenumber_interval_to_download:
+            if gda_pair not in self._downloaded_gas_wavenumber_interval:
                 self._gas_wavenumber_interval_to_download[gda_pair] = wave_range.to_unit(ans.enums.WaveUnit.Wavenumber_cm)
-            else:
-                if not self._downloaded_gas_wavenumber_interval[gda_pair].contains(wave_range):
-                    self._gas_wavenumber_interval_to_download[gda_pair] = self._downloaded_gas_wavenumber_interval[gda_pair].union(wave_range)
+            elif not self._downloaded_gas_wavenumber_interval[gda_pair].contains(wave_range):
+                self._gas_wavenumber_interval_to_download[gda_pair] = self._downloaded_gas_wavenumber_interval[gda_pair].union(wave_range)
     
     
     def _fetch_line_data(self) -> dict[bool,...]:
@@ -388,6 +387,18 @@ class HITRAN(LineDatabaseProtocol):
         gas_exists_in_db = [False]*len(self._gas_wavenumber_interval_to_download)
         
         for gas_idx, (gda_pair, wave_range) in enumerate(tuple(self._gas_wavenumber_interval_to_download.items())):
+            
+            # Check that the gas exists in the HITRAN database
+            gas_desc, ambient_gas = gda_pair
+            ht_gas = gas_desc.to_hitran()
+            if ht_gas is None:
+                gas_exists_in_db[gas_idx] = False
+                _lgr.warning(f'Cannot download data for {gas_desc}, as that gas is not present in the HITRAN database')
+                continue # cannot download data for a gas that is not present in HITRAN database
+            else:
+                gas_exists_in_db[gas_idx] = True
+            
+            # Work out if we have to download anything, or if we can just use the data we already have
             if gda_pair not in self._gas_wavenumber_interval_to_download:
                 continue
             saved_wave_range = self._downloaded_gas_wavenumber_interval.get(gda_pair, None)
@@ -397,16 +408,10 @@ class HITRAN(LineDatabaseProtocol):
             else:
                 _lgr.debug(f'Downloaded gas data {gda_pair} DOES NOT CONTAIN desired wave range {saved_wave_range} vs {wave_range}')
         
-            _lgr.info(f'Downloading data for {gda_pair} where {wave_range=}...')
-        
-            gas_desc, ambient_gas = gda_pair
-        
-            ht_gas = gas_desc.to_hitran()
-            if ht_gas is None:
-                gas_exists_in_db[gas_idx] = False
-                continue # cannot download data for a gas that is not present in HITRAN database
-            else:
-                gas_exists_in_db[gas_idx] = True
+            
+            # If we must download data then perform the download here.
+            
+            _lgr.info(f'Downloading data for {gda_pair} where {wave_range=} ({saved_wave_range=})...')
             
             vmin, vmax = wave_range.as_unit(ans.enums.WaveUnit.Wavenumber_cm).values()
             

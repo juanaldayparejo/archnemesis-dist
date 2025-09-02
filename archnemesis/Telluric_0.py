@@ -25,6 +25,7 @@ import os
 import numpy as np
 import h5py
 
+import archnemesis.Data.constants as const
 from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnit, SpectralCalculationMode
 import archnemesis.helpers.h5py_helper as h5py_helper
 
@@ -195,7 +196,6 @@ class Telluric_0:
         from datetime import datetime, timedelta
         from archnemesis.Data.path_data import archnemesis_path 
         from archnemesis import Atmosphere_0
-        from archnemesis.Data.gas_data import const
         import cdsapi
         
         #Defining the inputs
@@ -301,7 +301,7 @@ class Telluric_0:
         #First estimation of the altitudes
         g0 = 9.80665 #m/s2
         mmol = 0.0289644 #kg/mol
-        R = const["R"]
+        R = const.R
         
         sh = R * temp / (mmol * g0)
         h = -np.log(press/press[0]) * sh

@@ -1422,7 +1422,10 @@ def coreretOE(
             #Has the solution converged?
             tphi = 100.0*(OPHI-OptimalEstimation.PHI)/OPHI
             if (tphi>=0.0 and tphi<=OptimalEstimation.PHILIMIT and alambda<1.0):
-                _lgr.info('phi, phlimit : '+str(tphi)+','+str(OptimalEstimation.PHILIMIT))
+                _lgr.info(f'Previous phi = {OPHI}')
+                _lgr.info(f'Current phi = {OptimalEstimation.PHI}')
+                _lgr.info(f'Current phi as percentage of previous: {tphi}')
+                _lgr.info(f'Percentage convergence limit: {OptimalEstimation.PHILIMIT}')
                 _lgr.info('Phi has converged')
                 _lgr.info('Terminating retrieval')
                 break
@@ -1459,6 +1462,8 @@ def coreretOE(
         _lgr.info(f'\t{head}')
         f.write(head)
         for i,(p,c,sv) in enumerate(zip(phi_history, chisq_history, state_vector_history)):
+            if i >= n_successful_iterations:
+                break
             line = fmt.format(i, p, c, ' '.join((f'{x:09.3E}' for x in sv)))
             _lgr.info(f'\t{line}')
             f.write(line)

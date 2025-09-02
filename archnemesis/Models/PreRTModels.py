@@ -9,11 +9,12 @@ import abc
 
 import numpy as np
 import matplotlib.pyplot as plt
-
+from scipy.integrate import simpson
 
 from .ModelBase import ModelBase
 from .ModelParameter import ModelParameter
 
+import archnemesis.Data.constants as const
 from archnemesis.helpers import h5py_helper
 from archnemesis.helpers.maths_helper import ngauss
 from archnemesis.Scatter_0 import kk_new_sub
@@ -1471,8 +1472,7 @@ class Model9(PreRTModelBase):
 
         """
 
-        from scipy.integrate import simpson
-        from archnemesis.Data.gas_data import const
+        
 
 
         if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
@@ -1482,7 +1482,7 @@ class Model9(PreRTModelBase):
         
         
         #Calculating the actual atmospheric scale height in each level
-        R = const["R"]
+        R = const.R
         scale = R * atm.T / (atm.MOLWT * atm.GRAV)   #scale height (m)
 
         #This gradient is calcualted numerically (in this function) as it is too hard otherwise
@@ -1771,8 +1771,6 @@ class Model32(PreRTModelBase):
         _lgr.debug(f'{frac_scale_height=}')
         _lgr.debug(f'{tau=}')
 
-        #from scipy.integrate import simpson
-        from archnemesis.Data.gas_data import const
         
         if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
             _msg = f'Model id={cls.id} is only defined for aerosol profiles.'
@@ -1780,7 +1778,7 @@ class Model32(PreRTModelBase):
             raise ValueError(_msg)
 
         #Calculating the actual atmospheric scale height in each level
-        R = const["R"]
+        R = const.R
         scale = R * atm.T / (atm.MOLWT * atm.GRAV)   #scale height (m)
         rho = atm.calc_rho()*1e-3    #density (kg/m3)
 
@@ -2388,11 +2386,10 @@ class Model47(PreRTModelBase):
             _lgr.error(_msg)
             raise ValueError(_msg)
         
-        from archnemesis.Data.gas_data import const
         
         
         # Calculate atmospheric properties
-        R = const["R"]
+        R = const.R
         scale = R * atm.T / (atm.MOLWT * atm.GRAV)   #scale height (m)
         rho = atm.calc_rho()*1e-3    #density (kg/m3)
 

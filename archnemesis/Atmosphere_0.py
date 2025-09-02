@@ -31,6 +31,8 @@ import numpy as np
 from scipy.special import legendre
 import matplotlib.pyplot as plt
 
+import archnemesis.Data.constants as const
+from archnemesis.Data.planet_data import planet_info
 from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileType
 from archnemesis.helpers import h5py_helper
 
@@ -207,6 +209,13 @@ class Atmosphere_0:
     def AMFORM(self, value):
         self._amform = AtmosphericProfileFormatEnum(value)
 
+    def sanity_check(self):
+        """
+        Some quick tests to make sure that the data in this class has not been corrupted
+        """
+        assert np.all((self.H[-1] - self.H[0]) > 1E4), "The range of heights spanned by the atmosphere should probably be at least 10 km"
+        
+
     def assess(self):
         """
         Assess whether the different variables have the correct dimensions and types
@@ -301,6 +310,8 @@ class Atmosphere_0:
             if self.PARAH2 is not None:
                 assert self.PARAH2.shape == (self.NP,self.NLOCATIONS) , \
                     'PARAH2 must have size (NP,NLOCATIONS)'
+        
+        self.sanity_check()
 
     ##################################################################################
 
@@ -752,9 +763,7 @@ class Atmosphere_0:
         Subroutine to calculate the atmospheric density (kg/m3) at each level
         """
         
-        from archnemesis.Data.gas_data import const
-        
-        R = const["R"]
+        R = const.R
         rho = self.P * self.MOLWT / R / self.T
 
         return rho
@@ -766,9 +775,8 @@ class Atmosphere_0:
         Subroutine to calculate the atmospheric number density (m-3) at each level
         """
         
-        from archnemesis.Data.gas_data import const
         
-        k_B = const["k_B"]
+        k_B = const.k_B
         numdens = self.P / k_B / self.T
 
         return numdens
@@ -805,11 +813,10 @@ class Atmosphere_0:
         of Lindal et al., 1986, Astr. J., 90 (6), 1136-1146
         """
 
-        from archnemesis.Data.gas_data import const
-        from archnemesis.Data.planet_data import planet_info
+        
 
         #Reading data and calculating some parameters
-        Grav = const["G"]
+        Grav = const.G
         data = planet_info[str(int(self.IPLANET))]
         xgm = data["mass"] * Grav * 1.0e24 * 1.0e6
         xomega = 2.*np.pi / (data["rotation"]*24.*3600.)
@@ -882,7 +889,6 @@ class Atmosphere_0:
             
         """
         
-        from archnemesis.Data.gas_data import const
 
         #if self.NLOCATIONS>1:
         #    raise ValueError('error :: adjust_hydrostatP only works if NLOCATIONS = 1')
@@ -899,7 +905,7 @@ class Atmosphere_0:
             self.calc_grav()
 
             #Calculate the scaling factor
-            R = const["R"]
+            R = const.R
             scale = R * self.T / (self.MOLWT * self.GRAV)   #scale height (m)
 
             sh =  0.5*(scale[ialt]+scale[ialt+1])
@@ -942,7 +948,7 @@ class Atmosphere_0:
                 self.calc_grav()
 
                 #Calculate the scaling factor
-                R = const["R"]
+                R = const.R
                 scale = R * self.T[:,iLOC] / (self.MOLWT[:,iLOC] * self.GRAV[:,iLOC])   #scale height (m)
 
                 sh =  0.5*(scale[ialt]+scale[ialt+1])
@@ -975,7 +981,6 @@ class Atmosphere_0:
         Note : Only valid if NLOCATIONS = 1
         """
 
-        from archnemesis.Data.gas_data import const#, gas_info
 
         if self.NLOCATIONS==1:
 
@@ -999,7 +1004,7 @@ class Atmosphere_0:
                 #Calculate the gravity at each altitude level
                 self.calc_grav()
                 #Calculate the scale height
-                R = const["R"]
+                R = const.R
                 scale = R * self.T / (self.MOLWT * self.GRAV)   #scale height (m)
 
                 p[:] = self.P
@@ -1067,7 +1072,7 @@ class Atmosphere_0:
                 self.calc_grav()
 
                 #Calculate the scale height
-                R = const["R"]
+                R = const.R
                 scale = R * self.T / (self.MOLWT * self.GRAV)   #scale height (m)
 
                 if ((ialt>0) & (ialt<self.NP-1)):

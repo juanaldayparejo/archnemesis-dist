@@ -94,21 +94,21 @@ class LblDataTProfilesAtPressure(NamedTuple):
         print(f'{p_struct=}')
         f.write(
             p_struct.pack(
-                *self.press
+                *(x for x in np.nditer(np.asfortranarray(self.press)))
             )
         )
         
         print(f'{t_struct=}')
         f.write(
             t_struct.pack(
-                *self.temp.flat
+                *(x for x in np.nditer(np.asfortranarray(self.temp)))
             )
         )
         
         print(f'{k_struct=}')
         f.write(
             k_struct.pack(
-                *self.k.flat # already multiplied by 1E20 to avoid underflow when saving single precision floats
+                *(x for x in np.nditer(np.asfortranarray(self.k))) # already multiplied by 1E20 to avoid underflow when saving single precision floats
             )
         )
         
@@ -234,19 +234,19 @@ class LblDataTPGrid(NamedTuple):
         
         f.write(
             p_struct.pack(
-                *self.press.flat
+                *(x for x in np.nditer(np.asfortranarray(self.press)))
             )
         )
         
         f.write(
             t_struct.pack(
-                *self.temp.flat
+                *(x for x in np.nditer(np.asfortranarray(self.temp)))
             )
         )
         
         f.write(
             k_struct.pack(
-                *self.k.flat # already multiplied by 1E20 to avoid underflow when saving single precision floats
+                *(x for x in np.nditer(np.asfortranarray(self.k))) # already multiplied by 1E20 to avoid underflow when saving single precision floats
             )
         )
 
@@ -373,7 +373,7 @@ def read_legacy(
         buf = f.read(x_struct.size)
         _lgr.debug(f'{f.tell()=}')
         
-        ptk[i] = np.array(x_struct.unpack_from(buf), dtype=float).reshape(x_shape)
+        ptk[i] = np.array(x_struct.unpack_from(buf), dtype=float, order='F').reshape(x_shape)
     
     # Absorption coefficients start at `hdr.irec0` records into the file. THIS IS NOT THE SAME AS AFTER THE PRESSURE AND TEMPERATURE DATA!!
     current_pos = f.tell()
