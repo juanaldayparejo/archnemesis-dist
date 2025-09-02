@@ -268,7 +268,7 @@ def queryHITRAN_MONKEYPATCH(TableName, iso_id_list, numin, numax, pargroups=[], 
         else:
             raise RuntimeError(f'Failed to retrieve data for given parameters. Code : {e.code} URL : "{e.url}" Error : {e.reason}') from e
     except urllib.error.URLError as e:
-        raise RuntimeError(f'Cannot connect to {hapi.VARIABLES['GLOBAL_HOST']}. Try again or edit GLOBAL_HOST variable. Error: {e.reason}' ) from e
+        raise RuntimeError(f'Cannot connect to {hapi.VARIABLES["GLOBAL_HOST"]}. Try again or edit GLOBAL_HOST variable. Error: {e.reason}' ) from e
     
     CHUNK = 64 * 1024
     print('BEGIN DOWNLOAD: ' + TableName)
