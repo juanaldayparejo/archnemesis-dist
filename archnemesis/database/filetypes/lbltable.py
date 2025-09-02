@@ -94,21 +94,24 @@ class LblDataTProfilesAtPressure(NamedTuple):
         print(f'{p_struct=}')
         f.write(
             p_struct.pack(
-                *(x for x in np.nditer(np.asfortranarray(self.press)))
+                #*(x for x in np.nditer(np.asfortranarray(self.press)))
+                *self.press.flat
             )
         )
         
         print(f'{t_struct=}')
         f.write(
             t_struct.pack(
-                *(x for x in np.nditer(np.asfortranarray(self.temp)))
+                #*(x for x in np.nditer(np.asfortranarray(self.temp)))
+                *self.temp.flat
             )
         )
         
         print(f'{k_struct=}')
         f.write(
             k_struct.pack(
-                *(x for x in np.nditer(np.asfortranarray(self.k))) # already multiplied by 1E20 to avoid underflow when saving single precision floats
+                #*(x for x in np.nditer(np.asfortranarray(self.k))) # already multiplied by 1E20 to avoid underflow when saving single precision floats
+                *self.k.flat
             )
         )
         

@@ -822,6 +822,7 @@ class LineData_0:
         self.fetch_linedata(
             vmin = waves[0]-line_calculation_wavenumber_window, 
             vmax = waves[-1]+line_calculation_wavenumber_window, 
+            wave_unit = ans.enums.WaveUnit.Wavenumber_cm,
             refresh=ensure_linedata_downloaded
         )
         
@@ -853,7 +854,6 @@ class LineData_0:
                 abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) 
             
             k_total.fill(0.0) # reset to all zeros
-            
         
             strength = strengths[gas_desc]
             alpha_d = alpha_ds[gas_desc]
@@ -875,6 +875,8 @@ class LineData_0:
                 if strength[line_idx] < line_strength_cutoff:
                     continue
             
+                scratch.fill(0.0)
+                
                 np.subtract(waves, gas_line_data.NU[line_idx], out=delta_wn)
                 
                 np.less_equal(delta_wn, line_calculation_wavenumber_window, out=mask_leq)

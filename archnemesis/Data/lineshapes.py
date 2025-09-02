@@ -15,6 +15,22 @@ SQRT_log2 = np.sqrt(np.log(2))
 
 
 
+def voigt_ch4_H2_ambient(
+        delta_wn : np.ndarray, 
+        alpha_d : float, 
+        gamma_l : float
+    ) -> np.ndarray:
+    
+    
+    # NOTE: Unsure where the log(2) factor comes from but do not get the same answer as existing LBL tables without it.
+    #       it could also be a factor of 1/sqrt(2), they are very similar numbers.
+    #return voigt_profile(delta_wn, alpha_d, np.log(2)*gamma_l) 
+
+    # NOTE: Unsure where the 1/sqrt(2) factor comes from but do not get the same answer as existing LBL tables without it.
+    #       it could also be a factor of log(2), they are very similar numbers.
+    return voigt_profile(delta_wn, alpha_d/SQRT_2, gamma_l/SQRT_2)
+
+
 def voigt(
         delta_wn : np.ndarray, 
         alpha_d : float, 
@@ -59,21 +75,6 @@ def voigt(
         gamma_l : cauchy-lorents HWHM = gamma
     """
     
-    # NOTE: Unsure where the log(2) factor comes from but do not get the same answer as existing LBL tables without it.
-    #       it could also be a factor of 1/sqrt(2), they are very similar numbers.
-    #return voigt_profile(delta_wn, alpha_d, np.log(2)*gamma_l) 
-
-    # NOTE: Unsure where the 1/sqrt(2) factor comes from but do not get the same answer as existing LBL tables without it.
-    #       it could also be a factor of log(2), they are very similar numbers.
-    return voigt_profile(delta_wn, alpha_d/SQRT_2, gamma_l/SQRT_2)
-
-
-def voigt_scipy(
-        delta_wn : np.ndarray, 
-        alpha_d : float, 
-        gamma_l : float
-    ) -> np.ndarray:
-    
     sigma = alpha_d / SQRT_2log2
     return voigt_profile(delta_wn, sigma, gamma_l)
 
@@ -98,4 +99,4 @@ def hartmann_empirical_infrared_ch4_h2_broadening(
     chi[~mask_60] = 0.0684*np.exp(-abs_delta_wn[~mask_60]/ 393.0)
     
     
-    return chi*voigt_scipy(delta_wn, alpha_d, gamma_l)
+    return chi*voigt(delta_wn, alpha_d, gamma_l)
