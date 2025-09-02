@@ -32,11 +32,13 @@ import matplotlib.pyplot as plt
 from archnemesis import Data
 #from archnemesis import *
 import archnemesis as ans
-from archnemesis.enums import AmbientGas
+import archnemesis.enums
+
 #import archnemesis.helpers.maths_helper as maths_helper
 from archnemesis.helpers.io_helper import SimpleProgressTracker
 import archnemesis.database
-import archnemesis.database.hitran
+import archnemesis.database.line_database.hitran
+import archnemesis.database.partition_function_database.hitran
 from archnemesis.database.filetypes.lbltable import LblDataTProfilesAtPressure#, LblDataTPGrid
 from archnemesis.database.datatypes.wave_point import WavePoint
 from archnemesis.database.datatypes.wave_range import WaveRange
@@ -71,8 +73,9 @@ class LineData_0:
             self, 
             ID: int = 1,
             ISO: int = 0,
-            ambient_gas=AmbientGas.H2,
-            DATABASE : None | ans.database.LineDatabaseProtocol = None
+            ambient_gas=ans.enums.AmbientGas.AIR,
+            LINE_DATABASE : None | ans.database.protocols.LineDatabaseProtocol = None,
+            PARTITION_FUNCTION_DATABASE : None | ans.database.protocols.PartitionFunctionDatabaseProtocol = None,
     ):
         """
         Class to store line data for a specific gas and isotope.
@@ -90,16 +93,20 @@ class LineData_0:
             Name of the ambient gas, default AIR. This is used to
             determine the pressure-broadening coefficients
         
-        @attribute DATABASE: None | archnemsis.database.LineDatabaseProtocol
-            Instance of a class that implements the `archnemsis.database.LineDatabaseProtocol` protocol.
+        @attribute LINE_DATABASE: None | ans.database.protocols.LineDatabaseProtocol
+            Instance of a class that implements the `ans.database.protocols.LineDatabaseProtocol` protocol.
+            If `None` will use HITRAN as backend.
+        
+        @attribute PARTITION_FUNCTION_DATABASE: None | archnemsis.database.protocols.PartitionFunctionDatabaseProtocol
+            Instance of a class that implements the `archnemsis.database.protocols.PartitionFunctionDatabaseProtocol` protocol.
             If `None` will use HITRAN as backend.
         
 
         Attributes
         ----------
         
-        @attribute line_data : None | archnemsis.database.line_database_protocol.LineDataProtocol
-            An object (normally a numpy record array) that implements the `archnemsis.database.line_database_protocol.LineDataProtocol`
+        @attribute line_data : None | archnemsis.database.protocols.LineDataProtocol
+            An object (normally a numpy record array) that implements the `archnemsis.database.protocols.LineDataProtocol`
             protocol. If `None` the data has not been retrieved from the database yet.
             
             If not `None` will have the following attributes:
@@ -128,8 +135,8 @@ class LineData_0:
                 ELOWER : np.ndarray[['N_LINES_OF_GAS'],float] 
                     Lower state energy (cm^{-1})
         
-        @attribute partition_data : None | archnemsis.database.line_database_protocol.PartitionFunctionDataProtocol
-            An object (normally a numpy record array) that implements the `archnemsis.database.line_database_protocol.PartitionFunctionDataProtocol`
+        @attribute partition_data : None | archnemsis.database.protocols.PartitionFunctionDataProtocol
+            An object (normally a numpy record array) that implements the `archnemsis.database.protocols.PartitionFunctionDataProtocol`
             protocol. If `None` the data has not been retrieved from the database yet.
             
             If not `None` will have the following attributes:
@@ -148,37 +155,57 @@ class LineData_0:
         LineData_0.fetch_partition_function(...)
         """
         
+        self._ambient_gas = ambient_gas
+        self._line_database = None
+        self._partition_function_database = None
+        
         self.ID = ID
         self.ISO = ISO
-        self._ambient_gas = ambient_gas
-        self.DATABASE = DATABASE
+        self.LINE_DATABASE = LINE_DATABASE
+        self.PARTITION_FUNCTION_DATABASE = PARTITION_FUNCTION_DATABASE
+        
         self.line_data = None
         self.partition_data = None
         
     ##################################################################################
 
     @property
-    def DATABASE(self) -> ans.database.LineDatabaseProtocol:
-        if self._database is None:
-            raise RuntimeError('No database attached to LineData_0 instance')
-        return self._database
+    def LINE_DATABASE(self) -> ans.database.protocols.LineDatabaseProtocol:
+        if self._line_database is None:
+            raise RuntimeError('No line database attached to LineData_0 instance')
+        return self._line_database
 
-    @DATABASE.setter
-    def DATABASE(self, value : ans.database.LineDatabaseProtocol):
+    @LINE_DATABASE.setter
+    def LINE_DATABASE(self, value : ans.database.protocols.LineDatabaseProtocol):
         if value is None:
-            db = ans.database.hitran.HITRAN()
-            _lgr.info(f'Using default database {db}')
-            self._database = db
+            db = ans.database.line_database.hitran.HITRAN()
+            _lgr.info(f'Using default line database {db}')
+            self._line_database = db
         else:
-            self._database = value
+            self._line_database = value
+    
+    @property
+    def PARTITION_FUNCTION_DATABASE(self) -> ans.database.protocols.PartitionFunctionDatabaseProtocol:
+        if self._partition_function_database is None:
+            raise RuntimeError('No partition function database attached to LineData_0 instance')
+        return self._partition_function_database
+
+    @PARTITION_FUNCTION_DATABASE.setter
+    def PARTITION_FUNCTION_DATABASE(self, value : ans.database.protocols.PartitionFunctionDatabaseProtocol):
+        if value is None:
+            db = ans.database.partition_function_database.hitran.HITRAN()
+            _lgr.info(f'Using default partition function database {db}')
+            self._partition_function_database = db
+        else:
+            self._partition_function_database = value
 
     @property
-    def ambient_gas(self) -> AmbientGas:
+    def ambient_gas(self) -> ans.enums.AmbientGas:
         return self._ambient_gas
 
     @ambient_gas.setter
-    def ambient_gas(self, value : int | AmbientGas):
-        self._ambient_gas = AmbientGas(value)
+    def ambient_gas(self, value : int | ans.enums.AmbientGas):
+        self._ambient_gas = ans.enums.AmbientGas(value)
     
     @property
     def gas_isotopes(self) -> GasIsotopes:
@@ -199,8 +226,8 @@ class LineData_0:
         if not isinstance(self.ISO, int):
             raise TypeError(f"ISO must be an integer, got {type(self.ISO)}")
 
-        assert self.ambient_gas in AmbientGas, \
-            f"ambient_gas must be one of {tuple(AmbientGas)}"
+        assert self.ambient_gas in ans.enums.AmbientGas, \
+            f"ambient_gas must be one of {tuple(ans.enums.AmbientGas)}"
 
         if self.ID < 1:
             raise ValueError(f"ID must be greater than 0, got {self.ID}")
@@ -220,8 +247,8 @@ class LineData_0:
             self, 
             vmin : float , 
             vmax : float, 
+            wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
             refresh : bool = False, 
-            wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm
     ) -> None:
         """
         Fetch the line data from the specified database, if `refresh` then get the data even if we already have some.
@@ -230,26 +257,29 @@ class LineData_0:
         
         # ARGUMENTS #
             vmin : float
-                Minimum wavenumber to get line data for (cm^{-1})
+                Minimum wavenumber to get line data for
             vmax : float
-                Maximum wavenumber to get line data for (cm^{-1})
+                Maximum wavenumber to get line data for
+            wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm
+                Unit of `vmin` and `vmax`, default is wavenumbers in cm^{-1}.
             refresh : bool = False
                 If True will retrieve data from database again, even if data
                 is already present. NOTE: this will not neccessarily trigger a download
                 as the database may cache data.
         """
-        assert vmin < vmax, f'Mimimum wavenumber ({vmin}) must be less than maximum wavenumber ({vmax})'
+        assert vmin < vmax, f'Mimimum wave ({vmin}) must be less than maximum wave ({vmax})'
         
+        # Turn wavelength range in to Wavenumbers cm^{-1} for internal use
         wave_range = WaveRange(vmin, vmax, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm)
         
     
         if refresh or not self.is_line_data_ready():
-            self.line_data = self.DATABASE.get_line_data(
+            self.line_data = self.LINE_DATABASE.get_line_data(
                 self.gas_isotopes.as_radtran_gasses(), 
                 wave_range,
                 self.ambient_gas, 
             )
-            _lgr.info(f'Retrieved line data from database {self.DATABASE}')
+            _lgr.info(f'Retrieved line data from database {self.LINE_DATABASE}')
         else:
             _lgr.info('Line data already loaded')
         
@@ -274,10 +304,10 @@ class LineData_0:
         
         
         if refresh or not self.is_partition_function_ready():
-            self.partition_data = self.DATABASE.get_partition_function_data(
+            self.partition_data = self.PARTITION_FUNCTION_DATABASE.get_partition_function_data(
                 self.gas_isotopes.as_radtran_gasses()
             )
-            _lgr.info(f'Retrieved partition function data from database {self.DATABASE}')
+            _lgr.info(f'Retrieved partition function data from database {self.PARTITION_FUNCTION_DATABASE}')
         else:
             _lgr.info('Partition function data already loaded')
     

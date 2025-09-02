@@ -80,8 +80,9 @@ def test_hydrostath():
     Atmosphere.calc_molwt()
     
     Atmosphere.adjust_hydrostatH()
-
-    expected_h = np.array([0.,2950.78396658,7487.94634149])
+    
+    #expected_h = np.array([0.0, 2950.78396658, 7487.94634149])
+    expected_h = np.array([0., 2952.3915689 , 7492.07898138]) # Updated ans.constants.k_boltzmann to new value, so had to update these values
 
     assert np.allclose(Atmosphere.H, expected_h, atol=1e-6)
     

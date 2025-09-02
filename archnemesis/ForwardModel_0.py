@@ -3126,7 +3126,7 @@ class ForwardModel_0:
         SPECOUT = 1.0 - np.exp(-(TAUTOT_PATH)) #(NWAVE,NG,NPATH)
         return SPECOUT, None
     
-    def calculate_thermalscloud11flux_emission_spectrum(
+    def calculate_thermal_emission_spectrum(
             self,
             TAUTOT_LAYINC,
             dTAUTOT_LAYINC,
