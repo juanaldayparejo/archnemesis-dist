@@ -924,6 +924,7 @@ class LineData_0:
             wn_bin : float = 0.0, # Wavenumber (cm^{-1}) bin size. If zero will perform monochromatic calculation, if -ve will multiply `waves` spacing by absolute value to get bin size, if +ve specifies an exact bin size.
             **kwargs # Other keyword arguments passed through to `self.calculate_absorption(...)`
     ) -> tuple[LblDataTProfilesAtPressure,...]:
+        _lgr.critical('`LineData_0.calculate_absorption_at_temp_pressure_profile` is not quite ready for production use yet. Having trouble with the linetable file format.')
         
         # Need to check that `waves` is evenly spaced and monotonically increasing
         if waves.ndim == 1:
