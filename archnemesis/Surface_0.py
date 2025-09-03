@@ -21,10 +21,9 @@ from __future__ import annotations #  for 3.9 compatability
 from scipy.interpolate import interp1d
 import numpy as np
 import matplotlib.pyplot as plt
-import os
-from numba import jit, njit
-from archnemesis.enums import WaveUnit, LowerBoundaryCondition
+from numba import jit#, njit
 
+from archnemesis.enums import WaveUnit, LowerBoundaryCondition
 from archnemesis.helpers import h5py_helper
 
 import logging
@@ -359,126 +358,125 @@ class Surface_0:
         #Assessing that all the parameters have the correct type and dimension
         self.assess()
 
-        f = h5py.File(runname+'.h5','a')
-        #Checking if Atmosphere already exists
-        if ('/Surface' in f)==True:
-            del f['Surface']   #Deleting the Atmosphere information that was previously written in the file
+        with h5py.File(runname+'.h5','a') as f:
+            #Checking if Atmosphere already exists
+            if ('/Surface' in f)==True:
+                del f['Surface']   #Deleting the Atmosphere information that was previously written in the file
 
-        if self.GASGIANT==False:
+            if self.GASGIANT==False:
 
-            grp = f.create_group("Surface")
+                grp = f.create_group("Surface")
 
-            #Writing the lower boundary condition
-            dset = grp.create_dataset('LOWBC',data=int(self.LOWBC))
-            dset.attrs['title'] = "Lower Boundary Condition"
-            if self.LOWBC==LowerBoundaryCondition.THERMAL:
-                dset.attrs['type'] = 'Isotropic thermal emission (no reflection)'
-            elif self.LOWBC==LowerBoundaryCondition.LAMBERTIAN:
-                dset.attrs['type'] = 'Isotropic thermal emission and Lambert reflection'
-            elif self.LOWBC==LowerBoundaryCondition.HAPKE:
-                dset.attrs['type'] = 'Isotropic thermal emission and Hapke reflection'
-            elif self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
-                dset.attrs['type'] = 'Isotropic thermal emission and Oren-Nayar reflection'
+                #Writing the lower boundary condition
+                dset = h5py_helper.store_data(grp, 'LOWBC', int(self.LOWBC))
+                dset.attrs['title'] = "Lower Boundary Condition"
+                if self.LOWBC==LowerBoundaryCondition.THERMAL:
+                    dset.attrs['type'] = 'Isotropic thermal emission (no reflection)'
+                elif self.LOWBC==LowerBoundaryCondition.LAMBERTIAN:
+                    dset.attrs['type'] = 'Isotropic thermal emission and Lambert reflection'
+                elif self.LOWBC==LowerBoundaryCondition.HAPKE:
+                    dset.attrs['type'] = 'Isotropic thermal emission and Hapke reflection'
+                elif self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
+                    dset.attrs['type'] = 'Isotropic thermal emission and Oren-Nayar reflection'
 
-            #Writing the spectral units
-            dset = grp.create_dataset('ISPACE',data=int(self.ISPACE))
-            dset.attrs['title'] = "Spectral units"
-            if self.ISPACE==WaveUnit.Wavenumber_cm:
-                dset.attrs['units'] = 'Wavenumber / cm-1'
-            elif self.ISPACE==WaveUnit.Wavelength_um:
-                dset.attrs['units'] = 'Wavelength / um'
+                #Writing the spectral units
+                dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
+                dset.attrs['title'] = "Spectral units"
+                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                    dset.attrs['units'] = 'Wavenumber / cm-1'
+                elif self.ISPACE==WaveUnit.Wavelength_um:
+                    dset.attrs['units'] = 'Wavelength / um'
 
-            #Writing the spectral array
-            dset = grp.create_dataset('VEM',data=self.VEM)
-            dset.attrs['title'] = "Spectral array"
-            if self.ISPACE==WaveUnit.Wavenumber_cm:
-                dset.attrs['units'] = 'Wavenumber / cm-1'
-            elif self.ISPACE==WaveUnit.Wavelength_um:
-                dset.attrs['units'] = 'Wavelength / um'
+                #Writing the spectral array
+                dset = h5py_helper.store_data(grp, 'VEM', self.VEM)
+                dset.attrs['title'] = "Spectral array"
+                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                    dset.attrs['units'] = 'Wavenumber / cm-1'
+                elif self.ISPACE==WaveUnit.Wavelength_um:
+                    dset.attrs['units'] = 'Wavelength / um'
 
-            #Writing the number of locations
-            dset = grp.create_dataset('NLOCATIONS',data=self.NLOCATIONS)
-            dset.attrs['title'] = "Number of surface locations"
+                #Writing the number of locations
+                dset = h5py_helper.store_data(grp, 'NLOCATIONS', self.NLOCATIONS)
+                dset.attrs['title'] = "Number of surface locations"
 
-            #Writing the co-ordinates of the locations
-            dset = grp.create_dataset('LATITUDE',data=self.LATITUDE)
-            dset.attrs['title'] = "Latitude of the surface locations"
-            dset.attrs['units'] = 'degrees'
-
-            dset = grp.create_dataset('LONGITUDE',data=self.LONGITUDE)
-            dset.attrs['title'] = "Longitude of the surface locations"
-            dset.attrs['units'] = 'degrees'
-
-            #Writing the surface temperature
-            dset = grp.create_dataset('TSURF',data=self.TSURF)
-            dset.attrs['title'] = "Surface Temperature"
-            dset.attrs['units'] = 'K'
-
-            #Writing the surface albedo
-            dset = grp.create_dataset('GALB',data=self.GALB)
-            dset.attrs['title'] = "Ground albedo"
-            if self.GALB<0.0:
-                dset.attrs['type'] = 'Surface albedo calculated as (1 - EMISSIVITY)'
-
-            #Writing the emissivity
-            dset = grp.create_dataset('EMISSIVITY',data=self.EMISSIVITY)
-            dset.attrs['title'] = "Surface emissivity"
-            dset.attrs['units'] = ''
-
-            #Writing Hapke parameters if they are required
-            if self.LOWBC==LowerBoundaryCondition.HAPKE:
-
-                dset = grp.create_dataset('SGLALB',data=self.SGLALB)
-                dset.attrs['title'] = "Single scattering albedo"
-                dset.attrs['units'] = ''
-
-                dset = grp.create_dataset('K',data=self.K)
-                dset.attrs['title'] = "Porosity coefficient"
-                dset.attrs['units'] = ''
-
-                dset = grp.create_dataset('BS0',data=self.BS0)
-                dset.attrs['title'] = "Amplitude of the opposition effect"
-                dset.attrs['units'] = ''
-
-                dset = grp.create_dataset('hs',data=self.hs)
-                dset.attrs['title'] = "Width of the opposition surge"
-                dset.attrs['units'] = ''
-
-                dset = grp.create_dataset('BC0',data=self.BC0)
-                dset.attrs['title'] = "Amplitude of the coherent backscatter opposition effect"
-                dset.attrs['units'] = ''
-
-                dset = grp.create_dataset('hc',data=self.hc)
-                dset.attrs['title'] = "Width of the backscatter function"
-                dset.attrs['units'] = ''
-
-                dset = grp.create_dataset('ROUGHNESS',data=self.ROUGHNESS)
-                dset.attrs['title'] = "Roughness mean slope angle"
+                #Writing the co-ordinates of the locations
+                dset = h5py_helper.store_data(grp, 'LATITUDE', self.LATITUDE)
+                dset.attrs['title'] = "Latitude of the surface locations"
                 dset.attrs['units'] = 'degrees'
 
-                dset = grp.create_dataset('G1',data=self.G1)
-                dset.attrs['title'] = "Asymmetry factor of the first Henyey-Greenstein function defining the phase function"
-                dset.attrs['units'] = ''
-
-                dset = grp.create_dataset('G2',data=self.G2)
-                dset.attrs['title'] = "Asymmetry factor of the second Henyey-Greenstein function defining the phase function"
-                dset.attrs['units'] = ''
-
-                dset = grp.create_dataset('F',data=self.F)
-                dset.attrs['title'] = "Parameter defining the relative contribution of G1 and G2 of the double Henyey-Greenstein phase function"
-                dset.attrs['units'] = ''
-
-            elif self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
-
-                dset = grp.create_dataset('ALBEDO',data=self.ALBEDO)
-                dset.attrs['title'] = "Surface albedo"
-                dset.attrs['units'] = ''
-                
-                dset = grp.create_dataset('ROUGHNESS',data=self.ROUGHNESS)
-                dset.attrs['title'] = "Roughness mean slope angle"
+                dset = h5py_helper.store_data(grp, 'LONGITUDE', self.LONGITUDE)
+                dset.attrs['title'] = "Longitude of the surface locations"
                 dset.attrs['units'] = 'degrees'
 
-        f.close()
+                #Writing the surface temperature
+                dset = h5py_helper.store_data(grp, 'TSURF', self.TSURF)
+                dset.attrs['title'] = "Surface Temperature"
+                dset.attrs['units'] = 'K'
+
+                #Writing the surface albedo
+                dset = h5py_helper.store_data(grp, 'GALB', self.GALB)
+                dset.attrs['title'] = "Ground albedo"
+                if self.GALB<0.0:
+                    dset.attrs['type'] = 'Surface albedo calculated as (1 - EMISSIVITY)'
+
+                #Writing the emissivity
+                dset = h5py_helper.store_data(grp, 'EMISSIVITY', self.EMISSIVITY)
+                dset.attrs['title'] = "Surface emissivity"
+                dset.attrs['units'] = ''
+
+                #Writing Hapke parameters if they are required
+                if self.LOWBC==LowerBoundaryCondition.HAPKE:
+
+                    dset = h5py_helper.store_data(grp, 'SGLALB', self.SGLALB)
+                    dset.attrs['title'] = "Single scattering albedo"
+                    dset.attrs['units'] = ''
+
+                    dset = h5py_helper.store_data(grp, 'K', self.K)
+                    dset.attrs['title'] = "Porosity coefficient"
+                    dset.attrs['units'] = ''
+
+                    dset = h5py_helper.store_data(grp, 'BS0', self.BS0)
+                    dset.attrs['title'] = "Amplitude of the opposition effect"
+                    dset.attrs['units'] = ''
+
+                    dset = h5py_helper.store_data(grp, 'hs', self.hs)
+                    dset.attrs['title'] = "Width of the opposition surge"
+                    dset.attrs['units'] = ''
+
+                    dset = h5py_helper.store_data(grp, 'BC0', self.BC0)
+                    dset.attrs['title'] = "Amplitude of the coherent backscatter opposition effect"
+                    dset.attrs['units'] = ''
+
+                    dset = h5py_helper.store_data(grp, 'hc', self.hc)
+                    dset.attrs['title'] = "Width of the backscatter function"
+                    dset.attrs['units'] = ''
+
+                    dset = h5py_helper.store_data(grp, 'ROUGHNESS', self.ROUGHNESS)
+                    dset.attrs['title'] = "Roughness mean slope angle"
+                    dset.attrs['units'] = 'degrees'
+
+                    dset = h5py_helper.store_data(grp, 'G1', self.G1)
+                    dset.attrs['title'] = "Asymmetry factor of the first Henyey-Greenstein function defining the phase function"
+                    dset.attrs['units'] = ''
+
+                    dset = h5py_helper.store_data(grp, 'G2', self.G2)
+                    dset.attrs['title'] = "Asymmetry factor of the second Henyey-Greenstein function defining the phase function"
+                    dset.attrs['units'] = ''
+
+                    dset = h5py_helper.store_data(grp, 'F', self.F)
+                    dset.attrs['title'] = "Parameter defining the relative contribution of G1 and G2 of the double Henyey-Greenstein phase function"
+                    dset.attrs['units'] = ''
+
+                elif self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
+
+                    dset = h5py_helper.store_data(grp, 'ALBEDO', self.ALBEDO)
+                    dset.attrs['title'] = "Surface albedo"
+                    dset.attrs['units'] = ''
+                    
+                    dset = h5py_helper.store_data(grp, 'ROUGHNESS', self.ROUGHNESS)
+                    dset.attrs['title'] = "Roughness mean slope angle"
+                    dset.attrs['units'] = 'degrees'
+
 
     def read_hdf5(self,runname):
         """
@@ -487,55 +485,55 @@ class Surface_0:
 
         import h5py
 
-        f = h5py.File(runname+'.h5','r')
+        with h5py.File(runname+'.h5','r') as f:
 
-        #Checking if Surface exists
-        e = "/Surface" in f
-        if e==False:
-            # If we have "no surface", planet is a gasgiant
-            # so the surface is always perfectly isothermal
-            # and absorbing.
-            self.GASGIANT = True
-            self.LOWBC = LowerBoundaryCondition.THERMAL
-            self.TSURF = 0.0
-            self.GALB = 0.0
-        else:
-            self.GASGIANT = False
-            self.ISPACE = h5py_helper.retrieve_data(f, 'Surface/ISPACE', lambda x:  WaveUnit(np.int32(x)))
-            self.LOWBC = h5py_helper.retrieve_data(f, 'Surface/LOWBC', lambda x:  LowerBoundaryCondition(np.int32(x)))
-            self.NLOCATIONS = h5py_helper.retrieve_data(f, 'Surface/NLOCATIONS', np.int32)
-
-            self.VEM = h5py_helper.retrieve_data(f, 'Surface/VEM', np.array)
-            self.NEM = len(self.VEM)
-            if self.NLOCATIONS==1:
-                self.TSURF = h5py_helper.retrieve_data(f, 'Surface/TSURF', np.float64)
-                self.LATITUDE = h5py_helper.retrieve_data(f, 'Surface/LATITUDE', np.float64)
-                self.LONGITUDE = h5py_helper.retrieve_data(f, 'Surface/LONGITUDE', np.float64)
+            #Checking if Surface exists
+            e = "/Surface" in f
+            if e==False:
+                # If we have "no surface", planet is a gasgiant
+                # so the surface is always perfectly isothermal
+                # and absorbing.
+                self.GASGIANT = True
+                self.LOWBC = LowerBoundaryCondition.THERMAL
+                self.TSURF = 0.0
+                self.GALB = 0.0
             else:
-                self.TSURF = h5py_helper.retrieve_data(f, 'Surface/TSURF', np.array)
-                self.LATITUDE = h5py_helper.retrieve_data(f, 'Surface/LATITUDE', np.array)
-                self.LONGITUDE = h5py_helper.retrieve_data(f, 'Surface/LONGITUDE', np.array)
+                self.GASGIANT = False
+                self.ISPACE = h5py_helper.retrieve_data(f, 'Surface/ISPACE', lambda x:  WaveUnit(np.int32(x)))
+                self.LOWBC = h5py_helper.retrieve_data(f, 'Surface/LOWBC', lambda x:  LowerBoundaryCondition(np.int32(x)))
+                self.NLOCATIONS = h5py_helper.retrieve_data(f, 'Surface/NLOCATIONS', np.int32)
 
-            self.EMISSIVITY = h5py_helper.retrieve_data(f, 'Surface/EMISSIVITY', np.array)
+                self.VEM = h5py_helper.retrieve_data(f, 'Surface/VEM', np.array)
+                self.NEM = len(self.VEM)
+                if self.NLOCATIONS==1:
+                    self.TSURF = h5py_helper.retrieve_data(f, 'Surface/TSURF', np.float64)
+                    self.LATITUDE = h5py_helper.retrieve_data(f, 'Surface/LATITUDE', np.float64)
+                    self.LONGITUDE = h5py_helper.retrieve_data(f, 'Surface/LONGITUDE', np.float64)
+                else:
+                    self.TSURF = h5py_helper.retrieve_data(f, 'Surface/TSURF', np.array)
+                    self.LATITUDE = h5py_helper.retrieve_data(f, 'Surface/LATITUDE', np.array)
+                    self.LONGITUDE = h5py_helper.retrieve_data(f, 'Surface/LONGITUDE', np.array)
 
-            if self.LOWBC==LowerBoundaryCondition.LAMBERTIAN:
-                self.GALB = h5py_helper.retrieve_data(f, 'Surface/GALB', np.array)
+                self.EMISSIVITY = h5py_helper.retrieve_data(f, 'Surface/EMISSIVITY', np.array)
 
-            if self.LOWBC==LowerBoundaryCondition.HAPKE:
-                self.SGLALB = h5py_helper.retrieve_data(f, 'Surface/SGLALB', np.array)
-                self.BS0 = h5py_helper.retrieve_data(f, 'Surface/BS0', np.array)
-                self.hs = h5py_helper.retrieve_data(f, 'Surface/hs', np.array)
-                self.BC0 = h5py_helper.retrieve_data(f, 'Surface/BC0', np.array)
-                self.hc = h5py_helper.retrieve_data(f, 'Surface/hc', np.array)
-                self.K = h5py_helper.retrieve_data(f, 'Surface/K', np.array)
-                self.ROUGHNESS = h5py_helper.retrieve_data(f, 'Surface/ROUGHNESS', np.array)
-                self.G1 = h5py_helper.retrieve_data(f, 'Surface/G1', np.array)
-                self.G2 = h5py_helper.retrieve_data(f, 'Surface/G2', np.array)
-                self.F = h5py_helper.retrieve_data(f, 'Surface/F', np.array)
-                
-            if self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
-                self.ALBEDO = h5py_helper.retrieve_data(f, 'Surface/ALBEDO', np.array)
-                self.ROUGHNESS = h5py_helper.retrieve_data(f, 'Surface/ROUGHNESS', np.array)
+                if self.LOWBC==LowerBoundaryCondition.LAMBERTIAN:
+                    self.GALB = h5py_helper.retrieve_data(f, 'Surface/GALB', np.array)
+
+                if self.LOWBC==LowerBoundaryCondition.HAPKE:
+                    self.SGLALB = h5py_helper.retrieve_data(f, 'Surface/SGLALB', np.array)
+                    self.BS0 = h5py_helper.retrieve_data(f, 'Surface/BS0', np.array)
+                    self.hs = h5py_helper.retrieve_data(f, 'Surface/hs', np.array)
+                    self.BC0 = h5py_helper.retrieve_data(f, 'Surface/BC0', np.array)
+                    self.hc = h5py_helper.retrieve_data(f, 'Surface/hc', np.array)
+                    self.K = h5py_helper.retrieve_data(f, 'Surface/K', np.array)
+                    self.ROUGHNESS = h5py_helper.retrieve_data(f, 'Surface/ROUGHNESS', np.array)
+                    self.G1 = h5py_helper.retrieve_data(f, 'Surface/G1', np.array)
+                    self.G2 = h5py_helper.retrieve_data(f, 'Surface/G2', np.array)
+                    self.F = h5py_helper.retrieve_data(f, 'Surface/F', np.array)
+                    
+                if self.LOWBC==LowerBoundaryCondition.OREN_NAYAR:
+                    self.ALBEDO = h5py_helper.retrieve_data(f, 'Surface/ALBEDO', np.array)
+                    self.ROUGHNESS = h5py_helper.retrieve_data(f, 'Surface/ROUGHNESS', np.array)
 
         self.assess()
 
@@ -884,7 +882,7 @@ class Surface_0:
         """
         
         NWAVE = len(WAVE)
-        NTHETA = len(EMISS_ANG)
+        #NTHETA = len(EMISS_ANG)
         
         if E0 is None:
             E0 = np.ones(NWAVE)
@@ -1089,8 +1087,8 @@ class Surface_0:
             map = Basemap(projection='ortho', resolution=None,
                 lat_0=np.mean(self.LATITUDE), lon_0=np.mean(self.LONGITUDE))
             
-        lats = map.drawparallels(np.linspace(-90, 90, 13))
-        lons = map.drawmeridians(np.linspace(-180, 180, 13))
+        map.drawparallels(np.linspace(-90, 90, 13)) # lats
+        map.drawmeridians(np.linspace(-180, 180, 13)) # lons
 
         im = map.scatter(self.LONGITUDE,self.LATITUDE,latlon=True,c=self.TSURF,cmap=cmap)
 
@@ -1123,8 +1121,8 @@ class Surface_0:
             map = Basemap(projection='ortho', resolution=None,
                 lat_0=np.mean(self.LATITUDE), lon_0=np.mean(self.LONGITUDE))
             
-        lats = map.drawparallels(np.linspace(-90, 90, 13))
-        lons = map.drawmeridians(np.linspace(-180, 180, 13))
+        map.drawparallels(np.linspace(-90, 90, 13)) # lats
+        map.drawmeridians(np.linspace(-180, 180, 13)) # lons
 
         im = map.scatter(self.LONGITUDE,self.LATITUDE,latlon=True,c=self.EMISSIVITY[iWAVE,:],cmap=cmap)
 

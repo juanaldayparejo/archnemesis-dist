@@ -18,8 +18,8 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations #  for 3.9 compatability
-from archnemesis import *
-from archnemesis.Data.path_data import *
+
+from archnemesis.Data.path_data import archnemesis_resolve_path, archnemesis_indirect_path
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -287,41 +287,40 @@ class CIA_0:
         
         import h5py
 
-        f = h5py.File(runname+'.h5','a')
-        #Checking if Spectroscopy already exists
-        if ('/CIA' in f)==True:
-            del f['CIA']   #Deleting the Spectroscopy information that was previously written in the file
+        with h5py.File(runname+'.h5','a') as f:
+            #Checking if Spectroscopy already exists
+            if ('/CIA' in f)==True:
+                del f['CIA']   #Deleting the Spectroscopy information that was previously written in the file
 
-        grp = f.create_group("CIA")
+            grp = f.create_group("CIA")
 
-        #Writing the necessary flags
-        dset = grp.create_dataset('INORMAL',data=int(self.INORMAL))
-        dset.attrs['title'] = "Flag indicating whether the ortho/para-H2 ratio is in equilibrium (0 for 1:1) or normal (1 for 3:1)"
+            #Writing the necessary flags
+            dset = h5py_helper.store_data(grp, 'INORMAL', int(self.INORMAL))
+            dset.attrs['title'] = "Flag indicating whether the ortho/para-H2 ratio is in equilibrium (0 for 1:1) or normal (1 for 3:1)"
+            
+            #Write the directory where CIA tables are stored
+            dt = h5py.special_dtype(vlen=str)
+            CIADATA = ['']*1
+            
+            # Indirect the archnemesis path so it works on other systems
+            CIADATA[0] = archnemesis_indirect_path(self.CIADATA)
+            
+            dset = h5py_helper.store_data(grp, 'CIADATA', CIADATA,dtype=dt)
+            dset.attrs['title'] = "Path to directory where CIA table is stored"
+            
+            # Convert CIATABLE to HDF5 format if we do not have an HDF5 format of this table
+            CIATABLE_str = self.CIATABLE
+            if CIATABLE_str.endswith('.tab'):
+                CIATABLE_str = CIATABLE_str[:-4]+'.h5'
+            
+            if not os.path.exists(self.CIADATA+CIATABLE_str):
+                self.write_ciatable_hdf5(self.CIADATA+CIATABLE_str)
+            
+            # Write the name of the CIATABLE
+            CIATABLE = [CIATABLE_str]
+            dset = h5py_helper.store_data(grp, 'CIATABLE', CIATABLE,dtype=dt)
+            dset.attrs['title'] = "Name of the CIA table file"
         
-        #Write the directory where CIA tables are stored
-        dt = h5py.special_dtype(vlen=str)
-        CIADATA = ['']*1
-        
-        # Indirect the archnemesis path so it works on other systems
-        CIADATA[0] = archnemesis_indirect_path(self.CIADATA)
-        
-        dset = grp.create_dataset('CIADATA',data=CIADATA,dtype=dt)
-        dset.attrs['title'] = "Path to directory where CIA table is stored"
-        
-        # Convert CIATABLE to HDF5 format if we do not have an HDF5 format of this table
-        CIATABLE_str = self.CIATABLE
-        if CIATABLE_str.endswith('.tab'):
-            CIATABLE_str = CIATABLE_str[:-4]+'.h5'
-        
-        if not os.path.exists(self.CIADATA+CIATABLE_str):
-            self.write_ciatable_hdf5(self.CIADATA+CIATABLE_str)
-        
-        # Write the name of the CIATABLE
-        CIATABLE = [CIATABLE_str]
-        dset = grp.create_dataset('CIATABLE',data=CIATABLE,dtype=dt)
-        dset.attrs['title'] = "Name of the CIA table file"
-        
-        f.close()
         
     ##################################################################################
 
@@ -441,13 +440,13 @@ class CIA_0:
             # Try opening files in different modes use first that works
             if not file_read_successfully:
                 try:
-                    read_ciatable_hdf5(filename+'.h5')
+                    self.read_ciatable_hdf5(filename+'.h5')
                     file_read_successfully = True
                 except Exception:
                     file_read_successfully = False
             if not file_read_successfully:
                 try:
-                    read_ciatable_tab(filename+'.tab', *args)
+                    self.read_ciatable_tab(filename+'.tab', *args)
                     file_read_successfully = True
                 except Exception:
                     file_read_successfully = False
@@ -881,67 +880,63 @@ def read_cia_hitran_file(filename):
         CIA cross section (cm5 molecule-2)
     """
     
-    from archnemesis.Files import file_lines
+    with open(filename,'r') as file1:
     
-    file1 = open(filename,'r')
-    
-    
-    temp = []
-    nwave = []
-    wave = []
-    k = []
-    
-    ix = 0
-    while True:
         
-                
-        if ix==0:
-            #Header line for each case
-            line = file1.readline()
-            # if line is empty
-            # end of file is reached
-            if not line:
-                break
-    
-            il = 0
-            paircase = line[il:il+20]
-            il = il + 20
-            
-            wavemin = float(line[il:il+10])
-            il = il + 10
-            wavemax = float(line[il:il+10])
-            il = il + 10
-            nwavex = int(line[il:il+7])
-            il = il + 7
-            tempx = float(line[il:il+7])
-            il = il + 7
-            ciamax = float(line[il:il+10])
-            il = il + 10
-            dwave = float(line[il:il+6])
-            il = il + 6
-            comments = line[il:il+27]
-            il = il + 27
-            reference = line[il:il+3]
-            il = il + 3
-            
-            ix = 1
-            
-        else:
+        temp = []
+        nwave = []
+        wave = []
+        k = []
         
-            temp.append(tempx)
-            nwave.append(nwavex)
-        
-            #Data with cross sections
-            for iwave in range(nwavex):
+        ix = 0
+        while True:
+            
+                    
+            if ix==0:
+                #Header line for each case
                 line = file1.readline()
-                vals = line.split()
-                wave.append(float(vals[0]))
-                k.append(float(vals[1]))
+                # if line is empty
+                # end of file is reached
+                if not line:
+                    break
+        
+                il = 0
+                #paircase = line[il:il+20]
+                il = il + 20
                 
-            ix = 0
+                #wavemin = float(line[il:il+10])
+                il = il + 10
+                #wavemax = float(line[il:il+10])
+                il = il + 10
+                nwavex = int(line[il:il+7])
+                il = il + 7
+                tempx = float(line[il:il+7])
+                il = il + 7
+                #ciamax = float(line[il:il+10])
+                il = il + 10
+                #dwave = float(line[il:il+6])
+                il = il + 6
+                #comments = line[il:il+27]
+                il = il + 27
+                #reference = line[il:il+3]
+                il = il + 3
                 
+                ix = 1
                 
-    file1.close()
+            else:
+            
+                temp.append(tempx)
+                nwave.append(nwavex)
+            
+                #Data with cross sections
+                for iwave in range(nwavex):
+                    line = file1.readline()
+                    vals = line.split()
+                    wave.append(float(vals[0]))
+                    k.append(float(vals[1]))
+                    
+                ix = 0
+
 
     #Re-shaping arrays
     temp = np.array(temp)

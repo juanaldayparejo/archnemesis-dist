@@ -824,7 +824,6 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
     """
 
     from scipy.integrate import simpson
-    from archnemesis.Data.gas_data import Calc_mmw
     
     k_B = 1.38065e-23
 
@@ -1098,7 +1097,6 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
     """
 
     from scipy.integrate import simpson
-    from archnemesis.Data.gas_data import Calc_mmw
 
     k_B = 1.38065e-23
 
@@ -1506,16 +1504,16 @@ def read_hlay():
         
     """
 
-    f = open('height.lay','r')
+    with open('height.lay','r') as f:
 
-    header = f.readline().split()
+        _ = f.readline().split() # header
 
-    s = f.readline().split()
-    nlay = int(s[0])
-    hbase = np.zeros(nlay)
-    for i in range(nlay):
         s = f.readline().split()
-        hbase[i] = float(s[0])
+        nlay = int(s[0])
+        hbase = np.zeros(nlay)
+        for i in range(nlay):
+            s = f.readline().split()
+            hbase[i] = float(s[0])
 
     return nlay,hbase
 
@@ -1547,16 +1545,16 @@ def read_play():
         
     """
 
-    f = open('pressure.lay','r')
+    with open('pressure.lay','r') as f:
 
-    header = f.readline().split()
+        _ = f.readline().split() # header
 
-    s = f.readline().split()
-    nlay = int(s[0])
-    pbase = np.zeros(nlay)
-    for i in range(nlay):
         s = f.readline().split()
-        pbase[i] = float(s[0])
+        nlay = int(s[0])
+        pbase = np.zeros(nlay)
+        for i in range(nlay):
+            s = f.readline().split()
+            pbase[i] = float(s[0])
 
     return nlay,pbase
 

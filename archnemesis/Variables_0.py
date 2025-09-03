@@ -22,13 +22,13 @@ from __future__ import annotations #  for 3.9 compatability
 import os
 import os.path
 import textwrap
-import sys
+#import sys
 from typing import Type, Iterable
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from archnemesis import *
+#from archnemesis import *
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
 from archnemesis.enums import AtmosphericProfileType, Gas
 from archnemesis.helpers import io_helper
@@ -168,7 +168,7 @@ class Variables_0:
         """
         
         if self._models is None:
-            raise AttributeError(f'Models have not been found yet (e.g. by "Variables_0.read_apr(...)")')
+            raise AttributeError('Models have not been found yet (e.g. by "Variables_0.read_apr(...)")')
         return self._models
     
     @property
@@ -250,7 +250,7 @@ class Variables_0:
                         'FIXED' if fix else f'{s:07.2E}'
                     ))
                     first1 = False
-                    first2 = False
+                    #first2 = False
                     p_tbl_col_widths = [max(len(_1), _2) for _1,_2 in zip(p_str[i][-1], p_tbl_col_widths)]
         
         tbl_sec_sep = '|-' + ('-|-'.join(('-'*w for w in p_tbl_col_widths))) + '-|'
@@ -549,10 +549,10 @@ class Variables_0:
 
             if self.NVAR>1:
                 imod = self.VARIDENT[i,2]
-                ipar = self.VARPARAM[i,0]
+                #ipar = self.VARPARAM[i,0]
             else:
                 imod = self.VARIDENT[0,2]
-                ipar = self.VARPARAM[0,0]
+                #ipar = self.VARPARAM[0,0]
 
             if imod == 228:
                 
@@ -672,15 +672,13 @@ class Variables_0:
 
         import h5py
 
-        f = h5py.File(runname+'.h5','r')
-
-        #Checking if Variables exists
-        e = "/Variables" in f
-        if e==False:
-            raise ValueError('error :: Variables is not defined in HDF5 file')
-        else:
-
-            self.NVAR = h5py_helper.retrieve_data(f, 'Scatter/NVAR', np.int32)
+        with h5py.File(runname+'.h5','r') as f:
+            #Checking if Variables exists
+            e = "/Variables" in f
+            if e==False:
+                raise ValueError('error :: Variables is not defined in HDF5 file')
+            else:
+                self.NVAR = h5py_helper.retrieve_data(f, 'Scatter/NVAR', np.int32)
             
     ################################################################################################################
 
@@ -716,10 +714,6 @@ class Variables_0:
         
         """
         
-        from archnemesis import Scatter_0
-        
-        apr_read_warning_msg = ''
-        
         if self._models is not None:
             _lgr.warning(f'Already have models for {runname}, will overwrite them as we read the *.apr file.')
         self._models = []
@@ -741,7 +735,7 @@ class Variables_0:
             jxsc = -1
             jtan = -1
             jpre = -1
-            jrad = -1
+            #jrad = -1
             jlogg = -1
             jfrac = -1
             sxminfac = 0.001
@@ -794,7 +788,7 @@ class Variables_0:
                 try:
                     varident[i,:] = tuple(map(int, s[:3]))
                 except Exception as e:
-                    raise AprReadError(f'VARIDENT entry MUST be three (3) integers on a single line, other information beyond that is ignored (as a comment)') from e
+                    raise AprReadError('VARIDENT entry MUST be three (3) integers on a single line, other information beyond that is ignored (as a comment)') from e
 
 
                 found_model_for_varident = False

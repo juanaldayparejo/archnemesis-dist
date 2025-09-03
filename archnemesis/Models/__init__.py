@@ -4,7 +4,6 @@ from typing import Iterator
 
 from . import PreRTModels
 from . import PostRTModels
-from .ModelParameterEntry import ModelParameterEntry
 from .ModelBase import ModelBase
 
 import inspect

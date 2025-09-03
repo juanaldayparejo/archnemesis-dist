@@ -17,17 +17,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import archnemesis as ans
-from archnemesis import *
-import scipy
+#from archnemesis import *
 import os
+import sys
+import scipy
+import numpy as np
 import corner
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
+import archnemesis as ans
+import archnemesis.Files
+
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
+
+pymultinest = NotImplemented
+solve = NotImplemented
 
 
 class NestedSampling_0:
@@ -49,19 +56,20 @@ class NestedSampling_0:
         """
         
         try:
-            import pymultinest
-            from pymultinest.solve import solve
+            import pymultinest as _pymultinest # noqa F401
         except ImportError:
             _lgr.critical('PyMultiNest is not installed. Please download this before attempting to run retrievals with nested sampling. Instructions on installation can be found here: http://johannesbuchner.github.io/PyMultiNest/install.html')
-            pymultinest = None
-            solve = None
+            raise
+        else:
+            from pymultinest.solve import solve as _solve # noqa F401
+            global pymultinest
+            global solve
+            pymultinest = _pymultinest
+            solve = _solve
         
         self.N_LIVE_POINTS = N_LIVE_POINTS
-        
-        if pymultinest is None:
-            raise ImportError("pymultinest was not found. To use the NestedSampling class, you must install it: \n https://johannesbuchner.github.io/PyMultiNest/install.html") 
-            
-            
+        return
+
     def chi_squared(self, a,b,err):
         """
         Calculate chi^2/n statistic.
@@ -106,7 +114,7 @@ class NestedSampling_0:
 
         # Initialize the analyzer
         a = pymultinest.Analyzer(n_params=len(self.parameters), outputfiles_basename=self.prefix)
-        s = a.get_stats()
+        #s = a.get_stats()
 
         _lgr.info('Creating marginal plot ...')
 
@@ -215,7 +223,7 @@ class NestedSampling_0:
         weights_masked = weights[mask]
 
         # Load the covariance matrix for optimal estimation
-        full_covariance_matrix = read_cov(self.ForwardModel.runname)[9]
+        full_covariance_matrix = ans.Files.read_cov(self.ForwardModel.runname)[9]
 
         # Extract indices for the parameters of interest
         parameter_indices = [int(ip) for ip in self.parameters]
@@ -323,7 +331,7 @@ def coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
     # This function should be launched in parallel. We set up the MPI environment.
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
-    size = comm.Get_size()
+    #size = comm.Get_size()
 
     # Defining the NestedSampling class
     NestedSampling = NestedSampling_0()
@@ -353,7 +361,7 @@ def coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
                                                              NestedSampling.XA[i] + 5*NestedSampling.XA_ERR[i]) + \
                                                              NestedSampling.XA[i] - 5*NestedSampling.XA_ERR[i])
         else:  
-            _lgr.info(f'DISTRIBUTION ID NOT DEFINED!')
+            _lgr.info('DISTRIBUTION ID NOT DEFINED!')
 
     # Making the retrieval folder
     NestedSampling.prefix = NS_prefix

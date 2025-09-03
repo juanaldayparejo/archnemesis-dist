@@ -10,7 +10,7 @@ _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.WARN)
 
 def retrieve_data(
-        h5py_file : h5py.File,
+        h5py_file : h5py.File | h5py.Group,
         item_path : str,
         mutator : Callable[[Any], Any] = lambda x: x, # default is identity function
         default : Any = None,
@@ -28,27 +28,40 @@ def retrieve_data(
 
 
 def store_data(
-        h5py_file : h5py.File,
+        h5py_file : h5py.File | h5py.Group,
         item_path : str,
-        data : Any
+        data : Any,
+        dtype = None, # will guess data type
     ) -> None:
-    """
+    r"""
     Stores `data` at `item_path` in `h5py_file`. Values of "None" create an empty dataset
+    
+    Regex replacement for previous version "(\w*?)\.create_dataset\(('.*?'),\s*data\s*=\s*(.*)\)" -> "h5py_helper.store_data($1, $2, $3)"
     """
     #f.create_dataset('Retrieval/Output/OptimalEstimation/NX',data=self.NX)
     
-    dtype = float
-    if issubclass(type(data), np.ndarray):
-        dtype = data.dtype
-    elif type(data) is int:
-        dtype = int
+    if dtype is None:
+        dtype = float
+        if issubclass(type(data), np.ndarray):
+            dtype = data.dtype
+        elif type(data) is int:
+            dtype = int
     
+    if item_path not in h5py_file:
+        
+        if data is not None:
+            return h5py_file.create_dataset(item_path, data=data, dtype=dtype)
+        else:
+            return h5py_file.create_dataset(item_path, shape=None, dtype=dtype)
     
     if data is not None:
-        return h5py_file.create_dataset(item_path, data=data, dtype=dtype)
+        dset = h5py_file[item_path]
+        dset[...] = data
+        return dset
     else:
+        del h5py_file[item_path]
         return h5py_file.create_dataset(item_path, shape=None, dtype=dtype)
-    
+        
     
     
 

@@ -345,6 +345,8 @@ def test_multiple_scattering_cirs():
 def test_solar_occultation_mars():  
     '''
     Mars solar occultation test
+    
+    NOTE: Huge memory usage for this test.
     '''
     test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Mars_solar_occultation/')
     os.chdir(test_dir) #Changing directory to read files

@@ -19,15 +19,42 @@
 
 from __future__ import annotations #  for 3.9 compatability
 
-from archnemesis import *
-from archnemesis.Models import Models, ModelBase, ModelParameterEntry
+import os
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+import archnemesis as ans
+from archnemesis import (
+    Atmosphere_0,
+    Variables_0,
+    Measurement_0,
+    Layer_0,
+    OptimalEstimation_0,
+    CIA_0,
+    Scatter_0
+)
+
+from archnemesis.Data.planet_data import planet_info
+
+#from archnemesis.Models import Models, ModelBase, ModelParameterEntry
 from copy import copy
 
 from archnemesis.helpers import h5py_helper
 from archnemesis.enums import (
-    PlanetEnum, AtmosphericProfileFormatEnum, InstrumentLineshape, WaveUnit, SpectraUnit,
-    SpectralCalculationMode, LowerBoundaryCondition, ScatteringCalculationMode, AerosolPhaseFunctionCalculationMode,
-    ParaH2Ratio, RayleighScatteringMode
+    #PlanetEnum, 
+    #AtmosphericProfileFormatEnum, 
+    #InstrumentLineshape, 
+    LayerType,
+    WaveUnit, 
+    SpectraUnit,
+    SpectralCalculationMode, 
+    LowerBoundaryCondition, 
+    ScatteringCalculationMode, 
+    AerosolPhaseFunctionCalculationMode,
+    ParaH2Ratio, 
+    RayleighScatteringMode,
+    LayerIntegrationScheme,
 )
 
 import logging
@@ -142,7 +169,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Surface class and read file
     ###############################################################
 
-    isurf = planet_info[str(int(Atmosphere.IPLANET))]["isurf"]
+    #isurf = planet_info[str(int(Atmosphere.IPLANET))]["isurf"]
     Surface = Surface_0()
     # Always read the Surface entry in HDF5 file as defaults are set
     # there for gas giants that are different for the defaults
@@ -161,10 +188,9 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise CIA class and read files (.cia)  - NOT FROM HDF5 YET
     ##############################################################
 
-    f = h5py.File(runname+'.h5','r')
-    #Checking if CIA exists
-    e = "/CIA" in f
-    f.close()
+    with h5py.File(runname+'.h5','r') as f:
+        #Checking if CIA exists
+        e = "/CIA" in f
     
     if e==True:
         CIA = CIA_0(runname=runname)
@@ -189,10 +215,9 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Spectroscopy class and read file
     ###############################################################
 
-    f = h5py.File(runname+'.h5','r')
-    #Checking if Spectroscopy exists
-    e = "/Spectroscopy" in f
-    f.close()
+    with h5py.File(runname+'.h5','r') as f:
+        #Checking if Spectroscopy exists
+        e = "/Spectroscopy" in f
 
     if e is True:
         Spectroscopy = Spectroscopy_0(RUNNAME=runname)
@@ -203,10 +228,9 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Telluric class and read file
     ###############################################################
     
-    f = h5py.File(runname+'.h5','r')
-    #Checking if Telluric exists
-    e = "/Telluric" in f
-    f.close()
+    with h5py.File(runname+'.h5','r') as f:
+        #Checking if Telluric exists
+        e = "/Telluric" in f
     
     if e is True:
         Telluric = Telluric_0()
@@ -409,7 +433,7 @@ def read_input_files(runname):
     #Initialise Atmosphere class and read file (.ref, aerosol.ref)
     ##############################################################
 
-    _lgr.info(f'Reading atmospheric files...')
+    _lgr.info('Reading atmospheric files...')
     Atm = Atmosphere_0(runname=runname)
 
     #Read gaseous atmosphere
@@ -430,11 +454,11 @@ def read_input_files(runname):
     Layer = Layer_0(Atm.RADIUS)
     Scatter,Stellar,Surface,Layer = read_set(runname,Layer=Layer)
     if Layer.LAYTYP==LayerType.BASE_PRESSURE:
-        nlay, pbase = read_play()
+        nlay, pbase = ans.Layer_0.read_play()
         Layer.NLAY = nlay
         Layer.P_base = pbase*101325 
     if Layer.LAYTYP==LayerType.BASE_HEIGHT:
-        nlay,hbase = read_hlay()
+        nlay,hbase = ans.Layer_0.read_hlay()
         Layer.NLAY = nlay
         Layer.H_base = hbase*1.0e3    #Base height of each layer (m)
     if Layer.LAYTYP not in (LayerType.EQUAL_PRESSURE, LayerType.EQUAL_LOG_PRESSURE, LayerType.EQUAL_HEIGHT, LayerType.EQUAL_PATH_LENGTH, LayerType.BASE_PRESSURE, LayerType.BASE_HEIGHT):
@@ -540,7 +564,7 @@ def read_input_files(runname):
 
     #Reading .apr file and Variables Class
     #################################################################
-    _lgr.info(f'Reading .apr file')
+    _lgr.info('Reading .apr file')
     Variables = Variables_0()
     Variables.read_apr(runname, Atm.NP, Atm.NVMR, Atm.NDUST, Atm.NLOCATIONS)
     Variables.XN = copy(Variables.XA)
@@ -598,10 +622,10 @@ def read_mre(runname,MakePlot=False):
     #Reading first three lines
     tmp = np.fromfile(f,sep=' ',count=1,dtype='int')
     s = f.readline().split()
-    nspec = int(tmp[0])
+    #nspec = int(tmp[0])
     tmp = np.fromfile(f,sep=' ',count=5,dtype='float')
     s = f.readline().split()
-    ispec = int(tmp[0])
+    #ispec = int(tmp[0])
     ngeom = int(tmp[1])
     ny2 = int(tmp[2])
     ny = int(ny2 / ngeom)
@@ -757,13 +781,6 @@ def read_cov(runname,MakePlot=False):
         
     """
     
-    from matplotlib import gridspec
-    from matplotlib import ticker
-    from mpl_toolkits.axes_grid1 import host_subplot
-    import mpl_toolkits.axisartist as AA
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    
-    
     #Open file
     f = open(runname+'.cov','r')
     
@@ -908,10 +925,10 @@ def read_drv(runname,MakePlot=False):
     f = open(runname+'.drv','r')
     
     #Reading header
-    header = f.readline().split()
+    _ = f.readline().split() # header
     var1 = f.readline().split()
     var2 = f.readline().split()
-    linkey = f.readline().split()
+    _ = f.readline().split() # linkey
     
     #Reading flags
     ###############
@@ -922,7 +939,7 @@ def read_drv(runname,MakePlot=False):
     flagc = int(flags[3])
     
     #Reading name of .xsc file
-    xscname1 = f.readline().split()
+    _ = f.readline().split() # xscname1
     
     #Reading variables
     ###################
@@ -943,10 +960,10 @@ def read_drv(runname,MakePlot=False):
 
     #Reading parameters of each layer
     ##################################
-    header = f.readline().split()
-    header = f.readline().split()
-    header = f.readline().split()
-    header = f.readline().split()
+    _ = f.readline().split() # header
+    _ = f.readline().split() # header
+    _ = f.readline().split() # header
+    _ = f.readline().split() # header
     baseH = np.zeros([nlayer])
     delH = np.zeros([nlayer])
     baseP = np.zeros([nlayer])
@@ -1064,7 +1081,7 @@ def read_drv(runname,MakePlot=False):
         filt[i] = float(var1[0])
         vfilt[i] = float(var1[1])
                             
-    outfile = f.readline().split()
+    _ = f.readline().split() # outfile
 
     #Reading number of calculations
     ################################

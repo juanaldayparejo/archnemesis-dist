@@ -1,7 +1,6 @@
 """
 Configures logging for the package
 """
-import sys
 import logging
 
 pkg_lgr = logging.getLogger(__name__.split('.',1)[0])

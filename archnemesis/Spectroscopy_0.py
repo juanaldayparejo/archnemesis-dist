@@ -19,28 +19,27 @@
 
 from __future__ import annotations #  for 3.9 compatability
 
-from archnemesis import *
+#from archnemesis import *
 from archnemesis.enums import (
     WaveUnit,
-    SpectraUnit,
+    #SpectraUnit,
     SpectralCalculationMode,
-    Gas
+    #Gas
 )
 import numpy as np
 import scipy
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import os
+import os.path
 from numba import jit, njit
 
-from archnemesis.helpers import h5py_helper
+from archnemesis.helpers import h5py_helper, path_redirect
 
 
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 
-#!/usr/local/bin/python3
-# -*- coding: utf-8 -*-
 
 ###############################################################################################
 
@@ -54,7 +53,13 @@ State Vector Class.
 
 class Spectroscopy_0:
 
-    def __init__(self, RUNNAME: str = '', ILBL: SpectralCalculationMode = SpectralCalculationMode.LINE_BY_LINE_TABLES, NGAS: int = 2, ONLINE: bool = False):
+    def __init__(
+            self, 
+            RUNNAME: str = '', 
+            ILBL: SpectralCalculationMode = SpectralCalculationMode.LINE_BY_LINE_TABLES, 
+            NGAS: int = 2, 
+            ONLINE: bool = False
+        ):
 
         """
         Inputs
@@ -120,16 +125,16 @@ class Spectroscopy_0:
 
 
         # Input parameters with validation
-        self.RUNNAME = RUNNAME
+        self.runname = RUNNAME
         #self.ILBL = SpectralCalculationMode(ILBL) if not isinstance(ILBL, SpectralCalculationMode) else ILBL
         self.NGAS = NGAS
         self.ONLINE = ONLINE
 
         # Attributes with proper typing
         #self.ISPACE: Optional[WaveUnit] = None
-        self.ID: Optional[np.ndarray] = None  # Array of Gas enum values (NGAS)
+        self.ID: None | np.ndarray = None  # Array of Gas enum values (NGAS)
         self.ISO = None       #(NGAS)
-        self.LOCATION = None  #(NGAS)
+        self._locations = path_redirect.PathRedirectList() #(NGAS)
         self.NWAVE = None     
         self.WAVE = None      #(NWAVE)
         self.NP = None
@@ -146,10 +151,33 @@ class Spectroscopy_0:
         # private attributes
         self._ilbl = None
         self._ispace = None
+        self._locations_initialised = False
         
         # set property values
         self.ILBL = ILBL
         self.ISPACE = WaveUnit.Wavenumber_cm  # Default value
+
+    @property
+    def LOCATION(self) -> list[str]:
+        # NOTE: paths are stored as strings so we should be able to use `str.startswith(...)` to match them up.
+        if not self._locations_initialised:
+            return None
+        
+        return self._locations
+
+
+    @LOCATION.setter
+    def LOCATION(self, value) -> None:
+        if value is None:
+            self._locations_initialised = False
+        else:
+            self._locations._raw_paths = [x for x in value]
+            self._locations_initialised = True
+
+
+    @property
+    def RUNNAME(self):
+        return self.runname
     
     @property
     def ILBL(self) -> SpectralCalculationMode:
@@ -285,6 +313,51 @@ class Spectroscopy_0:
 
 
     ######################################################################################################
+    def set_table_location_redirects(self, redirects: tuple[tuple[str,str],...]):
+        """
+        Adds a group of redirects that means we can look in a different place for a file instead of
+        having to copy files into different places.
+        """
+        for old_path, new_path in redirects:
+            self._locations._path_redirects[old_path] = new_path
+        
+        return self
+
+    def add_table_location(self, *new_locations : str) -> None:
+        """
+        Adds the location of a table to this class, will not add the same table twice.
+        """
+        
+        for new_location in new_locations:
+            _lgr.debug(f'Adding table location {new_location=}')
+            if self.LOCATION is None or self.NGAS is None:
+                _lgr.error('Spectroscopy_0 instance cannot add a table location before it has been fully initialised. Run one of the following routines first: `self.read_hdf5(...)`, `self.read_lls(...)`, `self.read_kls(...)`.')
+                return
+            
+            add_new_loc_flag = True
+            
+            # Check that the new_location is not already in our list of locations
+            for location in self.LOCATION:
+                if os.path.samefile(self._locations._get_redirected_path(new_location), location): # NOTE: must apply redirects here as well otherwise we will be comparing the wrong files
+                    _lgr.warning(f'Spectral table file "{new_location}" is the same file as "{location}". Spectroscopy_0 instance will not add the same file twice as the data is already included')
+                    add_new_loc_flag = False
+            
+            if add_new_loc_flag:
+                self.LOCATION.append(new_location)
+                self.NGAS = len(self.LOCATION)
+                _lgr.info(f'Added new table location "{new_location}" to the Spectroscopy_0 instance. To make this change permanent do one of the following: [LEGACY INPUT] add the string to "{self.runname}.lls" or "{self.runname}.kls"; [HDF5 INPUT] run the snippet `spectroscopy.write_hdf5(spectroscopy.runname)` where `spectroscopy` is this Spectroscopy_0 instance.')
+            else:
+                if self.NGAS != len(self.LOCATION):
+                    _lgr.warning(f'Table file "{new_location}" was not added due to the above reason. However, the number of active gasses ({self.NGAS}) does not match the number of table locations ({len(self.LOCATION)}), whereas it is expected that they should. Updating the number of active gasses to be the same as the number of table locations...')
+                    self.NGAS = len(self.LOCATION)
+        
+        
+        # If tables have already been read, re-read them
+        if self.ID is not None:
+            self.read_header()
+        
+        return
+
     def write_hdf5(self, runname, inside_telluric=False):
         """
         Write the information about the k-tables or lbl-tables into the HDF5 file
@@ -313,10 +386,10 @@ class Spectroscopy_0:
                 grp = f.create_group("Telluric/Spectroscopy")
 
             #Writing the main dimensions
-            dset = grp.create_dataset('NGAS',data=self.NGAS)
+            dset = h5py_helper.store_data(grp, 'NGAS', self.NGAS)
             dset.attrs['title'] = "Number of radiatively active gases in atmosphere"
 
-            dset = grp.create_dataset('ILBL',data=int(self.ILBL))
+            dset = h5py_helper.store_data(grp, 'ILBL', int(self.ILBL))
             dset.attrs['title'] = "Spectroscopy calculation type"
             if self.ILBL==SpectralCalculationMode.K_TABLES:
                 dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
@@ -328,7 +401,7 @@ class Spectroscopy_0:
             if self.NGAS>0:
                 if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
                     dt = h5py.special_dtype(vlen=str)
-                    dset = grp.create_dataset('LOCATION',data=self.LOCATION,dtype=dt)
+                    dset = h5py_helper.store_data(grp, 'LOCATION', self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
                     dset.attrs['title'] = "Location of the pre-tabulated tables"
 
     ######################################################################################################
@@ -351,7 +424,6 @@ class Spectroscopy_0:
             #Checking if Spectroscopy exists
             e = name in f
             if e==False:
-                f.close()
                 raise ValueError('error :: Spectroscopy is not defined in HDF5 file')
             else:
                 self.NGAS = np.int32(f.get(name+'/NGAS'))
@@ -492,7 +564,7 @@ class Spectroscopy_0:
         Given the LOCATION of the look-up tables, reads the header information
         """
         
-
+        _lgr.warning(f'{self.NGAS=} {self.LOCATION=}')
         if self.NGAS>0:
 
             if self.ILBL==SpectralCalculationMode.K_TABLES:
@@ -714,7 +786,6 @@ class Spectroscopy_0:
             else:
                 raise ValueError('error in Spectroscopy :: ILBL must be either 0 (K-tables) or 2 (LBL-tables)')
 
-
     ######################################################################################################
     def write_table_hdf5(self,ID,ISO,filename):
         """
@@ -741,50 +812,47 @@ class Spectroscopy_0:
             if os.path.exists(filename+'.h5')==True:
                 os.remove(filename+'.h5')
             
-            f = h5py.File(filename+'.h5','w')
+            with h5py.File(filename+'.h5','w') as f:
             
-            #Writing the header information
-            dset = h5py_helper.store_data(f, 'ILBL', data=self.ILBL)
-            dset.attrs['title'] = "Spectroscopy calculation type"
-            if self.ILBL==SpectralCalculationMode.K_TABLES:
-                dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
-            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-                dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
-            else:
-                raise ValueError('error :: ILBL must be 0 or 2')
+                #Writing the header information
+                dset = h5py_helper.store_data(f, 'ILBL', data=self.ILBL)
+                dset.attrs['title'] = "Spectroscopy calculation type"
+                if self.ILBL==SpectralCalculationMode.K_TABLES:
+                    dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
+                elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                    dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
+                else:
+                    raise ValueError('error :: ILBL must be 0 or 2')
+                    
+                dset = h5py_helper.store_data(f, 'ID', data=ID)
+                dset.attrs['title'] = "ID of the gaseous species"
+
+                dset = h5py_helper.store_data(f, 'ISO', data=ISO)
+                dset.attrs['title'] = "Isotope ID of the gaseous species"
                 
-            dset = h5py_helper.store_data(f, 'ID', data=ID)
-            dset.attrs['title'] = "ID of the gaseous species"
-
-            dset = h5py_helper.store_data(f, 'ISO', data=ISO)
-            dset.attrs['title'] = "Isotope ID of the gaseous species"
+                dset = h5py_helper.store_data(f, 'WAVE', data=self.WAVE)
+                dset.attrs['title'] = "Spectral points at which the cross sections are defined"
+                
+                dset = h5py_helper.store_data(f, 'NP', data=self.NP)
+                dset.attrs['title'] = "Number of pressure levels at which the look-up table is tabulated"
+                
+                dset = h5py_helper.store_data(f, 'NT', data=self.NT)
+                dset.attrs['title'] = "Number of temperature levels at which the look-up table is tabulated"
+                
+                dset = h5py_helper.store_data(f, 'PRESS', data=self.PRESS)
+                dset.attrs['title'] = "Pressure levels at which the look-up table is tabulated / atm"
+                
+                dset = h5py_helper.store_data(f, 'TEMP', data=self.TEMP)
+                dset.attrs['title'] = "Temperature levels at which the look-up table is tabulated / K"
+                
+                #Writing the coefficients
+                dset = h5py_helper.store_data(f, 'K', data=self.K[:,:,:,igas])
+                dset.attrs['title'] = "Tabulated cross sections / cm2 multiplied by a factor of 1.0 x 10^20"
             
-            dset = h5py_helper.store_data(f, 'WAVE', data=self.WAVE)
-            dset.attrs['title'] = "Spectral points at which the cross sections are defined"
-            
-            dset = h5py_helper.store_data(f, 'NP', data=self.NP)
-            dset.attrs['title'] = "Number of pressure levels at which the look-up table is tabulated"
-            
-            dset = h5py_helper.store_data(f, 'NT', data=self.NT)
-            dset.attrs['title'] = "Number of temperature levels at which the look-up table is tabulated"
-            
-            dset = h5py_helper.store_data(f, 'PRESS', data=self.PRESS)
-            dset.attrs['title'] = "Pressure levels at which the look-up table is tabulated / atm"
-            
-            dset = h5py_helper.store_data(f, 'TEMP', data=self.TEMP)
-            dset.attrs['title'] = "Temperature levels at which the look-up table is tabulated / K"
-            
-            #Writing the coefficients
-            dset = h5py_helper.store_data(f, 'K', data=self.K[:,:,:,igas])
-            dset.attrs['title'] = "Tabulated cross sections / cm2 multiplied by a factor of 1.0 x 10^20"
-            
-            f.close()
-
         else:
             
             raise ValueError('error in write_table_hdf5 :: selected ILBL has not been implemented yet (only ILBL=2 is currently working)')
-        
-        
+
     ######################################################################################################
     def calc_klblg(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
         """
@@ -890,33 +958,31 @@ class Spectroscopy_0:
                 
                 for igas in range(self.NGAS):
                     
-                    f = h5py.File(self.LOCATION[igas],'r')
-                    kfile = f['K']
-                    wave = f['WAVE']
-                    
-                    #Creating new array to make sure it matches the resolution of self.WAVE
-                    vmin = np.round(np.float64(wave[0]), decimals=7)
-                    delv = np.round(np.float64(wave[1] - wave[0]), decimals=7)
-                    nwave = len(wave)
-                    vmax = delv*(nwave-1) + vmin
-                    wave = np.linspace(vmin,vmax,nwave)
-                    
-                    #Calculating the wavelengths to read
-                    iwl = np.searchsorted(np.array(wave), np.min(self.WAVE), side='right') - 1
-                    if iwl < 0:
-                        iwl = 0
+                    with h5py.File(self.LOCATION[igas],'r') as f:
+                        kfile = f['K']
+                        wave = f['WAVE']
+                        
+                        #Creating new array to make sure it matches the resolution of self.WAVE
+                        vmin = np.round(np.float64(wave[0]), decimals=7)
+                        delv = np.round(np.float64(wave[1] - wave[0]), decimals=7)
+                        nwave = len(wave)
+                        vmax = delv*(nwave-1) + vmin
+                        wave = np.linspace(vmin,vmax,nwave)
+                        
+                        #Calculating the wavelengths to read
+                        iwl = np.searchsorted(np.array(wave), np.min(self.WAVE), side='right') - 1
+                        if iwl < 0:
+                            iwl = 0
 
-                    iwh = np.searchsorted(np.array(wave), np.max(self.WAVE), side='left')
-                    if iwh >= nwave:
-                        iwh = nwave - 1
-                    
-                    klo1[:,igas] = kfile[iwl:iwh+1,ip,it1,0]
-                    klo2[:,igas] = kfile[iwl:iwh+1,ip,it1+1,0]
-                    khi1[:,igas] = kfile[iwl:iwh+1,ip+1,it2,0]
-                    khi2[:,igas] = kfile[iwl:iwh+1,ip+1,it2+1,0]
-                    
-                    f.close()
-
+                        iwh = np.searchsorted(np.array(wave), np.max(self.WAVE), side='left')
+                        if iwh >= nwave:
+                            iwh = nwave - 1
+                        
+                        klo1[:,igas] = kfile[iwl:iwh+1,ip,it1,0]
+                        klo2[:,igas] = kfile[iwl:iwh+1,ip,it1+1,0]
+                        khi1[:,igas] = kfile[iwl:iwh+1,ip+1,it2,0]
+                        khi2[:,igas] = kfile[iwl:iwh+1,ip+1,it2+1,0]
+                        
             #Interpolating to get the k-coefficients at desired p-T
             igood = np.where( (klo1>0.0) & (klo2>0.0) & (khi1>0.0) & (khi2>0.0) )
             
@@ -953,6 +1019,7 @@ class Spectroscopy_0:
             
 
         return kgood,dkgooddT
+
     ######################################################################################################
     def calc_klbl(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
         """
@@ -1057,32 +1124,31 @@ class Spectroscopy_0:
                 
                 for igas in range(self.NGAS):
                     
-                    f = h5py.File(self.LOCATION[igas],'r')
-                    kfile = f['K']
-                    wave = f['WAVE']
-                    
-                    #Creating new array to make sure it matches the resolution of self.WAVE
-                    vmin = np.round(np.float64(wave[0]), decimals=7)
-                    delv = np.round(np.float64(wave[1] - wave[0]), decimals=7)
-                    nwave = len(wave)
-                    vmax = delv*(nwave-1) + vmin
-                    wave = np.linspace(vmin,vmax,nwave)
-                    
-                    #Calculating the wavelengths to read
-                    iwl = np.searchsorted(np.array(wave), np.min(self.WAVE), side='right') - 1
-                    if iwl < 0:
-                        iwl = 0
+                    with h5py.File(self.LOCATION[igas],'r') as f:
+                        kfile = f['K']
+                        wave = f['WAVE']
+                        
+                        #Creating new array to make sure it matches the resolution of self.WAVE
+                        vmin = np.round(np.float64(wave[0]), decimals=7)
+                        delv = np.round(np.float64(wave[1] - wave[0]), decimals=7)
+                        nwave = len(wave)
+                        vmax = delv*(nwave-1) + vmin
+                        wave = np.linspace(vmin,vmax,nwave)
+                        
+                        #Calculating the wavelengths to read
+                        iwl = np.searchsorted(np.array(wave), np.min(self.WAVE), side='right') - 1
+                        if iwl < 0:
+                            iwl = 0
 
-                    iwh = np.searchsorted(np.array(wave), np.max(self.WAVE), side='left')
-                    if iwh >= nwave:
-                        iwh = nwave - 1
+                        iwh = np.searchsorted(np.array(wave), np.max(self.WAVE), side='left')
+                        if iwh >= nwave:
+                            iwh = nwave - 1
+                        
+                        klo1[:,igas] = kfile[iwl:iwh+1,ip,it1,0]
+                        klo2[:,igas] = kfile[iwl:iwh+1,ip,it1+1,0]
+                        khi1[:,igas] = kfile[iwl:iwh+1,ip+1,it2,0]
+                        khi2[:,igas] = kfile[iwl:iwh+1,ip+1,it2+1,0]
                     
-                    klo1[:,igas] = kfile[iwl:iwh+1,ip,it1,0]
-                    klo2[:,igas] = kfile[iwl:iwh+1,ip,it1+1,0]
-                    khi1[:,igas] = kfile[iwl:iwh+1,ip+1,it2,0]
-                    khi2[:,igas] = kfile[iwl:iwh+1,ip+1,it2+1,0]
-                    
-                    f.close()
             
             
             # Interpolating to get the k-coefficients at desired p-T
@@ -1107,7 +1173,6 @@ class Spectroscopy_0:
             )
             
         return kgood
-
 
     ######################################################################################################
     def calc_kg(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
@@ -1146,7 +1211,6 @@ class Spectroscopy_0:
             #Getting the levels just above and below the desired points
             lpress  = np.log(press1)
             ip = np.argmin(np.abs(self.PRESS-press1))
-            press0 = self.PRESS[ip]
 
             if self.PRESS[ip]>=press1:
                 iphi = ip
@@ -1166,7 +1230,6 @@ class Spectroscopy_0:
                     iphi = ip + 1
 
             it = np.argmin(np.abs(self.TEMP-temp1))
-            temp0 = self.TEMP[it]
 
             if self.TEMP[it]>=temp1:
                 ithi = it
@@ -1285,8 +1348,6 @@ class Spectroscopy_0:
             If True, the interpolation is done linearly. If False, it is done in log-space
         """
 
-        from scipy import interpolate
-
         #Interpolating the k-coefficients to the correct pressure and temperature
         #############################################################################
 
@@ -1297,7 +1358,7 @@ class Spectroscopy_0:
         NT = self.NT
         
         kgood = np.zeros([self.NWAVE,self.NG,npoints,self.NGAS])
-        dkgooddT = np.zeros([self.NWAVE,self.NG,npoints,self.NGAS])
+        #dkgooddT = np.zeros([self.NWAVE,self.NG,npoints,self.NGAS])
         for ipoint in range(npoints):
             press1 = press[ipoint]
             temp1 = temp[ipoint]
@@ -1377,8 +1438,6 @@ class Spectroscopy_0:
         ##########################################################################################
         
         NWAVEC = len(WAVECALC)
-        NG = self.NG
-        del_g = self.DELG
         kret = np.zeros([NWAVEC,self.NG,npoints,self.NGAS])
         # Precompute indices and weights for WAVECALC
         precomputed_indices = np.zeros((NWAVEC,2),dtype=int)
@@ -1401,7 +1460,7 @@ class Spectroscopy_0:
             precomputed_weights[iwave] = (w)
 
         kret = interpolate_k_values(npoints, self.NGAS, NWAVEC, precomputed_indices,
-                                             precomputed_weights, kgood, del_g, kret)
+                                             precomputed_weights, kgood, self.DELG, kret)
         return kret
 
 
@@ -1426,32 +1485,31 @@ def read_ltahead(filename):
     """
 
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-3:strlen] == 'lta':
-        f = open(filename,'r')
-    else:
-        f = open(filename+'.lta','r')
-
-    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
-    nwave = np.fromfile(f,dtype='int32',count=1)[0]
-    vmin = np.fromfile(f,dtype='float32',count=1)[0]
-    delv = np.fromfile(f,dtype='float32',count=1)[0]
-    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
-    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
-    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+    if not filename.endswith('.lta'):
+        filename += '.lta'
     
-    # Convert explicitly rounding to 7 decimals (float32 precision)
-    vmin = np.round(np.float64(vmin), decimals=7)
-    delv = np.round(np.float64(delv), decimals=7)
+    with open(filename, 'rb') as f:
+        
+        _ = int(np.fromfile(f,dtype='int32',count=1)[0]) # irec0
+        nwave = np.fromfile(f,dtype='int32',count=1)[0]
+        vmin = np.fromfile(f,dtype='float32',count=1)[0]
+        delv = np.fromfile(f,dtype='float32',count=1)[0]
+        npress = int(np.fromfile(f,dtype='int32',count=1)[0])
+        ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
+        gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        
+        # Convert explicitly rounding to 7 decimals (float32 precision)
+        vmin = np.round(np.float64(vmin), decimals=7)
+        delv = np.round(np.float64(delv), decimals=7)
 
-    presslevels = np.fromfile(f,dtype='float32',count=npress)
-    if ntemp > 0:
-        templevels = np.fromfile(f,dtype='float32',count=ntemp)
-    else:
-        templevels = np.zeros((npress,2))
-        for i in range(npress):
-            templevels[i] = np.fromfile(f,dtype='float32',count=-ntemp)
+        presslevels = np.fromfile(f,dtype='float32',count=npress)
+        if ntemp > 0:
+            templevels = np.fromfile(f,dtype='float32',count=ntemp)
+        else:
+            templevels = np.zeros((npress,2))
+            for i in range(npress):
+                templevels[i] = np.fromfile(f,dtype='float32',count=-ntemp)
 
     return nwave,vmin,delv,npress,ntemp,gasID,isoID,presslevels,templevels
 
@@ -1489,53 +1547,51 @@ def read_ktahead(filename):
         MODIFICATION HISTORY : Juan Alday (29/04/2019)
 
     """
-
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-3:strlen] == 'kta':
-        f = open(filename,'r')
-    else:
-        f = open(filename+'.kta','r')
+    if not filename.endswith('.kta'):
+        filename += '.kta'
+    
+    with open(filename, 'rb') as f:
 
-    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
-    nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
-    vmin = np.fromfile(f,dtype='float32',count=1)[0]
-    delv = np.fromfile(f,dtype='float32',count=1)[0]
-    fwhm = np.fromfile(f,dtype='float32',count=1)[0]
-    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ng = int(np.fromfile(f,dtype='int32',count=1)[0])
-    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
-    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        _ = int(np.fromfile(f,dtype='int32',count=1)[0]) # irec0
+        nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
+        vmin = np.fromfile(f,dtype='float32',count=1)[0]
+        delv = np.fromfile(f,dtype='float32',count=1)[0]
+        fwhm = np.fromfile(f,dtype='float32',count=1)[0]
+        npress = int(np.fromfile(f,dtype='int32',count=1)[0])
+        ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
+        ng = int(np.fromfile(f,dtype='int32',count=1)[0])
+        gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
 
-    # Convert explicitly rounding to 7 decimals (float32 precision)
-    vmin = np.round(np.float64(vmin), decimals=7)
-    delv = np.round(np.float64(delv), decimals=7)
+        # Convert explicitly rounding to 7 decimals (float32 precision)
+        vmin = np.round(np.float64(vmin), decimals=7)
+        delv = np.round(np.float64(delv), decimals=7)
 
-    g_ord = np.fromfile(f,dtype='float32',count=ng)
-    del_g = np.fromfile(f,dtype='float32',count=ng)
+        g_ord = np.fromfile(f,dtype='float32',count=ng)
+        del_g = np.fromfile(f,dtype='float32',count=ng)
 
-    dummy = np.fromfile(f,dtype='float32',count=1)
-    dummy = np.fromfile(f,dtype='float32',count=1)
+        _ = np.fromfile(f,dtype='float32',count=1)
+        _ = np.fromfile(f,dtype='float32',count=1)
 
-    presslevels = np.fromfile(f,dtype='float32',count=npress)
+        presslevels = np.fromfile(f,dtype='float32',count=npress)
 
-    N1 = abs(ntemp)
-    if ntemp < 0:
-        templevels = np.zeros([npress,N1])
-        for i in range(npress):
-            for j in range(N1):
-                templevels[i,j] =  np.fromfile(f,dtype='float32',count=1)
-    else:
-        templevels = np.fromfile(f,dtype='float32',count=ntemp)
+        N1 = abs(ntemp)
+        if ntemp < 0:
+            templevels = np.zeros([npress,N1])
+            for i in range(npress):
+                for j in range(N1):
+                    templevels[i,j] =  np.fromfile(f,dtype='float32',count=1)
+        else:
+            templevels = np.fromfile(f,dtype='float32',count=ntemp)
 
-    #Reading central wavelengths in non-uniform grid
-    if delv>0.0:
-        vmax = delv*(nwave-1) + vmin
-        wavetot = np.linspace(vmin,vmax,nwave)
-    else:
-        wavetot = np.zeros(nwave)
-        wavetot[:] = np.fromfile(f,dtype='float32',count=nwave)
+        #Reading central wavelengths in non-uniform grid
+        if delv>0.0:
+            vmax = delv*(nwave-1) + vmin
+            wavetot = np.linspace(vmin,vmax,nwave)
+        else:
+            wavetot = np.zeros(nwave)
+            wavetot[:] = np.fromfile(f,dtype='float32',count=nwave)
 
     return nwave,wavetot,fwhm,npress,ntemp,ng,gasID,isoID,g_ord,del_g,presslevels,templevels
 
@@ -1573,25 +1629,22 @@ def read_header_lta_hdf5(filename):
     import h5py
     
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-2:strlen] == 'h5':
-        f = h5py.File(filename,'r')
-    else:
-        f = h5py.File(filename+'.h5','r')
+    filename = filename if filename.endswith('.h5') else (filename+'.h5')
 
-    ilbl = h5py_helper.retrieve_data(f, 'ILBL', np.int32)
-    if ilbl==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-        wave = h5py_helper.retrieve_data(f, 'WAVE', np.array)
-        npress = h5py_helper.retrieve_data(f, 'NP', np.int32)
-        ntemp = h5py_helper.retrieve_data(f, 'NT', np.int32)
-        gasID = h5py_helper.retrieve_data(f, 'ID', np.int32)
-        isoID = h5py_helper.retrieve_data(f, 'ISO', np.int32)
-        presslevels = h5py_helper.retrieve_data(f, 'PRESS', np.array)
-        templevels = h5py_helper.retrieve_data(f, 'TEMP', np.array)
-    else:
-        raise ValueError('error in read_header_lta_hdf5 :: the defined ilbl in the look-up table must be 2')
-    
-    f.close()
+    with h5py.File(filename,'r') as f:
+
+        ilbl = h5py_helper.retrieve_data(f, 'ILBL', np.int32)
+        if ilbl==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            wave = h5py_helper.retrieve_data(f, 'WAVE', np.array)
+            npress = h5py_helper.retrieve_data(f, 'NP', np.int32)
+            ntemp = h5py_helper.retrieve_data(f, 'NT', np.int32)
+            gasID = h5py_helper.retrieve_data(f, 'ID', np.int32)
+            isoID = h5py_helper.retrieve_data(f, 'ISO', np.int32)
+            presslevels = h5py_helper.retrieve_data(f, 'PRESS', np.array)
+            templevels = h5py_helper.retrieve_data(f, 'TEMP', np.array)
+        else:
+            raise ValueError('error in read_header_lta_hdf5 :: the defined ilbl in the look-up table must be 2')
+        
 
     return ilbl,wave,npress,ntemp,gasID,isoID,presslevels,templevels
 
@@ -1631,67 +1684,75 @@ def read_lbltable(filename,wavemin,wavemax):
         MODIFICATION HISTORY : Juan Alday (25/09/2019)
 
     """
-
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-3:strlen] == 'lta':
-        f = open(filename,'rb')
-    else:
-        f = open(filename+'.lta','rb')
-
-    nbytes_int32 = 4
-    nbytes_float32 = 4
-
-    #Reading header
-    irec0 = np.fromfile(f,dtype='int32',count=1)[0]
-    nwavelta = np.fromfile(f,dtype='int32',count=1)[0]
-    vmin = np.fromfile(f,dtype='float32',count=1)[0]
-    delv = np.fromfile(f,dtype='float32',count=1)[0]
-    npress = np.fromfile(f,dtype='int32',count=1)[0]
-    ntemp = np.fromfile(f,dtype='int32',count=1)[0]
-    gasID = np.fromfile(f,dtype='int32',count=1)[0]
-    isoID = np.fromfile(f,dtype='int32',count=1)[0]
-
-    # Convert explicitly rounding to 7 decimals (float32 precision)
-    vmin = np.round(np.float64(vmin), decimals=7)
-    delv = np.round(np.float64(delv), decimals=7)
-
-    presslevels = np.fromfile(f,dtype='float32',count=npress)
+    if not filename.endswith('.lta'):
+        filename += '.lta'
     
-    if ntemp > 0:
-        templevels = np.fromfile(f,dtype='float32',count=ntemp)
-    else:
-        templevels = np.zeros((npress,2))
-        for i in range(npress):
-            templevels[i] = np.fromfile(f,dtype='float32',count=-ntemp)
+    with open(filename, 'rb') as f:
 
-    #Calculating the wavenumbers to be read
-    vmax = vmin + delv * (nwavelta-1)
-    wavelta = np.linspace(vmin,vmax,nwavelta)
+        #nbytes_int32 = 4
+        nbytes_float32 = 4
 
-    ins = np.where( (wavelta>=wavemin) & (wavelta<=wavemax) )[0]
-    nwave = len(ins)
-    wave = np.zeros(nwave)
-    wave[:] = wavelta[ins]
+        #Reading header
+        irec0 = np.fromfile(f,dtype='int32',count=1)[0]
+        nwavelta = np.fromfile(f,dtype='int32',count=1)[0]
+        vmin = np.fromfile(f,dtype='float32',count=1)[0]
+        delv = np.fromfile(f,dtype='float32',count=1)[0]
+        npress = np.fromfile(f,dtype='int32',count=1)[0]
+        ntemp = np.fromfile(f,dtype='int32',count=1)[0]
+        gasID = np.fromfile(f,dtype='int32',count=1)[0]
+        isoID = np.fromfile(f,dtype='int32',count=1)[0]
 
-    #Reading the absorption coefficients
-    #######################################
-    k = np.zeros([nwave,npress,abs(ntemp)])
+        # Convert explicitly rounding to 7 decimals (float32 precision)
+        vmin = np.round(np.float64(vmin), decimals=7)
+        delv = np.round(np.float64(delv), decimals=7)
 
-    #Jumping until we get to the minimum wavenumber
-    njump = npress*abs(ntemp)*(ins[0])
-    ioff = njump*nbytes_float32 + (irec0-1)*nbytes_float32
-    f.seek(ioff,0)
+        presslevels = np.fromfile(f,dtype='float32',count=npress)
+        
+        if ntemp > 0:
+            templevels = np.fromfile(f,dtype='float32',count=ntemp)
+        else:
+            templevels = np.zeros((npress,2))
+            for i in range(npress):
+                templevels[i] = np.fromfile(f,dtype='float32',count=-ntemp)
 
-    #Reading the coefficients we require
-    k_out = np.fromfile(f,dtype='float32',count=abs(ntemp)*npress*nwave)
-    il = 0
-    for ik in range(nwave):
-        for i in range(npress):
-            k[ik,i,:] = k_out[il:il+abs(ntemp)]
-            il = il + abs(ntemp)
+        #Calculating the wavenumbers to be read
+        vmax = vmin + delv * (nwavelta-1)
+        wavelta = np.linspace(vmin,vmax,nwavelta)
 
-    f.close()
+        ins = np.where( (wavelta>=wavemin) & (wavelta<=wavemax) )[0]
+        nwave = len(ins)
+        wave = np.zeros(nwave)
+        wave[:] = wavelta[ins]
+
+        #Reading the absorption coefficients
+        #######################################
+        k = np.zeros([nwave,npress,abs(ntemp)])
+
+        #Jumping until we get to the minimum wavenumber
+        njump = npress*abs(ntemp)*(ins[0])
+        ioff = njump*nbytes_float32 + (irec0-1)*nbytes_float32
+        f.seek(ioff,0)
+
+        #Reading the coefficients we require
+        k_out = np.fromfile(f,dtype='float32',count=abs(ntemp)*npress*nwave)
+        il = 0
+        for ik in range(nwave):
+            for i in range(npress):
+                k[ik,i,:] = k_out[il:il+abs(ntemp)]
+                il = il + abs(ntemp)
+    
+    _lgr.debug(f'{filename=}')
+    _lgr.debug(f'{npress=}')
+    _lgr.debug(f'{ntemp=}')
+    _lgr.debug(f'{gasID=}')
+    _lgr.debug(f'{isoID=}')
+    _lgr.debug(f'{presslevels=}')
+    _lgr.debug(f'{templevels=}')
+    _lgr.debug(f'{nwave=}')
+    _lgr.debug(f'{wave=}')
+    _lgr.debug(f'{k=}')
+    
     
     return npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wave,k
 
@@ -1735,90 +1796,86 @@ def read_ktable(filename,wavemin,wavemax):
         MODIFICATION HISTORY : Juan Alday (05/03/2021)
 
     """
-
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-3:strlen] == 'kta':
-        f = open(filename,'rb')
-    else:
-        f = open(filename+'.kta','rb')
+    if not filename.endswith('.kta'):
+        filename += '.kta'
+    
+    with open(filename, 'rb') as f:
 
-    nbytes_int32 = 4
-    nbytes_float32 = 4
-    ioff = 0
+        nbytes_int32 = 4
+        nbytes_float32 = 4
+        ioff = 0
 
-    #Reading header
-    irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
-    nwavekta = int(np.fromfile(f,dtype='int32',count=1)[0])
-    vmin = np.fromfile(f,dtype='float32',count=1)[0]
-    delv = np.fromfile(f,dtype='float32',count=1)[0]
-    fwhm = float(np.fromfile(f,dtype='float32',count=1)[0])
-    npress = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
-    ng = int(np.fromfile(f,dtype='int32',count=1)[0])
-    gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
-    isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        #Reading header
+        irec0 = int(np.fromfile(f,dtype='int32',count=1)[0])
+        nwavekta = int(np.fromfile(f,dtype='int32',count=1)[0])
+        vmin = np.fromfile(f,dtype='float32',count=1)[0]
+        delv = np.fromfile(f,dtype='float32',count=1)[0]
+        fwhm = float(np.fromfile(f,dtype='float32',count=1)[0])
+        npress = int(np.fromfile(f,dtype='int32',count=1)[0])
+        ntemp = int(np.fromfile(f,dtype='int32',count=1)[0])
+        ng = int(np.fromfile(f,dtype='int32',count=1)[0])
+        gasID = int(np.fromfile(f,dtype='int32',count=1)[0])
+        isoID = int(np.fromfile(f,dtype='int32',count=1)[0])
 
-    # Convert explicitly rounding to 7 decimals (float32 precision)
-    vmin = np.round(np.float64(vmin), decimals=7)
-    delv = np.round(np.float64(delv), decimals=7)
+        # Convert explicitly rounding to 7 decimals (float32 precision)
+        vmin = np.round(np.float64(vmin), decimals=7)
+        delv = np.round(np.float64(delv), decimals=7)
 
-    ioff = ioff + 10 * nbytes_int32
+        ioff = ioff + 10 * nbytes_int32
 
-    g_ord = np.zeros(ng)
-    del_g = np.zeros(ng)
-    templevels = np.zeros(ntemp)
-    presslevels = np.zeros(npress)
-    g_ord[:] = np.fromfile(f,dtype='float32',count=ng)
-    del_g[:] = np.fromfile(f,dtype='float32',count=ng)
+        g_ord = np.zeros(ng)
+        del_g = np.zeros(ng)
+        templevels = np.zeros(ntemp)
+        presslevels = np.zeros(npress)
+        g_ord[:] = np.fromfile(f,dtype='float32',count=ng)
+        del_g[:] = np.fromfile(f,dtype='float32',count=ng)
 
-    ioff = ioff + 2*ng*nbytes_float32
+        ioff = ioff + 2*ng*nbytes_float32
 
-    dummy = np.fromfile(f,dtype='float32',count=1)[0]
-    dummy = np.fromfile(f,dtype='float32',count=1)[0]
+        _ = np.fromfile(f,dtype='float32',count=1)[0]
+        _ = np.fromfile(f,dtype='float32',count=1)[0]
 
-    ioff = ioff + 2*nbytes_float32
+        ioff = ioff + 2*nbytes_float32
 
-    presslevels[:] = np.fromfile(f,dtype='float32',count=npress)
-    templevels[:] = np.fromfile(f,dtype='float32',count=ntemp)
+        presslevels[:] = np.fromfile(f,dtype='float32',count=npress)
+        templevels[:] = np.fromfile(f,dtype='float32',count=ntemp)
 
-    ioff = ioff + npress*nbytes_float32+ntemp*nbytes_float32
+        ioff = ioff + npress*nbytes_float32+ntemp*nbytes_float32
 
-    #Reading central wavelengths in non-uniform grid
-    if delv>0.0:
-        vmax = delv*(nwavekta-1) + vmin
-        wavetot = np.linspace(vmin,vmax,nwavekta)
-    else:
-        wavetot = np.zeros([nwavekta])
-        wavetot[:] = np.fromfile(f,dtype='float32',count=nwavekta)
-        ioff = ioff + nwavekta*nbytes_float32
+        #Reading central wavelengths in non-uniform grid
+        if delv>0.0:
+            vmax = delv*(nwavekta-1) + vmin
+            wavetot = np.linspace(vmin,vmax,nwavekta)
+        else:
+            wavetot = np.zeros([nwavekta])
+            wavetot[:] = np.fromfile(f,dtype='float32',count=nwavekta)
+            ioff = ioff + nwavekta*nbytes_float32
 
-    #Calculating the wavenumbers to be read
-    ins = np.where( (wavetot>=wavemin) & (wavetot<=wavemax) )[0]
-    nwave = len(ins)
-    wave = np.zeros([nwave])
-    wave[:] = wavetot[ins]
+        #Calculating the wavenumbers to be read
+        ins = np.where( (wavetot>=wavemin) & (wavetot<=wavemax) )[0]
+        nwave = len(ins)
+        wave = np.zeros([nwave])
+        wave[:] = wavetot[ins]
 
-    #Reading the k-coefficients
-    #######################################
+        #Reading the k-coefficients
+        #######################################
 
-    k_g = np.zeros([nwave,ng,npress,ntemp])
+        k_g = np.zeros([nwave,ng,npress,ntemp])
 
-    #Jumping until we get to the minimum wavenumber
-    njump = npress*ntemp*ng*ins[0]
-    ioff = njump*nbytes_float32 + (irec0-1)*nbytes_float32
-    f.seek(ioff,0)
+        #Jumping until we get to the minimum wavenumber
+        njump = npress*ntemp*ng*ins[0]
+        ioff = njump*nbytes_float32 + (irec0-1)*nbytes_float32
+        f.seek(ioff,0)
 
-    #Reading the coefficients we require
-    k_out = np.fromfile(f,dtype='float32',count=ntemp*npress*ng*nwave)
-    il = 0
-    for ik in range(nwave):
-        for i in range(npress):
-            for j in range(ntemp):
-                k_g[ik,:,i,j] = k_out[il:il+ng]
-                il = il + ng
-
-    f.close()
+        #Reading the coefficients we require
+        k_out = np.fromfile(f,dtype='float32',count=ntemp*npress*ng*nwave)
+        il = 0
+        for ik in range(nwave):
+            for i in range(npress):
+                for j in range(ntemp):
+                    k_g[ik,:,i,j] = k_out[il:il+ng]
+                    il = il + ng
 
     return gasID,isoID,nwave,wave,fwhm,ng,g_ord,del_g,npress,presslevels,ntemp,templevels,k_g
 
@@ -1864,58 +1921,56 @@ def write_lbltable(filename,npress,ntemp,gasID,isoID,presslevels,templevels,nwav
     import struct
 
     #Opening file
-    strlen = len(filename)
-    if filename[strlen-3:strlen] == 'lta':
-        f = open(filename,'w+b')
-    else:
-        f = open(filename+'.lta','w+b')
+    if not filename.endswith('.lta'):
+        filename += '.lta'
+    
+    with open(filename, 'wb') as f:
 
-    irec0 = 9 + npress + ntemp    #Don't know why this 9 is like this, but it works for a Linux/Ubuntu machine
-    bin=struct.pack('i',irec0) #IREC0
-    f.write(bin)
+        irec0 = 9 + npress + ntemp    #Don't know why this 9 is like this, but it works for a Linux/Ubuntu machine
+        bin=struct.pack('i',irec0) #IREC0
+        f.write(bin)
 
-    bin=struct.pack('i',nwave) #NWAVE
-    f.write(bin)
+        bin=struct.pack('i',nwave) #NWAVE
+        f.write(bin)
 
-    if DOUBLE==True:
-        df = 'd'
-    else:
-        df = 'f'
+        if DOUBLE==True:
+            df = 'd'
+        else:
+            df = 'f'
 
-    bin=struct.pack(df,vmin) #VMIN
-    f.write(bin)
+        bin=struct.pack(df,vmin) #VMIN
+        f.write(bin)
 
-    bin=struct.pack(df,delv) #DELV
-    f.write(bin)
+        bin=struct.pack(df,delv) #DELV
+        f.write(bin)
 
-    bin=struct.pack('i',npress) #NPRESS
-    f.write(bin)
+        bin=struct.pack('i',npress) #NPRESS
+        f.write(bin)
 
-    bin=struct.pack('i',ntemp) #NTEMP
-    f.write(bin)
+        bin=struct.pack('i',ntemp) #NTEMP
+        f.write(bin)
 
-    bin=struct.pack('i',gasID) #GASID
-    f.write(bin)
+        bin=struct.pack('i',gasID) #GASID
+        f.write(bin)
 
-    bin=struct.pack('i',isoID) #ISOID
-    f.write(bin)
+        bin=struct.pack('i',isoID) #ISOID
+        f.write(bin)
 
-    myfmt=df*len(presslevels)
-    bin=struct.pack(myfmt,*presslevels) #PRESSLEVELS
-    f.write(bin)
+        myfmt=df*len(presslevels)
+        bin=struct.pack(myfmt,*presslevels) #PRESSLEVELS
+        f.write(bin)
 
-    myfmt=df*len(templevels)
-    bin=struct.pack(myfmt,*templevels) #TEMPLEVELS
-    f.write(bin)
+        myfmt=df*len(templevels)
+        bin=struct.pack(myfmt,*templevels) #TEMPLEVELS
+        f.write(bin)
 
-    for i in range(nwave):
-        for j in range(npress):
-            tmp = k[i,j,:] * 1.0e20
-            myfmt=df*len(tmp)
-            bin=struct.pack(myfmt,*tmp) #K
-            f.write(bin)
+        for i in range(nwave):
+            for j in range(npress):
+                tmp = k[i,j,:] * 1.0e20
+                myfmt=df*len(tmp)
+                bin=struct.pack(myfmt,*tmp) #K
+                f.write(bin)
 
-    f.close()
     
 ######################################################################################################
     
