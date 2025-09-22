@@ -16,6 +16,7 @@ from ..protocols import (
 from ..datatypes.wave_range import WaveRange
 #from ..datatypes.gas_isotopes import GasIsotopes
 from ..datatypes.gas_descriptor import RadtranGasDescriptor
+import archnemesis.database.datatypes.fixed_width.hitran
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -26,8 +27,7 @@ from typing import NamedTuple
 from enum import IntEnum
 
 class LineRecordFormat(IntEnum):
-    HITRAN=0
-
+    HITRAN = 0
 
 
 class RadtranGasIsotopeData(NamedTuple):
@@ -39,6 +39,7 @@ class RadtranGasIsotopeData(NamedTuple):
     mol_mass : float
     name : str
     partition_fn_polynomial_coeffs : np.ndarray
+
 
 def load_gas_isotope_data(fpath : str):
     gasses = []
@@ -105,109 +106,37 @@ def load_gas_isotope_data(fpath : str):
     return gas_info
 
 
-def in_chunks_of(a, chunk_sizes):
-    i = 0
-    for s in chunk_sizes:
-        yield a[i:i+s]
-        i+=s
-
-
-class RecordHitran160(NamedTuple):
-    gas_id : int
-    iso_id : int
-    line_wavenumber : float
-    line_strength : float
-    einstein_a_coeff : float
-    gamma_air : float
-    gamma_self : float
-    e_lower : float
-    n_air : float
-    delta_air : float
-    global_upper_quanta : str
-    global_lower_quanta : str
-    local_upper_quanta : str
-    local_lower_quanta : str
-    ierr : None | int
-    iref : int
-    line_mixing_flag : str
-    gp : float
-    gpp : float
-
-
-def read_records_hitran_160(fpath : str, fixed_width=True):
-    i=0
-    records = []
-    with open(fpath, 'r') as f:
-        # skip anytihng starting with a '#'
-        while True:
-            if (i%10000 == 0):
-                _lgr.info(f'read {i} records...')
-            i+=1
-            
-            a = f.readline() if not fixed_width else f.read(160)
-            if a.strip().startswith('#'):
-                continue
-            
-            if len(a) == 0:
-                break # end of file
-            
-            
-            records.append(
-                RecordHitran160(
-                    *(fn(x) for fn,x in zip((
-                        int,#lambda x: (_lgr.debug(f'{x=}'), int(x))[1],
-                        int,#lambda x: (_lgr.debug(f'{x=}'), int(x))[1],
-                        float,#lambda x: (_lgr.debug(f'{x=}'), float(x))[1],
-                        float,#lambda x: (_lgr.debug(f'{x=}'), float(x))[1],
-                        float,#lambda x: (_lgr.debug(f'{x=}'), float(x))[1],
-                        float,#lambda x: (_lgr.debug(f'{x=}'), float(x))[1],
-                        float,#lambda x: (_lgr.debug(f'{x=}'), float(x))[1],
-                        float,#lambda x: (_lgr.debug(f'{x=}'), float(x))[1],
-                        float,#lambda x: (_lgr.debug(f'{x=}'), float(x))[1],
-                        float,#lambda x: (_lgr.debug(f'{x=}'), float(x))[1],
-                        str,#lambda x: (_lgr.debug(f'{x=}'), str(x))[1],
-                        str,#lambda x: (_lgr.debug(f'{x=}'), str(x))[1],
-                        str,#lambda x: (_lgr.debug(f'{x=}'), str(x))[1],
-                        str,#lambda x: (_lgr.debug(f'{x=}'), str(x))[1],
-                        lambda x: tuple(int(z) for z in x),#lambda x: (_lgr.debug(f'{x=}'), tuple(int(z) for z in x))[1],
-                        lambda x: tuple(x[2*i:2*i+2] for i in range(6)),#lambda x: (_lgr.debug(f'{x=}'), tuple(x[2*i:2*i+2] for i in range(6)))[1],
-                        str,#lambda x: (_lgr.debug(f'{x=}'), str(x))[1],
-                        float,#lambda x: (_lgr.debug(f'{x=}'), float(x))[1],
-                        float,#lambda x: (_lgr.debug(f'{x=}'), float(x))[1],
-                    ),
-                    in_chunks_of(a, (
-                        2,
-                        1,
-                        12,
-                        10,
-                        10,
-                        5,
-                        5,
-                        10,
-                        4,
-                        8,
-                        15,
-                        15,
-                        15,
-                        15,
-                        6,
-                        12,
-                        1,
-                        7,
-                        7,
-                    ))
-                ))
-            ))
-    
-    return records
-
 class RADTRAN(LineDatabaseProtocol):
     FORTRAN_RECORD_LENGTH : int = 4 # bytes
     
-    def __init__(self, keyfile : str, ambient_gas = ans.enums.AmbientGas.AIR):
-        _lgr.debug(f'Creating {self.__class__.__name__} with {keyfile=} {ambient_gas=}')
+    def __init__(
+            self, 
+            fpath : str, 
+            ambient_gas = ans.enums.AmbientGas.AIR,
+            
+    ):
+        _lgr.debug(f'Creating {self.__class__.__name__} with {fpath=} {ambient_gas=}')
         
-        self.keyfile = os.path.abspath(keyfile)
+        if os.path.isdir(fpath):
+            # .key file should be present, and there should only be one
+            keyfiles = [x for x in os.listdir(path=fpath) if x.endswith('.key')]
+            if len(keyfiles) > 1:
+                raise ValueError(f'Cannot create {self.__class__.__name__} from path "{fpath}". Requires a *.key file or directory containing a single *.key file')
+            else:
+                self.keyfile = os.path.abspath(os.path.join(fpath,keyfiles[0]))
+            
+        elif os.path.isfile(fpath):
+            # it should be the .key file
+            if not fpath.endswith('.key'):
+                if os.path.isfile(fpath+'.key'):
+                    self.keyfile = os.path.abspath(fpath+'.key')
+                raise ValueError(f'Cannot create {self.__class__.__name__} from path "{fpath}". Requires a *.key file or directory containing a single *.key file')
+            else:
+                self.keyfile = os.path.abspath(fpath)
+        else:
+            raise ValueError(f'Cannot create {self.__class__.__name__} from path "{fpath}". Requires a *.key file or directory containing a single *.key file')
+        
+        
         self.ambient_gas = ambient_gas
         self._local_storage_dir = os.path.dirname(self.keyfile)
         
@@ -242,24 +171,42 @@ class RADTRAN(LineDatabaseProtocol):
         _lgr.debug(f'Reading gas information from "{self.gas_data_file}"')
         self.gas_info = load_gas_isotope_data(self.gas_data_file)
         
-        _lgr.debug(f'Reading line records (format={self.record_format}, record_length={self.database_record_length}) from "{self.database_file}"')
-        if (self.record_format == LineRecordFormat.HITRAN) and (self.database_record_length == 160):
-            records = read_records_hitran_160(self.database_file)
+        _lgr.info(f'Finding format class for {self.record_format=} {self.database_record_length=}')
+        format_class = None
+        if self.record_format == LineRecordFormat.HITRAN:
+            format_class_name = f'FormatHitran{self.database_record_length}'
+            format_class = getattr(ans.database.datatypes.fixed_width.hitran, format_class_name, None)
+        
+            if format_class is None:
+                _lgr.error(f'Systematic format class name "{format_class_name}" not present in "archnemesis.database.datatypes.fixed_width.hitran"')
+            else:
+                _lgr.warning(f'Format class found from systematic format class name "{format_class_name}", NOTE: HITRAN legacy format is not used at the moment so be careful if using "einstein_a_coeff" attribute of records.')
         else:
-            raise RuntimeError(f'No known reader for combination of record format {self.record_format} and record length {self.database_record_length}')
+            _lgr.error(f'No LineRecordFormat matching {self.record_format}. Possible values are {list(LineRecordFormat)}')
+        
+        if format_class is None:
+            raise RuntimeError(f'Could not find format class for {self.record_format=} {self.database_record_length=}')
+        
+        _lgr.debug(format_class.to_string())
+        
+        _lgr.debug(f'Reading line records (format={self.record_format}, record_length={self.database_record_length}) from "{self.database_file}"')
+        records = format_class.read_records(self.database_file)
         
         
         _lgr.debug('Loading all records into memory...')
         
-        attrs = ( # which attributes of "RecordHitran160" are associated with the attributes of LineDataProtocol
+        # NOTE: Here is where I would put in something that swaps from legacy values to 'einstein_a_coeff'
+        #       or put it in the `format_class` classes that perform the reading.
+        
+        attrs = ( # which attributes of "format_class" are associated with the attributes of LineDataProtocol
             'line_wavenumber',
             'line_strength',
             'einstein_a_coeff',
-            'gamma_air',
-            'n_air',
-            'delta_air',
+            'gamma_amb',
+            'n_amb',
+            'delta_amb',
             'gamma_self',
-            'n_air',
+            'n_amb',
             'e_lower'
         )
         
@@ -339,7 +286,7 @@ class RADTRAN(LineDatabaseProtocol):
             key = (gas_desc.gas_id, gas_desc.iso_id, ambient_gas)
             
             if key not in self.data:
-                _lgr.warning(f'Cannot retrieve data for {gas_desc} and {ambient_gas} as there is no entry in database that matches')
+                _lgr.warning(f'Cannot retrieve data for {gas_desc} and {ambient_gas=} as there is no entry in database that matches. Entries are {list(self.data.keys())}')
                 result[gas_desc] = None
                 continue
             

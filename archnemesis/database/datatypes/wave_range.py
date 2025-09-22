@@ -38,6 +38,10 @@ class WaveRange(NamedTuple):
     def as_unit(self, new_unit : ans.enums.WaveUnit) -> Self:
         return self.to_unit(new_unit)
     
+    @property
+    def size(self) -> float:
+        return self.max - self.min
+    
     def values(self) -> tuple[float,float]:
         return self.min, self.max
     

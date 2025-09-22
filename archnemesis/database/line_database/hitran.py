@@ -255,7 +255,10 @@ class HITRAN(LineDatabaseProtocol):
         
         Checks if database has been initialised, checks if we have all requested data, download if required, reads
         requested data from database and returns it in LineDataProtocol format
+        
+        NOTE: Should always return data in the same units it was requested in
         """
+        
         gd = tuple(gas_descs)
         if not self.db_init_flag:
             self._init_database()
@@ -263,11 +266,18 @@ class HITRAN(LineDatabaseProtocol):
         self._check_available_data(gd, wave_range, ambient_gas)
         self._fetch_line_data()
         
-        return self._read_line_data(
+        ld = self._read_line_data(
             gd, 
             wave_range, 
             ambient_gas
         )
+        
+        
+        
+        return ld
+        
+        
+        
     
     def retrieve_downloaded_gas_wavenumber_interval_from_cache(self):
         cache_file_path = self._downloaded_gas_wavenumber_interval_cache_file
@@ -361,12 +371,19 @@ class HITRAN(LineDatabaseProtocol):
         return
 
     def _check_available_data(self, gas_descs : tuple[RadtranGasDescriptor,...], wave_range : WaveRange, ambient_gas : ans.enums.AmbientGas):
+        # Always download 0.5% more than asked for to avoid annoying downloads due to edge effects
+        expanded_wave_range = WaveRange(
+            wave_range.min - 0.005*wave_range.size, 
+            wave_range.max + 0.005*wave_range.size,
+            wave_range.unit
+        ).to_unit(ans.enums.WaveUnit.Wavenumber_cm)
+        
         for gas_desc in gas_descs:
             gda_pair = (gas_desc, ambient_gas)
             if gda_pair not in self._downloaded_gas_wavenumber_interval:
-                self._gas_wavenumber_interval_to_download[gda_pair] = wave_range.to_unit(ans.enums.WaveUnit.Wavenumber_cm)
-            elif not self._downloaded_gas_wavenumber_interval[gda_pair].contains(wave_range):
-                self._gas_wavenumber_interval_to_download[gda_pair] = self._downloaded_gas_wavenumber_interval[gda_pair].union(wave_range)
+                self._gas_wavenumber_interval_to_download[gda_pair] = expanded_wave_range
+            elif not self._downloaded_gas_wavenumber_interval[gda_pair].contains(expanded_wave_range):
+                self._gas_wavenumber_interval_to_download[gda_pair] = self._downloaded_gas_wavenumber_interval[gda_pair].union(expanded_wave_range)
     
     
     def _fetch_line_data(self) -> dict[bool,...]:
@@ -455,9 +472,6 @@ class HITRAN(LineDatabaseProtocol):
         self.store_downloaded_gas_wavenumber_interval_to_cache()
         
         return gas_exists_in_db
-
-
-    
 
 
     def _read_line_data(self, gas_descs : tuple[RadtranGasDescriptor,...], wave_range : WaveRange, ambient_gas : ans.enums.AmbientGas):

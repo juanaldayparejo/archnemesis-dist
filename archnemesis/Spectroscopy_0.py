@@ -426,11 +426,13 @@ class Spectroscopy_0:
             if e==False:
                 raise ValueError('error :: Spectroscopy is not defined in HDF5 file')
             else:
-                self.NGAS = np.int32(f.get(name+'/NGAS'))
-                self.ILBL = SpectralCalculationMode(np.int32(f.get(name+'/ILBL')))
+                self.NGAS = h5py_helper.retrieve_data(f, name+'/NGAS', np.int32, default=0)
+                self.ILBL = SpectralCalculationMode(h5py_helper.retrieve_data(f, name+'/ILBL', np.int32))
 
                 if self.NGAS>0:
-                    LOCATION1 = f.get(name+'/LOCATION')
+                    LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION', default=tuple())
+                    if LOCATION1 is None:
+                        LOCATION1 = []
                     LOCATION = ['']*self.NGAS
                     for igas in range(self.NGAS):
                         LOCATION[igas] = LOCATION1[igas].decode('ascii')
@@ -728,6 +730,9 @@ class Spectroscopy_0:
                     self.TEMP = templevels
                     self.NWAVE = len(wave)
                     self.WAVE = wave
+        else:
+            self.ID = np.zeros((0,),dtype=int)
+            self.ISO = np.zeros((0,),dtype=int)
 
     ######################################################################################################
     def read_tables(self, wavemin=0., wavemax=1.0e10):
@@ -1751,7 +1756,7 @@ def read_lbltable(filename,wavemin,wavemax):
             for i in range(npress):
                 k[ik,i,:] = k_out[il:il+abs(ntemp)]
                 il = il + abs(ntemp)
-    
+    """
     _lgr.debug(f'{filename=}')
     _lgr.debug(f'{npress=}')
     _lgr.debug(f'{ntemp=}')
@@ -1762,7 +1767,7 @@ def read_lbltable(filename,wavemin,wavemax):
     _lgr.debug(f'{nwave=}')
     _lgr.debug(f'{wave=}')
     _lgr.debug(f'{k=}')
-    
+    """
     
     return npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wave,k
 
