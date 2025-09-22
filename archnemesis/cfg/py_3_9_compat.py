@@ -9,8 +9,8 @@ import typing, typing_extensions
 typing.Self = typing_extensions.Self
 
 
-def ABCMeta_or(self, *args):
-    return typing.Union[self, *args]
+def ABCMeta_or(self, other):
+    return typing.Union[self, other]
 
 abc.ABCMeta.__or__ = ABCMeta_or
 
