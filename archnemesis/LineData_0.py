@@ -797,7 +797,7 @@ class LineData_0:
             temp : float, # kelvin
             press : float, # Atmospheres
             amb_frac : float = 1, # fraction of broadening due to ambient gas
-            wave_unit : ans.enums.waveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
+            wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
             lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # lineshape function to use
             line_calculation_wavenumber_window: float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
             tref : float = 296, # Reference temperature (Kelvin). TODO: This should be set by the database used
