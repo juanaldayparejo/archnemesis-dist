@@ -5,13 +5,15 @@ Perform compatability setup for python version 3.9
 
 import abc
 import typing, typing_extensions
+from typing import NoneType
 
 typing.Self = typing_extensions.Self
 
 
-def ABCMeta_or(self, other):
+def UNION_or(self, other):
     return typing.Union[self, other]
 
-abc.ABCMeta.__or__ = ABCMeta_or
+abc.ABCMeta.__or__ = UNION_or
 
+NoneType.__or__ = UNION_or
 
