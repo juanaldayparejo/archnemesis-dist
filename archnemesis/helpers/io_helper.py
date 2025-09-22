@@ -118,7 +118,7 @@ class SimpleProgressTracker:
         return self._output_target
 
     @output_target.setter
-    def output_target(self, value : str | Callable[[SimpleProgressTracker],str]):
+    def output_target(self, value : str | Callable[[Self],str]):
         """
         Set the `self._output_target` attribute to something that can accept a string.
         """
@@ -199,7 +199,7 @@ class SimpleProgressTracker:
             name : str, # Name of tracker (required)
             n_max : None | int = None, # Maximum number of iterations the tracker will run for, or `None` if that is unknown
             *, # end positional arguments
-            msg_format : str | Callable[[SimpleProgressTracker],str] = None, # Format string or callable that takes a `SimpleProgressTracker` object and returns a string to be displayed
+            msg_format : str | Callable[[Self],str] = None, # Format string or callable that takes a `SimpleProgressTracker` object and returns a string to be displayed
             display_interval_sec : float = 5, # How often (in seconds) to display the tracker progress
             display_interval_n : int = 1, # How often (in number of iterations) to calculate and display tracker progress.
             output_target : IO | logging.Logger = sys.stdout # tracker output will be sent to this object
