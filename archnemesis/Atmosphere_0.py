@@ -24,7 +24,7 @@ Created on Tue Mar 16 17:27:12 2021
 
 Atmosphere Class.
 """
-from __future__ import annotations #  for 3.9 compatability
+#from __future__ import annotations #  for 3.9 compatability
 from archnemesis import Data
 #from archnemesis import *
 import numpy as np

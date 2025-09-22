@@ -1,4 +1,4 @@
-from __future__ import annotations #  for 3.9 compatability
+#from __future__ import annotations #  for 3.9 compatability
 
 k_B                  : float    = 1.380649E-23                                   # J/K           Boltzmann constant
 k_boltzmann          : float    = 1.380649E-23                                   # J/K           Boltzmann constant
