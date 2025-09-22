@@ -4,6 +4,7 @@
 name: Unit tests for archNEMESIS
 
 on:
+  workflow_dispatch
   push:
     branches: [ "main" ]
   pull_request:
