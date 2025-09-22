@@ -1,4 +1,4 @@
-#from __future__ import annotations #  for 3.9 compatability
+
 
 from typing import get_args, Type, Self, Any, Iterator
 from collections import namedtuple

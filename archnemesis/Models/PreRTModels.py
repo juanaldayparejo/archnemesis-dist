@@ -1,4 +1,4 @@
-#from __future__ import annotations #  for 3.9 compatability
+
 
 """
 Contains models that alter the replica before radiative transfer is calculated

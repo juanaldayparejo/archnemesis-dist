@@ -1,4 +1,4 @@
-#from __future__ import annotations #  for 3.9 compatability
+
 
 import io
 from io import IOBase

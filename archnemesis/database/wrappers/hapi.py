@@ -1,4 +1,4 @@
-#from __future__ import annotations #  for 3.9 compatability
+
 
 """
 The HITRAN API "HAPI" has quite a few quirks that mean it does

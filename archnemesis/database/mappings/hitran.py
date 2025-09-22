@@ -1,4 +1,4 @@
-#from __future__ import annotations #  for 3.9 compatability
+
 
 radtran_to_hitran : dict[tuple[int,int], tuple[int,int]] = {
     
