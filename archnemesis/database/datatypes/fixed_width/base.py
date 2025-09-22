@@ -47,7 +47,8 @@ def str_to_type(s) -> Type:
     elif s=='tuple':
         return tuple
     elif s.startswith('tuple'):
-        return tuple[*(str_to_type(x) for x in s[6:-1].split(', '))]
+        #return tuple[*(str_to_type(x) for x in s[6:-1].split(', '))]
+        return tuple((str_to_type(x.strip()) for x in s[6:-1].split(', ')))
     elif s=='str':
         return str
 
