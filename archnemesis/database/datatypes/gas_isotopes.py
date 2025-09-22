@@ -81,7 +81,7 @@ class GasIsotopes:
         return Data.gas_info[str(self.rt_gas_id)]['name']
     
     @property
-    def iso_names(self) -> Iterator[str,...]:
+    def iso_names(self) -> Iterator[str]:
         return (Data.gas_info[str(self.rt_gas_id)]['isotope'][str(iso_id)]['name'] for iso_id in self.rt_iso_ids)
     
     @property
@@ -95,10 +95,10 @@ class GasIsotopes:
         ht_global_ids = [x.global_id if x is not None else None for x in g]
         return ht_gas_id, ht_iso_ids, ht_global_ids
     
-    def as_radtran_gasses(self) -> Iterator[RadtranGasDescriptor, ...]:
+    def as_radtran_gasses(self) -> Iterator[RadtranGasDescriptor]:
         return (RadtranGasDescriptor(self.rt_gas_id, iso_id) for iso_id in self.rt_iso_ids)
 
-    def as_hitran_gasses(self, filter_missing=True) -> Iterator[None|HitranGasDescriptor, ...]:
+    def as_hitran_gasses(self, filter_missing=True) -> Iterator[None|HitranGasDescriptor]:
         if filter_missing:
             return (x.to_hitran() for x in self.as_radtran_gasses() if x is not None)
         else:
