@@ -104,7 +104,7 @@ class GasIsotopes:
         else:
             return (x.to_hitran() for x in self.as_radtran_gasses())
     
-    def contains(self, other : GasIsotopes) -> bool:
+    def contains(self, other : Self) -> bool:
         """
         Does this set of gas isotopes contain `other`
         """
