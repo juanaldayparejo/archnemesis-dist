@@ -66,3 +66,22 @@ class ExomolRootFormat(TreePrinter, ExomolLineFileFormat):
             if mi.formula == mol_formula:
                 return tuple(f'{mi.formula}/{idi.iso_slug}/{idi.dataset}/{idi.iso_slug}__{idi.dataset}.def' for idi in mi.iso_dataset)
         return None
+    
+    
+    def iter_def_urls(self) -> tuple[str, str]:
+        for mi in self.molecule_info:
+            for idi in mi.iso_dataset:
+                yield (idi.formula, f'{mi.formula}/{idi.iso_slug}/{idi.dataset}/{idi.iso_slug}__{idi.dataset}.def')
+    
+    def get_api_urls(self):
+        return tuple("https://exomol.com/api/?molecule={}".format(mi.formula) for mi in self.molecule_info)
+    
+    
+    def get_def_urls(self):
+        return tuple(self.iter_def_urls())
+    
+    
+
+
+
+

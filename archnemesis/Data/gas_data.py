@@ -71,6 +71,19 @@ def id_to_name(gasid,isoid):
     else:
         return gas_info[str(gasid)]["isotope"][str(isoid)]["name"]
 
+def isotope_name_to_id(iso_name):
+    # make sure name is in same format as `gas_info`
+    iso_name = iso_name.replace('(1H)', 'H')
+    iso_name = iso_name.replace('(2H)', 'D')
+
+    for gas_id in gas_info:
+        for iso_id in gas_info[gas_id]['isotope']:
+            if 'name' not in gas_info[gas_id]['isotope'][iso_id]: # skip entries that do not have a name for their isotope
+                continue
+            if gas_info[gas_id]['isotope'][iso_id]['name'] == iso_name:
+                return (gas_id, iso_id)
+    return None # if not found
+
 
 def molecule_to_latex(formula):
     import re

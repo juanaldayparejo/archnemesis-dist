@@ -1,11 +1,13 @@
 import dataclasses as dc
 from typing import get_origin, get_args, Any, ClassVar, Callable, Iterator, Self
 
+import numpy as np
+
 from .col_format import ExomolColFileFormat
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 
 
@@ -175,7 +177,14 @@ class ExomolLineFileFormat:
                 
                 if hasattr(t_arg, 'from_line_itr'):
                     for j in range(n_entries):
-                        next_line, instance = t_arg.from_line_itr(next_line, line_itr)
+                        if next_line is None:
+                            next_line = next(line_itr)
+                        value, comment = next_line.split('#', 1)
+                        skip_default, skip_predicate = cls._skip_if_comment_predicate.get(field.name, (None, lambda x: False))
+                        if skip_predicate(comment):
+                            instance = skip_default
+                        else:
+                            next_line, instance = t_arg.from_line_itr(next_line, line_itr)
                         entries.append(instance)
                 else:
                     for j in range(n_entries):
@@ -183,7 +192,12 @@ class ExomolLineFileFormat:
                             next_line = next(line_itr)
                         _lgr.debug(next_line)
                         value, comment = next_line.split('#', 1)
-                        entries.append(t_arg(value.strip()))
+                        skip_default, skip_predicate = cls._skip_if_comment_predicate.get(field.name, (None, lambda x: False))
+                        if skip_predicate(comment):
+                            entries.append(skip_default)
+                        else:
+                            v = value.strip()
+                            entries.append(t_arg(v) if v.upper() != 'NAN' else np.nan)
                         next_line = None
                 
                 args[field.name] = entries if t_origin == list else tuple(entries)
@@ -192,21 +206,16 @@ class ExomolLineFileFormat:
                 next_line, instance = field.type.from_line_itr(next_line, line_itr)
                 args[field.name] = instance
             
-            elif type(field.type) is str and any([x in field.type for x in ("ExomolColFileFormat", "ExomolLineFileFormat")]):
-                if "ExomolColFileFormat" in field.type:
-                    next_line, instance = ExomolColFileFormat.from_line_itr(next_line, line_itr)
-                    args[field.name] = instance
-                elif "ExomolLineFileFormat" in field.type:
-                    next_line, instance = ExomolLineFileFormat.from_line_itr(next_line, line_itr)
-                    args[field.name] = instance
-                else:
-                    raise RuntimeError(f'Unknown type {field.type} when dispatching {cls.__name__} reader to attribute {field.name} reader.')
-            
+            elif type(field.type) is str:
+                raise RuntimeError(f'Field "{field.name}" has a string type annotation "{field.type}". String type annotations are not supported at the moment.')
+                
             else:
                 if next_line is None:
                     next_line = next(line_itr)
                 _lgr.debug(next_line)
-                args[field.name] = field.type(value.strip())
+                
+                v = value.strip()
+                args[field.name] = field.type(v) if v.upper() != 'NAN' else np.nan
                 next_line = None
 
         return (next_line, cls(**args))

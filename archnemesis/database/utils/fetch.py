@@ -10,13 +10,13 @@ _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 
 
-PROGRESS_INTERVAL_Kb : None | float = 10
+PROGRESS_INTERVAL_Kb : None | float = 1024
 # Interval (in kilobytes) on amount of data fetched to report progress (at log level `INFO`). If `None` will not report progress.
 
 def file_in_chunks(
         url : str, 
         *, # All following arguments are keyword only
-        chunk_size : None | int = 1024, 
+        chunk_size : None | int = (1024*1024), 
         encoding : str = 'ascii', 
         proxy : None | dict[str,str]
 ) -> Generator[bytes | str]:
@@ -39,7 +39,8 @@ def file_in_chunks(
             will generate `bytes` else will generate `str`.
     """
     req = urllib.request.Request(url)
-    _lgr.debug(f'{url=} {chunk_size=} {encoding=}')
+    _lgr.info(f'{url=}')
+    _lgr.debug(f'{chunk_size=} {encoding=}')
     
     
     handlers = []
@@ -81,7 +82,7 @@ def file_in_chunks(
     i = 0
     while (size_of_current_chunk := len(chunk := get_chunk(response))) > 0:
         
-        if PROGRESS_INTERVAL_Kb is not None and ((accumulated_size - last_reported_size) > (PROGRESS_INTERVAL_Kb*1024)):
+        if PROGRESS_INTERVAL_Kb is not None and ((accumulated_size - last_reported_size) >= (PROGRESS_INTERVAL_Kb*1024)):
             _lgr.info(f'Fetching chunk {i}. Chunk is {size_of_current_chunk/1024} Kb. Fetched {accumulated_size/1024} Kb so far...')
             last_reported_size = accumulated_size
         

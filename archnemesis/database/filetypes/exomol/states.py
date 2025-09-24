@@ -19,6 +19,7 @@ _lgr.setLevel(logging.INFO)
 
 @dc.dataclass(repr=False)
 class ExomolIsotopeStates():
+    mol_formula : str
     iso_slug : str
     dataset : str
     data : np.ndarray # structured array
@@ -101,7 +102,9 @@ class ExomolIsotopeStates():
                     col_type = (np.ubyte, 128) # most general case, 128 characters
                 column_types.append(col_type)
         
-        dtype_list : list[tuple[str, type, int],...] = [(name, *(t if (type(t) is tuple) else (t,1))) for name, t in zip(column_names, column_types)] 
+        
+        dtype_list : list[tuple[str, type]|tuple[str, type, int],...] = [(name, *t) if (type(t) is tuple) else (name,t) for name, t in zip(column_names, column_types)] 
+        
         col_descriptions = dict((name, desc) for name, desc in zip(column_names, column_descriptions))
         return dtype_list, col_descriptions
 
@@ -120,11 +123,11 @@ class ExomolIsotopeStates():
         dtype_list, col_descriptions = cls.get_initial_structured_dtype_list(iso_def)
         
         fpath = cls.download_file(url, dest_dir)
-        _lgr.debug(f'"{url}" downloaded to "{fpath}"')
+        _lgr.info(f'"{url}" downloaded to "{fpath}"')
 
         data = cls.get_data_from_file_bz2(fpath, iso_def.n_states, dtype_list, col_descriptions)
 
-        return cls(iso_slug, dataset, data, col_descriptions) 
+        return cls(iso_def.get_mol_formula(), iso_slug, dataset, data, col_descriptions) 
     
     @staticmethod
     def download_file(
@@ -138,11 +141,11 @@ class ExomolIsotopeStates():
         if os.path.exists(fpath) and (not overwrite):
             found_file_size = os.path.getsize(fpath)
             if found_file_size == 0:
-                _lgr.debug(f'WARNING: File "{fpath}" already exists but is {found_file_size} bytes in size, therefore will download again despite request to not overwrite file')
+                _lgr.warn(f'WARNING: File "{fpath}" already exists but is {found_file_size} bytes in size, therefore will download again despite request to not overwrite file')
             else:
                 return fpath
 
-        fetch.file(url, to_path=fpath, encoding=None)
+        fetch.file(url, to_fpath=fpath, encoding=None)
         return fpath
     
     @classmethod
@@ -210,7 +213,7 @@ class ExomolIsotopeStates():
         with bz2.open(fpath, 'r') as f:
             while (a_row := f.read(line_size)):
                 if (row_idx % 100000 == 0):
-                    _lgr.debug(f'reading in row {row_idx} / {n_rows}')
+                    _lgr.info(f'reading in row {row_idx} / {n_rows}')
                 
                 if len(a_row) != line_size:
                     raise RuntimeError(f'While reading "{fpath}", expected rows of size {line_size}, but row {row_idx} has size {len(a_row)}')
@@ -218,7 +221,7 @@ class ExomolIsotopeStates():
                 data[row_idx] = tuple(dtype_list[i][1](a_row[col_edge_idxs[i][0]:col_edge_idxs[i][1]]) for i, col in enumerate(data.dtype.names))
                 row_idx += 1
 
-        _lgr.debug(f'{cls.__name__} size of loaded data : {data.nbytes / (1024*1024)} Mb')
+        _lgr.info(f'{cls.__name__} size of loaded data : {data.nbytes / (1024*1024)} Mb')
         return data
 
 
@@ -246,8 +249,9 @@ class ExomolIsotopeStates():
         """
         Print column information to screen
         """
-        for name, description in self.column_info:
-            print(f'{name}\n{textwrap.indent(description,"    ")}')
+        print(f'Columns of states of {self.iso_slug}__{self.dataset}:')
+        for name, description in self.column_info():
+            print(f'    {name}\n{textwrap.indent(description,"        ")}')
 
 
 

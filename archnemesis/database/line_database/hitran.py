@@ -19,6 +19,7 @@ from ..protocols import (
 from ..datatypes.wave_range import WaveRange
 #from ..datatypes.gas_isotopes import GasIsotopes
 from ..datatypes.gas_descriptor import RadtranGasDescriptor
+from ..datatypes.hitran.gas_descriptor import HitranGasDescriptor
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -396,7 +397,7 @@ class HITRAN(LineDatabaseProtocol):
             
             # Check that the gas exists in the HITRAN database
             gas_desc, ambient_gas = gda_pair
-            ht_gas = gas_desc.to_hitran()
+            ht_gas = HitranGasDescriptor.from_radtran(gas_desc)
             if ht_gas is None:
                 gas_exists_in_db[gas_idx] = False
                 _lgr.warning(f'Cannot download data for {gas_desc}, as that gas is not present in the HITRAN database')
@@ -487,7 +488,7 @@ class HITRAN(LineDatabaseProtocol):
         
         for gas_desc in gas_descs:
             _lgr.debug(f'{gas_desc=}')
-            ht_gas_desc = gas_desc.to_hitran()
+            ht_gas_desc = HitranGasDescriptor.from_radtran(gas_desc)
             if ht_gas_desc is None:
                 line_data[gas_desc] = None
                 continue
@@ -574,7 +575,7 @@ class HITRAN(LineDatabaseProtocol):
         partition_function_data = dict()
         
         for gas_desc in gas_descs:
-            ht_gas = gas_desc.to_hitran()
+            ht_gas = HitranGasDescriptor.from_radtran(gas_desc)
             if ht_gas is None:
                 partition_function_data[gas_desc] = None
                 continue
