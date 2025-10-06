@@ -175,6 +175,7 @@ class Measurement_0:
     Measurement_0.edit_TANHE()
     Measurement_0.edit_WGEOM()
     
+    Measurement_0.add_fmerr()
     Measurement_0.calc_MeasurementVector()
     
     Measurement_0.remove_geometry()
@@ -1248,6 +1249,25 @@ class Measurement_0:
             'WGEOM should be NGEOM by NAV.'
 
         self.WGEOM = WGEOM_array
+
+    #################################################################################################################
+
+    def add_fmerr(self,verr,fmerr):
+        """
+        Add a forward modelling error to the measurement error covariance matrix
+        """
+
+        if self.SE is None:
+            raise ValueError('error in add_fmerr :: Measurement error covariance matrix has not been calculated yet')
+
+        fmerrx = np.zeros(self.NY)
+        ix = 0
+        for i in range(self.NGEOM):
+
+            fmerrx[ix:ix+self.NCONV[i]] = np.interp(self.VCONV[0:self.NCONV[i],i],verr,fmerr,left=fmerr[0],right=fmerr[-1])
+            ix = ix + self.NCONV[i]
+
+        self.SE += np.diag(fmerrx**2)
 
     #################################################################################################################
 

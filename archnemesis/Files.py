@@ -520,6 +520,13 @@ def read_input_files(runname):
 
     Measurement.runname = runname
     Measurement.read_spx()
+    
+    #Checking if forward modelling error file exists
+    if os.path.exists(fmerrname)==True:
+        #Reading forward modelling error
+        vfmerr,fmerr = read_fmerr(fmerrname)
+
+        Measurement.add_fmerr(vfmerr,fmerr)
 
     #Reading .sha file if FWHM>0.0
     if Measurement.FWHM > 0.0:
@@ -1608,6 +1615,60 @@ def write_inp(runname,ispace,iscat,ilbl,woff,niter,philimit,nspec,ioff,lin,IFORM
     if IFORM != -1:
         f.write('%i \n' % (int(IFORM)))
     f.close()
+
+
+###############################################################################################
+
+def read_fmerr(filename):
+    
+    
+    """
+        FUNCTION NAME : read_fmerr()
+
+        DESCRIPTION :
+        
+            Reads the forward modelling error from a file
+        
+        INPUTS :
+        
+            filename :: Name of the file containing the forward modelling error
+        
+        OPTIONAL INPUTS: none
+        
+        OUTPUTS :
+        
+            verr(nwave) :: Wavenumber/Wavelength array
+            fwerr(nwave) :: Forward modelling error
+        
+        CALLING SEQUENCE:
+
+            verr,fwerr = read_fmerr(filename)
+
+        MODIFICATION HISTORY : Juan Alday (29/09/2025)
+        
+    """
+    
+    with open(filename, 'r') as f:
+        
+        for line in f:
+            if line.strip() and not line.startswith('#'):
+                nwave = int(line.split()[0])
+                break
+            
+        verr = np.zeros(nwave)
+        fwerr = np.zeros(nwave)
+        i = 0
+        for line in f:
+            if line.strip() and not line.startswith('#'):
+                values = line.split()
+                if len(values) >= 2:
+                    verr[i] = float(values[0])
+                    fwerr[i] = float(values[1])
+                    i += 1
+                if i >= nwave:
+                    break
+
+    return verr, fwerr
 
 ###############################################################################################
 
