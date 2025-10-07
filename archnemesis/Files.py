@@ -523,6 +523,7 @@ def read_input_files(runname):
     
     #Checking if forward modelling error file exists
     if os.path.exists(fmerrname)==True:
+
         #Reading forward modelling error
         vfmerr,fmerr = read_fmerr(fmerrname)
 
@@ -1235,7 +1236,7 @@ def read_inp(runname,Measurement=None,Scatter=None,Spectroscopy=None):
 
     tmp = f.readline().split()
     WOFF = float(tmp[0])
-    fmerrname = str(f.readline().split())
+    fmerrname = str(f.readline().split()[0])
     tmp = f.readline().split()
     NITER = int(tmp[0])
     tmp = f.readline().split()
