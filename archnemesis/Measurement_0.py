@@ -144,6 +144,11 @@ class Measurement_0:
         Modelled spectrum for each geometry
     VNORM : float 
         If IFORM=5, then VNORM defines the wavelength at which the spectra must be normalised
+    VFMERR : 1D array, float (NVFMERR)
+        Wavenumber/wavelength at which the forward modelling error is defined
+    FMERR : 1D array, float (NVFMERR)
+        Forward modelling error at each VFMERR
+        
         
         
     Methods
@@ -252,6 +257,9 @@ class Measurement_0:
         self.VFIL = None  #np.zeros(NFIL,NCONV)
         self.AFIL = None  #np.zeros(NFIL,NCONV)
         
+        self.VFMERR = None  # np.zeros(NVFMERR)
+        self.AFMERR = None  # np.zeros(NVFMERR)
+        
         self.SUBOBS_LAT = 0.0 # sub observer latitude, optional
         self.SUBOBS_LON = 0.0 # sub observer longintude, optional
         
@@ -343,6 +351,14 @@ class Measurement_0:
             assert self.NFIL is not None, "NFIL must be defined for FWHM < 0"
             assert self.VFIL is not None, "VFIL must be defined for FWHM < 0"
             assert self.AFIL is not None, "AFIL must be defined for FWHM < 0"
+
+        #Checking that the wavelengths in the Forward modelling error encompass the spectrum
+        if self.VFMERR is not None:
+            assert self.FMERR is not None, "AFMERR must be defined if VFMERR is defined"
+            assert len(self.VFMERR) == len(self.FMERR), "VFMERR and AFMERR must have the same length"
+            for i in range(self.NGEOM):
+                assert self.VFMERR.min() <= self.VCONV[0:self.NCONV[i]].min(), 'VFMERR must be <= min(VCONV)'
+                assert self.VFMERR.max() >= self.VCONV[0:self.NCONV[i]].max(), 'VFMERR must be >= max(VCONV)'
 
     #################################################################################################################
             
@@ -611,6 +627,21 @@ class Measurement_0:
                 dset.attrs['title'] = "ILS in each spectral bin"
                 dset.attrs['unit'] = ""
 
+            if self.VFMERR is not None:
+                
+                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                    dset = h5py_helper.store_data(grp, 'VFMERR', self.VFMERR)
+                    dset.attrs['title'] = "Wavenumber of the points at which the forward modelling error is defined"
+                    dset.attrs['unit'] = "Wavenumber / cm-1"
+                elif self.ISPACE==WaveUnit.Wavelength_um:
+                    dset = h5py_helper.store_data(grp, 'VFMERR', self.VFMERR)
+                    dset.attrs['title'] = "Wavelength of the points at which the forward modelling error is defined"
+                    dset.attrs['unit'] = "Wavelength / um"
+
+                dset = h5py_helper.store_data(grp, 'FMERR', self.FMERR)
+                dset.attrs['title'] = "Forward modelling error"
+                dset.attrs['unit'] = lunit
+
     #################################################################################################################
 
     def read_hdf5(self,runname,calc_MeasurementVector=True):
@@ -673,12 +704,17 @@ class Measurement_0:
                     self.VFIL = h5py_helper.retrieve_data(f, 'Measurement/VFIL', np.array)
                     self.AFIL = h5py_helper.retrieve_data(f, 'Measurement/AFIL', np.array)
 
-            
+                if 'Measurement/VFMERR' in f:
+                    self.VFMERR = h5py_helper.retrieve_data(f, 'Measurement/VFMERR', np.array)
+                    self.FMERR = h5py_helper.retrieve_data(f, 'Measurement/FMERR', np.array)
+
         self.assess()
         
         self.build_ils() 
         if calc_MeasurementVector==True:
             self.calc_MeasurementVector()
+            self.add_fmerr()
+            
              
     #################################################################################################################
             
@@ -1252,10 +1288,16 @@ class Measurement_0:
 
     #################################################################################################################
 
-    def add_fmerr(self,verr,fmerr):
+    def add_fmerr(self):
         """
         Add a forward modelling error to the measurement error covariance matrix
         """
+
+        if self.VFMERR is None or self.FMERR is None:
+            return 
+        
+        verr = self.VFMERR
+        fmerr = self.FMERR
 
         if self.SE is None:
             raise ValueError('error in add_fmerr :: Measurement error covariance matrix has not been calculated yet')

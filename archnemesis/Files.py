@@ -526,8 +526,9 @@ def read_input_files(runname):
 
         #Reading forward modelling error
         vfmerr,fmerr = read_fmerr(fmerrname)
-
-        Measurement.add_fmerr(vfmerr,fmerr)
+        Measurement.VFMERR = vfmerr
+        Measurement.FMERR = fmerr
+        Measurement.add_fmerr()
 
     #Reading .sha file if FWHM>0.0
     if Measurement.FWHM > 0.0:
