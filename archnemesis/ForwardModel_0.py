@@ -102,6 +102,7 @@ class ForwardModel_0:
             Variables=None, 
             Telluric=None, 
             adjust_hydrostat=True,
+            NCores=None
     ):
 
         """Forward Model class
@@ -239,6 +240,8 @@ class ForwardModel_0:
         self.Layer = Layer
         self.Telluric = Telluric
         self.adjust_hydrostat=adjust_hydrostat
+        self.NCores = NCores
+
         
         
         # Check that Measurement has an instrument response function when LBL tables are used
@@ -514,6 +517,181 @@ class ForwardModel_0:
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
 
         return SPECONV
+
+
+    ###############################################################################################
+
+
+
+    def nemesisfmDISK(self):
+
+            """
+                FUNCTION NAME : nemesisfmDISK()
+
+                DESCRIPTION : This function computes a forward model but paralelizes the averaging of emission arrays for disk averages
+
+                INPUTS : none
+
+                OPTIONAL INPUTS: none
+
+                OUTPUTS :
+
+                    SPECMOD(NCONV,NGEOM) :: Modelled spectra
+
+                CALLING SEQUENCE:
+
+                    ForwardModel.nemesisfmDISK()
+
+                MODIFICATION HISTORY : Zach McQueen (30/09/2025)
+
+            """
+            from joblib import Parallel, delayed
+            from copy import copy, deepcopy
+            
+            #Errors and checks
+            if self.Atmosphere.NLOCATIONS!=1:
+                raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
+                
+            if self.Surface.NLOCATIONS!=1:
+                raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
+
+            self.check_gas_spec_atm()
+            self.check_wave_range_consistency()
+            
+            SPECONV = np.zeros(self.Measurement.MEAS.shape) #Initalise the array where the spectra will be stored (NWAVE,NGEOM)
+            for IGEOM in range(self.Measurement.NGEOM):
+
+                #Calculating new wave array            
+                self.Measurement.build_ils(IGEOM=IGEOM)
+                wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=IGEOM)
+                    
+                #Reading tables in the required wavelength range
+                self.SpectroscopyX = deepcopy(self.Spectroscopy)
+                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+
+                #Initialise array for averaging spectra (if required by NAV>1)
+                SPEC = np.zeros(self.SpectroscopyX.NWAVE)
+                WGEOMTOT = 0.0
+
+                #Call process_IAV to calculate FM at each emission ray
+                results = Parallel(n_jobs=self.NCores)(
+                    delayed(self.process_IAV)(IAV,IGEOM,SPEC)
+                    for IAV in range(self.Measurement.NAV[IGEOM])
+
+                )
+                
+                results_array = np.vstack(results)
+                SPEC = np.mean(results_array, axis=0)
+                print(np.shape(SPEC))
+
+
+                
+                #Applying the Telluric transmission if it exists
+                if self.TelluricX is not None:
+                    
+                    #Looking for the calculation wavelengths
+                    wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
+                    self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
+                    
+                    #Calculating the telluric transmission
+                    WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
+                
+                    #Interpolating the telluric transmission to the wavelengths of the planetary spectrum
+                    wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
+                    TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
+                    
+                    #Applying the telluric transmission to the planetary spectrum
+                    SPEC *= TRANSMISSION_TELLURICx
+                    
+                
+                #Convolving the spectra with the Instrument line shape
+                if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+                    if os.path.exists(self.runname+'.fwh')==True:
+                        FWHMEXIST=self.runname
+                    else:
+                        FWHMEXIST=''
+
+                    SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST='')
+
+                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+                    SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+
+                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
+                
+                #Normalising measurement to a given wavelength if required
+                if self.Measurement.IFORM == SpectraUnit.Normalised_radiance:
+                    SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
+
+            #Applying any changes to the computed spectra required by the state vector
+            dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX))
+            SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+
+            return SPECONV
+
+
+########################################################################
+
+    def process_IAV(self,IAV,IGEOM,SPEC):
+        from copy import deepcopy
+
+        WGEOMTOT = 0.0
+        #Selecting the relevant Measurement
+        self.select_Measurement(IGEOM,IAV)
+
+        #Making copy of classes to avoid overwriting them
+        self.AtmosphereX = deepcopy(self.Atmosphere)
+        self.ScatterX = deepcopy(self.Scatter)
+        self.StellarX = deepcopy(self.Stellar)
+        self.SurfaceX = deepcopy(self.Surface)
+        self.LayerX = deepcopy(self.Layer)
+        self.CIAX = deepcopy(self.CIA)
+        self.TelluricX = deepcopy(self.Telluric)
+        flagh2p = False
+
+        #Updating the required parameters based on the current geometry
+        if self.MeasurementX.EMISS_ANG[0,0]>=0.0:
+            self.ScatterX.SOL_ANG = self.MeasurementX.SOL_ANG[0,0]
+            self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
+            self.ScatterX.AZI_ANG = self.MeasurementX.AZI_ANG[0,0]
+        else:
+            self.ScatterX.SOL_ANG = self.MeasurementX.TANHE[0,0]
+            self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
+
+        #Changing the different classes taking into account the parameterisations in the state vector
+        xmap = self.subprofretg()
+        
+        #Calling gsetpat to split the new reference atmosphere and calculate the path
+        self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
+        self.calc_path()
+        
+        #Calling CIRSrad to perform the radiative transfer calculations
+        SPEC1X = self.CIRSrad()
+
+        if self.PathX.NPATH>1:  #If the calculation type requires several paths for a given geometry (e.g. netflux calculation)
+            SPEC1 = np.zeros((self.PathX.NPATH*self.SpectroscopyX.NWAVE,1))  #We linearise all paths into 1 measurement
+            ip = 0
+            for iPath in range(self.PathX.NPATH):
+                SPEC1[ip:ip+self.SpectroscopyX.NWAVE,0] = SPEC1X[:,iPath]
+        else:
+            SPEC1 = SPEC1X
+
+        #Averaging the spectra in case NAV>1
+        if self.Measurement.NAV[IGEOM]>=1:
+            SPEC[:] = SPEC[:] + self.Measurement.WGEOM[IGEOM,IAV] * SPEC1[:,0]
+            WGEOMTOT = WGEOMTOT + self.Measurement.WGEOM[IGEOM,IAV]
+        else:
+            SPEC[:] = SPEC1[:,0]
+
+        return SPEC
+
+
+
+
+
+
+
+
+
 
 
     ###############################################################################################
