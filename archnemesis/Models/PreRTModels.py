@@ -6000,9 +6000,11 @@ class Model999(PreRTModelBase):
             sx : np.ndarray[["mx","mx"],float],
             inum : np.ndarray[["mx"],int],
             npro : int,
+            ngas : int,
+            ndust : int,
             nlocations : int,
             runname : str,
-            sxminfac : float,
+            sxminfac : float,            
         ) -> Self:
         ix_0 = ix
         #******** model for retrieving the Surface temperature
