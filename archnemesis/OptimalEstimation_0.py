@@ -122,7 +122,7 @@ class OptimalEstimation_0:
         return chisq, phi, yn_prev_array, instance
 
 
-    def __init__(self, IRET=0, NITER=1, NX=1, NY=1, PHILIMIT=0.1, NCORES=1):
+    def __init__(self, IRET=0, NITER=1, NX=1, NY=1, PHILIMIT=0.1, NCORES=1, LIN=0):
 
         """
         Inputs
@@ -138,6 +138,18 @@ class OptimalEstimation_0:
             Number of elements in state vector
         @param NCORES: int,
             Number of cores available for parallel computations
+        @param LIN: int,
+            Flag indicating if information from previous retrievals is to be used.
+            
+                lin = 0  indicates no previous retrievals
+                lin = 1  indicates that previous retrieval should be considered
+                          and effect of retrieval errors accounted for
+                lin = 2  indicates that previous retrieval should be considered 
+                          and used as a priori for current retrieval.
+                lin = 3  indicates that previous retrieval should be considered
+                          and used as a priori for all parameters that match, and
+                          used to fix all other parameters (including effect of 
+                          propagation of retrieval errors).
 
         Attributes
         ----------
@@ -193,6 +205,7 @@ class OptimalEstimation_0:
         self.NY = NY
         self.PHILIMIT = PHILIMIT      
         self.NCORES = NCORES  
+        self.LIN = LIN
 
         # Input the following profiles using the edit_ methods.
         self.KK = None #(NY,NX)
@@ -1031,6 +1044,57 @@ class OptimalEstimation_0:
             self.AA = pickleobj.AA
             self.KK = pickleobj.KK
 
+    def write_raw(self,runname,Variables,Atmosphere):
+        """
+        Write the raw fitted state vectors and covariance matrices.
+        These are output in case the results of previous retrievals
+        (including retrieval errors) are required in later retrievals,
+        in which case this file is renamed as <runname>.pre.        
+
+        @param runname: str
+            Name of the NEMESIS run
+        @param Variables: class
+            Python class describing the different parameterisations retrieved
+        @param Measurement: class
+            Python class descrbing the measurement and observation
+        """
+
+        #Opening file
+        f = open(runname+'.raw','w')
+
+        str1 = '! Total number of retrievals'
+        nspec = 1
+        f.write(str(nspec)+ "\t" + str1 + "\n")
+
+        for ispec in range(nspec):
+            
+            #Writing first lines
+            #ispec1 = ispec + 1
+            str2 = '! ispec'
+            f.write("%i \t %s \n" % (ispec,str2)) 
+            str3 = '! Latitude, Longitude'
+            f.write("%5.7f \t %5.7f \t %s \n" % (Atmosphere.LATITUDE,Atmosphere.LONGITUDE,str3)) 
+            str3 = '! npro,ngas,ndust,nlocations,nvar'
+            f.write("%i \t %i \t %i \t %i \t %i \t %s \n" % (Atmosphere.NP,Atmosphere.NVMR,Atmosphere.NDUST,Atmosphere.NLOCATIONS,Variables.NVAR,str3)) 
+
+            for ivar in range(Variables.NVAR):
+                f.write(str(ivar+1)+"   ! ivar \n")
+                f.write("%i \t %i \t %i\n" % (Variables.VARIDENT[ivar,0],Variables.VARIDENT[ivar,1],Variables.VARIDENT[ivar,2]))
+                f.write("%10.8e \t %10.8e \t %10.8e \t %10.8e \t %10.8e\n" % (Variables.VARPARAM[ivar,0],Variables.VARPARAM[ivar,1],Variables.VARPARAM[ivar,2],Variables.VARPARAM[ivar,3],Variables.VARPARAM[ivar,4]))
+
+            str2 = '! nx'
+            f.write("%i \t %s \n" % (self.NX,str2))
+                
+            for i in range(self.NX):
+                f.write("%10.8e \t %i \t %i \n" % (self.XN[i],Variables.LX[i],Variables.NUM[i]))
+                
+            for i in range(self.NX):
+                for j in range(self.NX):
+                    f.write("%10.8e\n" % (self.ST[i,j]))
+            
+        f.close()
+
+
     def plot_K(self):
         """
         Function to plot the Jaxobian matrix
@@ -1126,7 +1190,7 @@ def coreretOE(
         PHILIMIT=0.1,
         NCores=1,
         nemesisSO=False,
-        write_itr=True,
+        write_itr=False,
         return_forward_model=False,
         return_phi_and_chisq_history=False,
     ) -> (
@@ -1211,7 +1275,10 @@ def coreretOE(
     state_vector_history = np.full((NITER+1, OptimalEstimation.NX), fill_value=np.nan)
     
     progress_file = 'progress.txt'
-    progress_w_iter = max(4, int(np.ceil(np.log10(NITER))))
+    if NITER>0:
+        progress_w_iter = max(4, int(np.ceil(np.log10(NITER))))
+    else:
+        progress_w_iter = 4
     progress_iter_states = {
         'initial' : 'PHI INITIAL     ',
         True :      'PHI REDUCED     ',
@@ -1451,7 +1518,10 @@ def coreretOE(
     
     _lgr.info('coreretOE :: Completed Optimal Estimation retrieval. Showing phi and chisq evolution')
     with open('phi_chisq.txt', 'w') as f:
-        w_iter = max(4, int(np.ceil(np.log10(NITER))))
+        if NITER>0:
+            w_iter = max(4, int(np.ceil(np.log10(NITER))))
+        else:
+            w_iter = 4
         fmt = f'{{:0{w_iter}}} | {{:09.3E}} | {{:09.3E}} | {{}}\n'
         head = ('iter' + ('' if w_iter <= 4 else ' '*(w_iter-4))
             +' | phi      '

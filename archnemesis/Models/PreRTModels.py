@@ -628,6 +628,33 @@ class Modelm1(PreRTModelBase):
         return cls(ix_0, ix-ix_0, model_classification[1])
 
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        #* continuous cloud, but cloud retrieved as particles/cm3 rather than
+        #* particles per gram to decouple it from pressure.
+        #********* continuous particles/cm3 profile ************************
+        ix_0 = ix
+        
+        if varident[0] >= 0:
+            raise ValueError('error in read_apr_nemesis :: model -1 type is only for use with aerosols')
+        ix = ix + npro
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+
+
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -914,7 +941,31 @@ class Model0(PreRTModelBase):
         assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
 
         return cls(ix_0, ix-ix_0, model_classification[1])
+    
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        _lgr.debug(f'Initialising model {cls.__name__} setup from bookmark')
+        ix_0 = ix
+        #********* continuous profile ************************
+        if varident[2] != cls.id:
+            raise ValueError('error in Model0.from_bookmark() :: wrong model id')
+        
+        ix = ix + npro
 
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
     def calculate_from_subprofretg(
             self,
@@ -1121,6 +1172,32 @@ class Model2(PreRTModelBase):
         tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
         x0[ix] = float(tmp[0])
         sx[ix,ix] = (float(tmp[1]))**2.
+
+        ix = ix + 1
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+
+
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        _lgr.debug(f'Initialising model {cls.__name__} setup from bookmark')
+        ix_0 = ix
+        #**** model 2 - Simple scaling factor of reference profile *******
+        if varident[2] != cls.id:
+            raise ValueError('error in Model2.from_bookmark() :: wrong model id')
 
         ix = ix + 1
 
@@ -1340,6 +1417,31 @@ class Model3(PreRTModelBase):
 
         return cls(ix_0, ix-ix_0, model_classification[1])
 
+
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        _lgr.debug(f'Initialising model {cls.__name__} setup from bookmark')
+        ix_0 = ix
+        #**** model 2 - Simple scaling factor of reference profile *******
+        if varident[2] != cls.id:
+            raise ValueError('error in Model3.from_bookmark() :: wrong model id')
+
+        ix = ix + 1
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
     def calculate_from_subprofretg(
             self,
@@ -1621,6 +1723,30 @@ class Model9(PreRTModelBase):
         sx[ix,ix] = eknee**2.
 
         ix = ix + 1
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** cloud profile held as total optical depth plus
+        #******** base height and fractional scale height. Below the knee
+        #******** pressure the profile is set to zero - a simple
+        #******** cloud in other words!
+        ix = ix + 3
 
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
         assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
@@ -2002,6 +2128,29 @@ class Model32(PreRTModelBase):
 
         return cls(ix_0, ix-ix_0, model_classification[1])
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** cloud profile is represented by a value at a 
+        #******** variable pressure level and fractional scale height.
+        #******** Below the knee pressure the profile is set to drop exponentially.
+        ix = ix + 3
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+
 
     def calculate_from_subprofretg(
             self,
@@ -2234,6 +2383,28 @@ class Model45(PreRTModelBase):
         sx[ix,ix] = err**2.
 
         ix = ix + 1
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+    
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** Irwin CH4 model. Represented by tropospheric and stratospheric methane 
+        #******** abundances, along with methane humidity. 
+        ix = ix + 3
 
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
         assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
@@ -2566,6 +2737,29 @@ class Model47(PreRTModelBase):
         return cls(ix_0, ix-ix_0, model_classification[1])
 
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** cloud profile is represented by a peak optical depth at a 
+        #******** variable pressure level and a Gaussian profile with FWHM (in log pressure)
+        ix = ix + 3
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+
+
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -2757,6 +2951,26 @@ class Model49(PreRTModelBase):
 
         return cls(ix_0, ix-ix_0, model_classification[1])
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #********* continuous profile in linear scale ************************
+        ix = ix + npro
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
     def calculate_from_subprofretg(
             self,
@@ -2939,6 +3153,26 @@ class Model50(PreRTModelBase):
         return cls(ix_0, ix-ix_0, model_classification[1])
 
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #********* continuous profile of a scaling factor ************************
+        ix = ix + npro
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -3057,6 +3291,28 @@ class Model51(PreRTModelBase):
         err = escale/scale
         sx[ix,ix] = err**2.
 
+        ix = ix + 1
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+
+
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #********* multiple of different profile ************************
         ix = ix + 1
 
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
@@ -3273,6 +3529,31 @@ class Model110(PreRTModelBase):
         sx[ix,ix] = float(tmp[1])**2.
         lx[ix] = 0
         inum[ix] = 1
+        ix = ix + 1
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** model for Venus cloud following Haus et al. (2016) with altitude offset
+
+        if varident[0]>0:
+            raise ValueError('error in read_apr model 110 :: VARIDENT[0] must be negative to be associated with the aerosols')
+
         ix = ix + 1
 
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
@@ -3557,6 +3838,32 @@ class Model111(PreRTModelBase):
         return cls(ix_0, ix-ix_0, model_classification[1])
 
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** model for Venus cloud and SO2 vmr profile with altitude offset
+
+        if varident[0]>0:
+            raise ValueError('error in read_apr model 111 :: VARIDENT[0] must be negative to be associated with the aerosols')
+
+        ix = ix + 3
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+
+
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -3686,6 +3993,27 @@ class Model202(PreRTModelBase):
 
         return cls(ix_0, ix-ix_0, model_classification[1])
 
+
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #********* simple scaling of telluric atmospheric profile ************************
+        ix = ix + 1
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
 
     def calculate_from_subprofretg(
             self,
@@ -3899,6 +4227,33 @@ class Model1002(PreRTModelBase):
                     sx[ix+k,ix+j] = sx[ix+j,ix+k]
 
         #jsurf = ix
+
+        ix = ix + nlocs
+
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+
+        return cls(ix_0, ix-ix_0, model_classification[1])
+
+
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** scaling of atmospheric profiles at multiple locations (linear scale)
+
+        nlocs = varparam[0]
+        if nlocs != nlocations:
+            raise ValueError('error in model 1002 :: number of locations must be the same as in Surface and Atmosphere')
 
         ix = ix + nlocs
 
@@ -4175,6 +4530,25 @@ class Model228(PreRTModelBase):
         lx[ix] = 0
         inum[ix] = 1
         ix = ix + 1
+
+        return cls(ix_0, ix-ix_0)
+
+
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** model for retrieving the ILS and Wavelength calibration in ACS MIR solar occultation observations
+        ix = ix + 8
 
         return cls(ix_0, ix-ix_0)
 
@@ -4476,6 +4850,23 @@ class Model229(PreRTModelBase):
 
         return cls(ix_0, ix-ix_0)
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** model for retrieving the ILS in ACS MIR solar occultation observations
+        ix = ix + 7
+
+        return cls(ix_0, ix-ix_0)
 
     def calculate_from_subprofretg(
             self,
@@ -4765,6 +5156,27 @@ class Model230(PreRTModelBase):
 
         return cls(ix_0, ix-ix_0)
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** model for retrieving multiple ILS (different spectral windows) in ACS MIR solar occultation observations
+        nwindows = varparam[0]
+        for iw in range(nwindows):
+            for j in range(7):
+                ix = ix + 1
+
+        return cls(ix_0, ix-ix_0)
+
 
     def calculate_from_subprofretg(
             self,
@@ -5015,6 +5427,46 @@ class Model444(PreRTModelBase):
         return cls(ix_0, ix-ix_0, haze_params, aerosol_species_idx, scattering_type_id)
 
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
+        haze_waves = []
+        for j in range(2):
+            ix = ix + 1
+
+        nwave = varparam[0] - 2
+        clen = varparam[1]
+        vref = varparam[2]
+        nreal_ref = varparam[3]
+        v_od_norm = varparam[4]
+        
+        haze_params = dict()
+        haze_params['NX'] = nwave
+        #haze_params['WAVE'] = haze_waves    !This needs to be fixed!
+        haze_params['NREAL'] = float(nreal_ref)
+        haze_params['WAVE_REF'] = float(vref)
+        haze_params['WAVE_NORM'] = float(v_od_norm)
+
+        for j in range(int(nwave)):
+            ix = ix + 1
+
+        aerosol_species_idx = varident[1]-1
+        scattering_type_id = 1 # Should add a way to alter this value from the input files.
+
+        return cls(ix_0, ix-ix_0, haze_params, aerosol_species_idx, scattering_type_id)
+
+
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -5248,6 +5700,39 @@ class Model446(PreRTModelBase):
         return cls(ix_0, ix-ix_0, fnamex)
 
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** model for retrieving an aerosol particle size distribution from a tabulated look-up table
+
+        #This model changes the extinction coefficient of a given aerosol population based on 
+        #the extinction coefficient look-up table stored in a separate file. 
+
+        #The look-up table specifies the extinction coefficient as a function of particle size, and 
+        #the parameter in the state vector is the particle size
+
+        #The look-up table must have the format specified in Models/Models.py (model446)
+        aerosol_id = varparam[0]
+        wavenorm = varparam[1]
+        xwave = varparam[2]
+
+        fnamex = ""   #This needs to be fixed!
+
+        ix = ix + 1
+
+        return cls(ix_0, ix-ix_0, fnamex)
+
+
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -5356,7 +5841,24 @@ class Model447(PreRTModelBase):
         ix = ix + 1
 
         return cls(ix_0, ix-ix_0)
+    
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** model for retrieving the Doppler shift
+        ix = ix + 1
 
+        return cls(ix_0, ix-ix_0)
 
     def calculate_from_subprofretg(
             self,
@@ -5489,6 +5991,25 @@ class Model500(PreRTModelBase):
                     sx[ix+k,ix+j] = sx[ix+j,ix+k]
 
         varparam[0] = nbasis
+        ix = ix + nbasis
+
+        return cls(ix_0, ix-ix_0)
+
+
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        nbasis = int(varparam[0])
         ix = ix + nbasis
 
         return cls(ix_0, ix-ix_0)
@@ -5647,6 +6168,28 @@ class Model666(PreRTModelBase):
 
         return cls(ix_0, ix-ix_0, htan)
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,          
+        ) -> Self:
+        
+        if varident[2] != cls.id:
+            raise ValueError('error in Model666.from_bookmark() :: wrong model id')
+        
+        ix_0 = ix
+        ix = ix + 1
+        htan = varparam[0]
+
+        return cls(ix_0, ix-ix_0, htan)
+
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -5760,6 +6303,23 @@ class Model777(PreRTModelBase):
 
         return cls(ix_0, ix-ix_0)
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** tangent height correction
+        ix = ix + 1
+
+        return cls(ix_0, ix-ix_0)
 
     def calculate_from_subprofretg(
             self,
@@ -5914,6 +6474,25 @@ class Model887(PreRTModelBase):
 
         return cls(ix_0, ix-ix_0)
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** Cloud x-section spectrum
+        nwv = varparam[0]
+        icloud = varparam[1]
+        ix = ix + nwv
+
+        return cls(ix_0, ix-ix_0)
 
     def calculate_from_subprofretg(
             self,
@@ -6024,6 +6603,26 @@ class Model999(PreRTModelBase):
 
         return cls(ix_0, ix-ix_0)
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,          
+        ) -> Self:
+        
+        if varident[2] != cls.id:
+            raise ValueError('error in Model999.from_bookmark() :: wrong model id')
+        
+        ix_0 = ix
+        ix = ix + 1
+
+        return cls(ix_0, ix-ix_0)
 
     def calculate_from_subprofretg(
             self,

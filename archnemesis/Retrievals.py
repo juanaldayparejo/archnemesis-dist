@@ -84,6 +84,41 @@ def retrieval_nemesis(
 
     ######################################################
     ######################################################
+    #    USE INFORMATION FROM PREVIOUS RETRIEVALS 
+    ######################################################
+    ######################################################
+
+    if Retrieval.LIN>0:
+
+        #Reading .pre file
+        Variables_prev = ans.Files.read_pre(runname)
+        
+        if Retrieval.LIN==1:
+            
+            _lgr.info('lin=1 :: Using information from previous retrieval to update parameters in reference classes and calculate the error from the previous covariance matrix in new measurement')
+            
+            #Calculating forward model
+            FM_prev = ans.ForwardModel_0(Atmosphere=Atmosphere,Measurement=Measurement,Spectroscopy=Spectroscopy,Scatter=Scatter,Stellar=Stellar,Surface=Surface,CIA=CIA,Layer=Layer,Variables=Variables_prev,Telluric=Telluric)
+            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
+            
+            #Calculating forward modelling error
+            SF = KK @ Variables_prev.SA @ KK.T
+            
+            #Adding forward model error to the new measurement error
+            Measurement.SE += SF
+
+            #Updating reference classes with the ones from the forward model class, which have been updated using the previous retrievals
+            #Note we do not update the measurement class as that was different in the previous retrieval
+            Atmosphere = FM_prev.AtmosphereX
+            Spectroscopy = FM_prev.SpectroscopyX
+            Scatter = FM_prev.ScatterX
+            Stellar = FM_prev.StellarX
+            Surface = FM_prev.SurfaceX
+            CIA = FM_prev.CIAX
+            Layer = FM_prev.LayerX
+
+    ######################################################
+    ######################################################
     #      RUN THE RETRIEVAL USING ANY APPROACH
     ######################################################
     ######################################################
@@ -114,6 +149,7 @@ def retrieval_nemesis(
         else:
             Retrieval.write_cov(runname,Variables,pickle=False)
             Retrieval.write_mre(runname,Variables,Measurement)
+            Retrieval.write_raw(runname,Variables,Atmosphere)
             
     if retrieval_method == RetrievalStrategy.Nested_Sampling:
         Retrieval.make_plots()

@@ -604,6 +604,76 @@ class ModelBase(abc.ABC):
         
         ...
     
+
+    @classmethod
+    @abc.abstractmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0", 
+            #   An instance of the archnemesis.Variables_0 class
+            
+            varident : np.ndarray[[3],int], 
+            #   Should be the correct slice of the original (which should be a reference to the sub-array)
+            
+            varparam : np.ndarray[["mparam"],float], 
+            #   Should be the correct slice of the original (which should be a reference to the sub-array)
+            
+            ix : int, 
+            #   The next free entry in the state vector
+            
+            npro : int, 
+            #   Number of altitude levels defined for the atmosphere component
+            
+            ngas : int,
+            #   Number of gas volume mixing ratio profiles defined for the reference atmosphere
+            
+            ndust : int,
+            #   Number of aerosol species density profiles define for the reference atmosphere
+
+            nlocations : int, 
+            #   Number of locations defined for the atmosphere component
+        ) -> Self:
+        """
+            Constructs a model from its entry in a *.apr file. Should be overwritten by a subclass
+            
+            ## ARGUMENTS ##
+            
+                variables : Variables_0
+                    The "Variables_0" instance that enables acccess to `variables.classify_model_type_from_varident`
+                
+                varident : np.ndarray[[3],int]
+                    "Variable Identifier" from a *.apr file. Consists of 3 integers. Exact interpretation depends on the model
+                    subclass.
+                
+                varparam : np.ndarray[["mparam"], float]
+                    "Variable Parameters" from a *.apr file. Holds "extra parameters" for the model. Exact interpretation depends on the model
+                    subclass. NOTE: this is a holdover from the FORTRAN code, the better way to give extra data to the model is to store it on the
+                    model instance itself.
+                
+                ix : int
+                    The index of the next free entry in the state vector
+                
+                npro : int
+                    Number of altitude levels defined for the atmosphere component of the retrieval setup.
+                
+                ngas : int,
+                    Number of gas volume mixing ratio profiles defined for the reference atmosphere
+                
+                ndust : int,
+                    Number of aerosol species density profiles define for the reference atmosphere
+                
+                n_locations : int
+                    Number of locations defined for the atmosphere component of the retrieval setup.
+            
+            ## RETURNS ##
+            
+                instance : Self
+                    A constructed instance of the model class that has parameters set from information in the *.apr file
+        """
+        
+        ...
+
+    
     
     @classmethod
     @abc.abstractmethod

@@ -530,6 +530,32 @@ class Model231(PostRTModelBase):
         return cls(ix_0, ix-ix_0, ngeom, ndegree)
         
     
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** multiplication of calculated spectrum by polynomial function (following polynomial of degree N)
+
+        #The computed spectra is multiplied by R = R0 * POL
+        #Where the polynomial function POL depends on the wavelength given by:
+        # POL = A0 + A1*(WAVE-WAVE0) + A2*(WAVE-WAVE0)**2. + ...
+        ngeom = int(varparam[0])
+        ndegree = int(varparam[1])
+        for ilevel in range(ngeom):
+            for ic in range(ndegree+1):
+                ix = ix + 1
+        return cls(ix_0, ix-ix_0, ngeom, ndegree)
+        
+    
     def calculate_from_subspecret(
             self,
             forward_model : "ForwardModel_0",
@@ -558,164 +584,6 @@ class Model231(PostRTModelBase):
             ixx += self.n_degree + 1
         
         return
-
-
-# [JD] This uses forward_model.SpectroscopyX, whereas Model231 uses forward_model.Measurement, is this correct?
-class Model2310(PostRTModelBase):
-    """
-        Scaling of spectra using a varying scaling factor (following a polynomial of degree N)
-        in multiple spectral windows
-    """
-    id : int = 2310
-    
-    
-    @classmethod
-    def calculate(
-            cls, 
-            SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
-            dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
-            igeom_slices : tuple[slice,...],
-            Spectroscopy : "Spectroscopy_0",
-            NGEOM : int, 
-            NDEGREE : int, 
-            COEFF : np.ndarray[['NDEGREE+1','NGEOM'],float],
-            lowin : np.ndarray[['NWINDOWS'],float],
-            hiwin : np.ndarray[['NWINDOWS'],float],
-        ) -> tuple[np.ndarray[['NCONV','NGEOM'],float], np.ndarray[['NCONV','NGEOM','NX'],float]]:
-        
-        for IWIN in range(lowin.size):
-            ivin = np.where( (Spectroscopy.WAVE>=lowin[IWIN]) & (Spectroscopy.WAVE<hiwin[IWIN]) )[0]
-            nvin = len(ivin)
-        
-            for i in range(NGEOM):
-                T = COEFF[i]
-
-                WAVE0 = Spectroscopy.WAVE[ivin].min()
-                spec = np.array(SPECMOD[ivin,i])
-
-                #Changing the state vector based on this parameterisation
-                POL = np.zeros(nvin)
-                for j in range(NDEGREE+1):
-                    POL[:] = POL[:] + T[j]*(Spectroscopy.WAVE[ivin]-WAVE0)**j
-
-                SPECMOD[ivin,i] *=  POL[:]
-
-                #Changing the rest of the gradients based on the impact of this parameterisation
-                dSPECMOD[ivin,i,:] *= POL[:,None]
-                
-
-                #Defining the analytical gradients for this parameterisation
-                dspecmod_part = dSPECMOD[ivin,i,igeom_slices[i]]
-                for j in range(NDEGREE+1):
-                    dspecmod_part[:,j] = spec[:] * (Spectroscopy.WAVE[ivin]-WAVE0)**j
-
-        return SPECMOD, dSPECMOD
-    
-    
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        """
-        Continuum addition to transmission spectra using a varying scaling factor (following polynomial of degree N)
-        in several spectral windows 
-
-        The computed spectra is multiplied by R = R0 * (T0 + POL)
-        Where the polynomial function POL depends on the wavelength given by:
-        POL = A0 + A1*(WAVE-WAVE0) + A2*(WAVE-WAVE0)**2. + ...
-        """
-        
-        s = f.readline().split()
-        f1 = open(s[0],'r')
-        tmp = np.fromfile(f1,sep=' ',count=3,dtype='int')
-        nlevel = int(tmp[0])
-        ndegree = int(tmp[1])
-        nwindows = int(tmp[2])
-        varparam[0] = nlevel
-        varparam[1] = ndegree
-        varparam[2] = nwindows
-
-        i0 = 0
-        #Defining the boundaries of the spectral windows
-        for iwin in range(nwindows):
-            tmp = f1.readline().split()
-            varparam[3+i0] = float(tmp[0])
-            i0 = i0 + 1
-            varparam[3+i0] = float(tmp[1])
-            i0 = i0 + 1
-
-        #Reading the coefficients for the polynomial in each geometry and spectral window
-        for iwin in range(nwindows):
-            for ilevel in range(nlevel):
-                tmp = np.fromfile(f1,sep=' ',count=2*(ndegree+1),dtype='float')
-                for ic in range(ndegree+1):
-                    r0 = float(tmp[2*ic])
-                    err0 = float(tmp[2*ic+1])
-                    x0[ix] = r0
-                    sx[ix,ix] = (err0)**2.
-                    inum[ix] = 0
-                    ix = ix + 1
-        return cls(ix_0, ix-ix_0)
-        
-    
-    def calculate_from_subspecret(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ivar : int,
-            SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
-            dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
-        ) -> None:
-        """
-        Model 2310. Scaling of spectra using a varying scaling factor (following a polynomial of degree N)
-        in multiple spectral windows
-        """
-
-        #NGEOM = int(forward_model.Variables.VARPARAM[ivar,0])
-        NGEOM = forward_model.MeasurementX.NGEOM
-        NDEGREE = int(forward_model.Variables.VARPARAM[ivar,1])
-        NWINDOWS = int(forward_model.Variables.VARPARAM[ivar,2])
-
-        lowin = np.zeros(NWINDOWS)
-        hiwin = np.zeros(NWINDOWS)
-        i0 = 0
-        for IWIN in range(NWINDOWS):
-            lowin[IWIN] = float(forward_model.Variables.VARPARAM[ivar,3+i0])
-            i0 = i0 + 1
-            hiwin[IWIN] = float(forward_model.Variables.VARPARAM[ivar,3+i0])
-            i0 = i0 + 1
-        
-        COEFF = np.array(forward_model.Variables.XN[ix : ix+(NDEGREE+1)*NGEOM]).reshape((NDEGREE+1,NGEOM))
-        
-        igeom_slices = tuple(slice(ix+(NDEGREE+1)*igeom, ix+(NDEGREE+1)*(igeom+1)) for igeom, nconv in enumerate(forward_model.Measurement.NCONV))
-
-        SPECMOD[...], dSPECMOD[...] = self.calculate(
-            SPECMOD, 
-            dSPECMOD, 
-            igeom_slices, 
-            forward_model.SpectroscopyX,
-            NGEOM, 
-            NDEGREE, 
-            COEFF,
-            lowin,
-            hiwin
-        )
 
 
 class Model232(PostRTModelBase):
@@ -807,6 +675,30 @@ class Model232(PostRTModelBase):
             ix = ix + 2
         return cls(ix_0, ix-ix_0)
         
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        """
+        Continuum addition to transmission spectra using the Angstrom coefficient
+
+        The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( - TAU0 * (WAVE/WAVE0)**-ALPHA )
+        Where the parameters to fit are TAU0 and ALPHA
+        """
+        nlevel = int(varparam[0])
+        wavenorm = float(varparam[1])
+        for ilevel in range(nlevel):                
+            ix = ix + 2
+        return cls(ix_0, ix-ix_0)
     
     def calculate_from_subspecret(
             self,
@@ -959,6 +851,34 @@ class Model233(PostRTModelBase):
             ix = ix + 3
         return cls(ix_0, ix-ix_0)
         
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        """
+        Aerosol opacity modelled with a variable angstrom coefficient. Applicable to transmission spectra.
+
+        The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( -TAU_AERO )
+        Where the aerosol opacity is modelled following
+
+         np.log(TAU_AERO) = a0 + a1 * np.log(WAVE) + a2 * np.log(WAVE)**2.
+
+        The coefficient a2 accounts for a curvature in the angstrom coefficient used in model 232. Note that model
+        233 converges to model 232 when a2=0.                  
+        """
+        nlevel = int(varparam[0])
+        for ilevel in range(nlevel):             
+            ix = ix + 3
+        return cls(ix_0, ix-ix_0)
     
     def calculate_from_subspecret(
             self,
@@ -1098,6 +1018,23 @@ class Model667(PostRTModelBase):
 
         return cls(ix_0, ix-ix_0)
 
+    @classmethod
+    def from_bookmark(
+            cls,
+            variables : "Variables_0",
+            varident : np.ndarray[[3],int],
+            varparam : np.ndarray[["mparam"],float],
+            ix : int,
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+        ) -> Self:
+        ix_0 = ix
+        #******** dilution factor to account for thermal gradients thorughout exoplanet
+        ix = ix + 1
+
+        return cls(ix_0, ix-ix_0)
 
     def calculate_from_subspecret(
             self,
