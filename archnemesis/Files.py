@@ -1659,7 +1659,7 @@ def read_pre(runname):
     """
     
     #Reading all lines first
-    with open(runname + '.raw', 'r') as f: 
+    with open(runname + '.pre', 'r') as f: 
         # Skip all lines that do not start with '#' 
         lines = [line.strip() for line in f.readlines() if line.strip()]
     
