@@ -22,10 +22,9 @@ import archnemesis as ans
 from archnemesis.enums import RetrievalStrategy
 import time
 
-
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+
 
 def retrieval_nemesis(
         runname,
@@ -103,7 +102,7 @@ def retrieval_nemesis(
             
             #Calculating forward modelling error
             SF = KK @ Variables_prev.SA @ KK.T
-            
+
             #Adding forward model error to the new measurement error
             Measurement.SE += SF
 

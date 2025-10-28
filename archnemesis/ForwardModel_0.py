@@ -1815,7 +1815,7 @@ class ForwardModel_0:
                     ix += self.Variables.models[ivar].n_state_vector_entries
 
         #Calculate atmospheric density
-        self.AtmosphereX.calc_rho() #rho kg/m3
+        rho = self.AtmosphereX.calc_rho() #rho kg/m3
 
 
         # NOTE: instead of having two different versions of `xmap`, just use the multiple location version.

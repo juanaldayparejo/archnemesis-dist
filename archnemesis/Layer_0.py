@@ -1015,6 +1015,10 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
         CONT = (CONT.T * LAYSF**-1 ).T
     else:
         CONT = CONT/LAYSF
+        
+    if DUST_UNITS is not None:
+        XMOLWT /= 1000. #Converting back to molecular weight in kg mol-1
+        
     return HEIGHT,PRESS,TEMP,TOTAM,AMOUNT,PP,CONT,FRAC,DELH,BASET,LAYSF
 
 #########################################################################################
@@ -1375,6 +1379,9 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
     for IPRO in range(NPRO):
         DAM[:,IPRO] = DAM[:,IPRO] / LAYSF
         DCO[:,IPRO] = DCO[:,IPRO] / LAYSF
+
+    if DUST_UNITS is not None:
+        XMOLWT /= 1000. #Converting back to molecular weight in kg mol-1
 
     return HEIGHT,PRESS,TEMP,TOTAM,AMOUNT,PP,CONT,FRAC,DELH,BASET,LAYSF,DTE,DAM,DCO,DPH
 
