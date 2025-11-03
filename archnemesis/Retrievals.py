@@ -217,7 +217,7 @@ def retrieval_nemesis(
 
     if retrieval_method == RetrievalStrategy.Optimal_Estimation:
         OptimalEstimation = ans.coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,\
-                                          NITER=Retrieval.NITER,PHILIMIT=Retrieval.PHILIMIT,NCores=NCores,nemesisSO=nemesisSO)
+                                          NITER=Retrieval.NITER,PHILIMIT=Retrieval.PHILIMIT,LIN=Retrieval.LIN,NCores=NCores,nemesisSO=nemesisSO)
         Retrieval = OptimalEstimation
     elif retrieval_method == RetrievalStrategy.Nested_Sampling:
         from archnemesis.NestedSampling_0 import coreretNS

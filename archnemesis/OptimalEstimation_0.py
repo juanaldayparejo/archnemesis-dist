@@ -566,7 +566,12 @@ class OptimalEstimation_0:
         else:
             # Calculating the inverse of Sa and Se
             sai = np.linalg.inv(self.SA)
-            sei_inv = np.diag(1.0 / np.diag(self.SE))
+            
+            if( (self.LIN == 1) or (self.LIN==3) ):
+                #We invert the matrix as it might be non-diagonal
+                sei_inv = np.linalg.inv(self.SE)
+            else:
+                sei_inv = np.diag(1.0 / np.diag(self.SE))
 
             # Calculate kt*sei_inv*kk
             a = kt @ sei_inv @ self.KK + sai
@@ -590,7 +595,12 @@ class OptimalEstimation_0:
         b = self.YN[:self.NY] - self.Y[:self.NY]
         d = self.XN[:self.NX] - self.XA[:self.NX]
         sai = np.linalg.inv(self.SA)
-        sei_inv = np.diag(1.0 / np.diag(self.SE))
+        
+        if( (self.LIN == 1) or (self.LIN==3) ):
+            #We invert the matrix as it might be non-diagonal
+            sei_inv = np.linalg.inv(self.SE)
+        else:
+            sei_inv = np.diag(1.0 / np.diag(self.SE))
         
         ## Getting (yn-y)^2/sigma_y^2 ##
         
@@ -1188,6 +1198,7 @@ def coreretOE(
         Telluric,
         NITER=10,
         PHILIMIT=0.1,
+        LIN=0,
         NCores=1,
         nemesisSO=False,
         write_itr=False,
@@ -1261,6 +1272,7 @@ def coreretOE(
 
     OptimalEstimation.NITER = NITER
     OptimalEstimation.PHILIMIT = PHILIMIT
+    OptimalEstimation.LIN = LIN
     OptimalEstimation.NCORES = NCores
     OptimalEstimation.NX = Variables.NX
     OptimalEstimation.NY = Measurement.NY
