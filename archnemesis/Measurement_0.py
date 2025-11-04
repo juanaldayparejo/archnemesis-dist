@@ -148,9 +148,25 @@ class Measurement_0:
         Wavenumber/wavelength at which the forward modelling error is defined
     FMERR : 1D array, float (NVFMERR)
         Forward modelling error at each VFMERR
-        
-        
-        
+    NORDERS_AOTF : int
+        Number of orders to consider to reconstruct AOTF filter function (if required)
+    VCONV_AOTF : 2D array, float (NCONV,NORDERS_AOTF)
+        Convolution wavelengths/wavenumbers for each order (if required)
+    WEIGHTS_AOTF : 2D array, float (NCONV,NORDERS_AOTF)
+        Weights of each order to reconstruct AOTF filter function (if required)
+    NFIL_AOTF : 2D array, int (NCONV,NORDERS_AOTF)
+        If FWHM<0.0, the ILS is expected to be defined separately for each convolution wavenumber.
+        NFIL represents the number of spectral points to defined the ILS for each convolution wavenumber.
+        In this case, we use a different ILS for each diffraction order for the reconstruction of the AOTF filter function.
+    VFIL_AOTF : 3D array, int (NFIL,NCONV,NORDERS_AOTF)
+        If FWHM<0.0, the ILS is expected to be defined separately for each convolution wavenumber.
+        VFIL represents the calculation wavenumbers at which the ILS is defined for each each convolution wavenumber.
+        In this case, we use a different ILS for each diffraction order for the reconstruction of the AOTF filter function.
+    AFIL_AOTF : 3D array, int (NFIL,NCONV,NORDERS_AOTF)
+        If FWHM<0.0, the ILS is expected to be defined separately for each convolution wavenumber.
+        AFIL represents the value of the ILS at each VFIL for each convolution wavenumber.
+        In this case, we use a different ILS for each diffraction order for the reconstruction of the AOTF filter function.
+
     Methods
     ----------
     
@@ -263,6 +279,13 @@ class Measurement_0:
         self.SUBOBS_LAT = 0.0 # sub observer latitude, optional
         self.SUBOBS_LON = 0.0 # sub observer longintude, optional
         
+        self.NORDERS_AOTF = None #Number of orders to consider to reconstruct AOTF filter function (if required)
+        self.VCONV_AOTF = None #np.zeros(NCONV,NORDERS_AOTF) #Convolution wavelengths/wavenumbers for each order (if required)
+        self.WEIGHTS_AOTF = None #np.zeros(NCONV,NORDERS_AOTF) #Weights of each order to reconstruct AOTF filter function (if required)
+        self.NFIL_AOTF = None  #np.zeros(NCONV,NORDERS_AOTF)
+        self.VFIL_AOTF = None  #np.zeros(NFIL_AOTF,NCONV,NORDERS_AOTF)
+        self.AFIL_AOTF = None  #np.zeros(NFIL_AOTF,NCONV,NORDERS_AOTF)
+
         # private attributes
         self._ishape = None
         self._ispace = None
@@ -348,9 +371,14 @@ class Measurement_0:
         elif self.FWHM == 0.0: # Lineshape baked into K-tables
             pass
         elif self.FWHM < 0.0: # lineshape described by files
-            assert self.NFIL is not None, "NFIL must be defined for FWHM < 0"
-            assert self.VFIL is not None, "VFIL must be defined for FWHM < 0"
-            assert self.AFIL is not None, "AFIL must be defined for FWHM < 0"
+            if self.NORDERS_AOTF is None:
+                assert self.NFIL is not None, "NFIL must be defined for FWHM < 0"
+                assert self.VFIL is not None, "VFIL must be defined for FWHM < 0"
+                assert self.AFIL is not None, "AFIL must be defined for FWHM < 0"
+            else:
+                assert self.NFIL_AOTF is not None, "NFIL_AOTF must be defined for FWHM < 0"
+                assert self.VFIL_AOTF is not None, "VFIL_AOTF must be defined for FWHM < 0"
+                assert self.AFIL_AOTF is not None, "AFIL_AOTF must be defined for FWHM < 0"
 
         #Checking that the wavelengths in the Forward modelling error encompass the spectrum
         if self.VFMERR is not None:
@@ -359,6 +387,14 @@ class Measurement_0:
             for i in range(self.NGEOM):
                 assert self.VFMERR.min() <= self.VCONV[0:self.NCONV[i]].min(), 'VFMERR must be <= min(VCONV)'
                 assert self.VFMERR.max() >= self.VCONV[0:self.NCONV[i]].max(), 'VFMERR must be >= max(VCONV)'
+
+        #Checking if the AOTF parameters are included and correctly defined
+        if self.NORDERS_AOTF is not None:
+            assert self.NORDERS_AOTF > 0, 'NORDERS_AOTF must be >0'
+            assert len(np.unique(self.NCONV)) == 1, 'When using AOTF, all geometries must have the same NCONV'
+            assert self.VCONV_AOTF.shape == (self.NCONV[0],self.NORDERS_AOTF), 'VCONV_AOTF must have size (NCONV,NORDERS_AOTF)'
+            assert self.WEIGHTS_AOTF.shape == (self.NCONV[0],self.NORDERS_AOTF), 'WEIGHTS_AOTF must have size (NCONV,NORDERS_AOTF)'
+            
 
     #################################################################################################################
             
