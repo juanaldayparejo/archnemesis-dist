@@ -35,6 +35,7 @@ This sections includes Jupyter notebookes with examples showing how archNEMESIS 
    examples/Jupiter_CIRS_nadir_thermal_emission/Jupiter_CIRS.ipynb
    examples/mars_groundbased/mars_groundbased.ipynb
    examples/Mars_DISORT/archnemesis_disort_comparisons.ipynb
+   examples/mars_aotf/mars_aotf.ipynb
    
 Retrievals
 ------------------

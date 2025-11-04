@@ -43,6 +43,7 @@ nbsphinx_thumbnails = {
     'examples/stellar/StellarExample': '_static/solar_spec.jpg',
     'examples/measurement/measurement_class': '_static/observation_sketch.png',
     'examples/mars_solocc/mars_SO': '_static/exomars_SO.jpg',
+    'examples/mars_aotf/mars_aotf': '_static/exomars_SO.jpg',
     #'examples/Jupiter_CIRS_nadir_thermal_emission/Jupiter_CIRS': '_static/jupiter_cassini.jpg',
     #'examples/Measurement/Measurement': '_static/observation_sketch.png',
 }

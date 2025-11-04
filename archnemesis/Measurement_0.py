@@ -152,8 +152,8 @@ class Measurement_0:
         Number of orders to consider to reconstruct AOTF filter function (if required)
     VCONV_AOTF : 2D array, float (NCONV,NGEOM,NORDERS_AOTF)
         Convolution wavelengths/wavenumbers for each order (if required)
-    WEIGHTS_AOTF : 2D array, float (NCONV,NGEOM,NORDERS_AOTF)
-        Weights of each order to reconstruct AOTF filter function (if required)
+    TRANS_AOTF : 2D array, float (NCONV,NGEOM,NORDERS_AOTF)
+        Transmission of the AOTF filter for each diffraction order (if required)
     NFIL_AOTF : 2D array, int (NCONV,NORDERS_AOTF)
         If FWHM<0.0, the ILS is expected to be defined separately for each convolution wavenumber.
         NFIL represents the number of spectral points to defined the ILS for each convolution wavenumber.
@@ -281,7 +281,7 @@ class Measurement_0:
         
         self.NORDERS_AOTF = None #Number of orders to consider to reconstruct AOTF filter function (if required)
         self.VCONV_AOTF = None #np.zeros(NCONV,NORDERS_AOTF) #Convolution wavelengths/wavenumbers for each order (if required)
-        self.WEIGHTS_AOTF = None #np.zeros(NCONV,NORDERS_AOTF) #Weights of each order to reconstruct AOTF filter function (if required)
+        self.TRANS_AOTF = None #np.zeros(NCONV,NORDERS_AOTF) #Weights of each order to reconstruct AOTF filter function (if required)
         self.NFIL_AOTF = None  #np.zeros(NCONV,NORDERS_AOTF)
         self.VFIL_AOTF = None  #np.zeros(NFIL_AOTF,NCONV,NORDERS_AOTF)
         self.AFIL_AOTF = None  #np.zeros(NFIL_AOTF,NCONV,NORDERS_AOTF)
@@ -392,8 +392,8 @@ class Measurement_0:
         if self.NORDERS_AOTF is not None:
             assert self.NORDERS_AOTF > 0, 'NORDERS_AOTF must be >0'
             assert self.VCONV_AOTF.shape == (self.NCONV.max(),self.NGEOM,self.NORDERS_AOTF), 'VCONV_AOTF must have size (NCONV,NORDERS_AOTF)'
-            assert self.WEIGHTS_AOTF.shape == (self.NCONV.max(),self.NGEOM,self.NORDERS_AOTF), 'WEIGHTS_AOTF must have size (NCONV,NORDERS_AOTF)'
-            
+            assert self.TRANS_AOTF.shape == (self.NCONV.max(),self.NGEOM,self.NORDERS_AOTF), 'TRANS_AOTF must have size (NCONV,NORDERS_AOTF)'
+
 
     #################################################################################################################
             
@@ -677,6 +677,55 @@ class Measurement_0:
                 dset.attrs['title'] = "Forward modelling error"
                 dset.attrs['unit'] = lunit
 
+            if self.NORDERS_AOTF is not None:
+                
+                dset = h5py_helper.store_data(grp, 'NORDERS_AOTF', self.NORDERS_AOTF)
+                dset.attrs['title'] = "Number of diffraction orders to combine on measurement"
+
+                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                    
+                    dset = h5py_helper.store_data(grp, 'VCONV_AOTF', self.VCONV_AOTF)
+                    dset.attrs['title'] = "Convolution wavenumbers for each of the diffraction orders"
+                    dset.attrs['unit'] = "Wavenumber / cm-1"
+                    
+                    dset = h5py_helper.store_data(grp, 'TRANS_AOTF', self.TRANS_AOTF)
+                    dset.attrs['title'] = "Transmission of the AOTF for each of the diffraction orders"
+
+                    if self.FWHM < 0.0:
+                        
+                        dset = h5py_helper.store_data(grp, 'NFIL_AOTF', self.NFIL_AOTF)
+                        dset.attrs['title'] = "Number of points required to define the ILS in each spectral bin (for each diffraction order)"
+
+                        dset = h5py_helper.store_data(grp, 'VFIL_AOTF', self.VFIL_AOTF)
+                        dset.attrs['title'] = "Wavenumber of the points required to define the ILS in each spectral bin (for each diffraction order)"
+                        dset.attrs['unit'] = "Wavenumber / cm-1"
+
+                        dset = h5py_helper.store_data(grp, 'AFIL_AOTF', self.AFIL_AOTF)
+                        dset.attrs['title'] = "ILS in each spectral bin"
+                        dset.attrs['unit'] = ""
+                        
+                if self.ISPACE==WaveUnit.Wavelength_um:
+                    
+                    dset = h5py_helper.store_data(grp, 'VCONV_AOTF', self.VCONV_AOTF)
+                    dset.attrs['title'] = "Convolution wavelengths for each of the diffraction orders"
+                    dset.attrs['unit'] = "Wavelength / um"
+                    
+                    dset = h5py_helper.store_data(grp, 'TRANS_AOTF', self.TRANS_AOTF)
+                    dset.attrs['title'] = "Transmission of the AOTF for each of the diffraction orders"
+
+                    if self.FWHM < 0.0:
+                        
+                        dset = h5py_helper.store_data(grp, 'NFIL_AOTF', self.NFIL_AOTF)
+                        dset.attrs['title'] = "Number of points required to define the ILS in each spectral bin (for each diffraction order)"
+
+                        dset = h5py_helper.store_data(grp, 'VFIL_AOTF', self.VFIL_AOTF)
+                        dset.attrs['title'] = "Wavelength of the points required to define the ILS in each spectral bin (for each diffraction order)"
+                        dset.attrs['unit'] = "Wavelength / um"
+
+                        dset = h5py_helper.store_data(grp, 'AFIL_AOTF', self.AFIL_AOTF)
+                        dset.attrs['title'] = "ILS in each spectral bin"
+                        dset.attrs['unit'] = ""
+
     #################################################################################################################
 
     def read_hdf5(self,runname,calc_MeasurementVector=True):
@@ -742,6 +791,15 @@ class Measurement_0:
                 if 'Measurement/VFMERR' in f:
                     self.VFMERR = h5py_helper.retrieve_data(f, 'Measurement/VFMERR', np.array)
                     self.FMERR = h5py_helper.retrieve_data(f, 'Measurement/FMERR', np.array)
+
+                if 'Measurement/NORDERS_AOTF' in f:
+                    self.NORDERS_AOTF = h5py_helper.retrieve_data(f, 'Measurement/NORDERS_AOTF', np.int32)
+                    self.VCONV_AOTF = h5py_helper.retrieve_data(f, 'Measurement/VCONV_AOTF', np.array)
+                    self.TRANS_AOTF = h5py_helper.retrieve_data(f, 'Measurement/TRANS_AOTF', np.array)
+                    if self.FWHM < 0.0:
+                        self.NFIL_AOTF = h5py_helper.retrieve_data(f, 'Measurement/NFIL_AOTF', np.array)
+                        self.VFIL_AOTF = h5py_helper.retrieve_data(f, 'Measurement/VFIL_AOTF', np.array)
+                        self.AFIL_AOTF = h5py_helper.retrieve_data(f, 'Measurement/AFIL_AOTF', np.array)
 
         self.assess()
         

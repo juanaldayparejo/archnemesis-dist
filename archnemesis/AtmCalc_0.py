@@ -24,9 +24,6 @@ from archnemesis.enums import ZenithAngleOrigin, PathObserverPointing, PathCalc
 
 import logging
 _lgr = logging.getLogger(__name__)
-#_lgr.setLevel(logging.DEBUG)
-#_lgr.setLevel(logging.INFO)
-_lgr.setLevel(logging.CRITICAL + 1)
 
 """
 Object to calculate the atmospheric paths
@@ -147,8 +144,8 @@ class AtmCalc_0:
             -------
 
         """
-        _lgr.info('Sent to AtmCalc_0', stacklevel=2)
-        _lgr.info(f'AtmCalc_0 :: {path_observer_pointing=}, {BOTLAY=}, {ANGLE=}, {EMISS_ANG=}, {SOL_ANG=}, {AZI_ANG=}, {IPZEN=}, {path_calc=}')
+        _lgr.debug('Sent to AtmCalc_0', stacklevel=2)
+        _lgr.debug(f'AtmCalc_0 :: {path_observer_pointing=}, {BOTLAY=}, {ANGLE=}, {EMISS_ANG=}, {SOL_ANG=}, {AZI_ANG=}, {IPZEN=}, {path_calc=}')
         
         #parameters
         self.path_observer_pointing = path_observer_pointing

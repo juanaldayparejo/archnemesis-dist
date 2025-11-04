@@ -816,13 +816,13 @@ class ForwardModel_0:
                     SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
                 
                 #Applying AOTF weights to combine the different diffraction orders
-                SPECONV_combined += (SPECONV * self.MeasurementX.WEIGHTS_AOTF[:,:,iorder])
+                SPECONV_combined += (SPECONV * self.MeasurementX.TRANS_AOTF[:,:,iorder])
 
                 #Restoring original convolution wavelengths
                 self.MeasurementX.edit_VCONV(vconv_orig)
 
             #Normalising by the total AOTF weights
-            SPECONV = (SPECONV_combined / np.sum(self.MeasurementX.WEIGHTS_AOTF,axis=2))
+            SPECONV = (SPECONV_combined / np.sum(self.MeasurementX.TRANS_AOTF,axis=2))
 
             #Applying any changes to the spectra required by the state vector
             dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
@@ -1052,8 +1052,8 @@ class ForwardModel_0:
                         
                 #Applying AOTF weights to combine the different diffraction orders
                 for igeom in range(self.MeasurementX.NGEOM):
-                    SPECONV_combined[:,igeom] += (SPECONV[:,igeom] * self.MeasurementX.WEIGHTS_AOTF[:,igeom,iorder])
-                    dSPECONV_combined[:,igeom,:] += (dSPECONV[:,igeom,:].T * self.MeasurementX.WEIGHTS_AOTF[:,igeom,iorder]).T
+                    SPECONV_combined[:,igeom] += (SPECONV[:,igeom] * self.MeasurementX.TRANS_AOTF[:,igeom,iorder])
+                    dSPECONV_combined[:,igeom,:] += (dSPECONV[:,igeom,:].T * self.MeasurementX.TRANS_AOTF[:,igeom,iorder]).T
         
                 #Restoring original convolution wavelengths
                 self.MeasurementX.edit_VCONV(vconv_orig)
@@ -1063,8 +1063,8 @@ class ForwardModel_0:
             dSPECONV = np.zeros((self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX))
             for igeom in range(self.MeasurementX.NGEOM):
                 
-                SPECONV[:,igeom] = (SPECONV_combined[:,igeom] / np.sum(self.MeasurementX.WEIGHTS_AOTF[:,igeom,:],axis=1))
-                dSPECONV[:,igeom,:] = (dSPECONV_combined[:,igeom,:].T / np.sum(self.MeasurementX.WEIGHTS_AOTF[:,igeom,:],axis=1)).T
+                SPECONV[:,igeom] = (SPECONV_combined[:,igeom] / np.sum(self.MeasurementX.TRANS_AOTF[:,igeom,:],axis=1))
+                dSPECONV[:,igeom,:] = (dSPECONV_combined[:,igeom,:].T / np.sum(self.MeasurementX.TRANS_AOTF[:,igeom,:],axis=1)).T
 
             #Applying any changes to the spectra required by the state vector
             SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
