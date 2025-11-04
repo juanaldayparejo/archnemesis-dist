@@ -754,11 +754,14 @@ class ForwardModel_0:
             for iorder in range(self.MeasurementX.NORDERS_AOTF):
                 _lgr.info(f'Calculating forward model for diffraction order {iorder+1} of {self.MeasurementX.NORDERS_AOTF}')
 
-                self.MeasurementX.edit_VCONV(self.MeasurementX.VCONV_AOTF[:,iorder])
-                if self.FWHM<0.0:
+                self.SpectroscopyX = deepcopy(self.Spectroscopy)
+                self.MeasurementX.edit_VCONV(self.MeasurementX.VCONV_AOTF[:,:,iorder])
+                if self.MeasurementX.FWHM<0.0:
                     self.MeasurementX.NFIL = self.MeasurementX.NFIL_AOTF[:,iorder]
                     self.MeasurementX.VFIL = self.MeasurementX.VFIL_AOTF[:,:,iorder]
                     self.MeasurementX.AFIL = self.MeasurementX.AFIL_AOTF[:,:,iorder]
+
+                _lgr.info(f'Spectral range = {self.MeasurementX.VCONV.min()} to {self.MeasurementX.VCONV.max()}')
 
                 #Defining spectral range         
                 self.MeasurementX.build_ils(IGEOM=0)
@@ -805,7 +808,6 @@ class ForwardModel_0:
 
                         SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
 
-
                 #Convolving the spectrum with the instrument line shape
                 _lgr.info('Convolving spectra and gradients with instrument line shape')
                 if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
@@ -814,13 +816,13 @@ class ForwardModel_0:
                     SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
                 
                 #Applying AOTF weights to combine the different diffraction orders
-                SPECONV_combined += (SPECONV.T * self.MeasurementX.WEIGHT_AOTF[:,iorder]).T
+                SPECONV_combined += (SPECONV * self.MeasurementX.WEIGHTS_AOTF[:,:,iorder])
 
                 #Restoring original convolution wavelengths
                 self.MeasurementX.edit_VCONV(vconv_orig)
 
             #Normalising by the total AOTF weights
-            SPECONV = (SPECONV_combined.T / np.sum(self.MeasurementX.WEIGHT_AOTF,axis=1)).T
+            SPECONV = (SPECONV_combined / np.sum(self.MeasurementX.WEIGHTS_AOTF,axis=2))
 
             #Applying any changes to the spectra required by the state vector
             dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
@@ -962,8 +964,10 @@ class ForwardModel_0:
                 
                 _lgr.info(f'Calculating forward model for diffraction order {iorder+1} of {self.MeasurementX.NORDERS_AOTF}')
 
-                self.MeasurementX.edit_VCONV(self.MeasurementX.VCONV_AOTF[:,iorder])
-                if self.FWHM<0.0:
+                self.SpectroscopyX = deepcopy(self.Spectroscopy)
+
+                self.MeasurementX.edit_VCONV(self.MeasurementX.VCONV_AOTF[:,:,iorder])
+                if self.MeasurementX.FWHM<0.0:
                     self.MeasurementX.NFIL = self.MeasurementX.NFIL_AOTF[:,iorder]
                     self.MeasurementX.VFIL = self.MeasurementX.VFIL_AOTF[:,:,iorder]
                     self.MeasurementX.AFIL = self.MeasurementX.AFIL_AOTF[:,:,iorder]
@@ -1048,8 +1052,8 @@ class ForwardModel_0:
                         
                 #Applying AOTF weights to combine the different diffraction orders
                 for igeom in range(self.MeasurementX.NGEOM):
-                    SPECONV_combined[:,igeom] += (SPECONV[:,igeom] * self.MeasurementX.WEIGHT_AOTF[:,iorder])
-                    dSPECONV_combined[:,igeom,:] += (dSPECONV[:,igeom,:].T * self.MeasurementX.WEIGHT_AOTF[:,iorder]).T
+                    SPECONV_combined[:,igeom] += (SPECONV[:,igeom] * self.MeasurementX.WEIGHTS_AOTF[:,igeom,iorder])
+                    dSPECONV_combined[:,igeom,:] += (dSPECONV[:,igeom,:].T * self.MeasurementX.WEIGHTS_AOTF[:,igeom,iorder]).T
         
                 #Restoring original convolution wavelengths
                 self.MeasurementX.edit_VCONV(vconv_orig)
@@ -1059,8 +1063,8 @@ class ForwardModel_0:
             dSPECONV = np.zeros((self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX))
             for igeom in range(self.MeasurementX.NGEOM):
                 
-                SPECONV[:,igeom] = (SPECONV_combined[:,igeom] / np.sum(self.MeasurementX.WEIGHT_AOTF,axis=1))
-                dSPECONV[:,igeom,:] = (dSPECONV_combined[:,igeom,:].T / np.sum(self.MeasurementX.WEIGHT_AOTF,axis=1)).T
+                SPECONV[:,igeom] = (SPECONV_combined[:,igeom] / np.sum(self.MeasurementX.WEIGHTS_AOTF[:,igeom,:],axis=1))
+                dSPECONV[:,igeom,:] = (dSPECONV_combined[:,igeom,:].T / np.sum(self.MeasurementX.WEIGHTS_AOTF[:,igeom,:],axis=1)).T
 
             #Applying any changes to the spectra required by the state vector
             SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)

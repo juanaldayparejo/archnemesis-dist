@@ -150,9 +150,9 @@ class Measurement_0:
         Forward modelling error at each VFMERR
     NORDERS_AOTF : int
         Number of orders to consider to reconstruct AOTF filter function (if required)
-    VCONV_AOTF : 2D array, float (NCONV,NORDERS_AOTF)
+    VCONV_AOTF : 2D array, float (NCONV,NGEOM,NORDERS_AOTF)
         Convolution wavelengths/wavenumbers for each order (if required)
-    WEIGHTS_AOTF : 2D array, float (NCONV,NORDERS_AOTF)
+    WEIGHTS_AOTF : 2D array, float (NCONV,NGEOM,NORDERS_AOTF)
         Weights of each order to reconstruct AOTF filter function (if required)
     NFIL_AOTF : 2D array, int (NCONV,NORDERS_AOTF)
         If FWHM<0.0, the ILS is expected to be defined separately for each convolution wavenumber.
@@ -391,9 +391,8 @@ class Measurement_0:
         #Checking if the AOTF parameters are included and correctly defined
         if self.NORDERS_AOTF is not None:
             assert self.NORDERS_AOTF > 0, 'NORDERS_AOTF must be >0'
-            assert len(np.unique(self.NCONV)) == 1, 'When using AOTF, all geometries must have the same NCONV'
-            assert self.VCONV_AOTF.shape == (self.NCONV[0],self.NORDERS_AOTF), 'VCONV_AOTF must have size (NCONV,NORDERS_AOTF)'
-            assert self.WEIGHTS_AOTF.shape == (self.NCONV[0],self.NORDERS_AOTF), 'WEIGHTS_AOTF must have size (NCONV,NORDERS_AOTF)'
+            assert self.VCONV_AOTF.shape == (self.NCONV.max(),self.NGEOM,self.NORDERS_AOTF), 'VCONV_AOTF must have size (NCONV,NORDERS_AOTF)'
+            assert self.WEIGHTS_AOTF.shape == (self.NCONV.max(),self.NGEOM,self.NORDERS_AOTF), 'WEIGHTS_AOTF must have size (NCONV,NORDERS_AOTF)'
             
 
     #################################################################################################################
