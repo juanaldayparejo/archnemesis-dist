@@ -567,11 +567,13 @@ class OptimalEstimation_0:
             # Calculating the inverse of Sa and Se
             sai = np.linalg.inv(self.SA)
             
-            if( (self.LIN == 1) or (self.LIN==3) ):
-                #We invert the matrix as it might be non-diagonal
-                sei_inv = np.linalg.inv(self.SE)
-            else:
-                sei_inv = np.diag(1.0 / np.diag(self.SE))
+            #if( (self.LIN == 1) or (self.LIN==3) ):
+            #    #We invert the matrix as it might be non-diagonal
+            #    sei_inv = np.linalg.inv(self.SE)
+            #else:
+            #    sei_inv = np.diag(1.0 / np.diag(self.SE))
+
+            sei_inv = np.diag(1.0 / np.diag(self.SE))
 
             # Calculate kt*sei_inv*kk
             a = kt @ sei_inv @ self.KK + sai
@@ -596,11 +598,13 @@ class OptimalEstimation_0:
         d = self.XN[:self.NX] - self.XA[:self.NX]
         sai = np.linalg.inv(self.SA)
         
-        if( (self.LIN == 1) or (self.LIN==3) ):
-            #We invert the matrix as it might be non-diagonal
-            sei_inv = np.linalg.inv(self.SE)
-        else:
-            sei_inv = np.diag(1.0 / np.diag(self.SE))
+        #if( (self.LIN == 1) or (self.LIN==3) ):
+        #    #We invert the matrix as it might be non-diagonal
+        #    sei_inv = np.linalg.inv(self.SE)
+        #else:
+        #    sei_inv = np.diag(1.0 / np.diag(self.SE))
+        
+        sei_inv = np.diag(1.0 / np.diag(self.SE))
         
         ## Getting (yn-y)^2/sigma_y^2 ##
         
@@ -1201,6 +1205,7 @@ def coreretOE(
         LIN=0,
         NCores=1,
         nemesisSO=False,
+        nemesisdisc=False,
         write_itr=False,
         return_forward_model=False,
         return_phi_and_chisq_history=False,
@@ -1241,8 +1246,8 @@ def coreretOE(
             PHILIMIT :: Percentage convergence limit. If the percentage reduction of the cost function PHI
                         is less than philimit then the retrieval is deemed to have converged.
 
-            nemesisSO :: If True, the retrieval uses the function jacobian_nemesisSO(), adapated specifically
-                         for solar occultation observations, rather than the more general jacobian_nemesis() function.
+            nemesisSO :: If True, it indicates that the retrieval is for a solar occultation observation
+            nemesisdisc :: If True, it indicates that the retrieval is for a disc-averaged observation
             
             return_forward_model :: if True will return the ForwardModel as well as the OptimalEstimation.
 
@@ -1331,9 +1336,10 @@ def coreretOE(
         Layer=Layer,
         Variables=Variables,
         Telluric=Telluric,
+        NCores=NCores,
     )
     _lgr.info('nemesis :: Calculating Jacobian matrix KK')
-    YN,KK = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
+    YN,KK = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc)
     
     OptimalEstimation.edit_YN(YN)
     OptimalEstimation.edit_KK(KK)
@@ -1443,6 +1449,7 @@ def coreretOE(
                     Layer=Layer,
                     Telluric=Telluric,
                     Variables=Variables1,
+                    NCores=NCores,
                 )
                 ForwardModel1.subprofretg()
 
@@ -1471,8 +1478,9 @@ def coreretOE(
             Layer=Layer,
             Telluric=Telluric,
             Variables=Variables,
+            NCores=NCores,
         )
-        YN1,KK1 = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
+        YN1,KK1 = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc)
 
         OptimalEstimation1 = deepcopy(OptimalEstimation)
         OptimalEstimation1.edit_YN(YN1)
@@ -1582,8 +1590,6 @@ def coreretOE(
     #Writing the contribution of each gas to .gcn file
     #if nemesisSO==True:
     #    calc_gascn(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer)
-    
-    
     
     result = (OptimalEstimation,)
     

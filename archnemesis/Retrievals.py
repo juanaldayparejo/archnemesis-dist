@@ -33,6 +33,7 @@ def retrieval_nemesis(
         NCores=1,
         retrieval_method : RetrievalStrategy = RetrievalStrategy.Optimal_Estimation,
         nemesisSO=False,
+        nemesisdisc=False,
         NS_prefix='chains/'
     ):
     
@@ -55,6 +56,7 @@ def retrieval_nemesis(
             retrieval_method :: (0) Optimal Estimation formalism
                                 (1) Nested sampling
             nemesisSO :: If True, it indicates that the retrieval is a solar occultation observation
+            nemesisdisc :: If True, it indicates that the retrieval is a disc-averaged observation
         
         OUTPUTS :
         
@@ -99,7 +101,7 @@ def retrieval_nemesis(
             
             #Calculating forward model
             FM_prev = ans.ForwardModel_0(Atmosphere=Atmosphere,Measurement=Measurement,Spectroscopy=Spectroscopy,Scatter=Scatter,Stellar=Stellar,Surface=Surface,CIA=CIA,Layer=Layer,Variables=Variables_prev,Telluric=Telluric)
-            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
+            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc)
             
             #Calculating forward modelling error
             SF = KK @ Variables_prev.SA @ KK.T
@@ -174,7 +176,7 @@ def retrieval_nemesis(
 
             #Now we calculate the forward model error from the previous retrieval
             FM_prev = ans.ForwardModel_0(Atmosphere=Atmosphere,Measurement=Measurement,Spectroscopy=Spectroscopy,Scatter=Scatter,Stellar=Stellar,Surface=Surface,CIA=CIA,Layer=Layer,Variables=Variables_prev,Telluric=Telluric)
-            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO)
+            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc)
             
             #We do not want to include the forward model error from variables that are retrieved again now
             ix1 = 0
@@ -217,7 +219,8 @@ def retrieval_nemesis(
 
     if retrieval_method == RetrievalStrategy.Optimal_Estimation:
         OptimalEstimation = ans.coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,\
-                                          NITER=Retrieval.NITER,PHILIMIT=Retrieval.PHILIMIT,LIN=Retrieval.LIN,NCores=NCores,nemesisSO=nemesisSO)
+                                          NITER=Retrieval.NITER,PHILIMIT=Retrieval.PHILIMIT,LIN=Retrieval.LIN,NCores=NCores,
+                                          nemesisSO=nemesisSO,nemesisdisc=nemesisdisc)
         Retrieval = OptimalEstimation
     elif retrieval_method == RetrievalStrategy.Nested_Sampling:
         from archnemesis.NestedSampling_0 import coreretNS
