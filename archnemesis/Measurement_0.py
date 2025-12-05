@@ -87,6 +87,7 @@ class Measurement_0:
             (3) Integrated spectral power of planet - W (cm-1)-1 if ISPACE=0 ---- W um-1 if ISPACE=1
             (4) Atmospheric transmission multiplied by solar flux
             (5) Normalised radiance to a given wavelength (VNORM)
+            (6) Integrated radiance over filter function - W cm-2 sr-1 if ISPACE=0 ---- W cm-2 sr-1 if ISPACE=1
     LATITUDE : float
         Planetocentric latitude at centre of the field of view
     LONGITUDE : float
@@ -332,14 +333,17 @@ class Measurement_0:
         assert self.NGEOM > 0, 'NGEOM must be >0'
         
         assert isinstance(self.IFORM, (int, np.integer, SpectraUnit)), 'IFORM must be int'
-        assert self.IFORM >= SpectraUnit.Radiance, 'IFORM must be >=0 and <=5'
-        assert self.IFORM <= SpectraUnit.Normalised_radiance, 'IFORM must be >=0 and <=5'
+        assert self.IFORM >= SpectraUnit.Radiance, 'IFORM must be >=0 and <=6'
+        assert self.IFORM <= SpectraUnit.Integrated_radiance, 'IFORM must be >=0 and <=6'
             
         if self.IFORM == SpectraUnit.Normalised_radiance:
             assert isinstance(self.VNORM, float), 'VNORM must be float if IFORM=5'
             for i in range(self.NGEOM):
                 assert self.VNORM >= self.VCONV[0:self.NCONV[i]].min(), 'VNORM must be >= min(VCONV)'
                 assert self.VNORM <= self.VCONV[0:self.NCONV[i]].max(), 'VNORM must be <= max(VCONV)'
+
+        if self.IFORM == SpectraUnit.Integrated_radiance:
+            assert self.FWHM < 0.0, 'FWHM must be <0 if IFORM=6 (Integrated radiance over filter function)'
 
         assert isinstance(self.ISPACE, (int, np.integer, WaveUnit)), 'ISPACE must be int'
         assert self.ISPACE >= WaveUnit.Wavenumber_cm, 'ISPACE must be >=0 and <=1'
@@ -406,7 +410,10 @@ class Measurement_0:
         if self.FWHM > 0.0:
             _lgr.info(f"Spectral resolution of the measurement (FWHM) ::  {(self.FWHM)}")
         elif self.FWHM < 0.0:
-            _lgr.info('Instrument line shape defined in .fil file')
+            if self.IFORM == SpectraUnit.Integrated_radiance:
+                _lgr.info('Filter functions defined in .fil file')
+            else:
+                _lgr.info('Instrument line shape defined in .fil file')
         else:
             _lgr.info('Spectral resolution of the measurement is account for in the k-tables')
 
@@ -527,6 +534,8 @@ class Measurement_0:
                     lunit = 'Atmospheric transmission multiplied by solar flux / W cm-2 (cm-1)-1'
                 elif self.IFORM==SpectraUnit.Normalised_radiance:
                     lunit = 'Spectra normalised to VNORM'
+                elif self.IFORM==SpectraUnit.Integrated_radiance:
+                    lunit = 'Integrated radiance over filter function / W cm-2 sr-1'
 
             elif self.ISPACE==WaveUnit.Wavelength_um:  #Wavelength space
                 if self.IFORM==SpectraUnit.Radiance:
@@ -541,7 +550,9 @@ class Measurement_0:
                     lunit = 'Atmospheric transmission multiplied by solar flux / W cm-2 um-1'
                 elif self.IFORM==SpectraUnit.Normalised_radiance:
                     lunit = 'Spectra normalised to VNORM'
-
+                elif self.IFORM==SpectraUnit.Integrated_radiance:
+                    lunit = 'Integrated radiance over filter function / W cm-2 sr-1'
+                    
             dset.attrs['units'] = lunit
             
             if self.IFORM==SpectraUnit.Normalised_radiance:
@@ -2402,6 +2413,108 @@ class Measurement_0:
         
     #################################################################################################################
 
+    def integrate_filter(self,Wave,ModSpec,IGEOM='All'):
+        """
+        Subroutine to integrate the Modelled spectrum over the filter profile
+
+        Parameters
+        ----------
+        Wave : 1D or 2D array (NWAVE)
+            Calculation wavelengths or wavenumbers
+        ModSpec : 1D or 2D array (NWAVE,NGEOM)
+            Modelled spectrum
+
+        Other Parameters
+        ----------------
+        IGEOM : int
+            If All, it is assumed all geometries cover exactly the same spetral range and ModSpec is expected to be (NWAVE,NGEOM)
+            If not, IGEOM should be an integer indicating the geometry it corresponds to in the Measurement class (or .spx file)
+
+        Returns
+        -------
+        SPECONV : 1D or 2D array (NCONV,NGEOM)
+            Integrated spectrum over the filter profile
+        """
+        
+        #Accounting for the Doppler shift that was previously introduced
+        wavecorr = self.correct_doppler_shift(Wave)
+
+        if self.FWHM>=0.0:
+            raise ValueError('error in integrate_filter :: FWHM must be < 0 for filter integration')
+        else:    
+            
+            if IGEOM=='All':
+                if ModSpec.ndim!=2:
+                    raise ValueError('error in integrate_filter :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
+                IG = 0
+                SPECONV = integrate_filter_ngeom(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+            else:
+                if ModSpec.ndim!=1:
+                    raise ValueError('error in integrate_filter :: ModSpec must have 1 dimensions (NWAVE)')
+                IG = IGEOM
+                SPECONV = integrate_filter(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+
+        return SPECONV
+        
+        
+    #################################################################################################################
+
+    def integrate_filterg(self,Wave,ModSpec,ModGrad,IGEOM='All'):
+    
+        """
+        Subroutine to integrate the Modelled spectrum and the gradients over the filter function 
+
+        Parameters
+        ----------
+        Wave : 1D array (NWAVE)
+            Calculation wavelengths or wavenumbers
+        ModSpec : 1D or 2D array (NWAVE,NGEOM)
+            Modelled spectrum
+        ModGrad: 2D or 3D array (NWAVE,NGEOM,NX)
+            Modelled gradients
+
+        Other Parameters
+        ----------------
+        IGEOM : int
+            If All, it is assumed all geometries cover exactly the same spetral range and ModSpec is expected to be (NWAVE,NGEOM)
+            If not, IGEOM should be an integer indicating the geometry it corresponds to in the Measurement class (or .spx file)
+
+        Returns
+        -------
+        SPECONV : 1D or 2D array (NCONV,NGEOM)
+            Integrated spectrum over the filter profile
+        dSPECONV : 2D or 3D array (NCONV,NGEOM,NX)
+            Integrated gradients over the filter profile
+        """
+
+        #Accounting for the Doppler shift that was previously introduced
+        NWAVE = len(Wave)
+        wavecorr = self.correct_doppler_shift(Wave)
+
+        if self.FWHM>=0.0:   
+            raise ValueError('error in integrate_filterg :: FWHM must be < 0 for filter integration')
+
+        else:
+            if IGEOM=='All':
+                if ModSpec.ndim!=2:
+                    raise ValueError('error in integrate_filterg :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
+                if ModGrad.ndim!=3:
+                    raise ValueError('error in integrate_filterg :: ModGrad must have 3 dimensions (NWAVE,NGEOM,NX)')
+                IG = 0
+                SPECONV,dSPECONV = integrate_filterg_ngeom(NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+
+            else:
+                if ModSpec.ndim!=1:
+                    raise ValueError('error in integrate_filterg :: ModSpec must have 1 dimensions (NWAVE)')
+                if ModGrad.ndim!=2:
+                    raise ValueError('error in integrate_filterg :: ModGrad must have 2 dimensions (NWAVE,NX)')
+                IG = IGEOM
+                SPECONV,dSPECONV = integrate_filterg(NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.NFIL,self.VFIL,self.AFIL)
+
+        return SPECONV,dSPECONV
+        
+    #################################################################################################################
+
     def calc_doppler_shift(self,wave):
         """
         Subroutine to calculate the Doppler shift in wavenumber or wavelength units based on
@@ -2513,6 +2626,35 @@ class Measurement_0:
         ax1.legend()
         ax1.set_xlabel(xlabel)
         ax1.set_ylabel('Instrument lineshape')
+        plt.tight_layout()
+        plt.show()
+        
+    #################################################################################################################
+    
+    def plot_filters(self):
+        """
+        Subroutine to make a summary plot of the filter functions
+        """
+
+        fig,ax1 = plt.subplots(1,1,figsize=(10,4))
+
+        if self.ISPACE==WaveUnit.Wavenumber_cm:
+            xlabel=r'Wavenumber (cm$^{-1}$)'
+            xsymbol = r'$\nu$'
+            xunit = r'cm$^{-1}$'
+        elif self.ISPACE==WaveUnit.Wavelength_um:
+            xlabel=r'Wavelength ($\mu$m)'
+            xsymbol = r'$\lambda$'
+            xunit = r'$\mu$m'
+
+        for iconv in range(self.NCONV[0]):
+            ax1.plot(self.VFIL[0:self.NFIL[iconv],iconv],self.AFIL[0:self.NFIL[iconv],iconv],label=xsymbol+' = '+str(np.round(self.VCONV[iconv,0],1))+' '+xunit)
+
+        ax1.set_facecolor('lightgray')
+        ax1.grid()
+        ax1.legend()
+        ax1.set_xlabel(xlabel)
+        ax1.set_ylabel('Filter function')
         plt.tight_layout()
         plt.show()
     
@@ -3484,5 +3626,250 @@ def lblconvg_fil(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil):
 
             yout[j] = yout[j]/ynor[j]
             gradout[j,:] = gradout[j,:]/gradnorm[j,:]
+
+    return yout,gradout
+
+
+#################################################################################################################
+#################################################################################################################
+#                                             FILTER INTEGRATIONS
+#################################################################################################################
+#################################################################################################################
+
+
+###############################################################################################
+@jit(nopython=True)
+def integrate_filter(nwave,vwave,y,nconv,vconv,nfil,vfil,afil):
+
+    """
+        FUNCTION NAME : integrate_filter()
+        
+        DESCRIPTION : Integrate the modelled spectrum with the filter function
+                      In this case, the filter function is defined by NFIL,VFIL and AFIL from the .fil file
+        
+        INPUTS :
+            nwave :: Number of calculation wavenumbers
+            vwave(nwave) :: Calculation wavenumbers
+            y(nwave) :: Modelled spectrum 
+            nconv :: Number of convolution wavenumbers
+            vconv(nconv) :: Convolution wavenumbers
+            nfil(nconv) :: Number of wavenumbers required to define the filter function
+                            in each convolution wavenumber
+            vfil(nfil,nconv) :: Wavenumbers required to define the filter function in each convolution wavenumber
+            afil(nfil,nconv) :: Function defining the filter function in each convolution wavenumber
+        OPTIONAL INPUTS: none
+        
+        OUTPUTS :
+        
+            yout(nconv) :: Integrated spectrum
+
+        CALLING SEQUENCE:
+        
+            yout = integrate_filter(nwave,vwave,y,nconv,vconv,nfil,vfil,afil)
+        
+        MODIFICATION HISTORY : Juan Alday (29/04/2021)
+        
+    """
+
+    if y.ndim==1:
+
+        yout = np.zeros((nconv))
+
+        for j in range(nconv):
+            v1 = vfil[0,j]
+            v2 = vfil[nfil[j]-1,j]
+            #Find relevant points in tabulated files
+            inwave = np.where( (vwave>=v1) & (vwave<=v2) )[0]
+            np1 = len(inwave)
+            
+            #Interpolating the filter function at the calculation wavenumbers
+            afil_interp = np.interp(vwave[inwave],vfil[0:nfil[j],j],afil[0:nfil[j],j])
+            
+            #Integrating the product of the spectrum and the filter function
+            yout[j] = np.trapz(y[inwave] * afil_interp, vwave[inwave])
+            
+    return yout
+
+###############################################################################################
+@jit(nopython=True)
+def integrate_filter_ngeom(nwave,vwave,y,nconv,vconv,nfil,vfil,afil):
+
+    """
+        FUNCTION NAME : integrate_filter_ngeom()
+        
+        DESCRIPTION : Integrate the modelled spectra (NGEOM spectra) with the filter function
+                      In this case, the filter function is defined by NFIL,VFIL and AFIL from the .fil file
+        
+        INPUTS :
+            nwave :: Number of calculation wavenumbers
+            vwave(nwave) :: Calculation wavenumbers
+            y(nwave,ngeom) :: Modelled spectrum 
+            nconv :: Number of convolution wavenumbers
+            vconv(nconv) :: Convolution wavenumbers
+            nfil(nconv) :: Number of wavenumbers required to define the filter function
+                            in each convolution wavenumber
+            vfil(nfil,nconv) :: Wavenumbers required to define the filter function in each convolution wavenumber
+            afil(nfil,nconv) :: Function defining the filter function in each convolution wavenumber
+        OPTIONAL INPUTS: none
+        
+        OUTPUTS :
+        
+            yout(nconv) :: Integrated spectrum
+
+        CALLING SEQUENCE:
+        
+            yout = integrate_filter_ngeom(nwave,vwave,y,nconv,vconv,nfil,vfil,afil)
+        
+        MODIFICATION HISTORY : Juan Alday (29/04/2021)
+        
+    """
+
+    if y.ndim==2:
+
+        #It is assumed all geometries cover the same spectral range
+        #nconv1 = y.shape[0]
+        ngeom = y.shape[1]
+
+        yout = np.zeros((nconv,ngeom))
+
+        #Filter function for each convolution number in each case is read from .fil file
+        for j in range(nconv):
+            v1 = vfil[0,j]
+            v2 = vfil[nfil[j]-1,j]
+            #Find relevant points in tabulated files
+            inwave = np.where( (vwave>=v1) & (vwave<=v2) )[0]
+            
+            #Interpolating the filter function at the calculation wavenumbers
+            afil_interp = np.interp(vwave[inwave],vfil[0:nfil[j],j],afil[0:nfil[j],j])
+            
+            #Integrating the product of the spectrum and the filter function
+            yout[j,:] = np.trapz(y[inwave,:] * afil_interp[:, None], vwave[inwave], axis=0)
+
+    return yout
+
+###############################################################################################
+@jit(nopython=True)
+def integrate_filterg(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil):
+
+    """
+        FUNCTION NAME : integrate_filterg()
+        
+        DESCRIPTION : Integrate the modelled spectrum and gradients over a filter function
+                      In this case, the filter function is defined by NFIL,VFIL and AFIL from the .fil file
+        
+        INPUTS :
+            nwave :: Number of calculation wavenumbers
+            vwave(nwave) :: Calculation wavenumbers
+            y(nwave) :: Modelled spectrum
+            dydx(nwave,nx) :: Modelled gradients with respect to each element of the state vector
+            nconv :: Number of convolution wavenumbers
+            vconv(nconv) :: Convolution wavenumbers
+            nfil(nconv) :: Number of wavenumbers required to define the filter function
+                            in each convolution wavenumber
+            vfil(nfil,nconv) :: Wavenumbers required to define the filter function in each convolution wavenumber
+            afil(nfil,nconv) :: Function defining the filter function in each convolution wavenumber
+
+        OPTIONAL INPUTS: none
+        
+        OUTPUTS :
+        
+            yout(nconv) :: Integrated spectrum
+            dyoutdx(nconv,nx) :: Integrated gradients
+
+        CALLING SEQUENCE:
+        
+            yout,dyoutdx = integrate_filterg(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil)
+        
+        MODIFICATION HISTORY : Juan Alday (29/04/2021)
+        
+    """
+
+    #If only one geometry needs to be convolved
+    if ( (y.ndim==1) & (dydx.ndim==2)):
+    
+        #It is assumed all geometries cover the same spectral range
+        nx = dydx.shape[1]
+
+        yout = np.zeros(nconv)
+        gradout = np.zeros((nconv,nx))
+
+        #Filter function for each convolution number in each case is read from .fil file
+        for j in range(nconv):
+            v1 = vfil[0,j]
+            v2 = vfil[nfil[j]-1,j]
+            #Find relevant points in tabulated files
+            inwave = np.where( (vwave>=v1) & (vwave<=v2) )[0]
+
+            #Interpolating the filter function at the calculation wavenumbers
+            afil_interp = np.interp(vwave[inwave],vfil[0:nfil[j],j],afil[0:nfil[j],j])
+            
+            #Integrating the product of the spectrum and the filter function
+            yout[j] = np.trapz(y[inwave] * afil_interp, vwave[inwave])
+            gradout[j,:] = np.trapz(dydx[inwave,:] * afil_interp[:, None], vwave[inwave], axis=0)
+
+    return yout,gradout
+
+###############################################################################################
+@jit(nopython=True)
+def integrate_filterg_ngeom(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil):
+
+    """
+        FUNCTION NAME : integrate_filterg_ngeom()
+        
+        DESCRIPTION : Integrate the modelled spectra (NGEOM spectra) and gradients over a filter function
+                      In this case, the filter function is defined by NFIL,VFIL and AFIL from the .fil file
+        
+        INPUTS :
+            nwave :: Number of calculation wavenumbers
+            vwave(nwave) :: Calculation wavenumbers
+            y(nwave,ngeom) :: Modelled spectra
+            dydx(nwave,ngeom,nx) :: Modelled gradients with respect to each element of the state vector
+            nconv :: Number of convolution wavenumbers
+            vconv(nconv) :: Convolution wavenumbers
+            nfil(nconv) :: Number of wavenumbers required to define the filter function
+                            in each convolution wavenumber
+            vfil(nfil,nconv) :: Wavenumbers required to define the filter function in each convolution wavenumber
+            afil(nfil,nconv) :: Function defining the filter function in each convolution wavenumber
+
+        OPTIONAL INPUTS: none
+        
+        OUTPUTS :
+        
+            yout(nconv,ngeom) :: Integrated spectra
+            dyoutdx(nconv,ngeom,nx) :: Integrated gradients
+
+        CALLING SEQUENCE:
+        
+            yout,dyoutdx = integrate_filterg_ngeom(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil)
+        
+        MODIFICATION HISTORY : Juan Alday (29/04/2021)
+        
+    """
+
+    #If only one geometry needs to be convolved
+    if ( (y.ndim==2) & (dydx.ndim==3)):
+    
+        #It is assumed all geometries cover the same spectral range
+        nx = dydx.shape[2]
+        ngeom = dydx.shape[1]
+
+        yout = np.zeros((nconv,ngeom))
+        gradout = np.zeros((nconv,ngeom,nx))
+
+        #Filter function for each convolution number in each case is read from .fil file
+        for j in range(nconv):
+            v1 = vfil[0,j]
+            v2 = vfil[nfil[j]-1,j]
+            #Find relevant points in tabulated files
+            inwave = np.where( (vwave>=v1) & (vwave<=v2) )[0]
+
+            #Interpolating the filter function at the calculation wavenumbers
+            afil_interp = np.interp(vwave[inwave],vfil[0:nfil[j],j],afil[0:nfil[j],j])
+            
+            #Integrating the product of the spectrum and the filter function
+            yout[j,:] = np.trapz(y[inwave,:] * afil_interp[:, None], vwave[inwave], axis=0)
+            
+            for k in range(nx):
+                gradout[j,:,k] = np.trapz(dydx[inwave,:,k] * afil_interp[:, None], vwave[inwave], axis=0)
 
     return yout,gradout

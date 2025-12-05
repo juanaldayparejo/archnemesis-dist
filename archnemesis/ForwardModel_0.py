@@ -499,23 +499,31 @@ class ForwardModel_0:
                 SPEC *= TRANSMISSION_TELLURICx
                 
             
-            #Convolving the spectra with the Instrument line shape
-            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
-                if os.path.exists(self.runname+'.fwh')==True:
-                    FWHMEXIST=self.runname
-                else:
-                    FWHMEXIST=''
+            #Convolving the spectra with the Instrument line shape or integrating over filter function
+            if self.Measurement.IFORM == SpectraUnit.Integrated_radiance:
+                
+                #Integrating the radiance over the filter function
+                SPECONV1 = self.Measurement.integrate_filter(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+                
+            else:
+                
+                #Convolving the spectra with the Instrument line shape
+                if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+                    if os.path.exists(self.runname+'.fwh')==True:
+                        FWHMEXIST=self.runname
+                    else:
+                        FWHMEXIST=''
 
-                SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
+                    SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
-            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
-                SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+                    SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
 
-            SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
-            
-            #Normalising measurement to a given wavelength if required
-            if self.Measurement.IFORM == SpectraUnit.Normalised_radiance:
-                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
+                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
+                
+                #Normalising measurement to a given wavelength if required
+                if self.Measurement.IFORM == SpectraUnit.Normalised_radiance:
+                    SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
 
         #Applying any changes to the computed spectra required by the state vector
         dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX))
@@ -678,19 +686,29 @@ class ForwardModel_0:
                 SPEC *= TRANSMISSION_TELLURICx
                 dSPEC[:,:] = (dSPEC[:,:].T * TRANSMISSION_TELLURICx).T 
 
-            #Convolving the spectra with the Instrument line shape
-            if self.Spectroscopy.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+ 
+            #Convolving the spectra with the Instrument line shape or integrating over filter function
+            if self.Measurement.IFORM == SpectraUnit.Integrated_radiance:
+                
+                #Integrating the radiance over the filter function
+                SPECONV1,dSPECONV1 = self.Measurement.integrate_filterg(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+                
+            else:
+            
+                #Convolving the spectra with the Instrument line shape
+            
+                if self.Spectroscopy.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
 
-                if os.path.exists(self.runname+'.fwh')==True:
-                    FWHMEXIST=self.runname
-                else:
-                    FWHMEXIST=''
+                    if os.path.exists(self.runname+'.fwh')==True:
+                        FWHMEXIST=self.runname
+                    else:
+                        FWHMEXIST=''
 
-                SPECONV1,dSPECONV1 = self.Measurement.convg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
+                    SPECONV1,dSPECONV1 = self.Measurement.convg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
-            elif self.Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+                elif self.Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
 
-                SPECONV1,dSPECONV1 = self.Measurement.lblconvg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
+                    SPECONV1,dSPECONV1 = self.Measurement.lblconvg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
 
             SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
             dSPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM,:] = dSPECONV1[0:self.Measurement.NCONV[IGEOM],:]
@@ -1250,12 +1268,23 @@ class ForwardModel_0:
 
                 SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
 
-        #Convolving the spectrum with the instrument line shape
-        _lgr.info('Convolving spectra and gradients with instrument line shape')
-        if self.SpectroscopyX.ILBL==0:
-            SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
-        elif self.SpectroscopyX.ILBL==2:
-            SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+
+        #Convolving the spectra with the Instrument line shape or integrating over filter function
+        if self.MeasurementX.IFORM == SpectraUnit.Integrated_radiance:
+            
+            #Integrating the radiance over the filter function
+            _lgr.info('Integrating spectra and gradients over filter function')
+            SPECONV = self.MeasurementX.integrate_filter(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+            
+        else:
+        
+            #Convolving the spectrum with the instrument line shape
+            _lgr.info('Convolving spectra and gradients with instrument line shape')
+            if self.SpectroscopyX.ILBL==0:
+                SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+            elif self.SpectroscopyX.ILBL==2:
+                SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+                
         dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
 
         #Applying any changes to the spectra required by the state vector
@@ -1391,15 +1420,25 @@ class ForwardModel_0:
                 SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
                 dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]*(1.-fhl) + dSPECOUT[:,ibaseh,:]*(1.-fhh)
 
-        #Convolving the spectrum with the instrument line shape
-        _lgr.info('Convolving spectra and gradients with instrument line shape')
-        if self.SpectroscopyX.ILBL==0:
-            SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
-        elif self.SpectroscopyX.ILBL==2:
-            SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
 
-        #Calculating the gradients of any parameterisations involving the convolution
-        dSPECONV = self.subspeconv(self.SpectroscopyX.WAVE,SPECMOD,dSPECONV)
+        #Convolving the spectra with the Instrument line shape or integrating over filter function
+        if self.MeasurementX.IFORM == SpectraUnit.Integrated_radiance:
+            
+            #Integrating the radiance over the filter function
+            _lgr.info('Integrating spectra and gradients over filter function')
+            SPECONV,dSPECONV = self.MeasurementX.integrate_filterg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+            
+        else:
+
+            #Convolving the spectrum with the instrument line shape
+            _lgr.info('Convolving spectra and gradients with instrument line shape')
+            if self.SpectroscopyX.ILBL==0:
+                SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+            elif self.SpectroscopyX.ILBL==2:
+                SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+
+            #Calculating the gradients of any parameterisations involving the convolution
+            dSPECONV = self.subspeconv(self.SpectroscopyX.WAVE,SPECMOD,dSPECONV)
         
         #Applying any changes to the spectra required by the state vector
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
