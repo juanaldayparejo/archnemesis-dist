@@ -793,6 +793,12 @@ class OptimalEstimation_0:
                 elif Measurement.IFORM==SpectraUnit.Normalised_radiance: #5
                     str4='Transmission'
                     xfac=1.0
+                elif Measurement.IFORM==SpectraUnit.Normalised_radiance: #5
+                    str4='Transmission'
+                    xfac=1.0
+                elif Measurement.IFORM==SpectraUnit.Integrated_radiance: #6
+                    str4='Integrated radiance over filter function / W cm-2 sr-1'
+                    xfac=1.0
                 else:
                     _lgr.warning(' in .mre :: IFORM not defined. Default=0')
                     str4='Radiances expressed as nW cm-2 sr-1 cm' 
@@ -817,6 +823,9 @@ class OptimalEstimation_0:
                     xfac=1.0
                 elif Measurement.IFORM==SpectraUnit.Normalised_radiance: #5
                     str4='Transmission'
+                    xfac=1.0
+                elif Measurement.IFORM==SpectraUnit.Integrated_radiance: #6
+                    str4='Integrated radiance over filter function / W cm-2 sr-1'
                     xfac=1.0
                 else:
                     _lgr.warning(' in .mre :: IFORM not defined. Default=0')
@@ -1457,7 +1466,6 @@ def coreretOE(
                     _lgr.info('nemesis :: Temperature has gone negative --- increasing brake')
                     alambda *= 10
                     check_marquardt_brake = True
-
 
 
         #Calculate test spectrum using trial state vector xn1. 
