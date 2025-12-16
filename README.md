@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/juanaldayparejo/archnemesis-dist/main/docs/images/archnemesis_logo_black_background.png" alt="archNEMESIS logo" width="400"/>
 </p>
 
-[![DOI](https://img.shields.io/badge/version-v1.0.4-red)](https://doi.org/10.5281/zenodo.15789739)
+[![DOI](https://img.shields.io/badge/version-v1.0.6-red)](https://doi.org/10.5281/zenodo.17948742)
 [![Documentation](https://img.shields.io/badge/readthedocs-latest-blue)](https://archnemesis.readthedocs.io)
 [![GitHub](https://img.shields.io/badge/github-code-green)](https://github.com/juanaldayparejo/archnemesis-dist)
 [![archNEMESIS](https://img.shields.io/badge/archNEMESIS-reference-yellow)](https://doi.org/10.5334/jors.554)

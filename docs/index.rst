@@ -6,8 +6,8 @@
 
 =========================
 
-.. image:: https://img.shields.io/badge/version-v1.0.4-red
-  :target: https://doi.org/10.5281/zenodo.15789739
+.. image:: https://img.shields.io/badge/version-v1.0.6-red
+  :target: https://doi.org/10.5281/zenodo.17948742
 
 .. image:: https://img.shields.io/badge/readthedocs-latest-blue
    :target: https://archnemesis.readthedocs.io
