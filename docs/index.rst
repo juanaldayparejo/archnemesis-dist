@@ -106,7 +106,18 @@ If archNEMESIS has been significant in your research, we suggest citing the foll
 Revision history
 -----------------------------
 
-- 1.0.5 (8 July, 2025)
+- `1.0.6 <https://doi.org/10.5281/zenodo.17948742>`_ (16 December, 2025)
+   - Fixing bugs to reconcile results with NEMESIS.
+   - Implemented LineData class with functionality to extract data from HITRAN using HAPI.
+   - Implemented first version of cross section calculations.
+   - Combined radiative transfer calculations with and without gradients in same function (CIRSradg is now CIRSrad(gradients=True)).
+   - Added forward modelling error capabilities.
+   - First implementation of nemesisdisc, forward model type for gradient calculations (no scattering) and multiple averaging points.
+   - Added functionality to read information from previous retrievals (LIN parameter).
+   - Implemented AOTF spectrometer modelling capabilities in nemesisSO.
+   - Implemented integration of signal across filters in nemesis (for modelling spectra from radiometers).
+
+- `1.0.5 <https://doi.org/10.5281/zenodo.15839794>`_ (8 July, 2025)
     - New release of archNEMESIS for publication at Journal of Open Research Software.
     - Fixed minor bugs throughout the code.
     - Added unit test for calculation of optical properties using Mie Theory.
