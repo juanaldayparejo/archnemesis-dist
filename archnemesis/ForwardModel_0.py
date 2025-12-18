@@ -503,7 +503,7 @@ class ForwardModel_0:
             if self.Measurement.IFORM == SpectraUnit.Integrated_radiance:
                 
                 #Integrating the radiance over the filter function
-                SPECONV1 = self.Measurement.integrate_filter(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = self.Measurement.integrate_filter(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
                 
             else:
                 
@@ -1870,10 +1870,10 @@ class ForwardModel_0:
             MODIFICATION HISTORY : Joe Penn (9/07/2024)
 
         """
-        start, end, xnx, ixrun, nemesisSO, nemesisL, YNtot, nfm = args
+        start, end, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, YNtot, nfm = args
         results = np.copy(YNtot)  # Local copy to prevent conflicts
         for ifm in range(start, end):
-            inp = (ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, results)
+            inp = (ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, results)
             results = self.execute_fm(inp)
         return start, results
 
@@ -1895,7 +1895,7 @@ class ForwardModel_0:
         import archnemesis.cfg.logs
         
         # Unpack input tuple
-        ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, YNtot = inp
+        ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, YNtot = inp
         # ifm - index of forward model
         # nfm - number of forward models
         # xnx - array holding state vectors for all parallel forward models
@@ -1909,7 +1909,7 @@ class ForwardModel_0:
         
         
         # Find the method to use when modelling the spectrum
-        nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, analytical_gradient=False)
+        nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, nemesisdisc, analytical_gradient=False)
         
         _lgr.info(f'Calculating forward model {ifm+1}/{nfm}')
         
@@ -2014,6 +2014,8 @@ class ForwardModel_0:
         if self.Scatter.ISCAT != ScatteringCalculationMode.THERMAL_EMISSION:
             self.Variables.NUM[:] = 1  #If scattering is present, gradients are calculated numerically
         
+        if nemesisdisc is True:
+            self.Variables.NUM[:] = 1  #If scattering is present, gradients are calculated numerically
         
         ian1 = np.where(self.Variables.NUM==0)  #Gradients calculated using CIRSradg
         ian1 = ian1[0]
@@ -2070,7 +2072,7 @@ class ForwardModel_0:
 
             chunks = [(i * base_chunk_size + min(i, remainder),
                        (i + 1) * base_chunk_size + min(i + 1, remainder),
-                       xnx, ixrun, nemesisSO, nemesisL, YNtot, nfm) for i in range(NCores)]
+                       xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, YNtot, nfm) for i in range(NCores)]
 
              #with Pool(NCores) as pool:
                  #results = pool.map(self.chunked_execution, chunks)
