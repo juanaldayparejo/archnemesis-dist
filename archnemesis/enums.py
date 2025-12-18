@@ -9,7 +9,7 @@ class PlanetEnum(IntEnum):
     """
     Define values for 'IPLANET', the planet being observed.
     """
-    UNDEFINED = -1
+    CUSTOM = -1
     Mercury = 1
     Venus = 2
     Earth = 3
