@@ -1944,7 +1944,7 @@ class ForwardModel_0:
     
     ###############################################################################################
 
-    def jacobian_nemesis(self,NCores=1,nemesisSO=False,nemesisL=False,nemesisdisc=False):
+    def jacobian_nemesis(self,NCores=1,nemesisSO=False,nemesisL=False,nemesisdisc=False,analytical_gradient=True):
 
         """
 
@@ -2014,7 +2014,7 @@ class ForwardModel_0:
         if self.Scatter.ISCAT != ScatteringCalculationMode.THERMAL_EMISSION:
             self.Variables.NUM[:] = 1  #If scattering is present, gradients are calculated numerically
         
-        if nemesisdisc is True:
+        if analytical_gradient is False:
             self.Variables.NUM[:] = 1  #If scattering is present, gradients are calculated numerically
         
         ian1 = np.where(self.Variables.NUM==0)  #Gradients calculated using CIRSradg
