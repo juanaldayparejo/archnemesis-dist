@@ -30,7 +30,6 @@ from archnemesis.enums import Gas, ParaH2Ratio
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
 
 ###############################################################################################
 
@@ -367,7 +366,7 @@ class CIA_0:
                 label = label + " ('normal')"
 
             iTEMP = np.argmin(np.abs(self.TEMP-296.))
-            ax1.plot(self.WAVEN,self.K_CIA[i,iTEMP,:],label=label)
+            ax1.plot(self.WAVEN,self.K_CIA[i,0,iTEMP,:],label=label)
 
         ax1.legend()
         ax1.set_facecolor('lightgray')
