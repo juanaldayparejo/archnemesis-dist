@@ -250,9 +250,9 @@ class Atmosphere_0:
             f"IPLANET must be one of {tuple(PlanetEnum)}"
         
         if self.IPLANET==-1: #Custom planet
-            assert np.issubdtype(type(self.PLANET_MASS), np.float) == True , \
+            assert np.issubdtype(type(self.PLANET_MASS), float) == True , \
                 'PLANET_MASS must be defined if custom planet'
-            assert np.issubdtype(type(self.PLANET_RADIUS), np.float) == True , \
+            assert np.issubdtype(type(self.PLANET_RADIUS), float) == True , \
                 'PLANET_RADIUS must be defined if custom planet'    
             
         assert len(self.ID) == self.NVMR , \

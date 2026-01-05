@@ -2904,7 +2904,7 @@ class Measurement_0:
             divider = make_axes_locatable(ax4)
             cax = divider.append_axes("bottom", size="5%", pad=0.15)
             cbar2 = plt.colorbar(im4,cax=cax,orientation='horizontal')
-            cbar2.set_label('Solar Zenith angle')
+            cbar2.set_label('Azimuth angle')
             
             #Plotting the spectra in linear scale
             ax5 = plt.subplot2grid((2,4),(0,2),rowspan=1,colspan=2)
