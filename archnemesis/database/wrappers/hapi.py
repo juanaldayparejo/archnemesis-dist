@@ -77,10 +77,9 @@ else:
     if _lgr.level <= logging.DEBUG:
         hapi.VARIABLES['DISPLAY_FETCH_URL'] = True
     
-    
-    
     hapi.LOCAL_TABLE_CACHE = dict()
 
+    # There are some functions we need to monkey patch to get HAPI to behave
     from . import hapi_monkey_patches as HMP
 
     for name, monkey_patch_fn in inspect.getmembers(HMP, lambda x: inspect.isfunction(x) and x.__name__.endswith('_MONKEYPATCH')):

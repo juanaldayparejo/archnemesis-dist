@@ -18,6 +18,15 @@ Monkey patches for HAPI functions.
 Locations of changes are denoted with a comment that starts with `# FIX`
 """
 
+# Constants required for some of the monkey patches
+hapi.VARIABLES['ON_ERROR_404_CHOICES'] = ('IGNORE', 'WARN', 'ERROR') # Possible values of 'ON_ERROR_404'
+
+# Variables required to control behavior on 404 errors
+#hapi.VARIABLES['ON_ERROR_404'] = 'IGNORE'  # Ignore on 404 errors rather than raising exceptions.
+hapi.VARIABLES['ON_ERROR_404'] = 'WARN'  # Warn on 404 errors rather than raising exceptions.
+#hapi.VARIABLES['ON_ERROR_404'] = 'ERROR' # Raise exceptions on 404 errors rather than warning.
+
+
 # "position" dictionary for table was not being constructed correctly, leading to
 # database corruption when `hapi.db_commit()` was called
 def storage2cache_MONKEYPATCH(TableName,cast=True,ext=None,nlines=None,pos=None):
@@ -251,6 +260,9 @@ def queryHITRAN_MONKEYPATCH(TableName, iso_id_list, numin, numax, pargroups=[], 
     if hapi.VARIABLES['DISPLAY_FETCH_URL']:
         print(url + '\n')
     
+    
+    req = None # FIX, initialize req variable so failed requests can be handled correctly
+    
     try:
         
         context = ssl._create_unverified_context() # FIX, created SSL context
@@ -265,6 +277,16 @@ def queryHITRAN_MONKEYPATCH(TableName, iso_id_list, numin, numax, pargroups=[], 
     except urllib.error.HTTPError as e:
         if e.code == 403:
             raise RuntimeError('Daily API query limit exceeded') from e
+        elif e.code == 404: # FIX, added handling of 404 errors
+            on_error_404 = hapi.VARIABLES.get('ON_ERROR_404', 'ERROR').upper()
+            if on_error_404 == 'IGNORE':
+                pass
+            elif on_error_404 == 'WARN':
+                print(f'WARNING: Data for the given parameters not found (404). This probably means that the HITRAN database has no lines for the requested isotope in the requested wavelength range. URL: "{e.url}"')
+            elif on_error_404 == 'ERROR':
+                raise RuntimeError(f'Failed to retrieve data for given parameters. Code : {e.code} URL : "{e.url}" Error : {e.reason}') from e
+            else:
+                raise RuntimeError(f'Invalid value for hapi.VARIABLES["ON_ERROR_404"]: "{on_error_404}". Must be one of {hapi.VARIABLES["ON_ERROR_404_CHOICES"]}') from e
         else:
             raise RuntimeError(f'Failed to retrieve data for given parameters. Code : {e.code} URL : "{e.url}" Error : {e.reason}') from e
     except urllib.error.URLError as e:
@@ -274,12 +296,15 @@ def queryHITRAN_MONKEYPATCH(TableName, iso_id_list, numin, numax, pargroups=[], 
     print('BEGIN DOWNLOAD: ' + TableName)
     
     with open(DataFileName, 'w') as fp:
-        while True:
-            chunk = req.read(CHUNK)
-            if not chunk:
-                break
-            fp.write(chunk.decode('utf-8'))
-            print('  %d bytes written to %s' % (CHUNK, DataFileName))
+        if req is None:
+            print('  No data present for the given parameters')
+        else:
+            while True:
+                chunk = req.read(CHUNK)
+                if not chunk:
+                    break
+                fp.write(chunk.decode('utf-8'))
+                print('  %d bytes written to %s' % (CHUNK, DataFileName))
     
     with open(HeaderFileName, 'w') as fp:
         fp.write(json.dumps(TableHeader, indent=2))
