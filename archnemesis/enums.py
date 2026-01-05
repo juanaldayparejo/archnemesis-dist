@@ -9,7 +9,7 @@ class PlanetEnum(IntEnum):
     """
     Define values for 'IPLANET', the planet being observed.
     """
-    UNDEFINED = -1
+    CUSTOM = -1
     Mercury = 1
     Venus = 2
     Earth = 3
@@ -210,6 +210,7 @@ class SpectraUnit(IntEnum):
     Integrated_spectral_power = 3 # Integrated spectral power of planet - W (cm-1)-1 if ISPACE=0 ---- W um-1 if ISPACE=1
     Atmospheric_transmission = 4 # Atmospheric transmission multiplied by solar flux
     Normalised_radiance = 5 # Normalised radiance to a given wavelength (VNORM)
+    Integrated_radiance = 6 # Integrated radiance over filter function - W cm-2 sr-1 if ISPACE=0 ---- W cm-2 sr-1 if ISPACE=1
 
 class SpectralCalculationMode(IntEnum):
     """

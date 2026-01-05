@@ -25,13 +25,12 @@ Contains the parameters describing different planets.
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
 
 
 planet_info = {
     "1": {
         "name": "Mercury",
-        "mass": 0.33022e24,  #kg
+        "mass": 0.33022e24,  #kg 
         "radius": 2439.7,    #km
         "flatten": 0.0,      
         "rotation": 58.6462, #days
@@ -40,7 +39,7 @@ planet_info = {
         },
     "2": {
         "name": "Venus",
-        "mass": 4.8690,  #kg
+        "mass": 4.8690e24,  #kg
         "radius": 6051.8,    #km
         "flatten": 0.0,      
         "rotation": -243.0187, #days
@@ -49,7 +48,7 @@ planet_info = {
         },
     "3": {
         "name": "Earth",
-        "mass": 5.9742,  #kg
+        "mass": 5.9742e24,  #kg
         "radius": 6378.14,    #km
         "flatten": 0.00335364,      
         "rotation": 0.99726968, #days
@@ -58,7 +57,7 @@ planet_info = {
         },
     "4": {
         "name": "Mars",
-        "mass": 0.64191,  #kg
+        "mass": 0.64191e24,  #kg
         "radius": 3397.0,    #km
         "flatten": 0.006476,      
         "rotation": 1.02595675, #days
@@ -67,7 +66,7 @@ planet_info = {
         }, 
     "5": {
         "name": "Jupiter",
-        "mass": 1898.2,  #kg
+        "mass": 1898.2e24,  #kg
         "radius": 71492.0,    #km
         "flatten": 0.064874,      
         "rotation": 0.41354, #days
@@ -76,7 +75,7 @@ planet_info = {
         },
     "6": {
         "name": "Saturn",
-        "mass": 568.5,  #kg
+        "mass": 568.5e24,  #kg
         "radius": 60268.0,    #km
         "flatten": 0.097962,      
         "rotation": 0.44401, #days
@@ -85,7 +84,7 @@ planet_info = {
         },
     "7": {
         "name": "Uranus",
-        "mass": 86.625,  #kg
+        "mass": 86.625e24,  #kg
         "radius": 25559.0,    #km
         "flatten": 0.022000,      
         "rotation": -0.71833, #days
@@ -94,7 +93,7 @@ planet_info = {
         },
     "8": {
         "name": "Neptune",
-        "mass": 102.78,  #kg
+        "mass": 102.78e24,  #kg
         "radius": 24764.0,    #km
         "flatten": 0.017081,      
         "rotation": 0.67125, #days
@@ -103,7 +102,7 @@ planet_info = {
         },
     "9": {
         "name": "Pluto",
-        "mass": 0.015,  #kg
+        "mass": 0.015e24,  #kg
         "radius": 1151.0,    #km
         "flatten": 0.0,      
         "rotation": -6.3872, #days
@@ -112,7 +111,7 @@ planet_info = {
         },
     "10": {
         "name": "Sun",
-        "mass": 1989000.0,  #kg
+        "mass": 1989000.0e24,  #kg
         "radius": 695000.0,    #km
         "flatten": 0.0,      
         "rotation": 25.38, #days
@@ -121,7 +120,7 @@ planet_info = {
         },
     "11": {
         "name": "Titan",
-        "mass": 0.1353,  #kg
+        "mass": 0.1353e24,  #kg
         "radius": 2575.0,    #km
         "flatten": 0.0,      
         "rotation": 15.945, #days
@@ -130,7 +129,7 @@ planet_info = {
         },
     "85": {
         "name": "NGTS-10b",
-        "mass": 4103.757,  #kg
+        "mass": 4103.757e24,  #kg
         "radius": 86147.86,    #km
         "flatten": 0.0,      
         "rotation": 100000.0, #days
@@ -139,7 +138,7 @@ planet_info = {
         },
     "87": {
         "name": "WASP-43b",
-        "mass": 3895.110,  #kg
+        "mass": 3895.110e24,  #kg
         "radius": 74065.70,    #km
         "flatten": 0.0,      
         "rotation": 100000.0, #days

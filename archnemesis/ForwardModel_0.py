@@ -102,6 +102,7 @@ class ForwardModel_0:
             Variables=None, 
             Telluric=None, 
             adjust_hydrostat=True,
+            NCores=None
     ):
 
         """Forward Model class
@@ -177,6 +178,8 @@ class ForwardModel_0:
             ForwardModel_0.nemesisfmg()
             ForwardModel_0.nemesisSOfm()
             ForwardModel_0.nemesisSOfmg()
+            ForwardModel_0.nemesisdiscfm()
+            ForwardModel_0.nemesisdiscfmg()
             ForwardModel_0.nemesisLfm()
             ForwardModel_0.nemesisLfmg()
             ForwardModel_0.nemesisCfm()
@@ -239,6 +242,8 @@ class ForwardModel_0:
         self.Layer = Layer
         self.Telluric = Telluric
         self.adjust_hydrostat=adjust_hydrostat
+        self.NCores = NCores
+
         
         
         # Check that Measurement has an instrument response function when LBL tables are used
@@ -353,6 +358,7 @@ class ForwardModel_0:
             self,
             nemesisSO : bool = False,
             nemesisL : bool = False,
+            nemesisdisc : bool = False,
             analytical_gradient : bool = False,
         ) -> Callable[[],np.ndarray] | Callable[[],tuple[np.ndarray,np.ndarray]]:
         """
@@ -365,6 +371,8 @@ class ForwardModel_0:
             method = self.nemesisSOfmg if analytical_gradient else self.nemesisSOfm
         elif nemesisL:
             method = self.nemesisLfmg if analytical_gradient else self.nemesisLfm
+        elif nemesisdisc:
+            method = self.nemesisdiscfmg if analytical_gradient else self.nemesisdiscfm
         else:
             method = self.nemesisfmg if analytical_gradient else self.nemesisfm
         
@@ -491,30 +499,37 @@ class ForwardModel_0:
                 SPEC *= TRANSMISSION_TELLURICx
                 
             
-            #Convolving the spectra with the Instrument line shape
-            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
-                if os.path.exists(self.runname+'.fwh')==True:
-                    FWHMEXIST=self.runname
-                else:
-                    FWHMEXIST=''
+            #Convolving the spectra with the Instrument line shape or integrating over filter function
+            if self.Measurement.IFORM == SpectraUnit.Integrated_radiance:
+                
+                #Integrating the radiance over the filter function
+                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = self.Measurement.integrate_filter(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+                
+            else:
+                
+                #Convolving the spectra with the Instrument line shape
+                if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+                    if os.path.exists(self.runname+'.fwh')==True:
+                        FWHMEXIST=self.runname
+                    else:
+                        FWHMEXIST=''
 
-                SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
+                    SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
-            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
-                SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+                    SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
 
-            SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
-            
-            #Normalising measurement to a given wavelength if required
-            if self.Measurement.IFORM == SpectraUnit.Normalised_radiance:
-                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
+                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
+                
+                #Normalising measurement to a given wavelength if required
+                if self.Measurement.IFORM == SpectraUnit.Normalised_radiance:
+                    SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
 
         #Applying any changes to the computed spectra required by the state vector
         dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX))
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
 
         return SPECONV
-
 
     ###############################################################################################
 
@@ -671,19 +686,29 @@ class ForwardModel_0:
                 SPEC *= TRANSMISSION_TELLURICx
                 dSPEC[:,:] = (dSPEC[:,:].T * TRANSMISSION_TELLURICx).T 
 
-            #Convolving the spectra with the Instrument line shape
-            if self.Spectroscopy.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+ 
+            #Convolving the spectra with the Instrument line shape or integrating over filter function
+            if self.Measurement.IFORM == SpectraUnit.Integrated_radiance:
+                
+                #Integrating the radiance over the filter function
+                SPECONV1,dSPECONV1 = self.Measurement.integrate_filterg(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+                
+            else:
+            
+                #Convolving the spectra with the Instrument line shape
+            
+                if self.Spectroscopy.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
 
-                if os.path.exists(self.runname+'.fwh')==True:
-                    FWHMEXIST=self.runname
-                else:
-                    FWHMEXIST=''
+                    if os.path.exists(self.runname+'.fwh')==True:
+                        FWHMEXIST=self.runname
+                    else:
+                        FWHMEXIST=''
 
-                SPECONV1,dSPECONV1 = self.Measurement.convg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
+                    SPECONV1,dSPECONV1 = self.Measurement.convg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
-            elif self.Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+                elif self.Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
 
-                SPECONV1,dSPECONV1 = self.Measurement.lblconvg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
+                    SPECONV1,dSPECONV1 = self.Measurement.lblconvg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
 
             SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
             dSPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM,:] = dSPECONV1[0:self.Measurement.NCONV[IGEOM],:]
@@ -737,76 +762,151 @@ class ForwardModel_0:
         self.check_gas_spec_atm()
         self.check_wave_range_consistency()
         
-        #Defining spectral range         
-        self.Measurement.build_ils(IGEOM=0) 
-        wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
+        if self.MeasurementX.NORDERS_AOTF is not None:
             
-        #Reading tables in the required wavelength range
-        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            _lgr.info('Calculating forward models for each of the diffraction orders to reconstruct AOTF filter function')
+            
+            vconv_orig = deepcopy(self.MeasurementX.VCONV)
+            
+            SPECONV_combined = np.zeros((self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM))
+            for iorder in range(self.MeasurementX.NORDERS_AOTF):
+                _lgr.info(f'Calculating forward model for diffraction order {iorder+1} of {self.MeasurementX.NORDERS_AOTF}')
 
-        #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
-        self.adjust_hydrostat = False
+                self.SpectroscopyX = deepcopy(self.Spectroscopy)
+                self.MeasurementX.edit_VCONV(self.MeasurementX.VCONV_AOTF[:,:,iorder])
+                if self.MeasurementX.FWHM<0.0:
+                    self.MeasurementX.NFIL = self.MeasurementX.NFIL_AOTF[:,iorder]
+                    self.MeasurementX.VFIL = self.MeasurementX.VFIL_AOTF[:,:,iorder]
+                    self.MeasurementX.AFIL = self.MeasurementX.AFIL_AOTF[:,:,iorder]
 
-        #Mapping variables into different classes
-        _ = self.subprofretg() # xmap
+                _lgr.info(f'Spectral range = {self.MeasurementX.VCONV.min()} to {self.MeasurementX.VCONV.max()}')
 
-        #Calculating the atmospheric paths
-        self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
-        self.calc_path_SO()
-        BASEH_TANHE = np.zeros(self.PathX.NPATH)
-        for i in range(self.PathX.NPATH):
-            BASEH_TANHE[i] = self.LayerX.BASEH[self.PathX.LAYINC[int(self.PathX.NLAYIN[i]/2),i]]/1.0e3
+                #Defining spectral range         
+                self.MeasurementX.build_ils(IGEOM=0)
+                wavecalc_min,wavecalc_max = self.MeasurementX.calc_wave_range(apply_doppler=True,IGEOM=None)
 
-        #Calling CIRSrad to calculate the spectra
-        SPECOUT = self.CIRSrad()
+                #Reading tables in the required wavelength range
+                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
-        #Interpolating the spectra to the correct altitudes defined in Measurement
-        SPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM])
-        for i in range(self.MeasurementX.NGEOM):
+                #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
+                self.adjust_hydrostat = False
 
-            #Find altitudes above and below the actual tangent height
-            ibase = np.argmin(np.abs(BASEH_TANHE-self.MeasurementX.TANHE[i]))
-            base0 = BASEH_TANHE[ibase]/1.0e3
-            if base0<=self.MeasurementX.TANHE[i]:
-                ibasel = ibase
-                ibaseh = ibase + 1
-            else:
-                ibasel = ibase - 1
-                ibaseh = ibase
+                #Mapping variables into different classes
+                _ = self.subprofretg() # xmap
 
-            if ibaseh>self.PathX.NPATH-1:
-                SPECMOD[:,i] = SPECOUT[:,ibasel]
-            else:
-                fhl = (self.MeasurementX.TANHE[i]-BASEH_TANHE[ibasel])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
-                fhh = (BASEH_TANHE[ibaseh]-self.MeasurementX.TANHE[i])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+                #Calculating the atmospheric paths
+                self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
+                self.calc_path_SO()
+                BASEH_TANHE = np.zeros(self.PathX.NPATH)
+                for i in range(self.PathX.NPATH):
+                    BASEH_TANHE[i] = self.LayerX.BASEH[self.PathX.LAYINC[int(self.PathX.NLAYIN[i]/2),i]]/1.0e3
 
-                SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
+                #Calling CIRSrad to calculate the spectra
+                SPECOUT = self.CIRSrad()
 
+                #Interpolating the spectra to the correct altitudes defined in Measurement
+                SPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM])
+                for i in range(self.MeasurementX.NGEOM):
 
-        #Convolving the spectrum with the instrument line shape
-        _lgr.info('Convolving spectra and gradients with instrument line shape')
-        if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
-            SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
-        elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+                    #Find altitudes above and below the actual tangent height
+                    ibase = np.argmin(np.abs(BASEH_TANHE-self.MeasurementX.TANHE[i]))
+                    base0 = BASEH_TANHE[ibase]/1.0e3
+                    if base0<=self.MeasurementX.TANHE[i]:
+                        ibasel = ibase
+                        ibaseh = ibase + 1
+                    else:
+                        ibasel = ibase - 1
+                        ibaseh = ibase
+
+                    if ibaseh>self.PathX.NPATH-1:
+                        SPECMOD[:,i] = SPECOUT[:,ibasel]
+                    else:
+                        fhl = (self.MeasurementX.TANHE[i]-BASEH_TANHE[ibasel])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+                        fhh = (BASEH_TANHE[ibaseh]-self.MeasurementX.TANHE[i])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+
+                        SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
+
+                #Convolving the spectrum with the instrument line shape
+                _lgr.info('Convolving spectra and gradients with instrument line shape')
+                if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+                    SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                    SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+                
+                #Applying AOTF weights to combine the different diffraction orders
+                SPECONV_combined += (SPECONV * self.MeasurementX.TRANS_AOTF[:,:,iorder])
+
+                #Restoring original convolution wavelengths
+                self.MeasurementX.edit_VCONV(vconv_orig)
+
+            #Normalising by the total AOTF weights
+            SPECONV = (SPECONV_combined / np.sum(self.MeasurementX.TRANS_AOTF,axis=2))
+
+            #Applying any changes to the spectra required by the state vector
+            dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
+            SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+
+        else:
+            
+            _lgr.info('Calculating forward model for solar occultation observation')
         
-        dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
+            #Defining spectral range         
+            self.Measurement.build_ils(IGEOM=0) 
+            wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
+                
+            #Reading tables in the required wavelength range
+            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
-        #Applying any changes to the spectra required by the state vector
-        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+            #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
+            self.adjust_hydrostat = False
 
-        #Fitting the polynomial baseline with python
-        #basem = self.MeasurementX.MEAS / SPECONV
-        
-        #ndegree = 2
-        #for it in range(self.MeasurementX.NGEOM):
-        #    pcoef = np.polyfit(self.MeasurementX.VCONV[:,it]-self.MeasurementX.VCONV[0,it],basem[:,it],ndegree)
-        
-        #    baseline_fit = np.zeros(self.MeasurementX.NCONV[it])
-        #    for ideg in range(ndegree+1):
-        #        baseline_fit[:] = baseline_fit[:] + pcoef[ideg] * (self.MeasurementX.VCONV[:,it]-self.MeasurementX.VCONV[0,it])**(ndegree-ideg)
- 
-        #    SPECONV[:,it] = SPECONV[:,it] * baseline_fit
+            #Mapping variables into different classes
+            _ = self.subprofretg() # xmap
+
+            #Calculating the atmospheric paths
+            self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
+            self.calc_path_SO()
+            BASEH_TANHE = np.zeros(self.PathX.NPATH)
+            for i in range(self.PathX.NPATH):
+                BASEH_TANHE[i] = self.LayerX.BASEH[self.PathX.LAYINC[int(self.PathX.NLAYIN[i]/2),i]]/1.0e3
+
+            #Calling CIRSrad to calculate the spectra
+            SPECOUT = self.CIRSrad()
+
+            #Interpolating the spectra to the correct altitudes defined in Measurement
+            SPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM])
+            for i in range(self.MeasurementX.NGEOM):
+
+                #Find altitudes above and below the actual tangent height
+                ibase = np.argmin(np.abs(BASEH_TANHE-self.MeasurementX.TANHE[i]))
+                base0 = BASEH_TANHE[ibase]/1.0e3
+                if base0<=self.MeasurementX.TANHE[i]:
+                    ibasel = ibase
+                    ibaseh = ibase + 1
+                else:
+                    ibasel = ibase - 1
+                    ibaseh = ibase
+
+                if ibaseh>self.PathX.NPATH-1:
+                    SPECMOD[:,i] = SPECOUT[:,ibasel]
+                else:
+                    fhl = (self.MeasurementX.TANHE[i]-BASEH_TANHE[ibasel])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+                    fhh = (BASEH_TANHE[ibaseh]-self.MeasurementX.TANHE[i])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+
+                    SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
+
+
+            #Convolving the spectrum with the instrument line shape
+            _lgr.info('Convolving spectra and gradients with instrument line shape')
+            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+                SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+            
+            dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
+
+            #Applying any changes to the spectra required by the state vector
+            SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
 
         return SPECONV
 
@@ -869,107 +969,209 @@ class ForwardModel_0:
         self.check_gas_spec_atm()
         self.check_wave_range_consistency()
         
-        #Defining spectral range         
-        self.Measurement.build_ils(IGEOM=0) 
-        wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
+        if self.MeasurementX.NORDERS_AOTF is not None:
             
-        #Reading tables in the required wavelength range
-        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
-
-        #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
-        self.adjust_hydrostat = False
-
-        #Mapping variables into different classes
-        xmap = self.subprofretg()
-
-        #Calculating the atmospheric paths
-        self.calc_pathg_SO()
-        BASEH_TANHE = np.zeros(self.PathX.NPATH)
-        for i in range(self.PathX.NPATH):
-            BASEH_TANHE[i] = self.LayerX.BASEH[self.PathX.LAYINC[int(self.PathX.NLAYIN[i]/2),i]]/1.0e3
-
-
-        #Calling CIRSrad to calculate the spectra
-        _lgr.info('Running CIRSradg')
-        #SPECOUT,dSPECOUT2,dTSURF = CIRSradg(self.runname,self.Variables,self.MeasurementX,self.AtmosphereX,self.SpectroscopyX,self.ScatterX,self.StellarX,self.SurfaceX,self.CIAX,self.LayerX,self.PathX)
-        SPECOUT,dSPECOUT2,dTSURF = self.CIRSrad(return_grad=True)
-
-        #Mapping the gradients from Layer properties to Profile properties
-        _lgr.info('Mapping gradients from Layer to Profile')
-        #Calculating the elements from NVMR+2+NDUST that need to be mapped
-        incpar = []
-        for i in range(self.AtmosphereX.NVMR+2+self.AtmosphereX.NDUST):
-            if np.mean(xmap[:,i,:])!=0.0:
-                incpar.append(i)
-
-        dSPECOUT1 = map2pro(dSPECOUT2,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.PathX.NLAYIN,self.PathX.LAYINC,self.LayerX.DTE,self.LayerX.DAM,self.LayerX.DCO,INCPAR=incpar)
-        #(NWAVE,NVMR+2+NDUST,NPRO,NPATH)
-        del dSPECOUT2
-
-        #Mapping the gradients from Profile properties to elements in state vector
-        _lgr.info('Mapping gradients from Profile to State Vector')
-        dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
-        #(NWAVE,NPATH,NX)
-        del dSPECOUT1
-
-        #Interpolating the spectra to the correct altitudes defined in Measurement
-        SPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM])
-        dSPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM,self.Variables.NX])
-        for i in range(self.MeasurementX.NGEOM):
-
-            #Find altitudes above and below the actual tangent height
-            ibase = np.argmin(np.abs(BASEH_TANHE-self.MeasurementX.TANHE[i]))
-            base0 = BASEH_TANHE[ibase]
+            _lgr.info('Calculating forward models for each of the diffraction orders to reconstruct AOTF filter function')
             
-            if base0<=self.MeasurementX.TANHE[i]:
-                ibasel = ibase
-                ibaseh = ibase + 1
-            else:
-                ibasel = ibase - 1
-                ibaseh = ibase
-
-            if ibaseh>self.PathX.NPATH-1:
-                SPECMOD[:,i] = SPECOUT[:,ibasel]
-                dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]
-            else:
-                fhl = (self.MeasurementX.TANHE[i]-BASEH_TANHE[ibasel])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
-                fhh = (BASEH_TANHE[ibaseh]-self.MeasurementX.TANHE[i])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
-
-                SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
-                dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]*(1.-fhl) + dSPECOUT[:,ibaseh,:]*(1.-fhh)
-
-        #Convolving the spectrum with the instrument line shape
-        _lgr.info('Convolving spectra and gradients with instrument line shape')
-        if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
-            SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
-        elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
-
-        #Calculating the gradients of any parameterisations involving the convolution
-        dSPECONV = self.subspeconv(self.SpectroscopyX.WAVE,SPECMOD,dSPECONV)
-        
-        #Applying any changes to the spectra required by the state vector
-        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
-        
-        #Fitting the polynomial baseline with python
-        #basem = self.MeasurementX.MEAS / SPECONV
-        
-        #ndegree = 2
-        #for it in range(self.MeasurementX.NGEOM):
-        #    pcoef = np.polyfit(self.MeasurementX.VCONV[:,it]-self.MeasurementX.VCONV[0,it],basem[:,it],ndegree)
-        
-        #    baseline_fit = np.zeros(self.MeasurementX.NCONV[it])
-        #    for ideg in range(ndegree+1):
-        #        baseline_fit[:] = baseline_fit[:] + pcoef[ideg] * (self.MeasurementX.VCONV[:,it]-self.MeasurementX.VCONV[0,it])**(ndegree-ideg)
+            vconv_orig = deepcopy(self.MeasurementX.VCONV)
+            
+            SPECONV_combined = np.zeros((self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM))
+            dSPECONV_combined = np.zeros((self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX))
+            
+            for iorder in range(self.MeasurementX.NORDERS_AOTF):
                 
-        #    ix = 0
-        #    for ivar in range(self.Variables.NVAR):
-            
-        #        for j in range(self.Variables.NXVAR[ivar]):
-        #            dSPECONV[:,it,ix] = dSPECONV[:,it,ix] * baseline_fit[:]
-        #            ix = ix + 1
+                _lgr.info(f'Calculating forward model for diffraction order {iorder+1} of {self.MeasurementX.NORDERS_AOTF}')
 
-        #    SPECONV[:,it] = SPECONV[:,it] * baseline_fit
+                self.SpectroscopyX = deepcopy(self.Spectroscopy)
+
+                self.MeasurementX.edit_VCONV(self.MeasurementX.VCONV_AOTF[:,:,iorder])
+                if self.MeasurementX.FWHM<0.0:
+                    self.MeasurementX.NFIL = self.MeasurementX.NFIL_AOTF[:,iorder]
+                    self.MeasurementX.VFIL = self.MeasurementX.VFIL_AOTF[:,:,iorder]
+                    self.MeasurementX.AFIL = self.MeasurementX.AFIL_AOTF[:,:,iorder]
+        
+                #Defining spectral range         
+                self.MeasurementX.build_ils(IGEOM=0) 
+                wavecalc_min,wavecalc_max = self.MeasurementX.calc_wave_range(apply_doppler=True,IGEOM=None)
+                    
+                #Reading tables in the required wavelength range
+                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+
+                #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
+                self.adjust_hydrostat = False
+
+                #Mapping variables into different classes
+                xmap = self.subprofretg()
+
+                #Calculating the atmospheric paths
+                self.calc_pathg_SO()
+                BASEH_TANHE = np.zeros(self.PathX.NPATH)
+                for i in range(self.PathX.NPATH):
+                    BASEH_TANHE[i] = self.LayerX.BASEH[self.PathX.LAYINC[int(self.PathX.NLAYIN[i]/2),i]]/1.0e3
+
+
+                #Calling CIRSrad to calculate the spectra
+                _lgr.info('Running CIRSradg')
+                SPECOUT,dSPECOUT2,dTSURF = self.CIRSrad(return_grad=True)
+
+                #Mapping the gradients from Layer properties to Profile properties
+                _lgr.info('Mapping gradients from Layer to Profile')
+                #Calculating the elements from NVMR+2+NDUST that need to be mapped
+                incpar = []
+                for i in range(self.AtmosphereX.NVMR+2+self.AtmosphereX.NDUST):
+                    if np.mean(xmap[:,i,:])!=0.0:
+                        incpar.append(i)
+
+                dSPECOUT1 = map2pro(dSPECOUT2,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.PathX.NLAYIN,self.PathX.LAYINC,self.LayerX.DTE,self.LayerX.DAM,self.LayerX.DCO,INCPAR=incpar)
+                #(NWAVE,NVMR+2+NDUST,NPRO,NPATH)
+                del dSPECOUT2
+
+                #Mapping the gradients from Profile properties to elements in state vector
+                _lgr.info('Mapping gradients from Profile to State Vector')
+                dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+                #(NWAVE,NPATH,NX)
+                del dSPECOUT1
+
+                #Interpolating the spectra to the correct altitudes defined in Measurement
+                SPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM])
+                dSPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM,self.Variables.NX])
+                for i in range(self.MeasurementX.NGEOM):
+
+                    #Find altitudes above and below the actual tangent height
+                    ibase = np.argmin(np.abs(BASEH_TANHE-self.MeasurementX.TANHE[i]))
+                    base0 = BASEH_TANHE[ibase]
+                    
+                    if base0<=self.MeasurementX.TANHE[i]:
+                        ibasel = ibase
+                        ibaseh = ibase + 1
+                    else:
+                        ibasel = ibase - 1
+                        ibaseh = ibase
+
+                    if ibaseh>self.PathX.NPATH-1:
+                        SPECMOD[:,i] = SPECOUT[:,ibasel]
+                        dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]
+                    else:
+                        fhl = (self.MeasurementX.TANHE[i]-BASEH_TANHE[ibasel])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+                        fhh = (BASEH_TANHE[ibaseh]-self.MeasurementX.TANHE[i])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+
+                        SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
+                        dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]*(1.-fhl) + dSPECOUT[:,ibaseh,:]*(1.-fhh)
+
+                #Convolving the spectrum with the instrument line shape
+                _lgr.info('Convolving spectra and gradients with instrument line shape')
+                if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+                    SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                    SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+
+                #Calculating the gradients of any parameterisations involving the convolution
+                dSPECONV = self.subspeconv(self.SpectroscopyX.WAVE,SPECMOD,dSPECONV)
+                        
+                #Applying AOTF weights to combine the different diffraction orders
+                for igeom in range(self.MeasurementX.NGEOM):
+                    SPECONV_combined[:,igeom] += (SPECONV[:,igeom] * self.MeasurementX.TRANS_AOTF[:,igeom,iorder])
+                    dSPECONV_combined[:,igeom,:] += (dSPECONV[:,igeom,:].T * self.MeasurementX.TRANS_AOTF[:,igeom,iorder]).T
+        
+                #Restoring original convolution wavelengths
+                self.MeasurementX.edit_VCONV(vconv_orig)
+
+            #Normalising by the total AOTF weights
+            SPECONV = np.zeros((self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM))
+            dSPECONV = np.zeros((self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX))
+            for igeom in range(self.MeasurementX.NGEOM):
+                
+                SPECONV[:,igeom] = (SPECONV_combined[:,igeom] / np.sum(self.MeasurementX.TRANS_AOTF[:,igeom,:],axis=1))
+                dSPECONV[:,igeom,:] = (dSPECONV_combined[:,igeom,:].T / np.sum(self.MeasurementX.TRANS_AOTF[:,igeom,:],axis=1)).T
+
+            #Applying any changes to the spectra required by the state vector
+            SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+        
+        else:
+            
+            _lgr.info('Calculating forward model for solar occultation observation')
+        
+            #Defining spectral range         
+            self.Measurement.build_ils(IGEOM=0) 
+            wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
+                
+            #Reading tables in the required wavelength range
+            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+
+            #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
+            self.adjust_hydrostat = False
+
+            #Mapping variables into different classes
+            xmap = self.subprofretg()
+
+            #Calculating the atmospheric paths
+            self.calc_pathg_SO()
+            BASEH_TANHE = np.zeros(self.PathX.NPATH)
+            for i in range(self.PathX.NPATH):
+                BASEH_TANHE[i] = self.LayerX.BASEH[self.PathX.LAYINC[int(self.PathX.NLAYIN[i]/2),i]]/1.0e3
+
+
+            #Calling CIRSrad to calculate the spectra
+            _lgr.info('Running CIRSradg')
+            #SPECOUT,dSPECOUT2,dTSURF = CIRSradg(self.runname,self.Variables,self.MeasurementX,self.AtmosphereX,self.SpectroscopyX,self.ScatterX,self.StellarX,self.SurfaceX,self.CIAX,self.LayerX,self.PathX)
+            SPECOUT,dSPECOUT2,dTSURF = self.CIRSrad(return_grad=True)
+
+            #Mapping the gradients from Layer properties to Profile properties
+            _lgr.info('Mapping gradients from Layer to Profile')
+            #Calculating the elements from NVMR+2+NDUST that need to be mapped
+            incpar = []
+            for i in range(self.AtmosphereX.NVMR+2+self.AtmosphereX.NDUST):
+                if np.mean(xmap[:,i,:])!=0.0:
+                    incpar.append(i)
+
+            dSPECOUT1 = map2pro(dSPECOUT2,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.PathX.NLAYIN,self.PathX.LAYINC,self.LayerX.DTE,self.LayerX.DAM,self.LayerX.DCO,INCPAR=incpar)
+            #(NWAVE,NVMR+2+NDUST,NPRO,NPATH)
+            del dSPECOUT2
+
+            #Mapping the gradients from Profile properties to elements in state vector
+            _lgr.info('Mapping gradients from Profile to State Vector')
+            dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+            #(NWAVE,NPATH,NX)
+            del dSPECOUT1
+
+            #Interpolating the spectra to the correct altitudes defined in Measurement
+            SPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM])
+            dSPECMOD = np.zeros([self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM,self.Variables.NX])
+            for i in range(self.MeasurementX.NGEOM):
+
+                #Find altitudes above and below the actual tangent height
+                ibase = np.argmin(np.abs(BASEH_TANHE-self.MeasurementX.TANHE[i]))
+                base0 = BASEH_TANHE[ibase]
+                
+                if base0<=self.MeasurementX.TANHE[i]:
+                    ibasel = ibase
+                    ibaseh = ibase + 1
+                else:
+                    ibasel = ibase - 1
+                    ibaseh = ibase
+
+                if ibaseh>self.PathX.NPATH-1:
+                    SPECMOD[:,i] = SPECOUT[:,ibasel]
+                    dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]
+                else:
+                    fhl = (self.MeasurementX.TANHE[i]-BASEH_TANHE[ibasel])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+                    fhh = (BASEH_TANHE[ibaseh]-self.MeasurementX.TANHE[i])/(BASEH_TANHE[ibaseh]-BASEH_TANHE[ibasel])
+
+                    SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
+                    dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]*(1.-fhl) + dSPECOUT[:,ibaseh,:]*(1.-fhh)
+
+            #Convolving the spectrum with the instrument line shape
+            _lgr.info('Convolving spectra and gradients with instrument line shape')
+            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+                SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+
+            #Calculating the gradients of any parameterisations involving the convolution
+            dSPECONV = self.subspeconv(self.SpectroscopyX.WAVE,SPECMOD,dSPECONV)
+            
+            #Applying any changes to the spectra required by the state vector
+            SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
         
         return SPECONV,dSPECONV
 
@@ -1066,12 +1268,23 @@ class ForwardModel_0:
 
                 SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
 
-        #Convolving the spectrum with the instrument line shape
-        _lgr.info('Convolving spectra and gradients with instrument line shape')
-        if self.SpectroscopyX.ILBL==0:
-            SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
-        elif self.SpectroscopyX.ILBL==2:
-            SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+
+        #Convolving the spectra with the Instrument line shape or integrating over filter function
+        if self.MeasurementX.IFORM == SpectraUnit.Integrated_radiance:
+            
+            #Integrating the radiance over the filter function
+            _lgr.info('Integrating spectra and gradients over filter function')
+            SPECONV = self.MeasurementX.integrate_filter(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+            
+        else:
+        
+            #Convolving the spectrum with the instrument line shape
+            _lgr.info('Convolving spectra and gradients with instrument line shape')
+            if self.SpectroscopyX.ILBL==0:
+                SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+            elif self.SpectroscopyX.ILBL==2:
+                SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+                
         dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
 
         #Applying any changes to the spectra required by the state vector
@@ -1207,15 +1420,25 @@ class ForwardModel_0:
                 SPECMOD[:,i] = SPECOUT[:,ibasel]*(1.-fhl) + SPECOUT[:,ibaseh]*(1.-fhh)
                 dSPECMOD[:,i,:] = dSPECOUT[:,ibasel,:]*(1.-fhl) + dSPECOUT[:,ibaseh,:]*(1.-fhh)
 
-        #Convolving the spectrum with the instrument line shape
-        _lgr.info('Convolving spectra and gradients with instrument line shape')
-        if self.SpectroscopyX.ILBL==0:
-            SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
-        elif self.SpectroscopyX.ILBL==2:
-            SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
 
-        #Calculating the gradients of any parameterisations involving the convolution
-        dSPECONV = self.subspeconv(self.SpectroscopyX.WAVE,SPECMOD,dSPECONV)
+        #Convolving the spectra with the Instrument line shape or integrating over filter function
+        if self.MeasurementX.IFORM == SpectraUnit.Integrated_radiance:
+            
+            #Integrating the radiance over the filter function
+            _lgr.info('Integrating spectra and gradients over filter function')
+            SPECONV,dSPECONV = self.MeasurementX.integrate_filterg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+            
+        else:
+
+            #Convolving the spectrum with the instrument line shape
+            _lgr.info('Convolving spectra and gradients with instrument line shape')
+            if self.SpectroscopyX.ILBL==0:
+                SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+            elif self.SpectroscopyX.ILBL==2:
+                SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+
+            #Calculating the gradients of any parameterisations involving the convolution
+            dSPECONV = self.subspeconv(self.SpectroscopyX.WAVE,SPECMOD,dSPECONV)
         
         #Applying any changes to the spectra required by the state vector
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
@@ -1305,6 +1528,332 @@ class ForwardModel_0:
 
         return SPECONV
 
+    ###############################################################################################
+
+    def nemesisdiscfm(self):
+
+        """
+            FUNCTION NAME : nemesisdiscfm()
+
+            DESCRIPTION : This function computes a forward model but parallelises the averaging of emission arrays for disc averages.
+                            This forward model type is especially useful for observations in which the planet is not spatially resolved.
+                            Therefore, for computing a forward model, the radiative transfer calculations need to be performed for 
+                            several emission angles (and limb points) and then averaged to produce a disc-averaged spectrum.
+
+            INPUTS : none
+
+            OPTIONAL INPUTS: none
+
+            OUTPUTS :
+
+                SPECMOD(NCONV,NGEOM) :: Modelled spectra
+
+            CALLING SEQUENCE:
+
+                ForwardModel.nemesisdiscfm()
+
+            MODIFICATION HISTORY : Zach McQueen (30/09/2025)
+
+        """
+        
+        from joblib import Parallel, delayed
+        from copy import copy, deepcopy
+        
+        #Errors and checks
+        if self.Atmosphere.NLOCATIONS!=1:
+            raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
+            
+        if self.Surface.NLOCATIONS!=1:
+            raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
+
+        self.check_gas_spec_atm()
+        self.check_wave_range_consistency()
+        
+        SPECONV = np.zeros(self.Measurement.MEAS.shape) #Initalise the array where the spectra will be stored (NWAVE,NGEOM)
+        for IGEOM in range(self.Measurement.NGEOM):
+
+            #Calculating new wave array            
+            self.Measurement.build_ils(IGEOM=IGEOM)
+            wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=IGEOM)
+                
+            #Reading tables in the required wavelength range
+            self.SpectroscopyX = deepcopy(self.Spectroscopy)
+            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+
+            #Call process_IAV to calculate FM at each emission ray
+            results = Parallel(n_jobs=self.NCores)(
+                delayed(self.process_IAV)(IAV,IGEOM,return_grad=False)
+                for IAV in range(self.Measurement.NAV[IGEOM])
+            )
+            results_array = np.vstack(results)  #(NAV,NWAVE)
+            
+            #Applying weights to each emission ray
+            for IAV in range(self.Measurement.NAV[IGEOM]):
+                results_array[IAV,:] *= self.Measurement.WGEOM[IGEOM,IAV]
+
+            SPEC = np.sum(results_array, axis=0)
+
+            #Applying the Telluric transmission if it exists
+            if self.TelluricX is not None:
+                
+                #Looking for the calculation wavelengths
+                wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
+                self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
+                
+                #Calculating the telluric transmission
+                WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
+            
+                #Interpolating the telluric transmission to the wavelengths of the planetary spectrum
+                wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
+                TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
+                
+                #Applying the telluric transmission to the planetary spectrum
+                SPEC *= TRANSMISSION_TELLURICx
+                
+            
+            #Convolving the spectra with the Instrument line shape
+            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+                if os.path.exists(self.runname+'.fwh')==True:
+                    FWHMEXIST=self.runname
+                else:
+                    FWHMEXIST=''
+
+                SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST='')
+
+            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+                SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+
+            SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
+            
+            #Normalising measurement to a given wavelength if required
+            if self.Measurement.IFORM == SpectraUnit.Normalised_radiance:
+                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
+
+        #Applying any changes to the computed spectra required by the state vector
+        dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX))
+        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+
+        return SPECONV
+
+    ###############################################################################################
+
+    def nemesisdiscfmg(self):
+
+        """
+            FUNCTION NAME : nemesisdiscfmg()
+
+            DESCRIPTION : This function computes a forward model but parallelises the averaging of emission arrays for disc averages.
+                            This forward model type is especially useful for observations in which the planet is not spatially resolved.
+                            Therefore, for computing a forward model, the radiative transfer calculations need to be performed for 
+                            several emission angles (and limb points) and then averaged to produce a disc-averaged spectrum.
+                            
+                            This version is the same as nemesisdisc, but includes the computation of the gradients too
+
+            INPUTS : none
+
+            OPTIONAL INPUTS: none
+
+            OUTPUTS :
+
+                SPECMOD(NCONV,NGEOM) :: Modelled spectra
+
+            CALLING SEQUENCE:
+
+                ForwardModel.nemesisdiscfm()
+
+            MODIFICATION HISTORY : Zach McQueen (30/09/2025)
+
+        """
+        
+        from joblib import Parallel, delayed
+        from copy import copy, deepcopy
+        
+        #Errors and checks
+        if self.Atmosphere.NLOCATIONS!=1:
+            raise ValueError('error in nemesisdiscfmg :: archNEMESIS has not been setup for dealing with multiple locations yet')
+            
+        if self.Surface.NLOCATIONS!=1:
+            raise ValueError('error in nemesisdiscfmg :: archNEMESIS has not been setup for dealing with multiple locations yet')
+
+        self.check_gas_spec_atm()
+        self.check_wave_range_consistency()
+        
+        SPECONV = np.zeros(self.Measurement.MEAS.shape) #Initalise the array where the spectra will be stored (NWAVE,NGEOM)
+        dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX))
+        for IGEOM in range(self.Measurement.NGEOM):
+
+            #Calculating new wave array            
+            self.Measurement.build_ils(IGEOM=IGEOM)
+            wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=IGEOM)
+                
+            #Reading tables in the required wavelength range
+            self.SpectroscopyX = deepcopy(self.Spectroscopy)
+            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+
+            #Call process_IAV to calculate FM at each emission ray
+            results = Parallel(n_jobs=self.NCores)(
+                delayed(self.process_IAV)(IAV,IGEOM,return_grad=True)
+                for IAV in range(self.Measurement.NAV[IGEOM])
+            )
+            
+            # Unpack results into separate arrays
+            results_FM, results_dFM = zip(*results)  # each is a tuple of arrays
+            
+            # Stack along the first dimension
+            results_array = np.vstack(results_FM)       # shape (NAV, NWAVE)
+            results_array_grad = np.stack(results_dFM, axis=0)  # shape (NAV, NWAVE, NX)
+            
+            #Applying weights to each emission ray
+            for IAV in range(self.Measurement.NAV[IGEOM]):
+                results_array[IAV,:] *= self.Measurement.WGEOM[IGEOM,IAV]
+                results_array_grad[IAV,:,:] *= self.Measurement.WGEOM[IGEOM,IAV]
+
+            SPEC = np.sum(results_array, axis=0)
+            dSPEC = np.sum(results_array_grad, axis=0)
+            
+            #Applying the Telluric transmission if it exists
+            if self.TelluricX is not None:
+                
+                #Looking for the calculation wavelengths
+                wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
+                self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
+                
+                #Calculating the telluric transmission
+                WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
+            
+                #Interpolating the telluric transmission to the wavelengths of the planetary spectrum
+                wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
+                TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
+                
+                #Applying the telluric transmission to the planetary spectrum
+                SPEC *= TRANSMISSION_TELLURICx
+                dSPEC[:,:] = (dSPEC[:,:].T * TRANSMISSION_TELLURICx).T
+
+            #Convolving the spectra with the Instrument line shape
+            if self.Spectroscopy.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+
+                if os.path.exists(self.runname+'.fwh')==True:
+                    FWHMEXIST=self.runname
+                else:
+                    FWHMEXIST=''
+
+                SPECONV1,dSPECONV1 = self.Measurement.convg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
+
+            elif self.Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+
+                SPECONV1,dSPECONV1 = self.Measurement.lblconvg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
+
+            SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
+            dSPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM,:] = dSPECONV1[0:self.Measurement.NCONV[IGEOM],:]
+
+        #Applying any changes to the spectra required by the state vector
+        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)                
+
+        return SPECONV,dSPECONV
+
+########################################################################
+
+    def process_IAV(self,IAV,IGEOM,return_grad=False):
+        
+        from copy import deepcopy
+
+        WGEOMTOT = 0.0
+        #Selecting the relevant Measurement
+        self.select_Measurement(IGEOM,IAV)
+
+        #Making copy of classes to avoid overwriting them
+        self.AtmosphereX = deepcopy(self.Atmosphere)
+        self.ScatterX = deepcopy(self.Scatter)
+        self.StellarX = deepcopy(self.Stellar)
+        self.SurfaceX = deepcopy(self.Surface)
+        self.LayerX = deepcopy(self.Layer)
+        self.CIAX = deepcopy(self.CIA)
+        self.TelluricX = deepcopy(self.Telluric)
+        flagh2p = False
+
+        #Updating the required parameters based on the current geometry
+        if self.MeasurementX.EMISS_ANG[0,0]>=0.0:
+            self.ScatterX.SOL_ANG = self.MeasurementX.SOL_ANG[0,0]
+            self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
+            self.ScatterX.AZI_ANG = self.MeasurementX.AZI_ANG[0,0]
+        else:
+            self.ScatterX.SOL_ANG = self.MeasurementX.TANHE[0,0]
+            self.ScatterX.EMISS_ANG = self.MeasurementX.EMISS_ANG[0,0]
+
+        #Changing the different classes taking into account the parameterisations in the state vector
+        xmap = self.subprofretg()
+        
+        #Calling gsetpat to split the new reference atmosphere and calculate the path
+        self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
+        
+        
+        #Calling CIRSrad to perform the radiative transfer calculations
+        if return_grad is True:
+            
+            #Setting up paths
+            self.calc_pathg()
+            
+            #Calculating spectrum
+            SPEC1X,dSPEC3X,dTSURFX = self.CIRSrad(return_grad=return_grad)
+            
+            _lgr.info("Mapping gradients from Profile to State Vector")
+            
+            #Calculating the elements from NVMR+2+NDUST that need to be mapped
+            incpar = []
+            for i in range(self.AtmosphereX.NVMR+2+self.AtmosphereX.NDUST):
+                if np.mean(xmap[:,i,:])!=0.0:
+                    incpar.append(i)
+
+            if len(incpar)>0:
+                dSPEC2X = map2pro(dSPEC3X,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.PathX.NLAYIN,self.PathX.LAYINC,self.LayerX.DTE,self.LayerX.DAM,self.LayerX.DCO,INCPAR=incpar)
+            else:
+                dSPEC2X = np.zeros((self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR+2+self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH))
+            del dSPEC3X
+
+            #Mapping the gradients from Profile properties to elements in state vector
+            _lgr.info('Mapping gradients from Profile to State Vector')
+            dSPEC1X = map2xvec(dSPEC2X,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+            #(NWAVE,NPATH,NX)
+            del dSPEC2X
+
+            #Adding the temperature surface gradient if required
+            if self.Variables.JSURF>=0:
+                dSPEC1X[:,0,self.Variables.JSURF] = dTSURFX[:,0]
+                
+            #Finalising output arrays
+            if self.PathX.NPATH>1:  #If the calculation type requires several paths for a given geometry (e.g. netflux calculation)
+                SPEC1 = np.zeros(self.PathX.NPATH*self.SpectroscopyX.NWAVE)  #We linearise all paths into 1 measurement
+                dSPEC1 = np.zeros((self.PathX.NPATH*self.SpectroscopyX.NWAVE,self.Variables.NX))
+                ip = 0
+                for iPath in range(self.PathX.NPATH):
+                    SPEC1[ip:ip+self.SpectroscopyX.NWAVE] = SPEC1X[:,iPath]
+                    dSPEC1[ip:ip+self.SpectroscopyX.NWAVE,:] = SPEC1X[:,iPath,:]
+                    ip += self.SpectroscopyX.NWAVE
+            else:
+                SPEC1 = SPEC1X[:,0]
+                dSPEC1 = dSPEC1X[:,0,:]
+                
+            return SPEC1,dSPEC1
+
+        else:
+            
+            #Setting up paths
+            self.calc_path()
+            
+            #Calculating spectrum
+            SPEC1X = self.CIRSrad(return_grad=return_grad)
+
+            #Finalising output arrays
+            if self.PathX.NPATH>1:  #If the calculation type requires several paths for a given geometry (e.g. netflux calculation)
+                SPEC1 = np.zeros(self.PathX.NPATH*self.SpectroscopyX.NWAVE)  #We linearise all paths into 1 measurement
+                ip = 0
+                for iPath in range(self.PathX.NPATH):
+                    SPEC1[ip:ip+self.SpectroscopyX.NWAVE] = SPEC1X[:,iPath]
+                    ip += self.SpectroscopyX.NWAVE
+            else:
+                SPEC1 = SPEC1X[:,0]
+
+            return SPEC1
 
     ###############################################################################################
 
@@ -1321,12 +1870,14 @@ class ForwardModel_0:
             MODIFICATION HISTORY : Joe Penn (9/07/2024)
 
         """
-        start, end, xnx, ixrun, nemesisSO, nemesisL, YNtot, nfm = args
+        start, end, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, YNtot, nfm = args
         results = np.copy(YNtot)  # Local copy to prevent conflicts
         for ifm in range(start, end):
-            inp = (ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, results)
+            inp = (ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, results)
             results = self.execute_fm(inp)
         return start, results
+
+    ###############################################################################################
 
     def execute_fm(self, inp):
         
@@ -1344,7 +1895,7 @@ class ForwardModel_0:
         import archnemesis.cfg.logs
         
         # Unpack input tuple
-        ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, YNtot = inp
+        ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, YNtot = inp
         # ifm - index of forward model
         # nfm - number of forward models
         # xnx - array holding state vectors for all parallel forward models
@@ -1358,7 +1909,7 @@ class ForwardModel_0:
         
         
         # Find the method to use when modelling the spectrum
-        nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, analytical_gradient=False)
+        nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, nemesisdisc, analytical_gradient=False)
         
         _lgr.info(f'Calculating forward model {ifm+1}/{nfm}')
         
@@ -1377,8 +1928,6 @@ class ForwardModel_0:
             # Stop disabling logging levels
             archnemesis.cfg.logs.pop_packagewide_level()
         
-        
-        
         if SPECMOD is not None:
             #Only Re-shape calculated spectrum into the shape of the measurement vector if the calculation completed
             ik = 0
@@ -1395,7 +1944,7 @@ class ForwardModel_0:
     
     ###############################################################################################
 
-    def jacobian_nemesis(self,NCores=1,nemesisSO=False,nemesisL=False):
+    def jacobian_nemesis(self,NCores=1,nemesisSO=False,nemesisL=False,nemesisdisc=False,analytical_gradient=True):
 
         """
 
@@ -1465,6 +2014,8 @@ class ForwardModel_0:
         if self.Scatter.ISCAT != ScatteringCalculationMode.THERMAL_EMISSION:
             self.Variables.NUM[:] = 1  #If scattering is present, gradients are calculated numerically
         
+        if analytical_gradient is False:
+            self.Variables.NUM[:] = 1  #If scattering is present, gradients are calculated numerically
         
         ian1 = np.where(self.Variables.NUM==0)  #Gradients calculated using CIRSradg
         ian1 = ian1[0]
@@ -1475,7 +2026,7 @@ class ForwardModel_0:
         if len(ian1)>0:
 
             _lgr.info('Calculating analytical part of the Jacobian :: Calling nemesisfmg ')
-            nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, analytical_gradient=True)
+            nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, nemesisdisc, analytical_gradient=True)
 
             SPECMOD,dSPECMOD = nemesis_method()
                 
@@ -1521,7 +2072,7 @@ class ForwardModel_0:
 
             chunks = [(i * base_chunk_size + min(i, remainder),
                        (i + 1) * base_chunk_size + min(i + 1, remainder),
-                       xnx, ixrun, nemesisSO, nemesisL, YNtot, nfm) for i in range(NCores)]
+                       xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, YNtot, nfm) for i in range(NCores)]
 
              #with Pool(NCores) as pool:
                  #results = pool.map(self.chunked_execution, chunks)
@@ -1654,7 +2205,7 @@ class ForwardModel_0:
                     ix += self.Variables.models[ivar].n_state_vector_entries
 
         #Calculate atmospheric density
-        self.AtmosphereX.calc_rho() #rho kg/m3
+        rho = self.AtmosphereX.calc_rho() #rho kg/m3
 
 
         # NOTE: instead of having two different versions of `xmap`, just use the multiple location version.
@@ -3413,7 +3964,6 @@ class ForwardModel_0:
         else:
             dSPECOUT = None
             dTSURF = None
-        
         
         if not (PathCalc.ABSORBTION 
                 | PathCalc.THERMAL_EMISSION 

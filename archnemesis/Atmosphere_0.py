@@ -53,7 +53,7 @@ class Atmosphere_0:
             NVMR=6, 
             NDUST=0, 
             NLOCATIONS=1, 
-            IPLANET=PlanetEnum.UNDEFINED, 
+            IPLANET=PlanetEnum.CUSTOM, 
             AMFORM=AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE
         ):
         """
@@ -163,6 +163,13 @@ class Atmosphere_0:
         #self.AMFORM : AtmosphericProfileFormatEnum = AMFORM
         self.NLOCATIONS = NLOCATIONS
         self.Fortran = Fortran
+        
+        #Planetary parameters
+        self.PLANET_FLATTEN=0.0
+        self.PLANET_J=[0.,0.,0.]
+        self.PLANET_ROTATION=100000.0
+        self.PLANET_MASS=None
+        self.PLANET_RADIUS=None
 
         # Input the following profiles using the edit_ methods.
         self.RADIUS = None    #float of (NLOCATIONS) #m
@@ -182,7 +189,6 @@ class Atmosphere_0:
         self.PARAH2 = None # np.zeros(NP) 
         
         self.SVP = {} # Flags for limiting gas profiles to saturated profiles (from .vpf file)
-        
         
         # private attributes
         self._iplanet = None
@@ -243,6 +249,12 @@ class Atmosphere_0:
         assert self.IPLANET in PlanetEnum, \
             f"IPLANET must be one of {tuple(PlanetEnum)}"
         
+        if self.IPLANET==-1: #Custom planet
+            assert np.issubdtype(type(self.PLANET_MASS), np.float) == True , \
+                'PLANET_MASS must be defined if custom planet'
+            assert np.issubdtype(type(self.PLANET_RADIUS), np.float) == True , \
+                'PLANET_RADIUS must be defined if custom planet'    
+            
         assert len(self.ID) == self.NVMR , \
             'ID must have size (NVMR)'
         assert len(self.ISO) == self.NVMR , \
@@ -395,7 +407,32 @@ class Atmosphere_0:
 
             dset = h5py_helper.store_data(grp, 'IPLANET', self.IPLANET)
             dset.attrs['title'] = "Planet ID"
-            dset.attrs['type'] = planet_info[str(int(self.IPLANET))]["name"]
+            if self.IPLANET>0:
+                dset.attrs['type'] = planet_info[str(int(self.IPLANET))]["name"]
+            else:
+                dset.attrs['type'] = 'Custom planet'
+            
+            if self.IPLANET==-1: #Custom planet
+                dset = h5py_helper.store_data(grp, 'PLANET_MASS', self.PLANET_MASS)
+                dset.attrs['title'] = "Planet mass"
+                dset.attrs['units'] = "kg"
+                
+                dset = h5py_helper.store_data(grp, 'PLANET_RADIUS', self.PLANET_RADIUS)
+                dset.attrs['title'] = "Planet radius"
+                dset.attrs['units'] = "km"
+                
+                if self.PLANET_ROTATION!=100000.0:
+                    dset = h5py_helper.store_data(grp, 'PLANET_ROTATION', self.PLANET_ROTATION)
+                    dset.attrs['title'] = "Planet rotation period"
+                    dset.attrs['units'] = "days"
+                    
+                if self.PLANET_FLATTEN!=0.0:
+                    dset = h5py_helper.store_data(grp, 'PLANET_FLATTEN', self.PLANET_FLATTEN)
+                    dset.attrs['title'] = "Planet flattening"
+                    
+                    dset = h5py_helper.store_data(grp, 'PLANET_J', self.PLANET_J)
+                    dset.attrs['title'] = "Planet J parameters"
+
 
             dset = h5py_helper.store_data(grp, 'AMFORM', self.AMFORM)
             dset.attrs['title'] = "Type of Molecular Weight calculation"
@@ -476,6 +513,17 @@ class Atmosphere_0:
                 self.NDUST = np.int32(f.get(name+'/NDUST'))
                 self.AMFORM : AtmosphericProfileFormatEnum = AtmosphericProfileFormatEnum(np.int32(f.get(name+'/AMFORM')))
                 self.IPLANET : PlanetEnum = PlanetEnum(np.int32(f.get(name+'/IPLANET')))
+
+                #Custom planet
+                if self.IPLANET==-1:
+                    self.PLANET_MASS = np.float64(f.get(name+'/PLANET_MASS'))
+                    self.PLANET_RADIUS = np.float64(f.get(name+'/PLANET_RADIUS'))
+                    if(name + '/' + 'PLANET_J' in f)==True:
+                        self.PLANET_J = np.float64(f.get(name+'/PLANET_J'))
+                    if(name + '/' + 'PLANET_FLATTEN' in f)==True:
+                        self.PLANET_FLATTEN = np.float64(f.get(name+'/PLANET_FLATTEN'))
+                    if(name + '/' + 'PLANET_ROTATION' in f)==True:
+                        self.PLANET_ROTATION = np.float64(f.get(name+'/PLANET_ROTATION'))
 
                 if self.NLOCATIONS==1:
                     self.LATITUDE = np.float64(f.get(name+'/LATITUDE'))
@@ -813,23 +861,26 @@ class Atmosphere_0:
         of Lindal et al., 1986, Astr. J., 90 (6), 1136-1146
         """
 
-        
-
         #Reading data and calculating some parameters
         Grav = const.G
-        data = planet_info[str(int(self.IPLANET))]
-        xgm = data["mass"] * Grav * 1.0e24 * 1.0e6
-        xomega = 2.*np.pi / (data["rotation"]*24.*3600.)
-        xellip=1.0/(1.0-data["flatten"])
-        Jcoeff = data["Jcoeff"]
+        
+        if self.IPLANET>0:  #Planet exists in dictionary
+            data = planet_info[str(int(self.IPLANET))]
+            self.PLANET_MASS = data["mass"]
+            self.PLANET_ROTATION = data["rotation"]
+            self.PLANET_FLATTEN = data["flatten"]
+            self.PLANET_J = data["Jcoeff"]
+            self.PLANET_RADIUS = data["radius"]
+
+        xgm = self.PLANET_MASS * Grav * 1.0e6
+        xomega = 2.*np.pi / (self.PLANET_ROTATION*24.*3600.)
+        xellip=1.0/(1.0-self.PLANET_FLATTEN)
+        Jcoeff = self.PLANET_J
         xcoeff = np.zeros(3)
         xcoeff[0] = Jcoeff[0] / 1.0e3
         xcoeff[1] = Jcoeff[1] / 1.0e6
         xcoeff[2] = Jcoeff[2] / 1.0e8
-        xradius = data["radius"] * 1.0e5   #cm
-        #isurf = data["isurf"]
-        #name = data["name"]
-
+        xradius = self.PLANET_RADIUS * 1.0e5   #cm
 
         #Calculating some values to account for the latitude dependence
         lat = 2 * np.pi * self.LATITUDE/360.      #Latitude in rad [float or (NLOCATIONS)]

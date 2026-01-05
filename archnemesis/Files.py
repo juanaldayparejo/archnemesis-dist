@@ -20,6 +20,7 @@
 
 
 import os
+import textwrap
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -37,10 +38,10 @@ from archnemesis import (
 
 from archnemesis.Data.planet_data import planet_info
 
-#from archnemesis.Models import Models, ModelBase, ModelParameterEntry
+from archnemesis.Models import Models, ModelBase, ModelParameterEntry
 from copy import copy
 
-from archnemesis.helpers import h5py_helper
+from archnemesis.helpers import h5py_helper, io_helper
 from archnemesis.enums import (
     #PlanetEnum, 
     #AtmosphericProfileFormatEnum, 
@@ -59,8 +60,6 @@ from archnemesis.enums import (
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
-
 
 ###############################################################################################
 ###############################################################################################
@@ -476,6 +475,7 @@ def read_input_files(runname):
     Retrieval = OptimalEstimation_0()
     Retrieval.NITER=NITER
     Retrieval.PHILIMIT=PHILIMIT
+    Retrieval.LIN = LIN
 
     #Reading surface files if planet has surface
     #############################################################################
@@ -520,6 +520,15 @@ def read_input_files(runname):
 
     Measurement.runname = runname
     Measurement.read_spx()
+    
+    #Checking if forward modelling error file exists
+    if os.path.exists(fmerrname)==True:
+
+        #Reading forward modelling error
+        vfmerr,fmerr = read_fmerr(fmerrname)
+        Measurement.VFMERR = vfmerr
+        Measurement.FMERR = fmerr
+        Measurement.add_fmerr()
 
     #Reading .sha file if FWHM>0.0
     if Measurement.FWHM > 0.0:
@@ -1228,7 +1237,7 @@ def read_inp(runname,Measurement=None,Scatter=None,Spectroscopy=None):
 
     tmp = f.readline().split()
     WOFF = float(tmp[0])
-    fmerrname = str(f.readline().split())
+    fmerrname = str(f.readline().split()[0])
     tmp = f.readline().split()
     NITER = int(tmp[0])
     tmp = f.readline().split()
@@ -1608,6 +1617,239 @@ def write_inp(runname,ispace,iscat,ilbl,woff,niter,philimit,nspec,ioff,lin,IFORM
     if IFORM != -1:
         f.write('%i \n' % (int(IFORM)))
     f.close()
+
+
+###############################################################################################
+
+def read_pre(runname):
+    
+    
+    """
+        FUNCTION NAME : read_pre()
+
+        DESCRIPTION :
+        
+            Reads the .pre file for a Nemesis run.
+            
+            This file includes information about the retrieved state vector and the retrieved
+            covariance matrix. This file is generated as an output file in the retrieval. 
+            If it is copied to a .pre extension and LIN>0 in the .inp file, this file will be used
+            to implement information from previous retrievals into the new retrieval
+            
+            NOTE :: The implementation of this file in archNEMESIS is slightly different
+                    than in NEMESIS, but the purpose of the file remains the same.
+        
+        INPUTS :
+        
+            runname :: Name of the Nemesis run
+        
+        OPTIONAL INPUTS: none
+        
+        OUTPUTS :
+        
+            Variables_prev :: Variables class with the information from the previous retrieval
+            
+        
+        CALLING SEQUENCE:
+
+            Variables_prev = read_pre(runname)
+
+        MODIFICATION HISTORY : Juan Alday (29/09/2025)
+        
+    """
+    
+    #Reading all lines first
+    with open(runname + '.pre', 'r') as f: 
+        # Skip all lines that do not start with '#' 
+        lines = [line.strip() for line in f.readlines() if line.strip()]
+    
+    #Reading file
+    idx = 0
+    nspec = int(lines[idx].split()[0])
+    _lgr.debug(f'nspec = {nspec}')
+    idx += 1
+    if nspec != 1:
+        raise ValueError('error in read_raw :: nspec>1 and this has not yet been implemented in archnemesis')
+    
+    for ispec in range(nspec):
+    
+        #Reading lines
+        ispecx = int(lines[idx].split()[0])
+        idx += 1
+        
+        #Reading latitude and longitude
+        lat = float(lines[idx].split()[0])
+        lon = float(lines[idx].split()[1])
+        idx += 1
+        _lgr.debug(f'lat = {lat}, lon = {lon}')
+        
+        #Reading other parameters
+        npro = int(lines[idx].split()[0])
+        ngas = int(lines[idx].split()[1])
+        ndust = int(lines[idx].split()[2])
+        nlocations = int(lines[idx].split()[3])
+        nvar = int(lines[idx].split()[4])
+        idx += 1
+        _lgr.debug(f'npro = {npro}, ngas = {ngas}, ndust = {ndust}, nlocations = {nlocations}, nvar = {nvar}')
+        
+        #Reading variable ids
+        varident = np.zeros((nvar,3),dtype='int32')
+        varparam = np.zeros((nvar,5))
+        for ivar in range(nvar):
+            
+            idx += 1  # Skipping header line
+            
+            for j in range(3):
+                varident[ivar,j] = int(lines[idx].split()[j])
+            idx += 1
+            
+            for j in range(5):
+                varparam[ivar,j] = float(lines[idx].split()[j])
+            idx += 1
+            
+            _lgr.debug(f'varident[{ivar}] = {varident[ivar,:]}, varparam[{ivar}] = {varparam[ivar,:]}')
+            
+        #Reading state vector
+        nx = int(lines[idx].split()[0])
+        idx += 1
+        _lgr.debug(f'nx = {nx}')
+        
+        xn = np.zeros(nx)
+        lx = np.zeros(nx,dtype='int32')
+        num = np.zeros(nx,dtype='int32')
+        for ix in range(nx):
+            xn[ix] = float(lines[idx].split()[0])
+            lx[ix] = int(lines[idx].split()[1])
+            num[ix] = int(lines[idx].split()[2])
+            idx += 1
+            
+        #Reading the retrieved coviariance matrix
+        st = np.zeros((nx,nx))
+        for ix in range(nx):
+            for iy in range(nx):
+                st[ix,iy] = float(lines[idx].split()[0])
+                idx += 1
+            
+    #Creating variables class 
+    Variables_prev = ans.Variables_0()    
+    Variables_prev._models = []
+    jsurf = -1
+    jalb = -1
+    jxsc = -1
+    jtan = -1
+    jpre = -1
+    #jrad = -1
+    jlogg = -1
+    jfrac = -1
+    ix = 0
+    for ivar in range(nvar):
+        
+        for model in Models:
+            
+            if model.is_varident_valid(varident[ivar,:]):
+                found_model_for_varident = True
+                
+                try:
+                    Variables_prev._models.append(
+                        model.from_bookmark(
+                            Variables_prev, 
+                            varident[ivar,:], 
+                            varparam[ivar,:], 
+                            ix, 
+                            npro, 
+                            ngas,
+                            ndust,
+                            nlocations,
+                        )
+                    )
+                except Exception as e:
+                    raise ValueError(f'Failed to read {ivar}^th model entry (with VARIDENT={varident[ivar,:]})') from e
+                
+                _lgr.info(f'\nVariables_0 :: read_raw :: varident {varident[ivar,:]}. Constructed model "{model.__name__}" (id={model.id})')
+                
+                if varident[ivar][2]==999:  #Retrieval of surface temperature
+                    jsurf = ix
+                elif varident[ivar][2]==666: #Retrieval of pressure at a givent tangent height
+                    jpre = ix
+                elif varident[ivar][2]==777: #Retrieval of tangent height at a given pressure level
+                    jtan = ix
+                
+        ix += Variables_prev._models[-1].n_state_vector_entries
+
+        if not found_model_for_varident:
+            raise ValueError(f'Variables_0 :: read_apr :: no model found for varident {varident[ivar,:]}')
+
+        
+    Variables_prev.NVAR=nvar
+    Variables_prev.NPARAM=5
+    Variables_prev.edit_VARIDENT(varident)
+    Variables_prev.edit_VARPARAM(varparam)
+    Variables_prev.calc_NXVAR(npro,nlocations=nlocations)
+    Variables_prev.JPRE, Variables_prev.JTAN, Variables_prev.JSURF, Variables_prev.JALB, Variables_prev.JXSC, Variables_prev.JLOGG, Variables_prev.JFRAC = jpre, jtan, jsurf, jalb, jxsc, jlogg, jfrac
+    Variables_prev.NX = nx
+    Variables_prev.edit_XA(xn)
+    Variables_prev.edit_XN(xn)
+    Variables_prev.edit_SA(st)
+    Variables_prev.edit_LX(lx)
+    Variables_prev.NUM = num
+    Variables_prev.calc_DSTEP()
+    Variables_prev.calc_FIX()
+    
+    return Variables_prev
+
+
+###############################################################################################
+
+def read_fmerr(filename):
+    
+    
+    """
+        FUNCTION NAME : read_fmerr()
+
+        DESCRIPTION :
+        
+            Reads the forward modelling error from a file
+        
+        INPUTS :
+        
+            filename :: Name of the file containing the forward modelling error
+        
+        OPTIONAL INPUTS: none
+        
+        OUTPUTS :
+        
+            verr(nwave) :: Wavenumber/Wavelength array
+            fwerr(nwave) :: Forward modelling error
+        
+        CALLING SEQUENCE:
+
+            verr,fwerr = read_fmerr(filename)
+
+        MODIFICATION HISTORY : Juan Alday (29/09/2025)
+        
+    """
+    
+    with open(filename, 'r') as f:
+        
+        for line in f:
+            if line.strip() and not line.startswith('#'):
+                nwave = int(line.split()[0])
+                break
+            
+        verr = np.zeros(nwave)
+        fwerr = np.zeros(nwave)
+        i = 0
+        for line in f:
+            if line.strip() and not line.startswith('#'):
+                values = line.split()
+                if len(values) >= 2:
+                    verr[i] = float(values[0])
+                    fwerr[i] = float(values[1])
+                    i += 1
+                if i >= nwave:
+                    break
+
+    return verr, fwerr
 
 ###############################################################################################
 

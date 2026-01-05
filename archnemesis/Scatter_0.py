@@ -1972,28 +1972,39 @@ def subfithgm(theta, phase):
     g1 = np.zeros(nwave)
     g2 = np.zeros(nwave)
     rms = np.zeros(nwave)
+
+    mx = 3
+    tol = 1e-8
+    nc_max = 5
+
     for iwave in range(nwave):
-    
-        #mx = 3
-        #my = 100
         x = np.array([0.5, 0.5, -0.5])
-        alamda = -1
+        alamda = -1.0
         nover = 1000
         nc = 0
+        chisq = 0.0
         ochisq = 0.0
-        lphase = np.log(phase[iwave,:])
-        for itemp in range(1, nover + 1):
-            if alamda < 0:
-                alpha, beta, chisq = mrqcofl(nphase, theta, phase[iwave,:], x)
-                ochisq = chisq
-                alamda = 1000.0
-            alamda, chisq = mrqminl(nphase, theta, lphase, x, alamda, alpha, beta, chisq, ochisq)
-            if chisq == ochisq:
-                nc += 1
-                break
-            else:
-                ochisq = chisq
-                nc = 0
+        alpha = np.zeros((mx, mx))
+        beta = np.zeros(mx)
+        lphase = np.log(phase[iwave, :])
+
+        for itemp in range(nover):
+            prev_chisq = chisq
+            alamda, chisq, ochisq, accepted = mrqminl(
+                nphase, theta, lphase, x, alamda, alpha, beta, chisq, ochisq
+            )
+
+            if accepted == 1:
+                delta = abs(chisq - prev_chisq)
+                denom = chisq + prev_chisq + 1e-30
+                rel = delta / denom
+                if rel < tol:
+                    nc += 1
+                    if nc > nc_max:
+                        break
+                else:
+                    nc = 0
+
         f[iwave] = x[0]
         g1[iwave] = x[1]
         g2[iwave] = x[2]
@@ -2001,45 +2012,85 @@ def subfithgm(theta, phase):
         
     return (f, g1, g2, rms)
 
+
 @njit(fastmath=True)
 def mrqminl(nphase, theta, phase, x, alamda, alpha, beta, chisq, ochisq):
     '''
     Fit phase function with henyey-greenstein parameters in log space
     '''
-    #max_thet = 100
     mx = 3
-    #my = 100
+
+    # Initialisation, matching Fortran: do first mrqcofl inside mrqminl,
+    # always with log(phase) data.
+    if alamda < 0.0:
+        alpha0, beta0, chisq0 = mrqcofl(nphase, theta, phase, x)
+        for j in range(mx):
+            for k in range(mx):
+                alpha[j, k] = alpha0[j, k]
+            beta[j] = beta0[j]
+        chisq = chisq0
+        ochisq = chisq0
+        alamda = 1000.0
+
+    # Build modified normal equations matrix
     covar = np.zeros((mx, mx))
-    da = np.copy(beta)[:, None]
     for j in range(mx):
         for k in range(mx):
             covar[j, k] = alpha[j, k]
         covar[j, j] = alpha[j, j] * (1.0 + alamda)
+
+    da = np.zeros(mx)
+    for j in range(mx):
+        da[j] = beta[j]
+
     covar = np.ascontiguousarray(np.linalg.inv(covar))
     da = np.dot(covar, np.ascontiguousarray(da))
-    if alamda == 0.0:
-        return
-    xt = x + da[:, 0]
+
+    # Trial parameters
+    xt = np.zeros(3)
+    for j in range(mx):
+        xt[j] = x[j] + da[j]
+
+    # Apply parameter bounds as in Fortran
     for i in range(3):
         if i == 0:
-            xt[i] = min(max(xt[i], 1e-06), 0.999999)
+            if xt[i] > 0.999999:
+                xt[i] = 0.999999
+            if xt[i] < 0.000001:
+                xt[i] = 0.000001
         elif i == 1:
-            xt[i] = min(max(xt[i], 0.0), 0.98)
+            if xt[i] > 0.98:
+                xt[i] = 0.98
+            if xt[i] < 0.0:
+                xt[i] = 0.0
         elif i == 2:
-            xt[i] = min(max(xt[i], -0.98), -0.1)
-    covar, da, chisq = mrqcofl(nphase, theta, phase, xt)
-    if chisq <= ochisq:
-        alamda *= 0.9
-        ochisq = chisq
-        alpha[:, :] = covar
-        beta[:] = da
-        x[:] = xt
+            if xt[i] < -0.98:
+                xt[i] = -0.98
+            if xt[i] > -0.1:
+                xt[i] = -0.1
+
+    covar_new, da_new, chisq_trial = mrqcofl(nphase, theta, phase, xt)
+
+    accepted = 0
+    if chisq_trial <= ochisq:
+        accepted = 1
+        alamda = 0.9 * alamda
+        chisq = chisq_trial
+        ochisq = chisq_trial
+        for j in range(mx):
+            for k in range(mx):
+                alpha[j, k] = covar_new[j, k]
+            beta[j] = da_new[j]
+            x[j] = xt[j]
     else:
-        alamda *= 1.5
+        alamda = 1.5 * alamda
         chisq = ochisq
-        if alamda > 1e+36:
-            alamda = 1e+36
-    return (alamda, chisq)
+        if alamda > 1e36:
+            alamda = 1e36
+
+    return (alamda, chisq, ochisq, accepted)
+
+
 
 @njit(fastmath=True)
 def mrqcofl(nphase, theta, phase, x):
