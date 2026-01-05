@@ -9,7 +9,7 @@ pkg_lgr.propagate = False
 pkg_lgr.setLevel(logging.INFO)
 
 pkg_stream_hdlr = logging.StreamHandler()
-pkg_stream_hdlr.setLevel(logging.INFO)
+pkg_stream_hdlr.setLevel(logging.DEBUG)
 
 pkg_stream_hdlr_formatter = logging.Formatter('%(levelname)s :: %(funcName)s :: %(filename)s-%(lineno)d :: %(message)s')
 pkg_stream_hdlr.setFormatter(pkg_stream_hdlr_formatter)
