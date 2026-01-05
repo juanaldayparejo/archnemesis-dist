@@ -249,6 +249,7 @@ class LineData_0:
             vmax : float, 
             wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
             refresh : bool = False, 
+            cull_empty : bool = False,
     ) -> None:
         """
         Fetch the line data from the specified database, if `refresh` then get the data even if we already have some.
@@ -266,6 +267,10 @@ class LineData_0:
                 If True will retrieve data from database again, even if data
                 is already present. NOTE: this will not neccessarily trigger a download
                 as the database may cache data.
+            cull_empty : bool = True
+                If True will remove any gases from `self.line_data` that return
+                a zero size or return None from the database (i.e. no data available 
+                for that gas/isotope).
         """
         assert vmin < vmax, f'Mimimum wave ({vmin}) must be less than maximum wave ({vmax})'
         
@@ -283,7 +288,22 @@ class LineData_0:
         else:
             _lgr.info('Line data already loaded')
         
-        for gas_desc,v in self.line_data:
+        if cull_empty:
+            gasses_to_remove = []
+            isotopes_to_keep = []
+            for gas_desc,v in self.line_data.items():
+                if v is None or v.size == 0:
+                    gasses_to_remove.append(gas_desc)
+                else:
+                    isotopes_to_keep.append(gas_desc.iso_id)
+            
+            if len(gasses_to_remove) > 0:
+                for gas_desc in gasses_to_remove:
+                    _lgr.info(f'Removing gas {gas_desc} from line data as no data was retrieved from database')
+                    del self.line_data[gas_desc]
+                self.ISO = tuple(sorted(isotopes_to_keep))
+        
+        for gas_desc,v in self.line_data.items():
             if v is None:
                 _lgr.warning(f'Database does not recognise gas {gas_desc} returned `None` for line_data, it should not be included further calculations. If strange things happen, try not including this isotope.')
         
@@ -1096,6 +1116,9 @@ class LineData_0:
         line_strengths_max = 0
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
             gas_linedata = self.line_data[gas_desc]
+            if gas_linedata is None or gas_linedata.size == 0:
+                continue
+                
             line_strength_mask = gas_linedata.SW >= smin
             wavenumbers = gas_linedata.NU[line_strength_mask]
             line_strengths = gas_linedata.SW[line_strength_mask]
@@ -1126,15 +1149,19 @@ class LineData_0:
         combined_ax.set(**ax_style_defaults)
     
         for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+            ax = ax_array[i+1]
+            ax.set_title(f'Line data for ${ans.Data.gas_data.molecule_to_latex(gas_desc.isotope_name)}$ (ID={int(gas_desc.gas_id)}, ISO={gas_desc.iso_id})')
+            
             gas_linedata = self.line_data[gas_desc]
+            if gas_linedata is None or gas_linedata.size == 0:
+                continue
+            
             line_strength_mask = gas_linedata.SW >= smin
             wavenumbers = gas_linedata.NU[line_strength_mask]
             line_strengths = gas_linedata.SW[line_strength_mask]
             
             # Plots for specific isotopes, coloured by lower energy state
-            ax = ax_array[i+1]
             
-            ax.set_title(f'Line data for ${ans.Data.gas_data.molecule_to_latex(gas_desc.isotope_name)}$ (ID={int(gas_desc.gas_id)}, ISO={gas_desc.iso_id})')
             p1 = ax.scatter(
                 wavenumbers,
                 line_strengths,

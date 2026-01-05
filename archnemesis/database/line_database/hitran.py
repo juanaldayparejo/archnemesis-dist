@@ -23,6 +23,7 @@ from ..datatypes.gas_descriptor import RadtranGasDescriptor
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
+#_lgr.setLevel(logging.DEBUG)
 
 # NOTE: HAPI does not differentiate between an actual failure to retrieve data because of a problem vs
 #       not retrieving any data because there is no data in a wavelength range. Until I can handle those
@@ -325,8 +326,8 @@ class HITRAN(LineDatabaseProtocol):
         
         # Read all of the data we have stored locally
         for tablename in tablenames:
-            if _lgr.level <= logging.DEBUG:
-                hapi.describeTable(tablename)
+            #if _lgr.level <= logging.DEBUG:
+            #    hapi.describeTable(tablename)
             
             # Assume tables conform to our naming format
             try:
@@ -339,19 +340,21 @@ class HITRAN(LineDatabaseProtocol):
             hapi.select(tablename, ParameterNames=('molec_id', 'local_iso_id', 'nu'), Conditions=None, DestinationTableName = 'temp')
             found_molec_ids, found_iso_local_ids, found_v = hapi.getColumns('temp', ('molec_id', 'local_iso_id', 'nu'))
             
-            assert len(set(found_molec_ids)) == 1, "Should only have one HITRAN gas per table"
-            assert len(set(found_iso_local_ids)) == 1, "Should only have one HITRAN isotope per table"
+            assert len(set(found_molec_ids)) <= 1, "Should have at most one HITRAN gas per table"
+            assert len(set(found_iso_local_ids)) <= 1, "Should have at most one HITRAN isotope per table"
             
-            
-            found_v = np.array(found_v, dtype=float)
-            
-            vmin = np.min(found_v)
-            vmax = np.max(found_v)
             
             gda_pair = (gas_desc, ambient_gas)
+            
             if gda_pair not in self._downloaded_gas_wavenumber_interval:
-                self._downloaded_gas_wavenumber_interval[gda_pair] = WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm)
-                _lgr.info(f'No cache of downloaded wave range for {gda_pair}, using wave range {self._downloaded_gas_wavenumber_interval[gda_pair]=} found in tables {tablename} which will underestimate the requested range.')
+                found_v = np.array(found_v, dtype=float)
+                if found_v.size != 0:
+                    vmin = np.min(found_v)
+                    vmax = np.max(found_v)
+                    self._downloaded_gas_wavenumber_interval[gda_pair] = WaveRange(vmin, vmax, ans.enums.WaveUnit.Wavenumber_cm)
+                    _lgr.info(f'No cache of downloaded wave range for {gda_pair}, using wave range {self._downloaded_gas_wavenumber_interval[gda_pair]=} found in tables {tablename} which will underestimate the requested range.')
+                else:
+                    _lgr.info(f'No cache of downloaded wave range for {gda_pair}, and no data found in table {tablename}, assuming no data has been downloaded yet for this gas/ambient-gas pair.')
                 
             hapi.dropTable('temp')
         
@@ -478,8 +481,8 @@ class HITRAN(LineDatabaseProtocol):
                 line_data[gas_desc] = None
                 continue
             
-            if _lgr.level <= logging.DEBUG:
-                hapi.describeTable(self.get_tablename_from_props(gas_desc, ambient_gas))
+            #if _lgr.level <= logging.DEBUG:
+            #    hapi.describeTable(self.get_tablename_from_props(gas_desc, ambient_gas))
             
             vmin, vmax = wave_range.values()
             Conditions = ('and',('between', 'nu', vmin, vmax),('equal','local_iso_id',ht_gas_desc.iso_id))
@@ -493,8 +496,8 @@ class HITRAN(LineDatabaseProtocol):
             except Exception as e:
                 raise RuntimeError(f'Failure when reading from database {self}.') from e
         
-            if _lgr.level <= logging.DEBUG:
-                hapi.describeTable(temp_line_data_table_name)
+            #if _lgr.level <= logging.DEBUG:
+            #    hapi.describeTable(temp_line_data_table_name)
         
             gamma_str, n_str, delta_str = self.get_ambient_gas_column_name_strings(ambient_gas)
             col_names = (
@@ -510,34 +513,12 @@ class HITRAN(LineDatabaseProtocol):
                 'n_air', # NOTE: here as we always fetch this value as we do not know if 'n_self' will be different or not
             )
             
-            cols = hapi.getColumns(
-                temp_line_data_table_name,
-                col_names
-            )
+            n_rows = hapi.getTableHeader(temp_line_data_table_name)['number_of_rows']
             
-            with warnings.catch_warnings():
-                warnings.simplefilter('default', UserWarning)
-                
-                # If we don't have any 'n_self' values, replace 'n_self' with final 'n_air' column
-                # Then, drop final 'n_air' column as we don't need it
-                n_self_tmp = np.ma.array(cols[-3], dtype=float)
-                n_self = np.array(cols[-1], dtype=float)
-                n_self[~n_self_tmp.mask] = n_self_tmp[~n_self_tmp.mask]
-                
-                cols[-3] = n_self
-                cols = cols[:-1]
-                
-                _lgr.debug(f'{len(cols)=} {[len(c) for c in cols]=}')
-                
-                for i, c in enumerate(cols):
-                    missing_col_names = []
-                    if isinstance(c[0], np.ma.core.MaskedConstant):
-                        missing_col_names.append(col_names[i])
-                    if len(missing_col_names) > 0:
-                        raise RuntimeError(f'Gas {gas_desc.gas_name} isotope {gas_desc.iso_id} "{gas_desc.isotope_name}" with ambient gas "{ambient_gas.name}" has NULL entries in the HITRAN database for the following columns: {missing_col_names}')
-            
+            if n_rows == 0:
+                _lgr.info(f'{gas_desc=} has no line data in the requested wave range {wave_range=}, returning empty dataset.')
                 line_data[gas_desc] = np.array(
-                    list(zip(*cols)),
+                    [], 
                     dtype = [
                         ('NU', float), # Transition wavenumber (cm^{-1})
                         ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
@@ -550,6 +531,48 @@ class HITRAN(LineDatabaseProtocol):
                         ('ELOWER', float), # lower state energy (cm^{-1})
                     ]
                 ).view(np.recarray)
+
+            else:
+                cols = hapi.getColumns(
+                    temp_line_data_table_name,
+                    col_names
+                )
+                
+                with warnings.catch_warnings():
+                    warnings.simplefilter('default', UserWarning)
+                    
+                    # If we don't have any 'n_self' values, replace 'n_self' with final 'n_air' column
+                    # Then, drop final 'n_air' column as we don't need it
+                    n_self_tmp = np.ma.array(cols[-3], dtype=float)
+                    n_self = np.array(cols[-1], dtype=float)
+                    n_self[~n_self_tmp.mask] = n_self_tmp[~n_self_tmp.mask]
+                    
+                    cols[-3] = n_self
+                    cols = cols[:-1]
+                    
+                    _lgr.debug(f'{len(cols)=} {[len(c) for c in cols]=}')
+                    
+                    for i, c in enumerate(cols):
+                        missing_col_names = []
+                        if isinstance(c[0], np.ma.core.MaskedConstant):
+                            missing_col_names.append(col_names[i])
+                        if len(missing_col_names) > 0:
+                            raise RuntimeError(f'Gas {gas_desc.gas_name} isotope {gas_desc.iso_id} "{gas_desc.isotope_name}" with ambient gas "{ambient_gas.name}" has NULL entries in the HITRAN database for the following columns: {missing_col_names}')
+                
+                    line_data[gas_desc] = np.array(
+                        list(zip(*cols)),
+                        dtype = [
+                            ('NU', float), # Transition wavenumber (cm^{-1})
+                            ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
+                            ('A', float), # einstein-A coeifficient (s^{-1})
+                            ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
+                            ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
+                            ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
+                            ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
+                            ('N_SELF', float), # temperature dependent exponent for `gamma_self` (NUMBER)
+                            ('ELOWER', float), # lower state energy (cm^{-1})
+                        ]
+                    ).view(np.recarray)
             
             hapi.dropTable(temp_line_data_table_name)
         
