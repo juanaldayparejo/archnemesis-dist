@@ -10,6 +10,7 @@ from ..protocols import (
 )
 
 from ..datatypes.gas_descriptor import RadtranGasDescriptor
+from ..datatypes.hitran.gas_descriptor import HitranGasDescriptor
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ class HITRAN(PartitionFunctionDatabaseProtocol):
         partition_function_data = dict()
         
         for gas_desc in gas_descs:
-            ht_gas = gas_desc.to_hitran()
+            ht_gas = HitranGasDescriptor.from_radtran(gas_desc)
             if ht_gas is None:
                 partition_function_data[gas_desc] = None
                 continue

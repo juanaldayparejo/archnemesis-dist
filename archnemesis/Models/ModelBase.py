@@ -43,6 +43,19 @@ _lgr.setLevel(logging.INFO)
 class ModelBase(abc.ABC):
     """
         Abstract base class of all parameterised models used by ArchNemesis. This class should be subclassed further for models of a particular component.
+        
+        These models work a bit differently to "normal" classes in Python. Normally, a python class holds onto it's state,
+        however in this case the "state vector" `Variables.XN` holds the state of the model's parameters (or `Variables.XA` for apriori 
+        values of the parameters) and `Variables.VARPARAM` holds the model's constants.
+        
+        This means that `__init__` actually defines the names of the model's parameters (in `self.parameters`), and
+        stores the number and index of the instance's parameters on the state vector.
+        
+        In other words, what this class actually stores is a "pointer" (or an index) to the model's state. Plus a set of
+        methods that let us do the following: 
+            1) Read/write the model state stored in the state vector.
+            2) Perform calculations based upon the model state.
+            3) Put the results from calculations into the correct part of a ForwardModel instance.
     """
     
     id : int = None # All "*ModelBase" classes that are not meant to be used should have an id of 'None'
