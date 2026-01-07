@@ -32,12 +32,11 @@ from numba import jit
 
 from archnemesis.helpers import h5py_helper
 from archnemesis.enums import InstrumentLineshape, WaveUnit, SpectraUnit
+from archnemesis import gauss_lobatto
 
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.WARN)
-
 
 
 #!/usr/local/bin/python3
@@ -216,7 +215,11 @@ class Measurement_0:
     Measurement_0.calc_doppler_shift()
     Measurement_0.invert_doppler_shift()
     Measurement_0.correct_doppler_shift()
+
+    Measurement_0.calc_avepoints_exoplanet()
     
+    Measurement_0.plot_ils()
+    Measurement_0.plot_filters()
     Measurement_0.plot_SO()
     Measurement_0.plot_nadir()
     Measurement_0.plot_disc_averaging()
@@ -234,8 +237,8 @@ class Measurement_0:
             LATITUDE=0.0, 
             LONGITUDE=0.0, 
             V_DOPPLER=0.0, 
-            NCONV=[1], 
-            NAV=[1]
+            NCONV=np.array([1],dtype="int32"), 
+            NAV=np.array([1],dtype="int32"),
     ):
 
         #Input parameters
@@ -818,8 +821,7 @@ class Measurement_0:
         if calc_MeasurementVector==True:
             self.calc_MeasurementVector()
             self.add_fmerr()
-            
-             
+                         
     #################################################################################################################
             
     def read_spx(self):
@@ -1674,6 +1676,219 @@ class Measurement_0:
 
     #################################################################################################################
         
+    def calc_avepoints_exoplanet(self,nmu=5,phase=0.,igeom=0):
+        """
+        Calculate the averaging points for exoplanet disc-averaged measurements following Irwin et al. (2020)
+
+        The calculation of the averaging points is valid for other planets. The exoplanet tag relates to the
+        assumption that the planet is tidally-locked to the star, which is used to calculate the latitude, longitude
+        and stellar angles for each averaging point. 
+
+        This code has been adapted from nemesispy
+
+        Parameters
+        ----------
+
+        nmu : int, optional
+            Number of averaging points in zenith direction 
+        phase : float, optional
+            Orbital phase in degrees (0 =parimary transit and 180 = secondary eclipse)
+        """
+
+        #Initialising arrays
+        assert nmu >=2, "Need at least 2 quadrature rings"
+        phase = phase%360
+        dtr = np.pi/180 # degree to radians conversion factor
+        delR = 1./nmu
+
+        # set up the output arrays
+        nsample = 1000 # large array size to hold calculations
+        tablat = np.zeros(nsample) # latitudes
+        tablon = np.zeros(nsample) # longitudeds
+        tabzen = np.zeros(nsample) # zenith angle in quadrature scheme
+        tabsol = np.zeros(nsample) # solar zenith angle
+        tabazi = np.zeros(nsample) # solar azimuth angle (scattering phase angle?)
+        tabwt = np.zeros(nsample)  # weight of each sample
+
+        #Calculating mu and weights based on Gauss-Lobatto quadrature
+        mu,wtmu = gauss_lobatto(2*nmu)
+        mu = mu[nmu::]
+        wtmu = wtmu[nmu::]
+
+        # trace out the day/night terminator
+        z_term = np.linspace(-1,1,201) # pick out some z coordinates for the terminator
+        if 0<= phase <= 180:
+            # terminator is to the left of z axis
+            theta_term = 2*np.pi - np.arccos(z_term)
+        else:
+            # terminator in the right side of the disc
+            theta_term = np.arccos(z_term)
+        x_term = np.sin(theta_term) * np.around(np.cos(phase*dtr),14) # x coords of terminator
+        r_term = np.sqrt(x_term**2+z_term**2) # radial coords of terminator
+        rmin = min(r_term) # least radius (is on x axis)
+
+        # define FOV averaging points
+        isample = 0
+        for imu in range(0, nmu): # quadrature rings
+            r_quad = np.sqrt(1.-mu[imu]**2) # quadrature radius (from small to large)
+            half_circum = np.pi*r_quad # half the circumference
+
+            # see if the quadrature ring intersects the terminator
+            # if so, find the intersection point and place a sample point there
+            if r_quad > rmin: # quadrature ring intersects the terminator
+                ikeep = np.where(r_term<=r_quad)
+                ikeep = ikeep[0] # index of the points on the terminator with radius > r_quad
+                i_intersect = np.array([ikeep[0], ikeep[-1]]) # index of two intersectionns
+                x_intersect = x_term[i_intersect] # x coordinates of intersection
+                z_intersect = z_term[i_intersect] # z coordinates of intersection
+
+                # take the intersection in the upper hemisphere
+                if z_intersect[1] > 0:
+                    alpha_intersect = arctan(x_intersect[1],z_intersect[1])/dtr
+                else:
+                    alpha_intersect = arctan(x_intersect[0],z_intersect[0])/dtr
+
+                # place the sample points on the quadrature rings on either side of the intersection
+                nalpha1 = int(0.5+half_circum*(alpha_intersect/180.0)/delR) # round up; separation ~ R/nmu
+                nalpha2 = int(0.5+half_circum*((180.-alpha_intersect)/180.0)/delR)
+
+                # at least 1 point either side of the intersection
+                if(nalpha1 < 2):
+                    nalpha1=2
+                if(nalpha2 < 2):
+                    nalpha2=2
+
+                # set the alphas of the sample points on current quadrature ring
+                nalpha = nalpha1+nalpha2-1 # intersection point double counted
+                alpha1 = alpha_intersect/(nalpha1-1) * np.arange(nalpha1)
+                alpha2 = alpha_intersect+(180.-alpha_intersect)/(nalpha2-1) * np.arange(nalpha2)
+                alpha2 = alpha2[1:(nalpha2)] # intersect was counted twice
+                alpha_sample_list = np.concatenate((alpha1,alpha2))
+
+            else: # quadrature ring does not intersect terminator
+                if(half_circum > 0.0):
+                    nalpha = int(0.5+half_circum/delR)
+                    alpha_sample_list = 180*np.arange(nalpha)/(nalpha-1)
+                else:
+                    nalpha=1
+
+            if(nalpha > 1): # more than one sample on the quadrature ring
+
+                for ialpha in np.arange(0,nalpha):
+
+                    alpha_sample = alpha_sample_list[ialpha]
+
+                    thetasol_sample, azi_sample, lat_sample, lon_sample \
+                        = generate_angles_exoplanet(phase,r_quad,alpha_sample)
+
+                    # trapezium rule weights
+                    if (ialpha == 0):
+                        wt_trap = (alpha_sample_list[ialpha+1]-alpha_sample_list[ialpha])/2.0
+                    elif (ialpha == nalpha-1):
+                        wt_trap = (alpha_sample_list[ialpha]-alpha_sample_list[ialpha-1])/2.0
+                    else:
+                        wt_trap = (alpha_sample_list[ialpha+1]-alpha_sample_list[ialpha-1])/2.0
+
+                    wt_azi= wt_trap/180. # sample azimuthal weight
+
+
+                    tablat[isample] = lat_sample # sample lattitude
+                    tablon[isample] = lon_sample # sample longitude
+                    tabzen[isample] = np.arccos(mu[imu])/dtr # sample emission zenith angle
+                    tabsol[isample] = thetasol_sample/dtr # sample stellar zenith angle
+                    tabazi[isample] = azi_sample/dtr # sample stellar azimuth angle
+                    tabwt[isample] = 2*mu[imu]*wtmu[imu]*wt_azi # sample weight
+                    isample = isample+1
+
+            else:
+                alpha_sample = 0.
+                thetasol_sample,azi_sample, lat_sample,lon_sample \
+                    = generate_angles_exoplanet(phase,r_quad,alpha_sample)
+                if(tabzen[isample] == 0.0):
+                    azi_sample = 180.
+                tablat[isample] = lat_sample
+                tablon[isample] = lon_sample
+                tabzen[isample] = np.arccos(mu[imu])/dtr
+                tabsol[isample] = thetasol_sample/dtr
+                tabazi[isample] = azi_sample
+                tabwt[isample] = 2*mu[imu]*wtmu[imu]
+                isample = isample+1
+
+        nav = isample
+        wav = np.zeros((6,isample))
+        sum=0.
+        for i in np.arange(0,isample):
+            wav[0,i]=tablat[i]              # 0th array is lattitude
+            wav[1,i]=tablon[i]%360          # 1st array is longitude
+            wav[2,i]=tabsol[i]              # 2nd array is stellar zenith angle
+            wav[3,i]=tabzen[i]              # 3rd array is emission zenith angle
+            wav[4,i]=tabazi[i]              # 4th array is stellar azimuth angle
+            wav[5,i]=tabwt[i]               # 5th array is weight
+            sum = sum+tabwt[i]
+
+        #sum should be very close to 1.0, but normalising just in case
+        for i in range(isample):            # normalise weights so they add up to 1
+            wav[5,i]=wav[5,i]/sum
+
+        #Updating class
+
+
+        if nav>self.NAV.max():
+            #we need to resize the arrays
+            flat = np.zeros((self.NGEOM,nav))
+            flon = np.zeros((self.NGEOM,nav))
+            tanhe = np.zeros((self.NGEOM,nav))
+            wgeom = np.zeros((self.NGEOM,nav))
+            emiss_ang = np.zeros((self.NGEOM,nav))
+            sol_ang = np.zeros((self.NGEOM,nav))
+            azi_ang = np.zeros((self.NGEOM,nav))
+            for i in range(self.NGEOM):
+                if self.FLAT is not None:
+                    flat[i,0:self.NAV[i]] = self.FLAT[i,0:self.NAV[i]]
+                if self.FLON is not None:
+                    flon[i,0:self.NAV[i]] = self.FLON[i,0:self.NAV[i]]
+                if self.TANHE is not None:
+                    tanhe[i,0:self.NAV[i]] = self.TANHE[i,0:self.NAV[i]]
+                if self.WGEOM is not None:
+                    wgeom[i,0:self.NAV[i]] = self.WGEOM[i,0:self.NAV[i]]
+                if self.EMISS_ANG is not None:
+                    emiss_ang[i,0:self.NAV[i]] = self.EMISS_ANG[i,0:self.NAV[i]]
+                if self.SOL_ANG is not None:
+                    sol_ang[i,0:self.NAV[i]] = self.SOL_ANG[i,0:self.NAV[i]]
+                if self.AZI_ANG is not None:
+                    azi_ang[i,0:self.NAV[i]] = self.AZI_ANG[i,0:self.NAV[i]]
+        else:
+
+            flat = self.FLAT.copy()
+            flon = self.FLON.copy()
+            if self.TANHE is not None:
+                tanhe = self.TANHE.copy()
+            wgeom = self.WGEOM.copy()
+            emiss_ang = self.EMISS_ANG.copy()
+            sol_ang = self.SOL_ANG.copy()
+            azi_ang = self.AZI_ANG.copy()
+
+        NAV = np.zeros(self.NGEOM,dtype='int32')
+        NAV[:] = self.NAV[:]
+        NAV[igeom] = nav
+        self.NAV = NAV
+        flat[igeom,0:nav] = wav[0,0:nav]
+        flon[igeom,0:nav] = wav[1,0:nav]
+        sol_ang[igeom,0:nav] = wav[2,0:nav]
+        emiss_ang[igeom,0:nav] = wav[3,0:nav]
+        azi_ang[igeom,0:nav] = wav[4,0:nav]
+        wgeom[igeom,0:nav] = wav[5,0:nav]
+
+        self.edit_FLAT(flat)
+        self.edit_FLON(flon)
+        self.edit_SOL_ANG(sol_ang)
+        self.edit_EMISS_ANG(emiss_ang)
+        self.edit_AZI_ANG(azi_ang)
+        self.edit_WGEOM(wgeom)
+
+
+    #################################################################################################################
+        
     def crop_wave(self,wavemin,wavemax,iconv=None):
     
         """
@@ -1710,7 +1925,8 @@ class Measurement_0:
 
         self.assess()
 
-
+    #################################################################################################################
+        
     def build_ils(self,IGEOM=0):
         """
         Subroutine to calculate the instrument lineshape kernel
@@ -2935,6 +3151,107 @@ class Measurement_0:
         plt.show()
         
     #################################################################################################################
+
+    def plot_fov(self, colormap='turbo'):
+        """
+        Subroutine to make a summary plot of the field-of-view geometry for a disc-averaging observation
+
+        """
+
+        from mpl_toolkits.basemap import Basemap
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+        #Making a figure for each geometry
+        for igeom in range(self.NGEOM):
+
+            plt.figure(figsize=(12,3))
+
+            #Plotting the geometry
+            ax1 = plt.subplot2grid((1,4),(0,0),rowspan=1,colspan=1)
+
+            if self.EMISS_ANG[igeom,:].min()>0.0:
+                _lgr.warning('there is no EMISS_ANG equal to zero, sub-observer point cannot be determined automatically, using central LATITUDE and LONGITUDE')
+
+                subobs_lat = self.LATITUDE
+                subobs_lon = self.LONGITUDE
+
+            else:
+
+                isubobs = np.where(self.EMISS_ANG[igeom,:]==np.min(self.EMISS_ANG[igeom,:]))[0][0]
+                subobs_lat = self.FLAT[igeom,isubobs]
+                subobs_lon = self.FLON[igeom,isubobs]
+
+            map1 = Basemap(projection='ortho', resolution=None,
+                lat_0=subobs_lat, lon_0=subobs_lon)
+            map1.drawparallels(np.linspace(-90, 90, 13)) # lats
+            map1.drawmeridians(np.linspace(-180, 180, 13)) # lons
+            im1 = map1.scatter(self.FLON[igeom,:],self.FLAT[igeom,:],latlon=True,c=self.WGEOM[igeom,:],cmap=colormap)
+
+            # create an axes on the right side of ax. The width of cax will be 5%
+            # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+            divider = make_axes_locatable(ax1)
+            cax = divider.append_axes("bottom", size="5%", pad=0.15)
+            cbar1 = plt.colorbar(im1,cax=cax,orientation='horizontal')
+            cbar1.set_label('Weight')
+
+
+
+
+            ax2 = plt.subplot2grid((1,4),(0,1),rowspan=1,colspan=1)
+            map2 = Basemap(projection='ortho', resolution=None,
+                lat_0=subobs_lat, lon_0=subobs_lon)
+            map2.drawparallels(np.linspace(-90, 90, 13)) # lats
+            map2.drawmeridians(np.linspace(-180, 180, 13)) # lons
+            im2 = map2.scatter(self.FLON[igeom,:],self.FLAT[igeom,:],latlon=True,c=self.EMISS_ANG[igeom,:],cmap=colormap,vmin=0.0,vmax=90.0)
+
+            # create an axes on the right side of ax. The width of cax will be 5%
+            # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+            divider = make_axes_locatable(ax2)
+            cax = divider.append_axes("bottom", size="5%", pad=0.15)
+            cbar2 = plt.colorbar(im2,cax=cax,orientation='horizontal')
+            cbar2.set_label('Emission angle')
+
+
+
+
+
+
+            ax3 = plt.subplot2grid((1,4),(0,2),rowspan=1,colspan=1)
+            map3 = Basemap(projection='ortho', resolution=None,
+                lat_0=subobs_lat, lon_0=subobs_lon)
+            map3.drawparallels(np.linspace(-90, 90, 13)) # lats
+            map3.drawmeridians(np.linspace(-180, 180, 13)) # lons
+            im3 = map3.scatter(self.FLON[igeom,:],self.FLAT[igeom,:],latlon=True,c=self.SOL_ANG[igeom,:],cmap=colormap,vmin=0.0,vmax=90.0)
+
+            # create an axes on the right side of ax. The width of cax will be 5%
+            # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+            ax3.set_facecolor('lightgray')
+            divider = make_axes_locatable(ax3)
+            cax = divider.append_axes("bottom", size="5%", pad=0.15)
+            cbar2 = plt.colorbar(im3,cax=cax,orientation='horizontal')
+            cbar2.set_label('Solar Zenith angle')
+            
+
+
+            ax4 = plt.subplot2grid((1,4),(0,3),rowspan=1,colspan=1)
+            map4 = Basemap(projection='ortho', resolution=None,
+                lat_0=subobs_lat, lon_0=subobs_lon)
+            map4.drawparallels(np.linspace(-90, 90, 13)) # lats
+            map4.drawmeridians(np.linspace(-180, 180, 13)) # lons
+            im4 = map4.scatter(self.FLON[igeom,:],self.FLAT[igeom,:],latlon=True,c=self.AZI_ANG[igeom,:],cmap=colormap,vmin=0.0,vmax=180.0)
+
+            # create an axes on the right side of ax. The width of cax will be 5%
+            # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+            divider = make_axes_locatable(ax4)
+            cax = divider.append_axes("bottom", size="5%", pad=0.15)
+            cbar2 = plt.colorbar(im4,cax=cax,orientation='horizontal')
+            cbar2.set_label('Azimuth angle')
+
+            plt.tight_layout()
+        plt.show()
+
+
+    #################################################################################################################
      
 #################################################################################################################
 #################################################################################################################
@@ -3873,3 +4190,253 @@ def integrate_filterg_ngeom(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil):
                 gradout[j,:,k] = np.trapz(dydx[inwave,:,k] * afil_interp[:, None], vwave[inwave], axis=0)
 
     return yout,gradout
+
+
+#################################################################################################################
+#################################################################################################################
+#                                            GEOMETRY CALCULATIONS - EXOPLANETS
+#################################################################################################################
+#################################################################################################################
+
+
+#Generate sample locations and corresponding weights on a planetary disc
+#for calculating the disc-averaged radiance of a transitting planet
+#at variable orbital phases.
+
+#Solar zenith and azimuth angles of the sample points
+#are also generated, but not currently used asreflected sunlight is not included.
+
+#Assumptions and conventions:
+
+#    1. The visible planetary disc is a circle (with dimensionless radius 1).
+
+#    2. The orbital phase is 0 at primary transit and 180 at secondary eclipse.
+#    Orbital phase increases in the direction of orbital motion.
+
+#    3. The planet is tidally locked, i.e. it's in synchronous rotation
+#    and always present the same hemisphere to the star. Therefore, We are
+#    observing the planet's orbit edge on.
+
+#    4. The planetocentric longitude is defined such that the antistellar point
+#    is on the 0E meridian, and the substellar point is on the 180E meridian.
+#    Longitude increases in the direction of planet's self-rotation.
+
+#    5. The north pole of the planet is defined such that when viewed directly
+#    above the north pole the planet is rotating anticlockwise.
+
+#Coordinate system (origin is at the centre of the target):
+
+#    x-axis points from observer's 9 o'clock to observer's 3 o'clock
+#    y-axis points from observer to the target
+#    z-axis points from south pole to north pole
+#    r is the radial distance
+#    theta is measured clockwiseky from the z-axis
+#    phi is measured anticlockwise from x-axis
+
+#    x = r * sin(theta) * cos(phi) = rho * cos(alpha)
+#    y = r * sin(theta) * sin(phi) = rho * sin(alpha)
+#    z = r * cos(theta)
+
+#    rho: projected distance from a point on the disc to the centre of the disc
+#    alpha: argument of a point on the projected disc, measured anticlockwise from x axis
+
+#################################################################################################
+
+def arctan(x,y):
+    """
+    Calculate the argument of the point (x,y) in the range [0,2pi).
+
+    Parameters
+    ----------
+        x : real
+            x-coordinate of the point (length of the adjacent side)
+        y : real
+            y-coordinate of the point (length of the opposite side)
+    Returns
+    -------
+        ang : real
+            Argument of (x,y) in radians
+    """
+    if(x == 0.0):
+        if (y == 0.0) : ang = 0.0 # (x,y) is the origin, ill-defined
+        elif (y > 0.0) : ang = 0.5*np.pi # (x,y) is on positive y-axis
+        else : ang = 1.5*np.pi  # (x,y) is on negative y-axis
+    else:
+        ang=np.arctan(y/x)
+        if (y > 0.0) :
+            if (x > 0.0) : ang = ang # (x,y) is in 1st quadrant
+            else : ang = ang+np.pi # (x,y) is in 2nd quadrant
+        elif (y == 0.0) :
+            if (x > 0.0) : ang = 0 # (x,y) is on positive x-axis
+            else : ang = np.pi # (x,y) is on negative x-axis
+        else:
+            if (x > 0.0) : ang = ang+2*np.pi # (x,y) is in 4th quadrant
+            else : ang = ang+np.pi # (x,y) is in 3rd quadrant
+    return ang
+
+#################################################################################################
+
+def rotatey(v, phi):
+    """
+    Rotate a 3D vector v anticlockwisely about the y-axis by angle phi
+
+    Parameters
+    ----------
+        v : ndarray
+            A real 3D vector to rotate
+        phi : real
+            Angle to rotate the vector v by (radians)
+
+    Returns
+    -------
+        v_new : ndarray
+            Rotated 3D vector
+    """
+    a = np.zeros((3,3)) # construct the rotation matrix
+    a[0,0] = np.cos(phi)
+    a[0,2] = np.sin(phi)
+    a[1,1] = 1.
+    a[2,0] = -np.sin(phi)
+    a[2,2] = np.cos(phi)
+    # v_new = np.matmul(a,v) # unsupported NumPy function
+    v_new = np.zeros(3)
+    for i in range(3):
+        for j in range(3):
+            v_new[i] += a[i,j] * v[j]
+    return v_new
+
+#################################################################################################
+
+def rotatez(v, phi):
+    """
+    Rotate a 3D vector v anticlockwisely about the z-axis by angle phi
+
+    Parameters
+    ----------
+        v : ndarray
+            A real 3D vector to rotate
+        phi : real
+            Angle to rotate the vector by (radians)
+
+    Returns
+    -------
+        v_new : ndarray
+            Rotated 3D vector
+    """
+    a = np.zeros((3,3))
+    a[0,0] = np.cos(phi)
+    a[0,1] = -np.sin(phi)
+    a[1,0] = np.sin(phi)
+    a[1,1] = np.cos(phi)
+    a[2,2] = 1
+    # v_new = np.matmul(a,v) # unsupported NumPy function
+    v_new = np.zeros(3)
+    for i in range(3):
+        for j in range(3):
+            v_new[i] += a[i,j] *v[j]
+    return v_new
+
+#################################################################################################
+
+def generate_angles_exoplanet(phase,rho,alpha):
+    """
+    Finds the stellar zenith angle, stellar azimuth angle, lattitude and longitude
+    of a chosen point on the visible disc of a planet under observation. The planet
+    is assumed to be tidally locked, and is observed on an edgy-on orbit.
+
+    Refer to the begining of the trig.py file for geomety and convections.
+
+    Parameters
+    ----------
+    phase : real
+        Orbital phase in degrees. 0 at  parimary transit and 180 at secondary eclipse.
+        Range: [0,360)
+    rho	: real
+        Fractional radius of the point on disc, must be between 0 and 1 inclusive.
+        Range: [0,1]
+    alpha : real
+        Argument of the point on visible disc (degrees), measured
+        anticlockwise from 3 o'clock.
+        Range: [0,360)
+
+    Returns
+    -------
+    zen : real
+        Computed solar zenith angle (radians), which is the angle between the local
+        normal and the stellar direction vector.
+    azi	: real
+        Computed solar azimuth angle (radians). Uses convention that
+        forward scatter = 0. !!! need to define.
+    lat	: real
+        Planetocentric latitude of the point (degrees).
+    lon	: real
+        Planetocentric longitude of the point (degrees).
+    """
+    phase = np.mod(phase,360)
+    dtr = np.pi/180. # degree to radiance conversion factor
+    assert rho <=1, "Fractional radius should be less or equal to 1"
+
+    # get stellar direction vector in Cartesian coordinates
+    # ie unit vector in direction of star
+    theta_star = np.pi/2. # star lies in planet's equitorial plane
+    phi_star = 90.0 + phase # when phase angle is 0 the star lies on the y-axis
+    x_star = np.sin(theta_star)*np.cos(phi_star*dtr)
+    y_star = np.sin(theta_star)*np.sin(phi_star*dtr)
+    z_star = np.cos(theta_star)
+    v_star = np.array([x_star,y_star,z_star])
+
+    # get Cartesian coordinates of input point
+    # calculate point position vector using spherical polars (r=1,theta,phi)
+    theta_point = np.arccos(rho*np.sin(alpha*dtr)) # ie planetary zenith angle of poiny
+    if np.sin(theta_point) != 0.0:
+        cos_phi = rho*np.cos(alpha*dtr)/abs(np.sin(theta_point))
+        phi_point = (-np.arccos(cos_phi))%(2*np.pi) # azimuth angle of point (on our side)
+    else:
+        phi_point = 0.0 # sin(theta_point) = 0 at north polt
+    x_point = np.sin(theta_point)*np.cos(phi_point)
+    y_point = np.sin(theta_point)*np.sin(phi_point)
+    z_point = np.cos(theta_point)
+    v_point = np.array([x_point,y_point,z_point])
+
+    # calculate angle between solar position vector and local normal
+    # i.e. zen solar zenith angle
+    inner_product = np.sum(v_star*v_point)
+    zen = np.arccos(inner_product)
+    zen = np.around(zen, 10)
+
+    # calculate latitude and longitude of the spot
+    # (sub-stellar point = 180E, anti-stellar point = 0E, longtitudes in the direction of self-rotation)
+    lat = np.around(90.-theta_point*180/np.pi, 10) # southern hemisphere has negative lattitude
+    lon = (phi_point/dtr - (phi_star+180))%360 # substellar point is 180E
+
+    # calculate emission viewing angle direction vector (-y axis) (Observer direction vecto)
+    x_observer = 0.
+    y_observer = -1.0
+    z_observer = 0.0
+    v_observer = np.array([x_observer,y_observer,z_observer])
+
+    ### calculate azimuth angle
+    # Rotate frame clockwise by phi_point about z (v_point is now x-axis)
+    v_star_1=rotatez(v_star,-phi_point)
+    v_point_1=rotatez(v_point,-phi_point)
+    v_observer_1=rotatez(v_observer,-phi_point)
+
+    # Rotate frame clockwise by theta_point about y (v_point is now z-axis )
+    v1B=rotatey(v_star_1,-theta_point)
+    v2B=rotatey(v_point_1,-theta_point)
+    v3B=rotatey(v_observer_1,-theta_point)
+
+    # thetsolB=np.arccos(v1B[2])
+    # thetobsB=np.arccos(v3B[2])
+    phisolB=arctan(v1B[0], v1B[1])
+    phiobsB=arctan(v3B[0], v3B[1])
+
+    azi = abs(phiobsB-phisolB)
+    if(azi > np.pi):
+        azi=2*np.pi-azi
+
+    # Ensure azi meets convention where azi=0 means forward-scattering
+    azi = np.pi-azi
+
+    return zen, azi, lat, lon
+

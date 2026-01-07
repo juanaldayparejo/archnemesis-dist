@@ -22,6 +22,7 @@ This section includes Jupyter notebooks with examples showing how to use the dif
    examples/cia_archnemesis/convert_cia_nemesis.ipynb
    examples/stellar/noaa_solar_spectrum.ipynb
    examples/linedata/linedata.ipynb
+   examples/disc_weights/disc_weights.ipynb
 
 
 Forward models
