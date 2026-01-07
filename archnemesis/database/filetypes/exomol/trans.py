@@ -53,17 +53,18 @@ class ExomolIsotopeTrans:
     ) -> Self:
         
         url = f'{EXOMOL_API_URL}{mol_formula}'
+        _lgr.info(f'Fetching ExoMol molecule trans file lists from "{url}"')
         spec = json.loads(fetch.file(url, encoding='ascii'))
         
         trans_files = [x['url'] for x in spec[iso_formula]['linelist'][dataset]['files'] if x['url'].endswith('.trans.bz2')]
-        
+        _lgr.info(f'Found {len(trans_files)} transition files for molecule="{mol_formula}", isotope="{iso_formula}", dataset="{dataset}". Only using up to {n_file_limit} files.')
         
         for trans_file_url in trans_files:
             if n_file_limit <= 0:
                 break
                 
             fpath = cls.download_file(f'https://{trans_file_url}', dest_dir)
-            _lgr.info(f'"{url}" downloaded to "{fpath}"')
+            _lgr.info(f'"{trans_file_url}" downloaded to "{fpath}"')
 
             data = cls.get_data_from_file_bz2(fpath)
 

@@ -90,6 +90,8 @@ def file_in_chunks(
         accumulated_size += size_of_current_chunk
         i += 1
     
+    _lgr.info(f'Fetch complete, downloaded {accumulated_size/1024} Kb in total over {i} chunks.')
+    
     return
 
 def file(

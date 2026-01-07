@@ -22,6 +22,7 @@ from ...utils import fetch
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
+#_lgr.setLevel(logging.DEBUG)
 
 
 EXOMOL_API_URL_FMT : str = "https://exomol.com/api/?molecule={}"
@@ -123,7 +124,6 @@ class ExomolPartitionFnInfo(TreePrinter, ExomolTaggedFileFormat):
     
     max_temp : float = None
     temp_step : float = None
-
 
 
 def field_quanta_reader(
@@ -232,16 +232,36 @@ def field_quanta_reader(
     return tuple(new_list)
 
 
+@dc.dataclass(repr=False)
+class ExomolQuantumCaseInfo(TreePrinter, ExomolTaggedFileFormat):
+    _complete_when_fields_filled = False
+    _expect_contiguous_fields = True
+    _repeated_fields_overwrite = False
+    _field_dispatch_map = {
+        'label' : 'Quantum case label',
+        'n_quanta' : 'No. of quanta defined',
+        'quanta' : 'Quantum label',
+    }
+    
+    _alternate_field_readers = {
+        'quanta' : field_quanta_reader,
+    }
+    
+    label : str = None
+    n_quanta : int = 0
+    quanta : tuple[ExomolQuantaInfo,...] = None
+
+
 def field_auxiliary_reader(
         type : Type, 
         peek_itr : PeekableIterator, 
         current_instance : None | tuple[ExomolAuxiliaryInfo,...]
 ) -> tuple[ExomolAuxiliaryInfo,...]:
-    # Quanta have their ordering in their comment
+    # Auxiliary columns have their ordering in their comment
     # so we need to pull that data out and ensure that the ordering
     # is respected.
     
-    # Assume that we have label, format, description for each Quanta. Missing elements will be set to `None`
+    # Assume that we have label, format, description for each Auxiliary. Missing elements will be set to `None`
     
     current_instance = current_instance if current_instance is not None else tuple() # Start with empty tuple
     
@@ -342,7 +362,7 @@ class ExomolIsotopeDef(TreePrinter, ExomolTaggedFileFormat):
     _self_dispatch_check = lambda next_line : next_line.split('#',1)[0].strip() == 'EXOMOL.def'
     _alternate_field_readers = {
         'quanta' : field_quanta_reader,
-        'auxiliary_columns' : field_auxiliary_reader,
+        'auxiliary_info' : field_auxiliary_reader,
     }
     _field_dispatch_map = {
         'id' : 'ID',
@@ -366,10 +386,8 @@ class ExomolIsotopeDef(TreePrinter, ExomolTaggedFileFormat):
         'lande_g_factor_available' : 'Lande g-factor availability',
         'n_states' : 'No. of states',
         'n_quanta_cases' : 'No. of quanta cases',
-        'quantum_case_labels' : 'Quantum case label',
-        'n_quanta' : 'No. of quanta defined',
-        'quanta' : 'Quantum label',
-        'auxiliary_columns' : 'Auxiliary title',
+        'quantum_cases' : 'Quantum case label',
+        'auxiliary_info' : 'Auxiliary title',
         'n_transitions' : 'Total number of transitions',
         'n_transition_files' : 'No. of transition files',
         'max_wavenumber' : 'Maximum wavenumber',
@@ -407,10 +425,8 @@ class ExomolIsotopeDef(TreePrinter, ExomolTaggedFileFormat):
     lande_g_factor_available : int = 0
     n_states : int = 0
     n_quanta_cases: int = 0
-    quantum_case_labels : tuple[str,...] = tuple()
-    n_quanta : int = 0
-    quanta : tuple[ExomolQuantaInfo,...] = None
-    auxiliary_columns : tuple[ExomolAuxiliaryInfo] = tuple()
+    quantum_cases : tuple[ExomolQuantumCaseInfo,...] = tuple()
+    auxiliary_info : tuple[ExomolAuxiliaryInfo,...] = tuple()
     n_transitions : int = None
     n_transition_files : int = None
     max_wavenumber : float = None
@@ -464,5 +480,13 @@ class ExomolIsotopeDef(TreePrinter, ExomolTaggedFileFormat):
         while database_url.endswith('/'):
             database_url = database_url[:-1]
         return database_url + f'/{self.get_mol_formula()}/{self.iso_slug}/{self.dataset}'
-    
-    
+
+
+
+
+
+
+
+
+
+

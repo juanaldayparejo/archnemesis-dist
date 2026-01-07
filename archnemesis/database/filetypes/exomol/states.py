@@ -68,7 +68,7 @@ class ExomolIsotopeStates():
             
     
             # Add each quanta case to the column names
-            for qc in iso_def.quanta_case:
+            for qc in iso_def.quantum_cases:
                 for q in qc.quanta:
                     column_names.append(q.label)
                     column_descriptions.append(q.description)
@@ -86,7 +86,7 @@ class ExomolIsotopeStates():
                     column_types.append(col_type)
     
             # Add each auxiliary to the column names
-            for aux in iso_def.auxiliary_list.entry[::-1]: # NOTE: for some reason these seem to be listed back-to-front
+            for aux in iso_def.auxiliary_info[::-1]: # NOTE: for some reason these seem to be listed back-to-front
                 column_names.append(aux.label)
                 column_descriptions.append(aux.description)
     
@@ -121,6 +121,9 @@ class ExomolIsotopeStates():
         
         url = iso_def.get_parent_url(database_url) + f'/{iso_slug}__{dataset}.states.bz2'
         dtype_list, col_descriptions = cls.get_initial_structured_dtype_list(iso_def)
+        
+        _lgr.info(f'{dtype_list=}')
+        _lgr.info('\n# col_descriptions #\n'+'\n'.join(f'\t{k} : {t[1]} \n\t\t{v}' for (k, v), t in zip(col_descriptions.items(), dtype_list)))
         
         fpath = cls.download_file(url, dest_dir)
         _lgr.info(f'"{url}" downloaded to "{fpath}"')
