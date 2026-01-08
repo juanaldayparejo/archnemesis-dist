@@ -45,6 +45,7 @@ nbsphinx_thumbnails = {
     'examples/mars_solocc/mars_SO': '_static/exomars_SO.jpg',
     'examples/mars_aotf/mars_aotf': '_static/exomars_SO.jpg',
     'examples/disc_weights/disc_weights': '_static/exoplanet_orbit.png',
+    'examples/Exoplanet_thermal_emission/exoplanet': '_static/exoplanet_orbit.png',
     #'examples/Jupiter_CIRS_nadir_thermal_emission/Jupiter_CIRS': '_static/jupiter_cassini.jpg',
     #'examples/Measurement/Measurement': '_static/observation_sketch.png',
 }
