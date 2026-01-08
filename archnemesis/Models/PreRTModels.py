@@ -2528,7 +2528,7 @@ class Model43(PreRTModelBase):
         if gammav2>0.0:
             x0[ix] = np.log(gammav2)
             lx[ix] = 1
-            num[ix] = 0
+            inum[ix] = 0
             sx[ix,ix] = (gammav2_err/gammav2)**2.
         else:
             raise ValueError('error in read_apr :: gammav2 must be > 0')
@@ -3906,7 +3906,7 @@ class Model62(PreRTModelBase):
         if p1>0.0:
             x0[ix] = np.log(p1)
             lx[ix] = 1
-            num[ix] = 1
+            inum[ix] = 1
             sx[ix,ix] = (p1_err/p1)**2.
         else:
             raise ValueError('error in read_apr :: p1 must be > 0')
@@ -3919,7 +3919,7 @@ class Model62(PreRTModelBase):
         if p2>0.0:
             x0[ix] = np.log(p2)
             lx[ix] = 1
-            num[ix] = 1
+            inum[ix] = 1
             sx[ix,ix] = (p2_err/p2)**2.
         else:
             raise ValueError('error in read_apr :: p2 must be > 0')
@@ -3932,7 +3932,7 @@ class Model62(PreRTModelBase):
         if p3>0.0:
             x0[ix] = np.log(p3)
             lx[ix] = 1
-            num[ix] = 1
+            inum[ix] = 1
             sx[ix,ix] = (p3_err/p3)**2.
         else:
             raise ValueError('error in read_apr :: p3 must be > 0')
@@ -3945,7 +3945,7 @@ class Model62(PreRTModelBase):
         if t0>0.0:
             x0[ix] = t0
             lx[ix] = 0
-            num[ix] = 1
+            inum[ix] = 1
             sx[ix,ix] = (t0_err)**2.
         else:
             raise ValueError('error in read_apr :: t0 must be > 0')
@@ -3958,7 +3958,7 @@ class Model62(PreRTModelBase):
         if alpha1>0.0:
             x0[ix] = np.log(alpha1)
             lx[ix] = 1
-            num[ix] = 1
+            inum[ix] = 1
             sx[ix,ix] = (alpha1_err/alpha1)**2.
         else:
             raise ValueError('error in read_apr :: alpha1 must be > 0')
@@ -3971,7 +3971,7 @@ class Model62(PreRTModelBase):
         if alpha2>0.0:
             x0[ix] = np.log(alpha2)
             lx[ix] = 1
-            num[ix] = 1
+            inum[ix] = 1
             sx[ix,ix] = (alpha2_err/alpha2)**2.
         else:
             raise ValueError('error in read_apr :: alpha2 must be > 0')
