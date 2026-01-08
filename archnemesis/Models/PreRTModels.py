@@ -2476,7 +2476,7 @@ class Model43(PreRTModelBase):
         if alpha>0.0:
             x0[ix] = np.log(alpha)
             lx[ix] = 1
-            num[ix] = 0
+            inum[ix] = 0
             sx[ix,ix] = (alpha_err/alpha)**2.
         else:
             raise ValueError('error in read_apr :: alpha must be > 0')
@@ -2489,7 +2489,7 @@ class Model43(PreRTModelBase):
         if beta>0.0:
             x0[ix] = np.log(beta)
             lx[ix] = 1
-            num[ix] = 0
+            inum[ix] = 0
             sx[ix,ix] = (beta_err/beta)**2.
         else:
             raise ValueError('error in read_apr :: beta must be > 0')
@@ -2500,10 +2500,10 @@ class Model43(PreRTModelBase):
         k_ir = float(s[0])
         k_ir_err = float(s[1])
         if k_ir>0.0:
-            x0[ix] = np.log(k_irr)
+            x0[ix] = np.log(k_ir)
             lx[ix] = 1
-            num[ix] = 0
-            sx[ix,ix] = (k_ir_err/k_irr)**2.
+            inum[ix] = 0
+            sx[ix,ix] = (k_ir_err/k_ir)**2.
         else:
             raise ValueError('error in read_apr :: k_ir must be > 0')
         ix += 1
