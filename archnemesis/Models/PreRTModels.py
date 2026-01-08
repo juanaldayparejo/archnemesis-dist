@@ -2515,7 +2515,7 @@ class Model43(PreRTModelBase):
         if gammav1>0.0:
             x0[ix] = np.log(gammav1)
             lx[ix] = 1
-            num[ix] = 0
+            inum[ix] = 0
             sx[ix,ix] = (gammav1_err/gammav1)**2.
         else:
             raise ValueError('error in read_apr :: gammav1 must be > 0')
