@@ -76,9 +76,37 @@ def iter_exomol_api_data(exomol_root, directory : str):
 def iter_exomol_def_files_from_api_data(api_data):
     for iso_formula, iso_info in api_data.items():
         mol_formula = iso_info['molecule']
-        for dataset_name in [k for k in iso_info['linelist'].keys() if k!='data type']:
-            iso_slug = iso_formula.replace(')(', '-').replace('(','').replace(')','')
+        #iso_slug = iso_formula.replace(')(', '-').replace('(','').replace(')','')
+        iso_slug_guess = (iso_formula[1:] if iso_formula[1] == '(' else iso_formula).replace('(','-').replace(')','')
+        url_start = f'exomol.com/db/{mol_formula}/'
+        
+        
+        dataset_names = set()
+        iso_slug = None 
+        for data_type, data_info in iso_info.items():
+            if not isinstance(data_info, dict):
+                continue
+            #_lgr.debug(f'{data_info=}')
+            data_info.pop('data type') # remote "data type" key as we don't care about it here.
+            for dataset_name in data_info.keys():
+                dataset_names.add(dataset_name)
+                
+                if iso_slug is None:  # Take the first iso_slug we can find
+                    for file_info in data_info[dataset_name]['files']:
+                        file_url = file_info['url']
+                        # file_url should be of form "exomol.com/db/MOL/ISO_SLUG/DATASET/{ISO__DATASET*, README.txt}"
+                        # only want to rip "ISO_SLUG" out of it
+                        
+                        if file_url.startswith(url_start):
+                            iso_slug = file_url[len(url_start):].split('/')[0]
+                            break
+                    
+        if iso_slug is None:
+            iso_slug = iso_slug_guess
+            
+        for dataset_name in dataset_names:
             yield iso_formula, f'{mol_formula}/{iso_slug}/{dataset_name}/{iso_slug}__{dataset_name}.def'
+
 
 def get_exomol_api_data(exomol_def, directory : str):
     mol_formula = exomol_def.get_mol_formula()
@@ -120,7 +148,7 @@ def get_exomol_broad_urls(exomol_def, database_url : str) -> tuple[str,...]:
 
 class EXOMOL:
     database_url : str = EXOMOL_DATABASE_URL
-    all_file : str = EXOMOL_DATABASE_URL + '/exomol.all'
+    all_file : str = EXOMOL_DATABASE_URL + '/exomol.all' # NOTE: There is a JSON version at https://www.exomol.com/db/exomol.all.json
     proxy : None | dict[str, str] = None # None or dictionary mapping protocol names to URLs of proxies
     db : None | sqlite3.Connection = None
     cur : None | sqlite3.Cursor = None
@@ -168,19 +196,23 @@ class EXOMOL:
                 formula VARCHAR(255) UNIQUE NOT NULL
             );
 
-            -- List of all isotopes associated with their molecule
+            -- List of all isotopes associated with their parent molecule
             CREATE TABLE isotopologues (
                 id INTEGER PRIMARY KEY,
                 molecule_id INTEGER REFERENCES molecules (id) ON UPDATE CASCADE ON DELETE CASCADE,
                 iso_id INTEGER NOT NULL,
                 formula VARCHAR(255) UNIQUE NOT NULL,
+                radtran_name VARCHAR(255) UNIQUE,
                 terrestrial_abundance FLOAT NOT NULL,
                 mass FLOAT NOT NULL,
                 mass_unit VARCHAR(32) DEFAULT "g/mol",
+                
                 CONSTRAINT unique_mol_iso_id_pair UNIQUE (molecule_id, iso_id)
             );
 
-            -- List of all known gasses, they are made up of one or more isotopologues
+            -- List of all known gasses, they are a mixture of one or more isotopologues and molecules
+            -- NOTE: Monoisotopic gasses share the same NAME as their isotopologue
+            -- NOTE: Monomolecular gasses share the same NAME as their molecule
             CREATE TABLE _gasses (
                 id INTEGER PRIMARY KEY,
                 name VARCHAR(255) UNIQUE NOT NULL
@@ -194,6 +226,7 @@ class EXOMOL:
                 molecule_id INTEGER NOT NULL,
                 iso_id INTEGER NOT NULL,
                 volume_mixing_ratio FLOAT NOT NULL,
+                
                 FOREIGN KEY (molecule_id, iso_id) REFERENCES isotopologues (molecule_id, iso_id) ON UPDATE CASCADE ON DELETE CASCADE
             );
 
@@ -240,17 +273,25 @@ class EXOMOL:
             # Add a gas entry for each molecule
             EXOMOL.db_add_gas(cur, gas_props['name'])
             
-            for iso_id, iso_props in gas_props['isotope'].items():
+            for i, (iso_id, iso_props) in enumerate(gas_props['isotope'].items()):
                 
-                iso_name = iso_props.get('name', gas_props['name'] + f'_{iso_id}')
+                iso_name = iso_props.get('name', None)
+                if iso_name is None:
+                    _lgr.warn(f'No isotope name for {i}^th isotope of molecule "{gas_props["name"]}", skipping...')
+                    continue # skip isotopes without a name
+                
                 if iso_name == gas_props['name']:
-                    iso_name = gas_props['name'] + f'_{iso_id}'
+                    _lgr.warn(f'Isotope name "{iso_name}" for molecule "{gas_props["name"]}" is the same as the molecule name, skipping...')
+                    continue
+                
+                norm_iso_name = gas_data.normalise_isotope_name(iso_name)
                 
                 #v = (int(mol_id), int(iso_id), iso_name, iso_props['abun'], iso_props["mass"])
                 EXOMOL.db_add_isotopologue(
                     cur,
                     int(mol_id),
                     int(iso_id),
+                    norm_iso_name,
                     iso_name,
                     iso_props['abun'],
                     iso_props["mass"],
@@ -259,13 +300,13 @@ class EXOMOL:
                 # Add a gas entry for every isotopologue
                 EXOMOL.db_add_gas(
                     cur,
-                    iso_name,
+                    norm_iso_name,
                 )
                 
                 # Single isotopologue gasses are only composed of themselves
-                EXOMOL.db_add_single_gas_component(
+                EXOMOL.db_add_isotopologue_gas_component(
                     cur,
-                    iso_name,
+                    norm_iso_name,
                     int(mol_id),
                     int(iso_id),
                 )
@@ -320,16 +361,17 @@ class EXOMOL:
             mol_id : int,
             iso_id : int,
             formula : str,
+            radtran_name : str,
             abun : float,
             mass : float,
             mass_unit : str = "g/mol",
     ):
         cur.execute(
             """
-            INSERT INTO isotopologues (molecule_id, iso_id, formula, terrestrial_abundance, mass, mass_unit) 
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO isotopologues (molecule_id, iso_id, formula, radtran_name, terrestrial_abundance, mass, mass_unit) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (mol_id, iso_id, formula, abun, mass, mass_unit)
+            (mol_id, iso_id, formula, radtran_name, abun, mass, mass_unit)
         )
         return
     
@@ -362,7 +404,7 @@ class EXOMOL:
         return
     
     @staticmethod
-    def db_add_single_gas_component(
+    def db_add_isotopologue_gas_component(
             cur,
             gas_name : str,
             mol_id : int,
@@ -420,6 +462,9 @@ class EXOMOL:
                 if modify_isotope_vmr_by_abundance:
                     vmr *= abun
                 
+                if vmr <= 0: # skip zero or negative VMR components
+                    continue
+                
                 cur.execute(
                     """
                     INSERT INTO gas_components (gas_id, gas_name, global_iso_id, molecule_id, iso_id, volume_mixing_ratio) 
@@ -455,22 +500,42 @@ class EXOMOL:
             
             DROP TABLE IF EXISTS datasets;
             DROP TABLE IF EXISTS broadeners;
+            DROP TABLE IF EXISTS exomol_def_files;
             
             -- Holds information about EXOMOL datasets
+            -- gas_id is the gas mixture that this dataset applies to. 
+            -- NOTE: Monoisotopic and Monomolecular gasses share the same name as their isotopologue/molecule
             CREATE TABLE datasets (
                 id INTEGER PRIMARY KEY,
                 source VARCHAR(255) NOT NULL,
-                global_iso_id INTEGER NOT NULL REFERENCES isotopologues (id) ON UPDATE CASCADE ON DELETE CASCADE,
+                gas_id INTEGER NOT NULL REFERENCES _gasses (id) ON UPDATE CASCADE ON DELETE CASCADE,
+                gas_name VARCHAR(255) REFERENCES _gasses (name) ON UPDATE CASCADE ON DELETE CASCADE,
                 name VARCHAR(255) NOT NULL,
                 version INTEGER NOT NULL,
                 
-                CONSTRAINT unique_source_gas_isotope_dataset UNIQUE (source, global_iso_id, name, version)
+                CONSTRAINT unique_source_gas_isotope_dataset UNIQUE (source, gas_id, name, version)
             );
             
-            -- Holds information about which gasses are used as broadeners for each dataset
+            -- Holds information about which gasses are available as broadeners for each dataset
             CREATE TABLE broadeners (
-                dataset_id INTEGER REFERENCES datasets (id) ON UPDATE CASCADE ON DELETE CASCADE,
-                gas_id INTEGER REFERENCES _gasses (id) ON UPDATE CASCADE ON DELETE CASCADE
+                id INTEGER PRIMARY KEY,
+                dataset_id INTEGER NOT NULL REFERENCES datasets (id) ON UPDATE CASCADE ON DELETE CASCADE,
+                gas_id INTEGER NOT NULL REFERENCES _gasses (id) ON UPDATE CASCADE ON DELETE CASCADE,
+                gas_name VARCHAR(255) REFERENCES _gasses (name) ON UPDATE CASCADE ON DELETE CASCADE
+            );
+            
+            -- Holds locations of dataset EXOMOL definition files
+            CREATE TABLE exomol_def_files (
+                id INTEGER PRIMARY KEY,
+                dataset_id INTEGER NOT NULL REFERENCES datasets (id) ON UPDATE CASCADE ON DELETE CASCADE,
+                dataset_name VARCHAR(255) NOT NULL REFERENCES datasets (name) ON UPDATE CASCADE ON DELETE CASCADE,
+                global_iso_id INTEGER NOT NULL REFERENCES isotopologues (id) ON UPDATE CASCADE ON DELETE CASCADE,
+                mol_id INTEGER NOT NULL REFERENCES molecules (id) ON UPDATE CASCADE ON DELETE CASCADE,
+                iso_id INTEGER NOT NULL REFERENCES isotopologues (iso_id) ON UPDATE CASCADE ON DELETE CASCADE,
+                mol_formula VARCHAR(255) NOT NULL,
+                iso_formula VARCHAR(255) NOT NULL,
+                iso_slug VARCHAR(255) NOT NULL,
+                url VARCHAR(1024) NOT NULL
             );
             
             COMMIT;
@@ -485,6 +550,10 @@ class EXOMOL:
         
         for api_data in iter_exomol_api_data(exomol_root, os.path.dirname(fpath)):
             exomol_def_urls = exomol_def_urls.union(set(iter_exomol_def_files_from_api_data(api_data)))
+        
+        exomol_def_urls = tuple(sorted(exomol_def_urls))
+        for def_iso_formula, def_url in exomol_def_urls:
+            _lgr.debug(f'{def_iso_formula=} {def_url=}')
         
         n_urls = len(exomol_def_urls)
         
@@ -501,7 +570,8 @@ class EXOMOL:
             
             
             _lgr.info(f'{i=} {n_urls=} {def_iso_formula=} {def_url=}')
-            gas_id_iso_id = gas_data.isotope_name_to_id(def_iso_formula)
+            norm_iso_name = gas_data.normalise_isotope_name(def_iso_formula)
+            gas_id_iso_id = gas_data.isotope_name_to_radtran_id(def_iso_formula)
             
             if gas_id_iso_id is None:
                 _lgr.info(f'No corresponding RADTRAN gas for "{def_iso_formula}"')
@@ -518,24 +588,51 @@ class EXOMOL:
             
             exomol_defs[rt_gas_desc] = exomol_defs.get(rt_gas_desc,[]) + [exomol_def]
             
-            global_iso_id = cur.execute(
-                "SELECT id FROM isotopologues WHERE molecule_id = ? AND iso_id = ?",
-                (rt_gas_desc.gas_id, rt_gas_desc.iso_id)
+            global_iso_id, mol_id, iso_id = cur.execute(
+                "SELECT id, molecule_id, iso_id FROM isotopologues WHERE formula = ?",
+                (norm_iso_name,)
+            ).fetchone()
+            
+            # Get the ID of the monoisotopic gas this dataset applies to
+            gas_id = cur.execute(
+                "SELECT id FROM _gasses WHERE name = ?",
+                (norm_iso_name,)
             ).fetchone()[0]
+            
+            row = ("EXOMOL", gas_id, norm_iso_name, exomol_def.dataset, int(exomol_def.version))
+            
+            _lgr.debug(f'{row=}')
+            cur.execute(
+                """
+                INSERT INTO datasets (source, gas_id, gas_name, name, version) VALUES (?, ?, ?, ?, ?)
+                """,
+                row
+            )
+            
+            dataset_id = cur.execute("SELECT last_insert_rowid()").fetchone()[0]
             
             cur.execute(
                 """
-                INSERT INTO datasets (source, global_iso_id, name, version) VALUES (?, ?, ?, ?)
+                INSERT INTO exomol_def_files (dataset_id, dataset_name, global_iso_id, mol_id, iso_id, mol_formula, iso_formula, iso_slug, url) 
+                VALUES (?, ?, ?, ?, ?, (SELECT formula FROM molecules WHERE id = ?), ?, ?, ?)
                 """,
-                ("EXOMOL", global_iso_id, exomol_def.dataset, int(exomol_def.version))
+                (
+                    dataset_id,
+                    exomol_def.dataset,
+                    global_iso_id,
+                    mol_id,
+                    iso_id,
+                    mol_id,
+                    norm_iso_name,
+                    exomol_def.iso_slug,
+                    cls.database_url + '/' + def_url,
+                )
             )
-            id = cur.execute("SELECT last_insert_rowid()")
-            _lgr.debug(f'{rt_gas_desc=} {id=}')
         
         db.commit() # Remember to commit any transactions, otherwise they will not be written to disk.
         
         if _lgr.level == logging.DEBUG:
-            row_itr = cur.execute("SELECT source, global_iso_id, name FROM datasets")
+            row_itr = cur.execute("SELECT * FROM datasets")
             for row in row_itr:
                 _lgr.debug(f'{row=}')
 

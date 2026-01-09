@@ -19,6 +19,8 @@ from ...datatypes.exomol.col_format import ExomolColFileFormat
 from ...utils.tree_printer import TreePrinter
 from ...utils import fetch
 
+from .isotope_def_file_fixes import iso_def_file_fix_map
+
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
@@ -354,14 +356,19 @@ def field_auxiliary_reader(
 @dc.dataclass(repr=False)
 class ExomolIsotopeDef(TreePrinter, ExomolTaggedFileFormat):
     """
-    Definition for each isotope. NOTE there is an *actual* API available for EXOMOL (e.g. "https://exomol.com/api/?molecule=CH4")
+    Definition for each isotope. 
+    
+    NOTE: there is an *actual* API available for EXOMOL (e.g. "https://exomol.com/api/?molecule=CH4")
     but I do not know where it is documented.
+
+    NOTE: Each isotope has an EXOMOL definition file (e.g. https://www.exomol.com/db/CH4/12C-1H4/YT10to10/12C-1H4__YT10to10.def)
+    also there is a JSON version of this file (e.g. https://www.exomol.com/db/CH4/12C-1H4/YT10to10/12C-1H4__YT10to10.def.json)
+    but not all text files appear to have a JSON equivalent.
     """
     _complete_when_fields_filled = False
     _expect_contiguous_fields = False
     _self_dispatch_check = lambda next_line : next_line.split('#',1)[0].strip() == 'EXOMOL.def'
     _alternate_field_readers = {
-        'quanta' : field_quanta_reader,
         'auxiliary_info' : field_auxiliary_reader,
     }
     _field_dispatch_map = {
@@ -443,6 +450,11 @@ class ExomolIsotopeDef(TreePrinter, ExomolTaggedFileFormat):
     @classmethod
     def from_url(cls, url):
         text = fetch.file(url, encoding='utf-8')
+        iso_def_file_fix_fn = iso_def_file_fix_map.get(url, None)
+        if iso_def_file_fix_fn is not None:
+            _lgr.info(f'Applying isotope definition file fix for URL "{url}"')
+            text = iso_def_file_fix_fn(text)
+        
         line_itr = (x for x in text.splitlines())
         return cls.from_line_itr(None, line_itr)[1].perform_fixes()
 
