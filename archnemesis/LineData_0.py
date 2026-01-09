@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 
 # TODO: 
 # * Account for HITRAN weighting by terrestrial abundances .
-#   NOTE: do this in the HITRAN.py file, not here as ideally LineData_0 would give 
+#   NOTE: do this correction in the HITRAN.py file, not here as ideally LineData_0 would give 
 #         line strengths and absorption coefficients per unit of gas (e.g. per column density,
 #         per gram, per mole, something like that) the exact unit to be worked out later.
 # * Natural Broadening
@@ -63,7 +63,13 @@ if TYPE_CHECKING:
 #   a gas mixture.
 # * Additional lineshapes, have a look at https://www.degruyterbrill.com/document/doi/10.1515/pac-2014-0208/html
 
-
+# TODO: Instead of dictionaries change `line_data` and `partition_data` to be available as big arrays with `gas_id` and `iso_id` fields
+# or maybe just `iso_id` fields as these are only for one gas at a time.
+# 
+# Either `partition_data` is combined into the giant array, or it can be in a seprate array and looked up based on `gas_id` and `iso_id`.
+#
+# Only partition functions and abundances are isotope dependent so after those are accounted for, one large array is a perfectly good
+# structure to have the data in.
 
 class LineData_0:
     """
@@ -105,7 +111,7 @@ class LineData_0:
         Attributes
         ----------
         
-        @attribute line_data : None | archnemsis.database.protocols.LineDataProtocol
+        @attribute line_data : None | dict[GasDescriptor, archnemsis.database.protocols.LineDataProtocol]
             An object (normally a numpy record array) that implements the `archnemsis.database.protocols.LineDataProtocol`
             protocol. If `None` the data has not been retrieved from the database yet.
             
@@ -135,7 +141,7 @@ class LineData_0:
                 ELOWER : np.ndarray[['N_LINES_OF_GAS'],float] 
                     Lower state energy (cm^{-1})
         
-        @attribute partition_data : None | archnemsis.database.protocols.PartitionFunctionDataProtocol
+        @attribute partition_data : None | dict[GasDescriptor, archnemsis.database.protocols.PartitionFunctionDataProtocol]
             An object (normally a numpy record array) that implements the `archnemsis.database.protocols.PartitionFunctionDataProtocol`
             protocol. If `None` the data has not been retrieved from the database yet.
             
@@ -487,23 +493,43 @@ class LineData_0:
             alpha_d : float, # line doppler width (gaussinan HWHM)
             gamma_l : float, # line lorentz width (cauchy-lorentz HWHM)
             lineshape_fn : Callable[[np.ndarray, float], np.ndarray], # function that calculates line shape
-            line_integral_points_delta_wn : np.ndarray,
+            line_integral_points_delta_wn : np.ndarray, # points to integrate lineshape at in wavenumber difference from line center.
             TEST : bool = False,
     ) -> np.ndarray:
         """
-        Calculates line absorbtion at `delta_wn` wavenumber difference from line center
-        for a `lineshape_fn`. Return absorption coefficient (cm^2 at `delta_wn` cm^{-1})
+        Calculates line absorbtion for bins with edges at `delta_wn_edges` wavenumber difference from line center
+        for a `lineshape_fn`.
+        
+        Accounts for the lineshape not being constant across a wavenumber bin by working out
+        the fraction of a lineshape that fills each wavenumber bin.
+        
+        As this works on wavenumber bins, must divide by size of wavenumber bins eventually.
+        
+        Used inside `calculate_absorption_in_bins`.
+        
+        # RETURNS # 
+            abs_coeff : np.ndarray
+                Absorption coefficient per wavenumber (cm^2 at `delta_wn` cm^{-1}), integrate across wavenumbers to get
         """
         #return strength* lineshape_fn(0.5*np.sum(delta_wn_edges,axis=0), alpha_d, gamma_l) # TESTING just using lineshape, no integral
         
         # Get value of absorption coefficient at all integration points
         # do this here so we don't have to repeat the calculation of endpoints.
-        ls_at_ip = lineshape_fn(line_integral_points_delta_wn, alpha_d, gamma_l)
+        
+        # get value of lineshape at integration points
+        ls_at_ip = lineshape_fn(line_integral_points_delta_wn, alpha_d, gamma_l) 
+        
+        # get integral of lineshape at each integration point
         integral_ls_at_ip = sp.integrate.cumulative_simpson(ls_at_ip, x=line_integral_points_delta_wn, initial=0)
         
-        # Assume symmetric so perform small fix
-        integral_ls_at_ip += (1 - integral_ls_at_ip[-1])/2
+        # Perform fix for lineshape integral starting at zero
+        # Assume integration points are symmetric about the lineshape center
+        # integral should always sum to 1
+        # therefore, can add 1/2 of residual to each integral, the remaining 1/2 of residual
+        # is after the last integration point.
+        integral_ls_at_ip += (1 - integral_ls_at_ip[-1])/2 
         
+        # Get the integral of the lineshape at wavenumber bin edges
         wn_edges_int = np.interp(
             delta_wn_edges,
             line_integral_points_delta_wn,
@@ -512,6 +538,10 @@ class LineData_0:
             right=1
         )
         
+        # The fraction of the lineshape in each wavenumber bin is the difference between
+        # the lineshape's integral at the wavenumber bin edges.
+        # Divide by the size of the wavenumber bin to get the fraction of lineshape in each
+        # wavenumber in each wavenumber bin.
         lineshape = (wn_edges_int[1] - wn_edges_int[0]) / (delta_wn_edges[1]-delta_wn_edges[0])
         
         if TEST:
@@ -625,6 +655,14 @@ class LineData_0:
         """
         Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}) multiplied by a factor of 1E20. 
         Returns the value for a single molecule at the specified temperature, pressure, and ambient gas fraction.
+        
+        Calculates in bins that have `waves` as midpoints. Bin edges are assumed to be half-way between each midpoint,
+        and the first and last bins are assumed to be symmetric around their midpoints.
+        
+        More exact but much slower than `calculate_monochromatic_absorption` as this tries to account for
+        all lines within a bin.
+        
+        Uses `calculate_line_absorption_in_bins` to get absorption coefficient in each bin for each line.
         
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
@@ -784,14 +822,23 @@ class LineData_0:
             self,
             delta_wn : np.ndarray, # wavenumber difference from line center (cm^{-1}), (NWAVE)
             mask : np.ndarray, # Boolean mask (NWAVE) that determines if absorption coefficient will be calculated from lineshape (True) or from a 1/(delta_wn^2) fit (False).
-            wide_mask : np.ndarray, # Boolean mask (NWAVE) that determines if absorption coefficient will be at all.
+            wide_mask : np.ndarray, # Boolean mask (NWAVE) that determines if absorption coefficient will be calculated from a 1/(delta_wn^2) fit (True) or not accounted for at all (False).
             strength : float, # line strength
             alpha_d : float, # line doppler width (gaussinan HWHM)
             gamma_l : float, # line lorentz width (cauchy-lorentz HWHM)
             lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # function that calculates line shape
             line_calculation_wavenumber_window : float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption, should be the same as the window used to make `mask`
-            out : np.ndarray | None = None, # if not None, will place the result into this array and return it, otherwise will create an array and return it.
+            out : np.ndarray | None = None, # if not None, will place the result into this array and return it, otherwise will create an array and return it. Allocating memory is slow, so if possible try to pre-allocate the output array and pass it in here.
     ) -> np.ndarray:
+        """
+        Calculates absorption coefficient per wavenumber (cm^2 per cm^{-1}) for a single line at 
+        a specific set of `delta_wn` wavenumber difference from the center of the line. 
+        
+        Does not use wavenumber bins, so `delta_wn` must be close enough together to 
+        approximate a continuous set of values.
+        
+        Used inside `calculate_monochromatic_absorption`
+        """
     
         # At `line_calculation_wavenumber_window` the lineshape_fn and 1/x^2 fit should be equal
         # requires that`line_calculation_wavenumber_window` was applied symmetrically around zero.
@@ -821,6 +868,10 @@ class LineData_0:
         """
         Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}) multiplied by a factor of 1E20. 
         Returns the value for a single molecule at the specified temperature, pressure, and ambient gas fraction.
+        
+        Faster than `calculate_absorption_in_bins` but as this function only calculates at specific wavelengths
+        not over wavelength bins, must ensure that `waves` is a fine enough grid that no important spectral
+        features are missed.
         
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
