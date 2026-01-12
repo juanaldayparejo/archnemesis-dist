@@ -1751,6 +1751,117 @@ class ForwardModel_0:
 
         return SPECONV,dSPECONV
 
+    ###############################################################################################
+
+    def nemesisPTfm(self):
+
+        """
+            FUNCTION NAME : nemesisPTfm()
+
+            DESCRIPTION : This function computes a forward model for a planetary transit observation
+
+            INPUTS : none
+
+            OPTIONAL INPUTS: none
+
+            OUTPUTS :
+
+                SPECMOD(NCONV) :: Modelled spectra
+
+            CALLING SEQUENCE:
+
+                ForwardModel.nemesisPTfm()
+                
+            MODIFICATION HISTORY : Juan Alday (12/01/2025)
+
+        """
+
+        #from scipy import interpolate
+        from copy import deepcopy
+
+        #First we change the reference atmosphere taking into account the parameterisations in the state vector
+        self.Variables1 = deepcopy(self.Variables)
+        self.MeasurementX = deepcopy(self.Measurement)
+        self.AtmosphereX = deepcopy(self.Atmosphere)
+        self.ScatterX = deepcopy(self.Scatter)
+        self.StellarX = deepcopy(self.Stellar)
+        self.SurfaceX = deepcopy(self.Surface)
+        self.LayerX = deepcopy(self.Layer)
+        self.SpectroscopyX = deepcopy(self.Spectroscopy)
+        self.CIAX = deepcopy(self.CIA)
+        #flagh2p = False
+
+        #Errors and checks
+        self.check_gas_spec_atm()
+        self.check_wave_range_consistency()
+        if self.MeasurementX.IFORM != SpectraUnit.TransitDepth:
+            raise ValueError('error in nemesisPTfm :: Measurement unit must be set to TransitDepth (IFORM=2) for primary transit observations')
+        if self.MeasurementX.NGEOM != 1:
+            raise ValueError('error in nemesisPTfm :: Only one geometry is allowed for primary transit observations (NGEOM=1)')
+        
+        _lgr.info('Calculating forward model for primary transit observation')
+    
+        #Defining spectral range         
+        self.Measurement.build_ils(IGEOM=0) 
+        wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
+            
+        #Reading tables in the required wavelength range
+        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+
+        #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
+        self.adjust_hydrostat = True
+
+        #Mapping variables into different classes
+        _ = self.subprofretg() # xmap
+
+        #Calculating the atmospheric paths
+        self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
+        self.calc_path_PT()
+        BASEH_TANHE = np.zeros(self.PathX.NPATH)
+        for i in range(self.PathX.NPATH):
+            BASEH_TANHE[i] = self.LayerX.BASEH[self.PathX.LAYINC[int(self.PathX.NLAYIN[i]/2),i]]/1.0e3
+
+        _lgr.debug('Tangent altitude of each spectrum')
+        for i in range(self.PathX.NPATH):
+            _lgr.debug('Path {:d} : Tangent altitude = {:.3f} km'.format(i,BASEH_TANHE[i]))
+
+        #Calling CIRSrad to calculate the spectra
+        SPECOUT = self.CIRSrad()  #Transmission spectra at the base of each layer
+
+        #Calculating the area of the star
+        area_star = np.pi * ( (self.StellarX.RADIUS*1.0e3)**2)   #Area of the star in m2
+        
+        #Calculating the area of the planet disk
+        area_planet_disk = np.pi * ( (self.AtmosphereX.RADIUS + BASEH_TANHE[0]*1.0e3)**2)       #Area of the planet disk in m2
+
+        #Calculating the absorption spectrum times the area of each annulus
+        SPECMOD = np.zeros((self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM))
+        for i in range(self.PathX.NPATH-1):
+
+            SPECTRUM0 = (1. - SPECOUT[:,i]) * 2. * np.pi * BASEH_TANHE[i] * 1.0e3 
+            SPECTRUM1 = (1. - SPECOUT[:,i+1]) * 2. * np.pi * BASEH_TANHE[i+1] * 1.0e3
+            dH = (BASEH_TANHE[i+1] - BASEH_TANHE[i]) * 1.0e3
+            SPECMOD[:,0] += 0.5 * (SPECTRUM0 + SPECTRUM1) * dH   #Integrating over height to get the total absorption area
+
+        #Calculating the transit depth spectrum
+        SPECMOD = (SPECMOD + area_planet_disk) / area_star * 100.   #Transit depth spectrum 
+        
+        #Convolving the spectrum with the instrument line shape
+        _lgr.info('Convolving spectra and gradients with instrument line shape')
+        if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+            SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+        elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+        
+        dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
+
+        #Applying any changes to the spectra required by the state vector
+        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+
+        return SPECONV
+
+
+
 ########################################################################
 
     def process_IAV(self,IAV,IGEOM,return_grad=False):
@@ -2015,7 +2126,7 @@ class ForwardModel_0:
             self.Variables.NUM[:] = 1  #If scattering is present, gradients are calculated numerically
         
         if analytical_gradient is False:
-            self.Variables.NUM[:] = 1  #If scattering is present, gradients are calculated numerically
+            self.Variables.NUM[:] = 1  
         
         ian1 = np.where(self.Variables.NUM==0)  #Gradients calculated using CIRSradg
         ian1 = ian1[0]
@@ -2611,7 +2722,6 @@ class ForwardModel_0:
         self.MeasurementX.LATITUDE = self.MeasurementX.FLAT[0,0]
         self.MeasurementX.LONGITUDE = self.MeasurementX.FLON[0,0]
 
-
     ###############################################################################################
 
     def select_location(self,ILOC):
@@ -3020,7 +3130,6 @@ class ForwardModel_0:
 
         #We initialise the total Path class, indicating that the calculations can be combined
         self.PathX = Path_0(AtmCalc_List,COMBINE=True)
-
 
     ###############################################################################################
 
@@ -3442,6 +3551,83 @@ class ForwardModel_0:
         #We initialise the total Path class, indicating that the calculations can be combined
         self.PathX = Path_0(AtmCalc_List,COMBINE=True)
 
+    ###############################################################################################
+
+    def calc_path_PT(self,Atmosphere=None,Scatter=None,Measurement=None,Layer=None):
+
+        """
+        FUNCTION NAME : calc_path_PT()
+
+        DESCRIPTION : Based on the flags read in the different NEMESIS files (e.g., .fla, .set files),
+                      different parameters in the Path class are changed to perform correctly
+                      the radiative transfer calculations
+                      
+                      This is the version of the path calculations for planetary transits
+
+        INPUTS : None
+
+        OPTIONAL INPUTS:
+
+            Atmosphere :: Python class defining the reference atmosphere (Default : self.AtmosphereX)
+            Scatter :: Python class defining the parameters required for scattering calculations (Default : self.ScatterX)
+            Measurement :: Python class defining the measurements and observations (Default : self.MeasurementX)
+            Layer :: Python class defining the atmospheric layering scheme for the calculation (Default : self.LayerX)
+
+        OUTPUTS :
+
+            self.PathX :: Python class defining the calculation type and the path
+
+        CALLING SEQUENCE:
+
+            ForwardModel.calc_path_PT()
+
+        MODIFICATION HISTORY : Juan Alday (15/03/2021)
+        """
+
+        from archnemesis import AtmCalc_0,Path_0
+
+        #Initialise variables
+        if Atmosphere is None:
+            Atmosphere = self.AtmosphereX
+        if Scatter is None:
+            Scatter = self.ScatterX
+        if Measurement is None:
+            Measurement = self.MeasurementX
+        if Layer is None:
+            Layer = self.LayerX
+
+        #Based on the new reference atmosphere, we split the atmosphere into layers
+        ################################################################################
+
+        #Limb or nadir observation?
+        #Is observation at limb? (coded with -ve emission angle where sol_ang is then the tangent altitude)
+
+        #Based on the new reference atmosphere, we split the atmosphere into layers
+        #In solar occultation LAYANG = 90.0
+        Layer.LAYANG = 90.0
+        
+        #Calculating the atmospheric layering
+        Layer.calc_layering(H=Atmosphere.H,P=Atmosphere.P,T=Atmosphere.T, ID=Atmosphere.ID, VMR=Atmosphere.VMR, DUST=Atmosphere.DUST, PARAH2=Atmosphere.PARAH2, MOLWT=Atmosphere.MOLWT)
+
+        #Based on the atmospheric layering, we calculate each required atmospheric path to model the measurements
+        #############################################################################################################
+
+        NCALC = Layer.NLAY - 1    #Number of calculations (geometries) to be performed
+        AtmCalc_List = []
+        for ICALC in range(NCALC):
+            iAtmCalc = AtmCalc_0(
+                Layer,
+                path_observer_pointing=PathObserverPointing.LIMB,
+                BOTLAY=ICALC,
+                ANGLE=90.0,
+                IPZEN=ZenithAngleOrigin.BOTTOM,
+                path_calc=PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE,
+            )
+            AtmCalc_List.append(iAtmCalc)
+
+        #We initialise the total Path class, indicating that the calculations can be combined
+        self.PathX = Path_0(AtmCalc_List,COMBINE=True)
+
 
     ###############################################################################################
     ###############################################################################################
@@ -3698,9 +3884,14 @@ class ForwardModel_0:
         xfac = np.ones(self.SpectroscopyX.NWAVE)
         if self.MeasurementX.IFORM==SpectraUnit.FluxRatio:
             xfac*=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2.
-            f = scipy.interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLSPEC)
-            solpspec = f(self.SpectroscopyX.WAVE)  #self.StellarX power spectrum (W (cm-1)-1 or W um-1)
-            xfac = xfac / solpspec
+            
+            #Calculating the solar flux
+            self.StellarX.calc_solar_flux()
+            
+            #Interpolating to the calculation wavelengths
+            f = scipy.interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
+            solflux = f(self.SpectroscopyX.WAVE)  #stellar flux spectrum (W cm-2 um-1 or W cm-2 (cm-1)-1)
+            xfac = xfac / solflux
 
         #Interpolating the emissivity of the self.SurfaceX to the calculation wavelengths
         if self.SurfaceX.TSURF>0.0:

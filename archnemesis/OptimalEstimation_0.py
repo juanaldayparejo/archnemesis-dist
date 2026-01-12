@@ -781,7 +781,7 @@ class OptimalEstimation_0:
                 elif Measurement.IFORM==SpectraUnit.FluxRatio: #1
                     str4='F_plan/F_star Ratio of planet'
                     xfac = 1.0
-                elif Measurement.IFORM==SpectraUnit.A_Ratio: #2
+                elif Measurement.IFORM==SpectraUnit.TransitDepth: #2
                     str4='Transit depth: 100*Planet_area/Stellar_area'
                     xfac = 1.0
                 elif Measurement.IFORM==SpectraUnit.Integrated_spectral_power: #3
@@ -812,7 +812,7 @@ class OptimalEstimation_0:
                 elif Measurement.IFORM==SpectraUnit.FluxRatio: #1
                     str4='F_plan/F_star Ratio of planet'
                     xfac = 1.0
-                elif Measurement.IFORM==SpectraUnit.A_Ratio: #2
+                elif Measurement.IFORM==SpectraUnit.TransitDepth: #2
                     str4='Transit depth: 100*Planet_area/Stellar_area'
                     xfac = 1.0
                 elif Measurement.IFORM==SpectraUnit.Integrated_spectral_power: #3

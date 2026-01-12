@@ -23,7 +23,6 @@ import numpy as np
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
 
 """
 Object to calculate the atmospheric paths

@@ -29,10 +29,9 @@ import archnemesis.Data.constants as const
 from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnit, SpectralCalculationMode
 import archnemesis.helpers.h5py_helper as h5py_helper
 
-
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+
 
 class Telluric_0:
     """
