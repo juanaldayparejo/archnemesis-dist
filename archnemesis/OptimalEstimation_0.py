@@ -853,7 +853,7 @@ class OptimalEstimation_0:
                         strspec = "\t %4i %14.8f %15.8e %15.8e %7.2f %15.8e %9.5f \n"
                     elif Measurement.IFORM==SpectraUnit.FluxRatio: #1
                         strspec = "\t %4i %10.4f %15.8e %15.8e %7.2f %15.8e %9.5f \n"
-                    elif Measurement.IFORM==SpectraUnit.A_Ratio: #2
+                    elif Measurement.IFORM==SpectraUnit.TransitDepth: #2
                         strspec = "\t %4i %9.4f %12.6e %12.6e %6.2f %12.6e %6.2f \n"
                     elif Measurement.IFORM==SpectraUnit.Integrated_spectral_power: #3
                         strspec = "\t %4i %10.4f %15.8e %15.8e %7.2f %15.8e %9.5f \n"

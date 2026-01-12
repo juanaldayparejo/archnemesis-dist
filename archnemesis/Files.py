@@ -538,7 +538,7 @@ def read_input_files(runname):
         Measurement.read_fil()
 
     #Reading stellar spectrum if required by Measurement units
-    if Measurement.IFORM in (SpectraUnit.FluxRatio, SpectraUnit.A_Ratio, SpectraUnit.Integrated_spectral_power, SpectraUnit.Atmospheric_transmission):
+    if Measurement.IFORM in (SpectraUnit.FluxRatio, SpectraUnit.TransitDepth, SpectraUnit.Integrated_spectral_power, SpectraUnit.Atmospheric_transmission):
         Stellar.read_sol(runname)
 
     #Initialise CIA class and read files (.cia)
