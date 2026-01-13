@@ -183,6 +183,7 @@ class ForwardModel_0:
             ForwardModel_0.nemesisLfm()
             ForwardModel_0.nemesisLfmg()
             ForwardModel_0.nemesisCfm()
+            ForwardModel_0.nemesisPTfm()
             ForwardModel_0.jacobian_nemesis(nemesisSO=False)
 
         Mapping models into reference classes
@@ -359,6 +360,7 @@ class ForwardModel_0:
             nemesisSO : bool = False,
             nemesisL : bool = False,
             nemesisdisc : bool = False,
+            nemesisPT : bool = False,
             analytical_gradient : bool = False,
         ) -> Callable[[],np.ndarray] | Callable[[],tuple[np.ndarray,np.ndarray]]:
         """
@@ -373,9 +375,11 @@ class ForwardModel_0:
             method = self.nemesisLfmg if analytical_gradient else self.nemesisLfm
         elif nemesisdisc:
             method = self.nemesisdiscfmg if analytical_gradient else self.nemesisdiscfm
+        elif nemesisPT:
+            method = (lambda: self.nemesisPTfm(gradients=True)) if analytical_gradient else (lambda: self.nemesisPTfm(gradients=False))
         else:
             method = self.nemesisfmg if analytical_gradient else self.nemesisfm
-        
+
         if method is None:
             raise RuntimeError('Could not select method to use when calculating nemesis forward model.')
         
@@ -1753,7 +1757,7 @@ class ForwardModel_0:
 
     ###############################################################################################
 
-    def nemesisPTfm(self):
+    def nemesisPTfm(self, gradients=False):
 
         """
             FUNCTION NAME : nemesisPTfm()
@@ -1762,11 +1766,14 @@ class ForwardModel_0:
 
             INPUTS : none
 
-            OPTIONAL INPUTS: none
+            OPTIONAL INPUTS:
+
+                gradients :: If True, the function will also compute the derivatives of the spectra with respect to the elements in the state vector
 
             OUTPUTS :
 
-                SPECMOD(NCONV) :: Modelled spectra
+                SPECMOD(NCONV,NGEOM) :: Modelled spectra
+                dSPECMOD(NCONV,NGEOM,NX) :: Derivatives of each spectrum with respect to the elements of the state vector (only if gradients=True)
 
             CALLING SEQUENCE:
 
@@ -1812,7 +1819,7 @@ class ForwardModel_0:
         self.adjust_hydrostat = True
 
         #Mapping variables into different classes
-        _ = self.subprofretg() # xmap
+        xmap = self.subprofretg() # xmap
 
         #Calculating the atmospheric paths
         self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
@@ -1826,7 +1833,30 @@ class ForwardModel_0:
             _lgr.debug('Path {:d} : Tangent altitude = {:.3f} km'.format(i,BASEH_TANHE[i]))
 
         #Calling CIRSrad to calculate the spectra
-        SPECOUT = self.CIRSrad()  #Transmission spectra at the base of each layer
+        if gradients is False:
+            _lgr.info('Running CIRSrad for primary transit observation')
+            SPECOUT = self.CIRSrad()  #Transmission spectra at the base of each layer
+        else:
+            _lgr.info('Running CIRSradg for primary transit observation')
+            SPECOUT,dSPECOUT2,dTSURF = self.CIRSrad(return_grad=True)  #Transmission spectra at the base of each layer
+
+            #Mapping the gradients from Layer properties to Profile properties
+            _lgr.info('Mapping gradients from Layer to Profile')
+            #Calculating the elements from NVMR+2+NDUST that need to be mapped
+            incpar = []
+            for i in range(self.AtmosphereX.NVMR+2+self.AtmosphereX.NDUST):
+                if np.mean(xmap[:,i,:])!=0.0:
+                    incpar.append(i)
+
+            dSPECOUT1 = map2pro(dSPECOUT2,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.PathX.NLAYIN,self.PathX.LAYINC,self.LayerX.DTE,self.LayerX.DAM,self.LayerX.DCO,INCPAR=incpar)
+            #(NWAVE,NVMR+2+NDUST,NPRO,NPATH)
+            del dSPECOUT2
+
+            #Mapping the gradients from Profile properties to elements in state vector
+            _lgr.info('Mapping gradients from Profile to State Vector')
+            dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+            #(NWAVE,NPATH,NX)
+            del dSPECOUT1
 
         #Calculating the area of the star
         area_star = np.pi * ( (self.StellarX.RADIUS*1.0e3)**2)   #Area of the star in m2
@@ -1836,6 +1866,7 @@ class ForwardModel_0:
 
         #Calculating the absorption spectrum times the area of each annulus
         SPECMOD = np.zeros((self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM))
+        dSPECMOD = np.zeros((self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM,self.Variables.NX))
         for i in range(self.PathX.NPATH-1):
 
             SPECTRUM0 = (1. - SPECOUT[:,i]) * 2. * np.pi * BASEH_TANHE[i] * 1.0e3 
@@ -1843,25 +1874,46 @@ class ForwardModel_0:
             dH = (BASEH_TANHE[i+1] - BASEH_TANHE[i]) * 1.0e3
             SPECMOD[:,0] += 0.5 * (SPECTRUM0 + SPECTRUM1) * dH   #Integrating over height to get the total absorption area
 
+            if gradients is True:
+
+                dSPECTRUM0 = -dSPECOUT[:,i,:] * 2. * np.pi * BASEH_TANHE[i] * 1.0e3 
+                dSPECTRUM1 = -dSPECOUT[:,i+1,:] * 2. * np.pi * BASEH_TANHE[i+1] * 1.0e3
+                dSPECMOD[:,0,:] += 0.5 * (dSPECTRUM0 + dSPECTRUM1) * dH   #Integrating over height to get the total absorption area
+
         #Calculating the transit depth spectrum
         SPECMOD = (SPECMOD + area_planet_disk) / area_star * 100.   #Transit depth spectrum 
+
+        if gradients is True:
+            dSPECMOD = dSPECMOD / area_star * 100.   #Gradients of the transit depth spectrum
         
         #Convolving the spectrum with the instrument line shape
         _lgr.info('Convolving spectra and gradients with instrument line shape')
-        if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
-            SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
-        elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+        if gradients is False:
+
+            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+                SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+            
+            dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
+
+            #Applying any changes to the spectra required by the state vector
+            SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+
+            return SPECONV
+
+        else:
+
+            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+                SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+
+            #Applying any changes to the spectra required by the state vector
+            SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+
+            return SPECONV,dSPECONV
         
-        dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
-
-        #Applying any changes to the spectra required by the state vector
-        SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
-
-        return SPECONV
-
-
-
 ########################################################################
 
     def process_IAV(self,IAV,IGEOM,return_grad=False):
@@ -1981,10 +2033,10 @@ class ForwardModel_0:
             MODIFICATION HISTORY : Joe Penn (9/07/2024)
 
         """
-        start, end, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, YNtot, nfm = args
+        start, end, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, nemesisPT, YNtot, nfm = args
         results = np.copy(YNtot)  # Local copy to prevent conflicts
         for ifm in range(start, end):
-            inp = (ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, results)
+            inp = (ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, nemesisPT, results)
             results = self.execute_fm(inp)
         return start, results
 
@@ -2006,7 +2058,7 @@ class ForwardModel_0:
         import archnemesis.cfg.logs
         
         # Unpack input tuple
-        ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, YNtot = inp
+        ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, nemesisPT, YNtot = inp
         # ifm - index of forward model
         # nfm - number of forward models
         # xnx - array holding state vectors for all parallel forward models
@@ -2020,7 +2072,7 @@ class ForwardModel_0:
         
         
         # Find the method to use when modelling the spectrum
-        nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, nemesisdisc, analytical_gradient=False)
+        nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, nemesisdisc, nemesisPT, analytical_gradient=False)
         
         _lgr.info(f'Calculating forward model {ifm+1}/{nfm}')
         
@@ -2055,7 +2107,7 @@ class ForwardModel_0:
     
     ###############################################################################################
 
-    def jacobian_nemesis(self,NCores=1,nemesisSO=False,nemesisL=False,nemesisdisc=False,analytical_gradient=True):
+    def jacobian_nemesis(self,NCores=1,nemesisSO=False,nemesisL=False,nemesisdisc=False,nemesisPT=False,analytical_gradient=True):
 
         """
 
@@ -2137,7 +2189,7 @@ class ForwardModel_0:
         if len(ian1)>0:
 
             _lgr.info('Calculating analytical part of the Jacobian :: Calling nemesisfmg ')
-            nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, nemesisdisc, analytical_gradient=True)
+            nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, nemesisdisc, nemesisPT, analytical_gradient=True)
 
             SPECMOD,dSPECMOD = nemesis_method()
                 
@@ -2183,7 +2235,7 @@ class ForwardModel_0:
 
             chunks = [(i * base_chunk_size + min(i, remainder),
                        (i + 1) * base_chunk_size + min(i + 1, remainder),
-                       xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, YNtot, nfm) for i in range(NCores)]
+                       xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, nemesisPT, YNtot, nfm) for i in range(NCores)]
 
              #with Pool(NCores) as pool:
                  #results = pool.map(self.chunked_execution, chunks)
@@ -3607,7 +3659,7 @@ class ForwardModel_0:
         Layer.LAYANG = 90.0
         
         #Calculating the atmospheric layering
-        Layer.calc_layering(H=Atmosphere.H,P=Atmosphere.P,T=Atmosphere.T, ID=Atmosphere.ID, VMR=Atmosphere.VMR, DUST=Atmosphere.DUST, PARAH2=Atmosphere.PARAH2, MOLWT=Atmosphere.MOLWT)
+        Layer.calc_layeringg(H=Atmosphere.H,P=Atmosphere.P,T=Atmosphere.T, ID=Atmosphere.ID, VMR=Atmosphere.VMR, DUST=Atmosphere.DUST, PARAH2=Atmosphere.PARAH2, MOLWT=Atmosphere.MOLWT)
 
         #Based on the atmospheric layering, we calculate each required atmospheric path to model the measurements
         #############################################################################################################
