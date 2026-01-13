@@ -7,6 +7,7 @@ import warnings
 
 import numpy as np
 import numpy.ma
+import numpy.lib.recfunctions
 
 
 import archnemesis as ans
@@ -22,8 +23,8 @@ from ..datatypes.gas_descriptor import RadtranGasDescriptor
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.INFO)
-#_lgr.setLevel(logging.DEBUG)
+#_lgr.setLevel(logging.INFO)
+_lgr.setLevel(logging.DEBUG)
 
 # NOTE: HAPI does not differentiate between an actual failure to retrieve data because of a problem vs
 #       not retrieving any data because there is no data in a wavelength range. Until I can handle those
@@ -250,7 +251,7 @@ class HITRAN(LineDatabaseProtocol):
             gas_descs : tuple[RadtranGasDescriptor,...], 
             wave_range : WaveRange, 
             ambient_gas : ans.enums.AmbientGas
-        ) -> dict[RadtranGasDescriptor, LineDataProtocol]:
+        ) -> LineDataProtocol:
         """
         Required by LineDatabaseProtocol. Retrieves line data from the database.
         
@@ -463,28 +464,63 @@ class HITRAN(LineDatabaseProtocol):
     
 
 
-    def _read_line_data(self, gas_descs : tuple[RadtranGasDescriptor,...], wave_range : WaveRange, ambient_gas : ans.enums.AmbientGas):
+    def _read_line_data(
+            self, 
+            gas_descs : tuple[RadtranGasDescriptor,...], 
+            wave_range : WaveRange, ambient_gas : ans.enums.AmbientGas
+        ) -> LineDataProtocol:
         if not self.db_init_flag:
             raise RuntimeError(f'Cannot read line data as database {self} is not initalised yet.')
         
         temp_line_data_table_name = 'temp_line_data'
         _lgr.debug(f'{temp_line_data_table_name=}')
         
-        line_data = dict()
+        #line_data = dict()
         
         _lgr.debug(f'{gas_descs=}')
+        
+        line_data = np.array(
+            [], 
+            dtype = [
+                #('RT_GLOBAL_ISO_ID', int), # Radtran global isotope id
+                ('RT_GAS_DESC', int, (2,)), # Radtran gas descriptor
+                ('NU', float), # Transition wavenumber (cm^{-1})
+                ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
+                ('A', float), # einstein-A coeifficient (s^{-1})
+                ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
+                ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
+                ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
+                ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
+                ('N_SELF', float), # temperature dependent exponent for `gamma_self` (NUMBER)
+                ('ELOWER', float), # lower state energy (cm^{-1})
+            ]
+        ).view(np.recarray)
+        
+        vmin, vmax = wave_range.values()
+        gamma_str, n_str, delta_str = self.get_ambient_gas_column_name_strings(ambient_gas)
+        col_names = (
+            'nu',
+            'sw',
+            'a',
+            gamma_str,
+            n_str,
+            delta_str,
+            'gamma_self',
+            'n_self', # NOTE: This may be missing, in that case it is assumed to be equal to n_air
+            'elower',
+            'n_air', # NOTE: here as we always fetch this value as we do not know if 'n_self' will be different or not
+        )
         
         for gas_desc in gas_descs:
             _lgr.debug(f'{gas_desc=}')
             ht_gas_desc = gas_desc.to_hitran()
             if ht_gas_desc is None:
-                line_data[gas_desc] = None
                 continue
             
             #if _lgr.level <= logging.DEBUG:
             #    hapi.describeTable(self.get_tablename_from_props(gas_desc, ambient_gas))
             
-            vmin, vmax = wave_range.values()
+            
             Conditions = ('and',('between', 'nu', vmin, vmax),('equal','local_iso_id',ht_gas_desc.iso_id))
             
             try:
@@ -495,48 +531,24 @@ class HITRAN(LineDatabaseProtocol):
                 )
             except Exception as e:
                 raise RuntimeError(f'Failure when reading from database {self}.') from e
-        
-            #if _lgr.level <= logging.DEBUG:
-            #    hapi.describeTable(temp_line_data_table_name)
-        
-            gamma_str, n_str, delta_str = self.get_ambient_gas_column_name_strings(ambient_gas)
-            col_names = (
-                'nu',
-                'sw',
-                'a',
-                gamma_str,
-                n_str,
-                delta_str,
-                'gamma_self',
-                'n_self', # NOTE: This may be missing, in that case it is assumed to be equal to n_air
-                'elower',
-                'n_air', # NOTE: here as we always fetch this value as we do not know if 'n_self' will be different or not
-            )
             
             n_rows = hapi.getTableHeader(temp_line_data_table_name)['number_of_rows']
+        
+        
             
             if n_rows == 0:
                 _lgr.info(f'{gas_desc=} has no line data in the requested wave range {wave_range=}, returning empty dataset.')
-                line_data[gas_desc] = np.array(
-                    [], 
-                    dtype = [
-                        ('NU', float), # Transition wavenumber (cm^{-1})
-                        ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
-                        ('A', float), # einstein-A coeifficient (s^{-1})
-                        ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
-                        ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
-                        ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
-                        ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
-                        ('N_SELF', float), # temperature dependent exponent for `gamma_self` (NUMBER)
-                        ('ELOWER', float), # lower state energy (cm^{-1})
-                    ]
-                ).view(np.recarray)
+                continue
 
             else:
-                cols = hapi.getColumns(
-                    temp_line_data_table_name,
-                    col_names
-                )
+                cols = [
+                    #[gas_desc.global_iso_id]*n_rows, 
+                    [(gas_desc.gas_id, gas_desc.iso_id)]*n_rows, 
+                    *hapi.getColumns(
+                        temp_line_data_table_name,
+                        col_names
+                    )
+                ]
                 
                 with warnings.catch_warnings():
                     warnings.simplefilter('default', UserWarning)
@@ -551,54 +563,46 @@ class HITRAN(LineDatabaseProtocol):
                     cols = cols[:-1]
                     
                     _lgr.debug(f'{len(cols)=} {[len(c) for c in cols]=}')
+                    #_lgr.debug(f'{cols[0]=}')
+                    #_lgr.debug(f'{cols[1]=}')
+                    #_lgr.debug(f'{cols[2]=}')
                     
-                    for i, c in enumerate(cols):
+                    for i, c in enumerate(cols[1:]):
                         missing_col_names = []
                         if isinstance(c[0], np.ma.core.MaskedConstant):
                             missing_col_names.append(col_names[i])
                         if len(missing_col_names) > 0:
                             raise RuntimeError(f'Gas {gas_desc.gas_name} isotope {gas_desc.iso_id} "{gas_desc.isotope_name}" with ambient gas "{ambient_gas.name}" has NULL entries in the HITRAN database for the following columns: {missing_col_names}')
                 
-                    line_data[gas_desc] = np.array(
-                        list(zip(*cols)),
-                        dtype = [
-                            ('NU', float), # Transition wavenumber (cm^{-1})
-                            ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
-                            ('A', float), # einstein-A coeifficient (s^{-1})
-                            ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
-                            ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
-                            ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
-                            ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
-                            ('N_SELF', float), # temperature dependent exponent for `gamma_self` (NUMBER)
-                            ('ELOWER', float), # lower state energy (cm^{-1})
-                        ]
-                    ).view(np.recarray)
+                    line_data = np.lib.recfunctions.stack_arrays(
+                        (
+                            line_data, 
+                            np.array(
+                                list(zip(*cols)),
+                                dtype = [
+                                    ('RT_GAS_DESC', int, (2,)), # Radtran gas descriptor
+                                    ('NU', float), # Transition wavenumber (cm^{-1})
+                                    ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
+                                    ('A', float), # einstein-A coeifficient (s^{-1})
+                                    ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
+                                    ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
+                                    ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
+                                    ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
+                                    ('N_SELF', float), # temperature dependent exponent for `gamma_self` (NUMBER)
+                                    ('ELOWER', float), # lower state energy (cm^{-1})
+                                ]
+                            ).view(np.recarray)
+                        ),
+                        defaults=None,
+                        usemask = False,
+                        asrecarray=True,
+                        autoconvert=False
+                    )
             
             hapi.dropTable(temp_line_data_table_name)
         
         return line_data
     
     
-    def _read_partition_function_data(self, gas_descs : tuple[RadtranGasDescriptor,...]):
-        partition_function_data = dict()
-        
-        for gas_desc in gas_descs:
-            ht_gas = gas_desc.to_hitran()
-            if ht_gas is None:
-                partition_function_data[gas_desc] = None
-                continue
-            
-            temps = hapi.TIPS_2021_ISOT_HASH[(ht_gas.gas_id,ht_gas.iso_id)]
-            qs = hapi.TIPS_2021_ISOQ_HASH[(ht_gas.gas_id,ht_gas.iso_id)]
-            partition_function_data[gas_desc] = np.array(
-                list(zip(
-                    temps,
-                    qs
-                )),
-                dtype=[
-                    ('TEMP', float), 
-                    ('Q', float)
-                ]
-            ).view(np.recarray)
-        return partition_function_data
+    
     

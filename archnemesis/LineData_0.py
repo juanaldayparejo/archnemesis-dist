@@ -71,6 +71,13 @@ if TYPE_CHECKING:
 # Only partition functions and abundances are isotope dependent so after those are accounted for, one large array is a perfectly good
 # structure to have the data in.
 
+# TODO: Speed up molecular mass lookup for each isotopologue
+
+if TYPE_CHECKING:
+    N_LINES_OF_GAS = 'Number of lines for a gas isotopologue'
+    N_TEMPS_OF_GAS = 'Number of temperature points for a gas isotopologue'
+
+
 class LineData_0:
     """
     Clear class for storing line data.
@@ -111,11 +118,13 @@ class LineData_0:
         Attributes
         ----------
         
-        @attribute line_data : None | dict[GasDescriptor, archnemsis.database.protocols.LineDataProtocol]
+        @attribute line_data : None | dict[RadtranGasDescriptor, archnemsis.database.protocols.LineDataProtocol]
             An object (normally a numpy record array) that implements the `archnemsis.database.protocols.LineDataProtocol`
             protocol. If `None` the data has not been retrieved from the database yet.
             
             If not `None` will have the following attributes:
+                RT_GAS_DESC : np.array[['N_LINES_OF_GAS'], (int,int)]
+                    Radtran gas descriptor
                 
                 NU : np.ndarray[['N_LINES_OF_GAS'],float]
                     Transition wavenumber (cm^{-1})
@@ -216,6 +225,46 @@ class LineData_0:
     @property
     def gas_isotopes(self) -> GasIsotopes:
         return GasIsotopes(self.ID, self.ISO)
+    
+    @property
+    def line_data_dict(self) -> dict[RadtranGasDescriptor, ans.database.protocols.LineDataProtocol]:
+        if self.line_data is None:
+            return dict((rt_gas_desc, None) for rt_gas_desc in self.gas_isotopes.as_radtran_gasses())
+        
+        _lgr.debug(f'{self.line_data.RT_GAS_DESC.dtype=}')
+        _lgr.debug(f'{self.line_data.RT_GAS_DESC.shape=}')
+        _lgr.debug(f'{self.line_data.RT_GAS_DESC=}')
+        
+        _ldd = {}
+        for rt_gas_desc in self.gas_isotopes.as_radtran_gasses():
+            _lgr.debug(f'{len(self.get_line_data_gas_desc_mask(rt_gas_desc))=}')
+            _lgr.debug(f'{type(self.get_line_data_gas_desc_mask(rt_gas_desc))=}')
+            _lgr.debug(f'{self.get_line_data_gas_desc_mask(rt_gas_desc).dtype=}')
+            _lgr.debug(f'{np.count_nonzero(self.get_line_data_gas_desc_mask(rt_gas_desc))=}')
+            
+            _ldd[rt_gas_desc] = self.line_data[self.get_line_data_gas_desc_mask(rt_gas_desc)]
+        
+        return _ldd
+    
+    
+    @property
+    def partition_data_dict(self) -> dict[RadtranGasDescriptor, ans.database.protocols.PartitionFunctionDataProtocol]:
+        if self.line_data is None:
+            return dict((rt_gas_desc, None) for rt_gas_desc in self.gas_isotopes.as_radtran_gasses())
+        
+        
+        _lgr.debug(f'{self.partition_data.RT_GAS_DESC.dtype=}')
+        _lgr.debug(f'{self.partition_data.RT_GAS_DESC.shape=}')
+        _lgr.debug(f'{self.partition_data.RT_GAS_DESC=}')
+        
+        _pfdd = {}
+        for rt_gas_desc in self.gas_isotopes.as_radtran_gasses():
+            _pfdd[rt_gas_desc] = self.partition_data[
+                self.get_partition_data_gas_desc_mask(rt_gas_desc)
+            ]
+        
+        return _pfdd
+
 
     def __repr__(self) -> str:
         return f'LineData_0(ID={self.ID}, ISO={self.ISO}, ambient_gas={self.ambient_gas}, is_line_data_ready={self.is_line_data_ready()}, is_partition_function_ready={self.is_partition_function_ready()}, database={self._database})'
@@ -239,11 +288,24 @@ class LineData_0:
             raise ValueError(f"ID must be greater than 0, got {self.ID}")
         if self.ISO < 0:   
             raise ValueError(f"ISO must be greater than or equal to 0, got {self.ISO}")
-        
+    
     ###########################################################################################################################
+    
+    def get_line_data_gas_desc_mask(self, rt_gas_desc : RadtranGasDescriptor) -> np.ndarray[bool]:
+        """
+        Returns a boolean mask of the same shape as `self.line_data` that is True where the isotopologues is the same as in `rt_gas_desc`
+        """
+        return np.logical_and((self.line_data.RT_GAS_DESC[:,0] == rt_gas_desc.gas_id),(self.line_data.RT_GAS_DESC[:,1] == rt_gas_desc.iso_id))
+    
+    def group_line_derived_data_by_gas_desc(self, line_derived_data):
+        _ldd = {}
+        for rt_gas_desc in self.gas_isotopes.as_radtran_gasses():
+            _ldd[rt_gas_desc] = line_derived_data[self.get_line_data_gas_desc_mask(rt_gas_desc)]
+        return _ldd
     
     def is_line_data_ready(self) -> bool:
         """
+        Tests if `self.line_data` has data stored in it or not.
         """
         if self.line_data is None:
             return False
@@ -277,6 +339,9 @@ class LineData_0:
                 If True will remove any gases from `self.line_data` that return
                 a zero size or return None from the database (i.e. no data available 
                 for that gas/isotope).
+        
+        # SIDE EFFECT #
+            Sets LineData_0.line_data as something that follows LineDataProtocol
         """
         assert vmin < vmax, f'Mimimum wave ({vmin}) must be less than maximum wave ({vmax})'
         
@@ -294,28 +359,34 @@ class LineData_0:
         else:
             _lgr.info('Line data already loaded')
         
+        line_data_dict = self.line_data_dict
+        
         if cull_empty:
             gasses_to_remove = []
             isotopes_to_keep = []
-            for gas_desc,v in self.line_data.items():
+            for gas_desc,v in line_data_dict.items():
                 if v is None or v.size == 0:
                     gasses_to_remove.append(gas_desc)
                 else:
                     isotopes_to_keep.append(gas_desc.iso_id)
             
             if len(gasses_to_remove) > 0:
-                for gas_desc in gasses_to_remove:
-                    _lgr.info(f'Removing gas {gas_desc} from line data as no data was retrieved from database')
-                    del self.line_data[gas_desc]
                 self.ISO = tuple(sorted(isotopes_to_keep))
         
-        for gas_desc,v in self.line_data.items():
-            if v is None:
-                _lgr.warning(f'Database does not recognise gas {gas_desc} returned `None` for line_data, it should not be included further calculations. If strange things happen, try not including this isotope.')
+        return
         
     ###########################################################################################################################
     
+    def get_partition_data_gas_desc_mask(self, rt_gas_desc : RadtranGasDescriptor) -> np.ndarray[bool]:
+        """
+        Returns a boolean mask of the same shape as `self.partition_data` that is True where the isotopologue is the same as in `rt_gas_desc`
+        """
+        return np.logical_and((self.partition_data.RT_GAS_DESC[:,0] == rt_gas_desc.gas_id), (self.partition_data.RT_GAS_DESC[:,1] == rt_gas_desc.iso_id))
+    
     def is_partition_function_ready(self) -> bool:
+        """
+        Tests if `self.partition_data` has data stored it in or not
+        """
         return self.partition_data is not None
     
     def fetch_partition_function(self, refresh : bool = False) -> None:
@@ -342,7 +413,7 @@ class LineData_0:
     def calculate_doppler_width(
             self, 
             temp: float, 
-    ) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
+    ) -> np.ndarray[['N_LINES_OF_GAS'], float]:
         """
         Calculate Doppler width (HWHM), broadening due to thermal motion.
         NOTE: To get the standard deviation of the gaussian, multiply HWHM by 1/sqrt(2*ln(2))
@@ -362,15 +433,9 @@ class LineData_0:
         """
         doppler_width_const_cgs : float  = (1.0 / Data.constants.c_light_cgs) * np.sqrt(2 * np.log(2) * Data.constants.N_avogadro * Data.constants.k_boltzmann_cgs)
         _lgr.debug(f'{doppler_width_const_cgs=}')
-        dws = dict() # result
         
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            gas_line_data = self.line_data[gas_desc]
-            if gas_line_data is None:
-                dws[gas_desc] = np.nan
-                continue
-            
-            dws[gas_desc] = doppler_width_const_cgs * gas_line_data.NU * np.sqrt( temp / gas_desc.molecular_mass)
+        mol_masses = np.array([RadtranGasDescriptor(*x).molecular_mass for x in self.line_data.RT_GAS_DESC]) # This lookup is slow
+        dws = doppler_width_const_cgs * self.line_data.NU * np.sqrt( temp / mol_masses)
         
         _lgr.debug(dws)
         return dws
@@ -381,44 +446,24 @@ class LineData_0:
             temp: float,
             amb_frac: float, # fraction of ambient gas
             tref : float = 296,
-    ) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
+    ) -> np.ndarray[['N_LINES_OF_GAS'], float]:
         """
         Calculate pressure-broadened width HWHM (half-width-half-maximum) of cauchy-lorentz distribution.
         """
         _lgr.debug(f'{press=} {temp=} {amb_frac=} {tref=}')
         
-        lws = dict() # result
-        
         tratio = tref/temp
         
-        ONCE_FLAG=True
-        
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            gas_line_data = self.line_data[gas_desc]
-            
-            
-            if (_lgr.level == logging.DEBUG) and ONCE_FLAG:
-                _lgr.debug(f'{gas_line_data.N_AMB=}')
-                _lgr.debug(f'{gas_line_data.GAMMA_AMB=}')
-                _lgr.debug(f'{gas_line_data.N_SELF=}')
-                _lgr.debug(f'{gas_line_data.GAMMA_SELF=}')
-                ONCE_FLAG=False
-            
-            if gas_line_data is None:
-                lws[gas_desc] = np.nan
-                continue
-            
-            lws[gas_desc] = (
-                (tratio**gas_line_data.N_AMB) * gas_line_data.GAMMA_AMB * amb_frac 
-                 + (tratio**gas_line_data.N_SELF) * gas_line_data.GAMMA_SELF *  (1-amb_frac)
-            ) * press
-            
+        lws = (
+            (tratio**self.line_data.N_AMB) * self.line_data.GAMMA_AMB * amb_frac 
+                 + (tratio**self.line_data.N_SELF) * self.line_data.GAMMA_SELF *  (1-amb_frac)
+        ) * press
         
         _lgr.debug(lws)
         return lws
     
     
-    def calculate_partition_sums(self,T) -> dict[RadtranGasDescriptor, float]:
+    def calculate_partition_sums(self,T) -> np.ndarray[['N_LINES_OF_GAS'], float]:
         """
         Calculate the partition functions at any arbitrary temperature
 
@@ -426,23 +471,23 @@ class LineData_0:
             T (float): Temperature (K)
 
         Returns:
-            QT : np.ndarray[['N_GAS_ISOTOPES'], float]
-                Partition functions for each of the isotopes at temperature T 
+            QT : np.ndarray[['N_LINES_OF_GAS'], float]
+                Partition functions for line at temperature T 
         """
-        QTs = dict() # result
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            gas_partition_data = self.partition_data[gas_desc]
-            if gas_partition_data is None:
-                QTs[gas_desc] = np.nan
-                continue
-            
-            QTs[gas_desc] = np.interp(T, gas_partition_data.TEMP, gas_partition_data.Q)
+        QTs = np.empty((self.line_data.shape[0],), dtype=float)
+        
+        for gas_desc, gas_partition_data in self.partition_data_dict.items():
+            QTs[self.get_line_data_gas_desc_mask(gas_desc)] = np.interp(T, gas_partition_data.TEMP, gas_partition_data.Q)
         
         return QTs
         
     ###########################################################################################################################
     
-    def calculate_line_strength(self,T,Tref=296.) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
+    def calculate_line_strength(
+            self,
+            T,
+            Tref=296.0
+    ) -> np.ndarray[['N_LINES_OF_GAS'], float]:
         """
         Calculate the line strengths at any arbitrary temperature
 
@@ -451,36 +496,33 @@ class LineData_0:
             Tref (float) :: Reference temperature at which the line strengths are listed (default 296 K)
 
         Returns:
-            line_strengths : dict[RadtranGasDescriptor, np.ndarray[['N_GAS_LINES'], float]
+            line_strengths : np.ndarray[['N_GAS_LINES'], float]
                 Line strengths at temperature T
         """
         
-        line_strengths = dict() # result
-        
         qT = self.calculate_partition_sums(T)
         qTref = self.calculate_partition_sums(Tref)
+        
+        _lgr.debug(f'{qT.shape=}')
+        _lgr.debug(f'{qTref.shape=}')
         
         _lgr.debug(f'{Data.constants.c2_cgs=}')
         
         
         t_factor = Data.constants.c2_cgs * (T - Tref)/(T*Tref)
+        _lgr.debug(f'{t_factor=}')
         
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            gas_line_data = self.line_data[gas_desc]
-            if gas_line_data is None:
-                line_strengths[gas_desc] = np.zeros((0,),dtype=float)
-                continue
+        q_ratio = qTref / qT
+        _lgr.debug(f'{q_ratio.shape=}')
             
-            # Partition function ratio
-            q_ratio = qTref[gas_desc] / qT[gas_desc]
-            
-            boltz = np.exp(t_factor*gas_line_data.ELOWER)
-            
-            stim = ( 1 - np.exp(-Data.constants.c2_cgs*gas_line_data.NU/T)) / ( 1 - np.exp(-Data.constants.c2_cgs*gas_line_data.NU/Tref))
-            
-            line_strengths[gas_desc] = gas_line_data.SW * q_ratio * boltz * stim
-            
-            # Take into account abundances here?
+        boltz = np.exp(t_factor*self.line_data.ELOWER)
+        _lgr.debug(f'{boltz.shape=}')
+        
+        stim = ( 1 - np.exp(-Data.constants.c2_cgs*self.line_data.NU/T)) / ( 1 - np.exp(-Data.constants.c2_cgs*self.line_data.NU/Tref))
+        _lgr.debug(f'{stim.shape=}')
+        
+        line_strengths = self.line_data.SW * q_ratio * boltz * stim
+        _lgr.debug(f'{line_strengths.shape=}')
         
         return line_strengths
     
@@ -845,12 +887,11 @@ class LineData_0:
         constant = lineshape_fn(np.array([line_calculation_wavenumber_window]), alpha_d, gamma_l) * (line_calculation_wavenumber_window**2)
         
         if out is None:
-            out = np.empty_like(delta_wn)
+            out = np.zeros_like(delta_wn)
         
         out[wide_mask] = strength * constant / (delta_wn[wide_mask]**2) # calculate "continuum" contribution for the wide mask
         out[mask] = strength * lineshape_fn(delta_wn[mask], alpha_d, gamma_l) # overwrite the "center" with lineshape contribution
         return out
-    
     
     def calculate_monochromatic_absorption(
             self,
@@ -897,9 +938,9 @@ class LineData_0:
             refresh=ensure_linedata_downloaded
         )
         
-        strengths = self.calculate_line_strength(temp, tref)
-        alpha_ds = self.calculate_doppler_width(temp)
-        gamma_ls = self.calculate_lorentz_width(press, temp, amb_frac, tref)
+        strengths = self.group_line_derived_data_by_gas_desc(self.calculate_line_strength(temp, tref))
+        alpha_ds = self.group_line_derived_data_by_gas_desc(self.calculate_doppler_width(temp))
+        gamma_ls = self.group_line_derived_data_by_gas_desc(self.calculate_lorentz_width(press, temp, amb_frac, tref))
         
         # Define arrays here to re-use memory
         delta_wn = np.zeros_like(waves, dtype=float)
@@ -913,11 +954,10 @@ class LineData_0:
         k_total = np.zeros_like(waves, dtype=float)
         
         
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
+        for i, (gas_desc, gas_line_data) in enumerate(self.line_data_dict.items()):
             _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
-            gas_line_data = self.line_data[gas_desc]
-        
-            if gas_line_data is None:
+            
+            if gas_line_data is None or gas_line_data.size == 0:
                 abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) # All zeros for gasses that are not present in database
                 continue
             else:
@@ -956,7 +996,7 @@ class LineData_0:
                 
                 np.less_equal(delta_wn, 10*line_calculation_wavenumber_window, out=wide_mask_leq)
                 np.greater_equal(delta_wn, -10*line_calculation_wavenumber_window, out=wide_mask_geq)
-                np.logical_and(mask_leq, mask_geq, out=wide_mask)
+                np.logical_and(wide_mask_leq, wide_mask_geq, out=wide_mask)
 
                 self.calculate_monochromatic_line_absorption(
                     delta_wn,
@@ -984,6 +1024,161 @@ class LineData_0:
             abs_coeffs[gas_desc][wav_sort_idxs] = k_total*1E20
         
         return abs_coeffs
+    
+    def calculate_monochromatic_absorption_array(
+            self,
+            waves : np.ndarray, # 1D array with shape [NWAVE]
+            temp : float, # kelvin
+            press : float, # Atmospheres
+            amb_frac : float = 1, # fraction of broadening due to ambient gas
+            wave_unit : ans.enums.waveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
+            lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # lineshape function to use
+            line_calculation_wavenumber_window: float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+            tref : float = 296, # Reference temperature (Kelvin). TODO: This should be set by the database used
+            line_strength_cutoff : float = 1E-32, # Strength below which a line is ignored.
+            ensure_linedata_downloaded : bool = True,
+            calc_chunk_size : int = 1000,
+    ) -> np.ndarray[['NWAVE'],float]:
+        """
+        Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}) multiplied by a factor of 1E20. 
+        Returns the combined value for the gas mixture at the specified temperature, pressure, and ambient gas fraction.
+        
+        Should be faster than `calculate_monochromatic_absorption` as we perform the calculations using numpy arrays. The 
+        calculation is split into chunks of `calc_chunk_size` to avoid out-of-memory errors.
+        
+        For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
+        """
+        INFO_ONCE_FLAG = False
+        calc_chunk_size = 1000
+        
+        # Convert waves to wavenumber (cm^{-1})
+        #in_waves = np.array(waves)
+        waves = np.array(WavePoint(waves, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value)
+        
+        # Remember the ordering we got as input
+        wav_sort_idxs = np.argsort(waves)
+        
+        waves = waves[wav_sort_idxs]
+        
+        # Download data if we need it
+        self.fetch_linedata(
+            vmin = waves[0]-line_calculation_wavenumber_window, 
+            vmax = waves[-1]+line_calculation_wavenumber_window, 
+            wave_unit = ans.enums.WaveUnit.Wavenumber_cm,
+            refresh=ensure_linedata_downloaded
+        )
+        
+        strengths : np.ndarray[['N_LINES_OF_GAS'], float] = self.calculate_line_strength(temp, tref)
+        alpha_ds  : np.ndarray[['N_LINES_OF_GAS'], float] = self.calculate_doppler_width(temp)
+        gamma_ls  : np.ndarray[['N_LINES_OF_GAS'], float] = self.calculate_lorentz_width(press, temp, amb_frac, tref)
+        
+        # Define arrays here to re-use memory
+        wave_like_shape = (waves.shape[0], calc_chunk_size)
+        delta_wn      : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=float)
+        scratch       : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=float)
+        mask_leq      : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
+        mask_geq      : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
+        mask          : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
+        wide_mask_leq : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
+        wide_mask_geq : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
+        wide_mask     : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
+        
+        k_chunk       : np.ndarray[['NWAVE'], float] = np.zeros_like(waves, dtype=float)
+        
+        k_total       : np.ndarray[['NWAVE'], float] = np.zeros_like(waves, dtype=float)
+        
+        
+        # At `line_calculation_wavenumber_window` the lineshape_fn and 1/x^2 fit should be equal
+        # requires that`line_calculation_wavenumber_window` was applied symmetrically around zero.
+        lineshape_continuity_constants = np.array(
+            [lineshape_fn(line_calculation_wavenumber_window, alpha_d, gamma_l) * (line_calculation_wavenumber_window**2) for alpha_d, gamma_l in zip(alpha_ds, gamma_ls)]
+        )
+        _lgr.debug(f'{lineshape_continuity_constants.shape=}')
+        
+        line_idxs_to_include = np.nonzero(
+            (waves[0] <= self.line_data.NU) 
+            & (self.line_data.NU <= waves[-1])
+            & (strengths >= line_strength_cutoff)
+        )[0]
+        
+        progress_tracker = SimpleProgressTracker(len(line_idxs_to_include), "Computing line contributions.", 5, target_logger=_lgr)
+        
+        
+        
+        line_idx_chunk_edges = [*range(0, len(line_idxs_to_include), calc_chunk_size), len(line_idxs_to_include)]
+        line_idx_chunk_slices = [slice(line_idx_chunk_edges[i], line_idx_chunk_edges[i+1]) for i in range(len(line_idx_chunk_edges)-1)]
+        line_idx_chunks = [line_idxs_to_include[chunk_slice] for chunk_slice in line_idx_chunk_slices]
+        
+        _lgr.info(f'{line_idxs_to_include=}')
+        _lgr.info(f'{line_idx_chunk_edges=}')
+        _lgr.info(f'{line_idx_chunk_slices=}')
+        _lgr.info(f'{line_idx_chunks=}')
+        
+        _waves = waves[:,None]
+        
+        for _j, line_idx_chunk in enumerate(line_idx_chunks):
+            progress_tracker.n = _j*calc_chunk_size
+            progress_tracker.log_at(logging.INFO)
+        
+            chunk_slice = slice(len(line_idx_chunk))
+        
+            scratch.fill(0.0)
+            delta_wn.fill(np.nan)
+                
+            np.subtract(_waves, self.line_data.NU[line_idx_chunk], out=delta_wn[:,chunk_slice])
+            
+            #_lgr.debug(f'{delta_wn=}')
+            #plt.matshow(delta_wn)
+            #plt.show()
+            
+            np.less_equal(delta_wn, line_calculation_wavenumber_window, out=mask_leq)
+            np.greater_equal(delta_wn, -1*line_calculation_wavenumber_window, out=mask_geq)
+            np.logical_and(mask_leq, mask_geq, out=mask)
+            
+            #_lgr.debug(f'{mask=}')
+            #plt.matshow(mask)
+            #plt.show()
+            
+            np.less_equal(delta_wn, 10*line_calculation_wavenumber_window, out=wide_mask_leq)
+            np.greater_equal(delta_wn, -10*line_calculation_wavenumber_window, out=wide_mask_geq)
+            np.logical_and(wide_mask_leq, wide_mask_geq, out=wide_mask)
+            np.logical_xor(wide_mask, mask, out = wide_mask)
+
+            #_lgr.debug(f'{wide_mask=}')
+            #plt.matshow(wide_mask)
+            #plt.show()
+
+            #_lgr.debug(f'{strengths[line_idx_chunk].shape=}')
+            #_lgr.debug(f'{lineshape_continuity_constants[line_idx_chunk].shape=}')
+            #_lgr.debug(f'{delta_wn.shape=}')
+
+            # Could speed this up by using "function operators" like the above code does.
+            scratch[:,chunk_slice] = (
+                wide_mask[:,chunk_slice] * (strengths[line_idx_chunk] * lineshape_continuity_constants[line_idx_chunk] / (delta_wn[:,chunk_slice]**2)) # calculate "continuum" contribution for the wide mask
+                + mask[:,chunk_slice] * (strengths[line_idx_chunk] * lineshape_fn(delta_wn[:,chunk_slice], alpha_ds[line_idx_chunk], gamma_ls[line_idx_chunk])) # overwrite the "center" with lineshape contribution
+            ) 
+            
+            #_lgr.debug(f'{scratch.shape=}')
+            #_lgr.debug(f'{scratch=}')
+            #plt.matshow(scratch)
+            #plt.show()
+            
+            np.sum(scratch, axis=1, out=k_chunk)
+            
+            #_lgr.debug(f'{k_chunk=}')
+            
+            np.add(k_total, k_chunk, out=k_total)
+            
+            # Add in continuum absorption here if required
+            if not INFO_ONCE_FLAG:
+                _lgr.info('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
+                INFO_ONCE_FLAG = True
+        
+        # Ensure abs coeff are not less than zero
+        k_total[k_total<0] = 0
+        
+        
+        return k_total*1E20
         
         
     
@@ -1165,11 +1360,14 @@ class LineData_0:
         combined_ax.set_title('Line data coloured by isotopologue')
         
         line_strengths_max = 0
-        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
-            gas_linedata = self.line_data[gas_desc]
+        
+        line_data_dict = self.line_data_dict
+        
+        for i, (gas_desc, gas_linedata) in enumerate(line_data_dict.items()):
+            
             if gas_linedata is None or gas_linedata.size == 0:
                 continue
-                
+            
             line_strength_mask = gas_linedata.SW >= smin
             wavenumbers = gas_linedata.NU[line_strength_mask]
             line_strengths = gas_linedata.SW[line_strength_mask]
@@ -1199,11 +1397,10 @@ class LineData_0:
         combined_ax.set_ylabel('Line strength (cm$^{-1}$ / (molec cm$^{-2}$))')
         combined_ax.set(**ax_style_defaults)
     
-        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+        for i, (gas_desc, gas_linedata) in enumerate(line_data_dict.items()):
             ax = ax_array[i+1]
             ax.set_title(f'Line data for ${ans.Data.gas_data.molecule_to_latex(gas_desc.isotope_name)}$ (ID={int(gas_desc.gas_id)}, ISO={gas_desc.iso_id})')
             
-            gas_linedata = self.line_data[gas_desc]
             if gas_linedata is None or gas_linedata.size == 0:
                 continue
             

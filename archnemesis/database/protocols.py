@@ -30,6 +30,7 @@ class LineDataProtocol(Protocol):
         np.recarray[
             ['N_LINES_OF_GAS'],
             [
+                ('RT_GAS_DESC', int, (2,)), # Radtran gas descriptor
                 ('NU', float), # Transition wavenumber (cm^{-1})
                 ('SW', float), # transition intensity per molecule (weighted by terrestrial isotopologue abundance) (cm^{-1} molecule^{-1} cm^{-2}) at standard temperature and pressure (STP)
                 ('A', float), # einstein-A coefficient for spontaneous emission (s^{-1})
@@ -42,6 +43,7 @@ class LineDataProtocol(Protocol):
             ]
         ]
     """
+    RT_GAS_DESC : np.ndarray[['N_LINES_OF_GAS'],int,(2,)] # Radtran gas descriptor
     NU : np.ndarray[['N_LINES_OF_GAS'],float] # Transition wavenumber (cm^{-1})
     SW : np.ndarray[['N_LINES_OF_GAS'],float] # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
     A : np.ndarray[['N_LINES_OF_GAS'],float] # einstein-A coeifficient (s^{-1})
@@ -63,11 +65,13 @@ class PartitionFunctionDataProtocol(Protocol):
         np.recarray[
             ['N_TEMPS_OF_GAS'],
             [
+                ('RT_GAS_DESC', int, (2,)), # Radtran gas descriptor
                 ('TEMP', float), # Temperature of tablulated partition function (Kelvin)
                 ('Q', float), # Tabulated partition function value
             ]
         ]
     """
+    RT_GAS_DESC : np.ndarray[['N_LINES_OF_GAS'],int,(2,)] # Radtran gas descriptor
     TEMP : np.ndarray[['N_TEMPS_OF_GAS'],float] # Temperature of tablulated partition function (Kelvin)
     Q : np.ndarray[['N_TEMPS_OF_GAS'],float] # Tabulated partition function value
 

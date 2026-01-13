@@ -21,6 +21,12 @@ class RadtranGasDescriptor(NamedTuple):
     gas_id : int
     iso_id : int
     
+    @classmethod
+    def from_global_iso_id(cls, global_iso_id):
+        gas_id = (global_iso_id >> 16)
+        iso_id = (global_iso_id - (gas_id << 16))
+        return cls(gas_id, iso_id)
+    
     def to_hitran(self):
         result = radtran_to_hitran.get((self.gas_id,self.iso_id), None)
         if result is None:
@@ -53,8 +59,12 @@ class RadtranGasDescriptor(NamedTuple):
         return float(Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['abun'])
     
     @property
-    def global_id(self):
-        return int(Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['id'])
+    def global_iso_id(self) -> int:
+        """
+        Yields a unique value for each gas isotope
+        """
+        assert self.iso_id < 65536 # NOTE: 2^{16} = 65536
+        return ((self.gas_id << 16) + self.iso_id)
 
 
 class HitranGasDescriptor(NamedTuple):
