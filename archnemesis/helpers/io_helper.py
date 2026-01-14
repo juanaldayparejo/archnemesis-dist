@@ -86,6 +86,10 @@ class SimpleProgressTracker:
     def increment(self):
         self.n = self.n+1
     
+    def finish(self):
+        self.n = self.n_max
+        return self
+    
     def get_message(self):
         if self.t_now is None:
             return f'{self.msg_prefix}Progress: {self.n} / {self.n_max} [{100.0*self.n/self.n_max: 6.2f} %] Time: UNKNOWN'
