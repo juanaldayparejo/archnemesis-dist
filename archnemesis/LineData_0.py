@@ -1,4 +1,4 @@
-from __future__ import annotations #  for 3.9 compatability
+
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -353,7 +353,6 @@ class LineData_0:
         
         # Turn wavelength range in to Wavenumbers cm^{-1} for internal use
         wave_range = WaveRange(vmin, vmax, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm)
-        
     
         if refresh or not self.is_line_data_ready():
             self.line_data = self.LINE_DATABASE.get_line_data(
@@ -800,74 +799,74 @@ class LineData_0:
         
         overall_progress_tracker = SimpleProgressTracker(len(list(self.gas_isotopes.as_radtran_gasses())), "Computing line contributions from each isotope", 0, target_logger=_lgr)
         
-        for i, (gas_desc, gas_line_data) in enumerate(self.line_data_dict.items()):
-            _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
-            overall_progress_tracker.n = i
-            overall_progress_tracker.log_at(logging.INFO)
+        radtran_gasses = tuple(self.gas_isotopes_as_radtran_gasses())
         
-            if gas_line_data is None or gas_line_data.size == 0:
-                abs_coeffs[gas_desc] = np.zeros_like(wave_midpoints, dtype=float) # All zeros for gasses that are not present in database
-                continue
-            else:
-                # need a new array for each gas, need to define it before using as want to place values in in a specific order
-                abs_coeffs[gas_desc] = np.zeros_like(wave_midpoints, dtype=float) 
-            
-            k_total *= 0.0 # reset 
-            
         
-            strength = strengths[gas_desc]
-            alpha_d = alpha_ds[gas_desc]
-            gamma_l = gamma_ls[gas_desc]
-            
-            mask_lines_above_min_wave= gas_line_data.NU >= (wave_edges[0,0] - line_calculation_wavenumber_window)
-            mask_lines_below_max_wave = gas_line_data.NU <= (wave_edges[1,-1] - line_calculation_wavenumber_window)
-            line_idxs_to_include = np.nonzero(mask_lines_above_min_wave & mask_lines_below_max_wave)
-            idx_min = np.min(line_idxs_to_include)
-            idx_max = np.max(line_idxs_to_include)
-            n_lines = idx_max - idx_min
-            _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
-            
-            progress_tracker = SimpleProgressTracker(n_lines, f"Computing line contributions from {gas_desc}. ", 5, target_logger=_lgr)
-            
-            for _j, line_idx in enumerate(range(idx_min, idx_max)):
-                if _j % n_line_progress == 0:
-                    progress_tracker.n = _j
-                    progress_tracker.log_at(logging.INFO)
+        with SimpleProgressTracker('Wavenumber bin absorption coefficient calculation', len(radtran_gasses), output_target=_lgr) as prog_tracker_1:
+            for i, (gas_desc, gas_line_data) in enumerate(self.line_data_dict.items()):
+                _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
                 
-                if strength[line_idx] < line_strength_cutoff:
+                prog_tracker_1.display()
+            
+                if gas_line_data is None or gas_line_data.size == 0:
+                    abs_coeffs[gas_desc] = np.zeros_like(wave_midpoints, dtype=float) # All zeros for gasses that are not present in database
                     continue
-            
-                line_wn_mask = np.abs(wave_midpoints - gas_line_data.NU[line_idx]) < line_calculation_wavenumber_window
-                n_line_wn_mask = np.count_nonzero(line_wn_mask)
-
+                else:
+                    # need a new array for each gas, need to define it before using as want to place values in in a specific order
+                    abs_coeffs[gas_desc] = np.zeros_like(wave_midpoints, dtype=float) 
                 
-                if n_line_wn_mask > 0:
-                    delta_wn_edges = wave_edges[:, line_wn_mask] - gas_line_data.NU[line_idx]
+                k_total *= 0.0 # reset 
+                
+            
+                strength = strengths[gas_desc]
+                alpha_d = alpha_ds[gas_desc]
+                gamma_l = gamma_ls[gas_desc]
+                
+                mask_lines_above_min_wave= gas_line_data.NU >= (wave_edges[0,0] - line_calculation_wavenumber_window)
+                mask_lines_below_max_wave = gas_line_data.NU <= (wave_edges[1,-1] - line_calculation_wavenumber_window)
+                line_idxs_to_include = np.nonzero(mask_lines_above_min_wave & mask_lines_below_max_wave)
+                idx_min = np.min(line_idxs_to_include)
+                idx_max = np.max(line_idxs_to_include)
+                n_lines = idx_max - idx_min
+                _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
+                
+                
+                with SimpleProgressTracker(f"Computing line contributions from {gas_desc}", n_lines, display_interval_n = n_line_progress, output_target=_lgr) as prog_tracker_2:
+                    for _j, line_idx in enumerate(range(idx_min, idx_max)):
+                        prog_tracker_2.display()
+                        
+                        if strength[line_idx] < line_strength_cutoff:
+                            continue
                     
-                    k_total[line_wn_mask] += self.calculate_line_absorption_in_bins(
-                        delta_wn_edges,
-                        strength[line_idx],
-                        alpha_d[line_idx],
-                        gamma_l[line_idx],
-                        lineshape_fn,
-                        line_integral_points_delta_wn,
-                        TEST = TEST and TEST_PREDICATE(line_idx, gas_line_data.NU[line_idx])
-                    ) 
+                        line_wn_mask = np.abs(wave_midpoints - gas_line_data.NU[line_idx]) < line_calculation_wavenumber_window
+                        n_line_wn_mask = np.count_nonzero(line_wn_mask)
+
+                        
+                        if n_line_wn_mask > 0:
+                            delta_wn_edges = wave_edges[:, line_wn_mask] - gas_line_data.NU[line_idx]
+                            
+                            k_total[line_wn_mask] += self.calculate_line_absorption_in_bins(
+                                delta_wn_edges,
+                                strength[line_idx],
+                                alpha_d[line_idx],
+                                gamma_l[line_idx],
+                                lineshape_fn,
+                                line_integral_points_delta_wn,
+                                TEST = TEST and TEST_PREDICATE(line_idx, gas_line_data.NU[line_idx])
+                            ) 
+                        
+                        # Add in continuum absorption here if required
+                        if not INFO_ONCE_FLAG:
+                            _lgr.info('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
+                            INFO_ONCE_FLAG = True
+                        
+                        
+                    
+                # Ensure abs coeff are not less than zero
+                k_total[k_total<0] = 0
                 
-                # Add in continuum absorption here if required
-                if not INFO_ONCE_FLAG:
-                    _lgr.info('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
-                    INFO_ONCE_FLAG = True
-            
-            progress_tracker.finish().log_at(logging.INFO)
-            
-            # Ensure abs coeff are not less than zero
-            k_total[k_total<0] = 0
-            
-            # put into absorption coefficient dictionary, multiply by 1E20 factor here
-            abs_coeffs[gas_desc][wav_sort_idxs] = k_total*1E20
-        
-        overall_progress_tracker.finish().log_at(logging.INFO)
+                # put into absorption coefficient dictionary, multiply by 1E20 factor here
+                abs_coeffs[gas_desc][wav_sort_idxs] = k_total*1E20
         
         return abs_coeffs
     
@@ -911,7 +910,7 @@ class LineData_0:
             temp : float, # kelvin
             press : float, # Atmospheres
             amb_frac : float = 1, # fraction of broadening due to ambient gas
-            wave_unit : ans.enums.waveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
+            wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
             lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # lineshape function to use
             line_calculation_wavenumber_window: float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
             tref : float = 296, # Reference temperature (Kelvin). TODO: This should be set by the database used
@@ -928,7 +927,7 @@ class LineData_0:
         
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
-        INFO_ONCE_FLAG = False
+        CONT_CALC_MSG_ONCE_FLAG = False
         n_line_progress = 1000
         
         abs_coeffs = dict()
@@ -967,81 +966,80 @@ class LineData_0:
         
         overall_progress_tracker = SimpleProgressTracker(len(list(self.gas_isotopes.as_radtran_gasses())), "Computing line contributions from each isotope", 0, target_logger=_lgr)
         
-        for i, (gas_desc, gas_line_data) in enumerate(self.line_data_dict.items()):
-            _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
-            overall_progress_tracker.n = i
-            overall_progress_tracker.log_at(logging.INFO)
-            
-            if gas_line_data is None or gas_line_data.size == 0:
-                abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) # All zeros for gasses that are not present in database
-                continue
-            else:
-                # need a new array for each gas, need to define it before using as want to place values in in a specific order
-                abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) 
-            
-            k_total.fill(0.0) # reset to all zeros
+        radtran_gasses = tuple(self.gas_isotopes.as_radtran_gasses())
         
-            strength = strengths[gas_desc]
-            alpha_d = alpha_ds[gas_desc]
-            gamma_l = gamma_ls[gas_desc]
-            
-            line_idxs_to_include = np.nonzero((waves[0] <= gas_line_data.NU) & (gas_line_data.NU <= waves[-1]))
-            idx_min = np.min(line_idxs_to_include)
-            idx_max = np.max(line_idxs_to_include)
-            n_lines = idx_max - idx_min
-            _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
-            
-            progress_tracker = SimpleProgressTracker(n_lines, f"Computing line contributions from {gas_desc}. ", 5, target_logger=_lgr)
-            
-            for _j, line_idx in enumerate(range(idx_min, idx_max)):
-                if _j % n_line_progress == 0:
-                    progress_tracker.n = _j
-                    progress_tracker.log_at(logging.INFO)
+        with SimpleProgressTracker("Monochromatic absorption coefficient calculation", len(radtran_gasses), output_target=_lgr) as abs_coeff_progress:
+            for i, gas_desc in enumerate(radtran_gasses):
+                _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
                 
-                if strength[line_idx] < line_strength_cutoff:
+                abs_coeff_progress.display()
+                gas_line_data = self.line_data[gas_desc]
+            
+                if gas_line_data is None:
+                    abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) # All zeros for gasses that are not present in database
                     continue
+                else:
+                    # need a new array for each gas, need to define it before using as want to place values in in a specific order
+                    abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) 
+                
+                k_total.fill(0.0) # reset to all zeros
             
-                scratch.fill(0.0)
+                strength = strengths[gas_desc]
+                alpha_d = alpha_ds[gas_desc]
+                gamma_l = gamma_ls[gas_desc]
                 
-                np.subtract(waves, gas_line_data.NU[line_idx], out=delta_wn)
+                line_idxs_to_include = np.nonzero((waves[0] <= gas_line_data.NU) & (gas_line_data.NU <= waves[-1]))
+                idx_min = np.min(line_idxs_to_include)
+                idx_max = np.max(line_idxs_to_include)
+                n_lines = idx_max - idx_min
+                _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
                 
-                np.less_equal(delta_wn, line_calculation_wavenumber_window, out=mask_leq)
-                np.greater_equal(delta_wn, -line_calculation_wavenumber_window, out=mask_geq)
-                np.logical_and(mask_leq, mask_geq, out=mask)
+                with SimpleProgressTracker(f"Computing line contributions from {gas_desc}. ", n_lines, display_interval_n=n_line_progress, output_target=_lgr) as line_contrib_prog:
                 
-                np.less_equal(delta_wn, 10*line_calculation_wavenumber_window, out=wide_mask_leq)
-                np.greater_equal(delta_wn, -10*line_calculation_wavenumber_window, out=wide_mask_geq)
-                np.logical_and(wide_mask_leq, wide_mask_geq, out=wide_mask)
+                    for _j, line_idx in enumerate(range(idx_min, idx_max)):
+                        line_contrib_prog.display()
+                        
+                        if strength[line_idx] < line_strength_cutoff:
+                            continue
+                    
+                        scratch.fill(0.0)
+                        
+                        np.subtract(waves, gas_line_data.NU[line_idx], out=delta_wn)
+                        
+                        np.less_equal(delta_wn, line_calculation_wavenumber_window, out=mask_leq)
+                        np.greater_equal(delta_wn, -line_calculation_wavenumber_window, out=mask_geq)
+                        np.logical_and(mask_leq, mask_geq, out=mask)
+                        
+                        np.less_equal(delta_wn, 10*line_calculation_wavenumber_window, out=wide_mask_leq)
+                        np.greater_equal(delta_wn, -10*line_calculation_wavenumber_window, out=wide_mask_geq)
+                        np.logical_and(wide_mask_leq, wide_mask_geq, out=wide_mask)
 
-                self.calculate_monochromatic_line_absorption(
-                    delta_wn,
-                    mask, 
-                    wide_mask,
-                    strength[line_idx],
-                    alpha_d[line_idx],
-                    gamma_l[line_idx],
-                    lineshape_fn,
-                    line_calculation_wavenumber_window,
-                    out=scratch
-                )
+                        self.calculate_monochromatic_line_absorption(
+                            delta_wn,
+                            mask, 
+                            wide_mask,
+                            strength[line_idx],
+                            alpha_d[line_idx],
+                            gamma_l[line_idx],
+                            lineshape_fn,
+                            line_calculation_wavenumber_window,
+                            out=scratch
+                        )
+                        
+                        k_total = np.add(k_total, scratch, out=k_total)
+                        
+                        # Add in continuum absorption here if required
+                        if not CONT_CALC_MSG_ONCE_FLAG:
+                            _lgr.debug('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
+                            CONT_CALC_MSG_ONCE_FLAG = True
+                        
                 
-                k_total = np.add(k_total, scratch, out=k_total)
-                
-                # Add in continuum absorption here if required
-                if not INFO_ONCE_FLAG:
-                    _lgr.info('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
-                    INFO_ONCE_FLAG = True
-            
-            progress_tracker.finish().log_at(logging.INFO)
-            
-            # Ensure abs coeff are not less than zero
-            k_total[k_total<0] = 0
+                # Ensure abs coeff are not less than zero
+                k_total[k_total<0] = 0
 
-            # put into absorption coefficient dictionary, multiply by 1E20 factor here
-            abs_coeffs[gas_desc][wav_sort_idxs] = k_total*1E20
-        
-        overall_progress_tracker.finish().log_at(logging.INFO)
-        
+                # put into absorption coefficient dictionary, multiply by 1E20 factor here
+                abs_coeffs[gas_desc][wav_sort_idxs] = k_total*1E20
+            
         return abs_coeffs
     
     def calculate_monochromatic_absorption_array(
@@ -1287,31 +1285,32 @@ class LineData_0:
         # Allocate result array
         k_total = np.zeros((len(gas_descs), n_waves, pressure_profile.size, 2), dtype=float)
         
-        progress_tracker = SimpleProgressTracker(temp_points.size, "Computing absorption coefficients of temperature-pressure profile. ", target_logger=_lgr)
+        with SimpleProgressTracker("Computing absorption coefficients of temperature-pressure profile", temp_points.size, output_target=_lgr) as pt_profile_progress:
         
-        for i, press in enumerate(pressure_profile):
-            for j, temp in enumerate(temp_points[i]):
-                progress_tracker.log_at_and_increment(logging.INFO)
-                #_lgr.info(f'Calculating absorption at temperature-pressure profile point ({i},{j}) of ({pressure_profile.size},{temp_points.shape[1]}). Progress: {i*2+j} / {temp_points.size} [{100.0*(i*2+j)/temp_points.size: 6.2f} %]')
-                abs_coeffs = calc_absorption_fn(
-                    waves, 
-                    temp, 
-                    press, 
-                    wave_unit = wave_unit,
-                    **kwargs
-                )
-                for k, v in abs_coeffs.items():
-                    x = gas_descs.index(k)
-                    k_total[x, :, i, j] = v
+            for i, press in enumerate(pressure_profile):
+                for j, temp in enumerate(temp_points[i]):
+                    pt_profile_progress.display()
                     
-                    """
-                    if (temp > 100) and (press > 7):
-                        plt.title(f'{press=}\n{temp=}')
-                        plt.plot(waves, v)
-                        plt.xlim((1.64,1.68))
-                        plt.show()
-                        sys.exit()
-                    """
+                    #_lgr.info(f'Calculating absorption at temperature-pressure profile point ({i},{j}) of ({pressure_profile.size},{temp_points.shape[1]}). Progress: {i*2+j} / {temp_points.size} [{100.0*(i*2+j)/temp_points.size: 6.2f} %]')
+                    abs_coeffs = calc_absorption_fn(
+                        waves, 
+                        temp, 
+                        press, 
+                        wave_unit = wave_unit,
+                        **kwargs
+                    )
+                    for k, v in abs_coeffs.items():
+                        x = gas_descs.index(k)
+                        k_total[x, :, i, j] = v
+                        
+                        """
+                        if (temp > 100) and (press > 7):
+                            plt.title(f'{press=}\n{temp=}')
+                            plt.plot(waves, v)
+                            plt.xlim((1.64,1.68))
+                            plt.show()
+                            sys.exit()
+                        """
         
         result = []
         

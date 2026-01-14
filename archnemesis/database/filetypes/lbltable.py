@@ -1,6 +1,7 @@
-from __future__ import annotations #  for 3.9 compatability
+
 
 import io
+from io import IOBase
 from typing import NamedTuple, TYPE_CHECKING
 import struct
 
@@ -9,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+import archnemesis.enums
 import archnemesis as ans
 from archnemesis.database.datatypes.wave_point import WavePoint
 from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
@@ -309,7 +311,7 @@ def read_legacy_header(f : str | io.IOBase) -> LblHeader:
 
 
 def read_legacy(
-        f : str | io.ioBase, 
+        f : str | IOBase, 
         wave_unit : None | ans.enums.WaveUnit =  None,
         fortran_record_byte_size = 4, # number of bytes in a fortran record, normally 4
 ) -> LblDataTProfilesAtPressure | LblDataTPGrid:
@@ -320,7 +322,7 @@ def read_legacy(
     
     ## ARGUMENTS ##
         
-        f : str | ioBase
+        f : str | IOBase
             Filename or FileLike object for table to read.
         
         wave_unit : None | ans.enums.WaveUnit

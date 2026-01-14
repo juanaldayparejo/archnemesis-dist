@@ -72,6 +72,53 @@ def id_to_name(gasid,isoid):
         return gas_info[str(gasid)]["isotope"][str(isoid)]["name"]
 
 
+def replace_str_outside_brackets(text, x, replacement = ''):
+    # find 'x' in text only if outside brackets
+    n = len(x)
+    x_may_be_present = True
+    
+    while x_may_be_present:
+        depth = 0
+        i = 0
+        text_len = len(text)
+        while i<text_len:
+            if text[i] == '(':
+                depth += 1
+            elif text[i] == ')':
+                depth -= 1
+            elif text[i:i+n] == x and depth == 0:
+                text = text[:i] + replacement + text[i+n:]
+                break
+            i += 1
+        if i == text_len:
+            # did not find x, so can stop
+            x_may_be_present = False
+    return text
+
+def normalise_isotope_name(iso_name):
+    # make sure is converted to standard format where all atoms have brackets around them
+    iso_name = replace_str_outside_brackets(iso_name, 'H', '(1H)')
+    iso_name = replace_str_outside_brackets(iso_name, 'D', '(2H)')
+    return iso_name
+
+def get_radtran_isotope_name(iso_name):
+    # make sure name is in same format as `gas_info`
+    iso_name = iso_name.replace('(1H)', 'H')
+    iso_name = iso_name.replace('(2H)', 'D')
+    return iso_name
+
+def isotope_name_to_radtran_id(iso_name):
+    iso_name = normalise_isotope_name(iso_name)
+
+    for gas_id in gas_info:
+        for iso_id in gas_info[gas_id]['isotope']:
+            if 'name' not in gas_info[gas_id]['isotope'][iso_id]: # skip entries that do not have a name for their isotope
+                continue
+            if normalise_isotope_name(gas_info[gas_id]['isotope'][iso_id]['name']) == iso_name:
+                return (gas_id, iso_id)
+    return None # if not found
+
+
 def molecule_to_latex(formula):
     import re
     # Step 1: Replace isotopes in parentheses (e.g., (14N) -> ^{14}N)
@@ -1329,13 +1376,13 @@ gas_info = {
         "name": "H2",
         "isotope": {
             "1": {
-                "name": "H2",
+                "name": "(1H)2",
                 "abun": 0.999955,
                 "mass": 2.016,
                 "id": 11,
             },
             "2": {
-                "name": "HD",
+                "name": "(1H)(1D)",
                 "abun": 0.000311,
                 "mass": 3.021825,
                 "id": 12,
@@ -1347,7 +1394,7 @@ gas_info = {
         "name": "He",
         "isotope": {
             "1": {
-                "name": "He",
+                "name": "(4He)",
                 "abun": 1.0,
                 "mass": 4.0021,
                 "id": 4,
