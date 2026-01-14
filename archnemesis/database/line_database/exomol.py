@@ -162,6 +162,8 @@ class EXOMOL:
         # 2) Calculate the values required by the `LineDataProtocol` and store them in the a database
         # 3) provide ways to pull wanted values out of the database on demand.
         
+        raise NotImplementedError('EXOMOL line database is not ready yet.')
+        
         self.local_storage_dir = local_storage_dir
         self.database_fpath = os.path.join(local_storage_dir, 'exomol.db')
         
