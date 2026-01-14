@@ -1215,6 +1215,7 @@ def coreretOE(
         NCores=1,
         nemesisSO=False,
         nemesisdisc=False,
+        nemesisPT=False,
         write_itr=False,
         return_forward_model=False,
         return_phi_and_chisq_history=False,
@@ -1257,6 +1258,7 @@ def coreretOE(
 
             nemesisSO :: If True, it indicates that the retrieval is for a solar occultation observation
             nemesisdisc :: If True, it indicates that the retrieval is for a disc-averaged observation
+            nemesisPT :: If True, it indicates that the retrieval is for a primary transit observation
             
             return_forward_model :: if True will return the ForwardModel as well as the OptimalEstimation.
 
@@ -1348,7 +1350,7 @@ def coreretOE(
         NCores=NCores,
     )
     _lgr.info('nemesis :: Calculating Jacobian matrix KK')
-    YN,KK = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc)
+    YN,KK = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT)
     
     OptimalEstimation.edit_YN(YN)
     OptimalEstimation.edit_KK(KK)
@@ -1488,7 +1490,7 @@ def coreretOE(
             Variables=Variables,
             NCores=NCores,
         )
-        YN1,KK1 = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc)
+        YN1,KK1 = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT)
 
         OptimalEstimation1 = deepcopy(OptimalEstimation)
         OptimalEstimation1.edit_YN(YN1)

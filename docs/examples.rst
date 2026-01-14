@@ -49,4 +49,5 @@ This sections includes Jupyter notebookes with examples showing how archNEMESIS 
 
    examples/retrieval_Jupiter_Tprofile/Jupiter_CIRS_retrieval.ipynb
    examples/Neptune_JWST_nested_sampling/Neptune_JWST.ipynb
+   examples/retrieval_exoplanet_transit/retrieval_exoplanet.ipynb
    
