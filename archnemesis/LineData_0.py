@@ -797,9 +797,7 @@ class LineData_0:
         
         k_total = np.zeros_like(wave_midpoints, dtype=float) # define here and re-use the memory
         
-        overall_progress_tracker = SimpleProgressTracker(len(list(self.gas_isotopes.as_radtran_gasses())), "Computing line contributions from each isotope", 0, target_logger=_lgr)
-        
-        radtran_gasses = tuple(self.gas_isotopes_as_radtran_gasses())
+        radtran_gasses = tuple(self.gas_isotopes.as_radtran_gasses())
         
         
         with SimpleProgressTracker('Wavenumber bin absorption coefficient calculation', len(radtran_gasses), output_target=_lgr) as prog_tracker_1:
@@ -964,18 +962,15 @@ class LineData_0:
         wide_mask = np.zeros_like(waves, dtype=bool)
         k_total = np.zeros_like(waves, dtype=float)
         
-        overall_progress_tracker = SimpleProgressTracker(len(list(self.gas_isotopes.as_radtran_gasses())), "Computing line contributions from each isotope", 0, target_logger=_lgr)
-        
         radtran_gasses = tuple(self.gas_isotopes.as_radtran_gasses())
         
         with SimpleProgressTracker("Monochromatic absorption coefficient calculation", len(radtran_gasses), output_target=_lgr) as abs_coeff_progress:
-            for i, gas_desc in enumerate(radtran_gasses):
+            for i, (gas_desc, gas_line_data) in enumerate(self.line_data_dict.items()):
                 _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
                 
                 abs_coeff_progress.display()
-                gas_line_data = self.line_data[gas_desc]
-            
-                if gas_line_data is None:
+                            
+                if gas_line_data is None or gas_line_data.size == 0:
                     abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) # All zeros for gasses that are not present in database
                     continue
                 else:
@@ -1048,187 +1043,44 @@ class LineData_0:
             temp : float, # kelvin
             press : float, # Atmospheres
             amb_frac : float = 1, # fraction of broadening due to ambient gas
-            wave_unit : ans.enums.waveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
+            wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
             lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # lineshape function to use
             line_calculation_wavenumber_window: float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
             tref : float = 296, # Reference temperature (Kelvin). TODO: This should be set by the database used
             line_strength_cutoff : float = 1E-32, # Strength below which a line is ignored.
             ensure_linedata_downloaded : bool = True,
-            calc_chunk_size : int = 1000,
     ) -> np.ndarray[['NWAVE'],float]:
         """
         Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}) multiplied by a factor of 1E20. 
         Returns the combined value for the gas mixture at the specified temperature, pressure, and ambient gas fraction.
         
-        NOTE: Is not actually faster than `calculate_monochromatic_absorption` as we are doing extra computations when
-        doing lineshape calculations. I am going to fix this eventually.
+        NOTE: Is currently a wrapper around `calculate_monochromatic_absorption`.
         
         Should be faster than `calculate_monochromatic_absorption` as we perform the calculations using numpy arrays. The 
         calculation is split into chunks of `calc_chunk_size` to avoid out-of-memory errors.
         
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
-        INFO_ONCE_FLAG = False
-        calc_chunk_size = 100
         
-        # Convert waves to wavenumber (cm^{-1})
-        #in_waves = np.array(waves)
-        waves = np.array(WavePoint(waves, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value)
-        
-        # Remember the ordering we got as input
-        wav_sort_idxs = np.argsort(waves)
-        
-        waves = waves[wav_sort_idxs]
-        
-        # Download data if we need it
-        self.fetch_linedata(
-            vmin = waves[0]-line_calculation_wavenumber_window, 
-            vmax = waves[-1]+line_calculation_wavenumber_window, 
-            wave_unit = ans.enums.WaveUnit.Wavenumber_cm,
-            refresh=ensure_linedata_downloaded
+        abs_coeff = self.calculate_monochromatic_absorption(
+            waves,
+            temp,
+            press,
+            amb_frac,
+            wave_unit,
+            lineshape_fn,
+            line_calculation_wavenumber_window,
+            tref,
+            line_strength_cutoff,
+            ensure_linedata_downloaded
         )
         
-        strengths : np.ndarray[['N_LINES_OF_GAS'], float] = self.calculate_line_strength(temp, tref)
-        alpha_ds  : np.ndarray[['N_LINES_OF_GAS'], float] = self.calculate_doppler_width(temp)
-        gamma_ls  : np.ndarray[['N_LINES_OF_GAS'], float] = self.calculate_lorentz_width(press, temp, amb_frac, tref)
+        abs_coeff_combined = np.zeros_like(waves, dtype=float)
         
-        # Define arrays here to re-use memory
-        wave_like_shape = (waves.shape[0], calc_chunk_size)
-        delta_wn      : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=float)
-        scratch       : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=float)
-        valid_mask    : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
-        mask_leq      : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
-        mask_geq      : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
-        mask          : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
-        wide_mask_leq : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
-        wide_mask_geq : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
-        wide_mask     : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=bool)
-        temp_1        : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=float)
-        temp_2        : np.ndarray[['NWAVE', 'calc_chunk_size'], float] = np.zeros(wave_like_shape, dtype=float)
+        for item in abs_coeff.values():
+            abs_coeff_combined += item
         
-        
-        nu            : np.ndarray[['calc_chunk_size'], float] = np.zeros((calc_chunk_size,), dtype=float)
-        strength      : np.ndarray[['calc_chunk_size'], float] = np.zeros((calc_chunk_size,), dtype=float)
-        alpha_d       : np.ndarray[['calc_chunk_size'], float] = np.zeros((calc_chunk_size,), dtype=float)
-        gamma_l       : np.ndarray[['calc_chunk_size'], float] = np.zeros((calc_chunk_size,), dtype=float)
-        lcc           : np.ndarray[['calc_chunk_size'], float] = np.zeros((calc_chunk_size,), dtype=float)
-        
-        k_chunk       : np.ndarray[['NWAVE'], float] = np.zeros_like(waves, dtype=float)
-        
-        k_total       : np.ndarray[['NWAVE'], float] = np.zeros_like(waves, dtype=float)
-        
-        
-        # At `line_calculation_wavenumber_window` the lineshape_fn and 1/x^2 fit should be equal
-        # requires that`line_calculation_wavenumber_window` was applied symmetrically around zero.
-        lineshape_continuity_constants = np.array(
-            [lineshape_fn(line_calculation_wavenumber_window, alpha_d, gamma_l) * (line_calculation_wavenumber_window**2) for alpha_d, gamma_l in zip(alpha_ds, gamma_ls)]
-        )
-        _lgr.debug(f'{lineshape_continuity_constants.shape=}')
-        
-        line_idxs_to_include = np.nonzero(
-            (waves[0] <= self.line_data.NU) 
-            & (self.line_data.NU <= waves[-1])
-            & (strengths >= line_strength_cutoff)
-        )[0]
-        
-        progress_tracker = SimpleProgressTracker(len(line_idxs_to_include), "Computing line contributions.", 5, target_logger=_lgr)
-        
-        
-        
-        line_idx_chunk_edges = [*range(0, len(line_idxs_to_include), calc_chunk_size), len(line_idxs_to_include)]
-        line_idx_chunk_slices = [slice(line_idx_chunk_edges[i], line_idx_chunk_edges[i+1]) for i in range(len(line_idx_chunk_edges)-1)]
-        line_idx_chunks = [line_idxs_to_include[chunk_slice] for chunk_slice in line_idx_chunk_slices]
-        
-        _lgr.debug(f'{line_idxs_to_include=}')
-        _lgr.debug(f'{line_idx_chunk_edges=}')
-        _lgr.debug(f'{line_idx_chunk_slices=}')
-        _lgr.debug(f'{line_idx_chunks=}')
-        
-        _waves = waves[:,None]
-        
-        for _j, line_idx_chunk in enumerate(line_idx_chunks):
-            progress_tracker.n = _j*calc_chunk_size
-            progress_tracker.log_at(logging.INFO)
-        
-            chunk_slice = slice(len(line_idx_chunk))
-        
-            scratch.fill(0.0)
-            #delta_wn.fill(0.0)
-            #temp_1.fill(0.0)
-            #temp_2.fill(0.0)
-            #mask.fill(False)
-            #wide_mask.fill(False)
-            #nu.fill(0.0)
-            #strength.fill(0.0)
-            #alpha_d.fill(0.0)
-            #gamma_l.fill(0.0)
-            #lcc.fill(0.0)
-            valid_mask.fill(False)
-            
-            valid_mask[:,chunk_slice] = True
-            
-            nu[chunk_slice] = self.line_data.NU[line_idx_chunk]
-            strength[chunk_slice] = strengths[line_idx_chunk]
-            alpha_d[chunk_slice] = alpha_ds[line_idx_chunk]
-            gamma_l[chunk_slice] = gamma_ls[line_idx_chunk]
-            lcc[chunk_slice] = lineshape_continuity_constants[line_idx_chunk]
-                
-            np.subtract(_waves, nu, out=delta_wn)
-            
-            #_lgr.debug(f'{delta_wn=}')
-            #plt.matshow(delta_wn)
-            #plt.show()
-            
-            np.less_equal(delta_wn, line_calculation_wavenumber_window, out=mask_leq)
-            np.greater_equal(delta_wn, -1*line_calculation_wavenumber_window, out=mask_geq)
-            np.logical_and(mask_leq, mask_geq, out=mask)
-            
-            #_lgr.debug(f'{mask=}')
-            #plt.matshow(mask)
-            #plt.show()
-            
-            np.less_equal(delta_wn, 10*line_calculation_wavenumber_window, out=wide_mask_leq)
-            np.greater_equal(delta_wn, -10*line_calculation_wavenumber_window, out=wide_mask_geq)
-            np.logical_and(wide_mask_leq, wide_mask_geq, out=wide_mask)
-            np.logical_xor(wide_mask, mask, out = wide_mask)
-
-            #_lgr.debug(f'{wide_mask=}')
-            #plt.matshow(wide_mask)
-            #plt.show()
-
-            #_lgr.debug(f'{strengths[line_idx_chunk].shape=}')
-            #_lgr.debug(f'{lineshape_continuity_constants[line_idx_chunk].shape=}')
-            #_lgr.debug(f'{delta_wn.shape=}')
-
-            # Could speed this up by using "function operators" like the above code does.
-            scratch[:,chunk_slice] = (
-                wide_mask[:,chunk_slice] * (strengths[line_idx_chunk] * lineshape_continuity_constants[line_idx_chunk] / (delta_wn[:,chunk_slice]**2)) # calculate "continuum" contribution for the wide mask
-                + mask[:,chunk_slice] * (strengths[line_idx_chunk] * lineshape_fn(delta_wn[:,chunk_slice], alpha_ds[line_idx_chunk], gamma_ls[line_idx_chunk])) # overwrite the "center" with lineshape contribution
-            ) 
-            
-            #_lgr.debug(f'{scratch.shape=}')
-            #_lgr.debug(f'{scratch=}')
-            #plt.matshow(scratch)
-            #plt.show()
-            
-            np.sum(scratch, axis=1, out=k_chunk)
-            
-            #_lgr.debug(f'{k_chunk=}')
-            
-            np.add(k_total, k_chunk, out=k_total)
-            
-            # Add in continuum absorption here if required
-            if not INFO_ONCE_FLAG:
-                _lgr.info('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
-                INFO_ONCE_FLAG = True
-        
-        progress_tracker.finish().log_at(logging.INFO)
-        
-        # Ensure abs coeff are not less than zero
-        k_total[k_total<0] = 0
-        
-        
-        return k_total*1E20
+        return abs_coeff_combined
         
         
     
