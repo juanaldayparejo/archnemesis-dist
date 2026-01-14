@@ -210,13 +210,19 @@ class RADTRAN(LineDatabaseProtocol):
             'e_lower'
         )
         
-        self.data = dict()
+        self.data : dict[RadtranGasDescriptor, LineDataProtocol] = dict()
         
         for gas_desc in self.gas_info.keys():
             key = (gas_desc.gas_id, gas_desc.iso_id, self.ambient_gas)
             self.data[key] = np.rec.fromrecords(
-                [tuple(getattr(x,attr) for attr in attrs) for x in records if ((x.gas_id == gas_desc.gas_id) and (x.iso_id == gas_desc.iso_id))],
+                [
+                    (
+                        (x.gas_id, x.iso_id), 
+                        *tuple(getattr(x,attr) for attr in attrs)
+                    ) for x in records if ((x.gas_id == gas_desc.gas_id) and (x.iso_id == gas_desc.iso_id))
+                ],
                 dtype=[
+                    ('RT_GAS_DESC', int, (2,)), # Radtran gas descriptor
                     ('NU', float), # Transition wavenumber (cm^{-1})
                     ('SW', float), # transition intensity per molecule (weighted by terrestrial isotopologue abundance) (cm^{-1} molecule^{-1} cm^{-2}) at standard temperature and pressure (STP)
                     ('A', float), # einstein-A coefficient for spontaneous emission (s^{-1})
@@ -278,18 +284,62 @@ class RADTRAN(LineDatabaseProtocol):
         ) -> dict[RadtranGasDescriptor, None | LineDataProtocol]:
         """
         """
-        result = dict()
+        #result = dict()
         
         vmin, vmax = wave_range.to_unit(ans.enums.WaveUnit.Wavenumber_cm).values()
+        
+        line_data = np.array(
+            [], 
+            dtype = [
+                ('RT_GAS_DESC', int, (2,)), # Radtran gas descriptor
+                ('NU', float), # Transition wavenumber (cm^{-1})
+                ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
+                ('A', float), # einstein-A coeifficient (s^{-1})
+                ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
+                ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
+                ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
+                ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
+                ('N_SELF', float), # temperature dependent exponent for `gamma_self` (NUMBER)
+                ('ELOWER', float), # lower state energy (cm^{-1})
+            ]
+        ).view(np.recarray)
+        
         
         for gas_desc in gas_descriptors:
             key = (gas_desc.gas_id, gas_desc.iso_id, ambient_gas)
             
             if key not in self.data:
                 _lgr.warning(f'Cannot retrieve data for {gas_desc} and {ambient_gas=} as there is no entry in database that matches. Entries are {list(self.data.keys())}')
-                result[gas_desc] = None
+                #result[gas_desc] = None
                 continue
             
             x = self.data[key]
-            result[gas_desc] = x[(vmin <= x.NU) & (x.NU <= vmax)]
-        return result
+            #result[gas_desc] = x[(vmin <= x.NU) & (x.NU <= vmax)]
+            
+            line_data = np.lib.recfunctions.stack_arrays(
+                (
+                    line_data, 
+                    np.array(
+                        x[(vmin <= x.NU) & (x.NU <= vmax)],
+                        dtype = [
+                            ('RT_GAS_DESC', int, (2,)), # Radtran gas descriptor
+                            ('NU', float), # Transition wavenumber (cm^{-1})
+                            ('SW', float), # transition intensity (weighted by isotopologue abundance) (cm^{-1} / molec_cm^{-2})
+                            ('A', float), # einstein-A coeifficient (s^{-1})
+                            ('GAMMA_AMB', float), # ambient gas broadening coefficient (cm^{-1} atm^{-1})
+                            ('N_AMB', float), # temperature dependent exponent for `gamma_amb` (NUMBER)
+                            ('DELTA_AMB', float), # ambient gas pressure induced line-shift (cm^{-1} atm^{-1})
+                            ('GAMMA_SELF', float), # self broadening coefficient (cm^{-1} atm^{-1})
+                            ('N_SELF', float), # temperature dependent exponent for `gamma_self` (NUMBER)
+                            ('ELOWER', float), # lower state energy (cm^{-1})
+                        ]
+                    ).view(np.recarray)
+                ),
+                defaults=None,
+                usemask = False,
+                asrecarray=True,
+                autoconvert=False
+            )
+            
+        #return result
+        return line_data

@@ -482,6 +482,8 @@ class LineData_0:
         QTs = np.empty((self.line_data.shape[0],), dtype=float)
         
         for gas_desc, gas_partition_data in self.partition_data_dict.items():
+            if gas_partition_data.size == 0:
+                continue
             QTs[self.get_line_data_gas_desc_mask(gas_desc)] = np.interp(T, gas_partition_data.TEMP, gas_partition_data.Q)
         
         return QTs

@@ -24,8 +24,8 @@ from ..datatypes.hitran.gas_descriptor import HitranGasDescriptor
 
 import logging
 _lgr = logging.getLogger(__name__)
-#_lgr.setLevel(logging.INFO)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
+#_lgr.setLevel(logging.DEBUG)
 
 # NOTE: HAPI does not differentiate between an actual failure to retrieve data because of a problem vs
 #       not retrieving any data because there is no data in a wavelength range. Until I can handle those
@@ -69,6 +69,21 @@ class HITRAN(LineDatabaseProtocol):
         
     _class_gas_wavenumber_interval_to_download : dict[tuple[RadtranGasDescriptor, ans.enums.AmbientGas], WaveRange] = dict() 
     
+    _paramter_name_template = (
+        'nu',
+        'sw',
+        'a',
+        'gamma_AMBGAS',
+        'n_AMBGAS',
+        'delta_AMBGAS',
+        'gamma_self',
+        'n_self', # NOTE: This may be missing, in that case it is assumed to be equal to n_air
+        'elower',
+        # NOTE: attributes below this line are retrieved just incase we need them
+        'gamma_air', # NOTE: always fetch `gamma_air` so we can substitute it for `gamma_str` if that value is missing
+        'n_air', # NOTE: here as we always fetch this value as we do not know if 'n_self' will be different or not
+        'delta_air', # NOTE: always fetch `delta_air` so we can substitute it for `delta_str` if that value is missing
+    )
     
     @classmethod
     def set_class_local_storage_dir(cls, local_storage_dir : str):
@@ -161,6 +176,16 @@ class HITRAN(LineDatabaseProtocol):
         return gamma_str, n_str, delta_str
     
     @staticmethod
+    def get_parameter_name_strings(ambient_gas : ans.enums.AmbientGas) -> tuple[str,...]:
+        gamma_str, n_str, delta_str = HITRAN.get_ambient_gas_parameter_name_strings(ambient_gas)
+        substitutes = {
+            'gamma_AMBGAS' : gamma_str,
+            'n_AMBGAS' : n_str,
+            'delta_AMBGAS' : delta_str,
+        }
+        return tuple(substitutes.get(x, x) for x in  HITRAN._paramter_name_template)
+    
+    @staticmethod
     def get_ambient_gas_column_name_strings(ambient_gas : ans.enums.AmbientGas) -> tuple[str,str,str]:
         """
         HAPI column names have gas in LOWERCASE (including 'air')
@@ -181,11 +206,23 @@ class HITRAN(LineDatabaseProtocol):
         
         return gamma_str, n_str, delta_str
     
+    @staticmethod
+    def get_column_name_strings(ambient_gas : ans.enums.AmbientGas) -> tuple[str,...]:
+        gamma_str, n_str, delta_str = HITRAN.get_ambient_gas_column_name_strings(ambient_gas)
+        substitutes = {
+            'gamma_AMBGAS' : gamma_str,
+            'n_AMBGAS' : n_str,
+            'delta_AMBGAS' : delta_str,
+        }
+        return tuple(substitutes.get(x, x) for x in  HITRAN._paramter_name_template)
+    
     def __init__(
             self,
             local_storage_dir : None | str = None,
+            fallback_to_air_broadening_flag : bool = True,
         ):
         self.init_database(local_storage_dir)
+        self.fallback_to_air_broadening_flag : bool = fallback_to_air_broadening_flag
     
     @property
     def ready(self) -> bool:
@@ -426,20 +463,9 @@ class HITRAN(LineDatabaseProtocol):
             
             vmin, vmax = wave_range.as_unit(ans.enums.WaveUnit.Wavenumber_cm).values()
             
-            gamma_str, n_str, delta_str = self.get_ambient_gas_parameter_name_strings(ambient_gas)
-            parameters = (
-                'nu',
-                'sw',
-                'a',
-                gamma_str,
-                n_str,
-                delta_str,
-                'gamma_self',
-                'n_self', # NOTE: This may be missing, in that case it is assumed to be equal to n_air
-                'elower',
-                'n_air', # NOTE: here so we always fetch this value as we do not know if 'n_self' will be different or not
-            )
+            parameters = self.get_parameter_name_strings(ambient_gas)
             _lgr.debug(f'Fetching the following parameters from HITRAN: {parameters}')
+            
             try:
                 hapi.fetch(
                     self.get_tablename_from_props(gas_desc, ambient_gas),
@@ -512,19 +538,9 @@ class HITRAN(LineDatabaseProtocol):
         ).view(np.recarray)
         
         vmin, vmax = wave_range.values()
+
         gamma_str, n_str, delta_str = self.get_ambient_gas_column_name_strings(ambient_gas)
-        col_names = (
-            'nu',
-            'sw',
-            'a',
-            gamma_str,
-            n_str,
-            delta_str,
-            'gamma_self',
-            'n_self', # NOTE: This may be missing, in that case it is assumed to be equal to n_air
-            'elower',
-            'n_air', # NOTE: here as we always fetch this value as we do not know if 'n_self' will be different or not
-        )
+        hapi_col_names = self.get_column_name_strings(ambient_gas)
         
         for gas_desc in gas_descs:
             _lgr.debug(f'{gas_desc=}')
@@ -561,28 +577,61 @@ class HITRAN(LineDatabaseProtocol):
                     [(gas_desc.gas_id, gas_desc.iso_id)]*n_rows, 
                     *hapi.getColumns(
                         temp_line_data_table_name,
-                        col_names
+                        hapi_col_names
                     )
                 ]
+                col_names = ('gas_id', *hapi_col_names)
                 
                 with warnings.catch_warnings():
                     warnings.simplefilter('default', UserWarning)
                     
                     # If we don't have any 'n_self' values, replace 'n_self' with final 'n_air' column
                     # Then, drop final 'n_air' column as we don't need it
-                    n_self_tmp = np.ma.array(cols[-3], dtype=float)
-                    n_self = np.array(cols[-1], dtype=float)
+                    col_names_subs_begin_idx = col_names.index('elower') + 1
+                    
+                    n_self_tmp = np.ma.array(cols[col_names.index('n_self')], dtype=float)
+                    n_self = np.array(cols[col_names_subs_begin_idx + col_names[col_names_subs_begin_idx:].index('n_air')], dtype=float)
                     n_self[~n_self_tmp.mask] = n_self_tmp[~n_self_tmp.mask]
+                    cols[col_names.index('n_self')] = n_self
                     
-                    cols[-3] = n_self
-                    cols = cols[:-1]
+                    if self.fallback_to_air_broadening_flag:
+                        fallback_from_to = (
+                            (gamma_str, 'gamma_air'), 
+                            (n_str, 'n_air'),
+                            (delta_str, 'delta_air')
+                        )
+                        for fb_from_col, fb_to_col in fallback_from_to:
+                            orig_col = np.ma.array(cols[col_names.index(fb_from_col)], dtype=float)
+                            if np.any(orig_col.mask):
+                                new_col = np.ma.array(cols[col_names_subs_begin_idx + col_names[col_names_subs_begin_idx:].index(fb_to_col)], dtype=float)
+                                new_col[~orig_col.mask] = orig_col[~orig_col.mask]
+                                cols[col_names.index(fb_from_col)] = new_col.data
+                                
+                                _lgr.warn(f'Gas {gas_desc.gas_name} isotope {gas_desc.iso_id} "{gas_desc.isotope_name}" with ambient gas "{ambient_gas.name}" is falling back some values in column "{fb_from_col}" to values in column "{fb_to_col}". This is because the `fallback_to_air_broadening_flag` is set to "{self.fallback_to_air_broadening_flag}"')
+                                _lgr.debug(f'{orig_col=}')
+                                _lgr.debug(f'{np.any(orig_col.mask)=}')
+                                _lgr.debug(f'{new_col=}')
+                                _lgr.debug(f'{np.any(new_col.mask)=}')
+                                
+                                if np.any(new_col.mask):
+                                    raise RuntimeError(f'Gas {gas_desc.gas_name} isotope {gas_desc.iso_id} "{gas_desc.isotope_name}" with ambient gas "{ambient_gas.name}" fallback from column "{fb_from_col}" to column "{fb_to_col}" FAILED. There are some missing values in "{fb_to_col}".')
+                                
+                    cols = cols[:col_names_subs_begin_idx]
+                    col_names = col_names[:col_names_subs_begin_idx]
                     
+                    assert len(cols) == len(col_names), f"Must have same number of columns as names for columns. But have {len(cols)} cols and {len(col_names)} names"
+                    
+                    #_lgr.debug(f'{cols=}')
                     _lgr.debug(f'{len(cols)=} {[len(c) for c in cols]=}')
+                    for i, c in enumerate(cols):
+                        _lgr.debug(f'{col_names[i]=}')
+                        _lgr.debug(f'len(Column[{i}]) = {len(c)}')
+                        #_lgr.debug(f'Column[{i}] = {c}')
                     #_lgr.debug(f'{cols[0]=}')
                     #_lgr.debug(f'{cols[1]=}')
                     #_lgr.debug(f'{cols[2]=}')
                     
-                    for i, c in enumerate(cols[1:]):
+                    for i, c in enumerate(cols):
                         missing_col_names = []
                         if isinstance(c[0], np.ma.core.MaskedConstant):
                             missing_col_names.append(col_names[i])
