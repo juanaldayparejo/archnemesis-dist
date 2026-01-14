@@ -298,7 +298,7 @@ class LineData_0:
         """
         return np.logical_and((self.line_data.RT_GAS_DESC[:,0] == rt_gas_desc.gas_id),(self.line_data.RT_GAS_DESC[:,1] == rt_gas_desc.iso_id))
     
-    def group_line_derived_array_by_gas_desc(self, array : np.ndarray[['N_GAS_LINES',...],Any]) -> dict[RadtranGasDescriptor, np.ndarray]:
+    def group_line_derived_array_by_gas_desc(self, array : np.ndarray[['N_LINES_OF_GAS',...],Any]) -> dict[RadtranGasDescriptor, np.ndarray]:
         """
         Take an `array` and group it in the same way as `self.line_data` would be grouped by `RadtranGasDescriptor` to form `self.line_data_dict`.
         Used to separate e.g. calculated Line Strengths into a dictionary that has Line Strengths for each constitudent isotope.
