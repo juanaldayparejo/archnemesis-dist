@@ -1,4 +1,4 @@
-from __future__ import annotations #  for 3.9 compatability
+
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -47,14 +47,15 @@ from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
 # Logging
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
+#_lgr.setLevel(logging.DEBUG)
 
 if TYPE_CHECKING:
     NWAVE = "Number of wave points"
 
 # TODO: 
 # * Account for HITRAN weighting by terrestrial abundances .
-#   NOTE: do this in the HITRAN.py file, not here as ideally LineData_0 would give 
+#   NOTE: do this correction in the HITRAN.py file, not here as ideally LineData_0 would give 
 #         line strengths and absorption coefficients per unit of gas (e.g. per column density,
 #         per gram, per mole, something like that) the exact unit to be worked out later.
 # * Natural Broadening
@@ -63,6 +64,19 @@ if TYPE_CHECKING:
 #   a gas mixture.
 # * Additional lineshapes, have a look at https://www.degruyterbrill.com/document/doi/10.1515/pac-2014-0208/html
 
+# TODO: Instead of dictionaries change `line_data` and `partition_data` to be available as big arrays with `gas_id` and `iso_id` fields
+# or maybe just `iso_id` fields as these are only for one gas at a time.
+# 
+# Either `partition_data` is combined into the giant array, or it can be in a seprate array and looked up based on `gas_id` and `iso_id`.
+#
+# Only partition functions and abundances are isotope dependent so after those are accounted for, one large array is a perfectly good
+# structure to have the data in.
+
+# TODO: Speed up molecular mass lookup for each isotopologue
+
+if TYPE_CHECKING:
+    N_LINES_OF_GAS = 'Number of lines for a gas isotopologue'
+    N_TEMPS_OF_GAS = 'Number of temperature points for a gas isotopologue'
 
 
 class LineData_0:
@@ -105,11 +119,13 @@ class LineData_0:
         Attributes
         ----------
         
-        @attribute line_data : None | archnemsis.database.protocols.LineDataProtocol
+        @attribute line_data : None | dict[RadtranGasDescriptor, archnemsis.database.protocols.LineDataProtocol]
             An object (normally a numpy record array) that implements the `archnemsis.database.protocols.LineDataProtocol`
             protocol. If `None` the data has not been retrieved from the database yet.
             
             If not `None` will have the following attributes:
+                RT_GAS_DESC : np.array[['N_LINES_OF_GAS'], (int,int)]
+                    Radtran gas descriptor
                 
                 NU : np.ndarray[['N_LINES_OF_GAS'],float]
                     Transition wavenumber (cm^{-1})
@@ -135,7 +151,7 @@ class LineData_0:
                 ELOWER : np.ndarray[['N_LINES_OF_GAS'],float] 
                     Lower state energy (cm^{-1})
         
-        @attribute partition_data : None | archnemsis.database.protocols.PartitionFunctionDataProtocol
+        @attribute partition_data : None | dict[GasDescriptor, archnemsis.database.protocols.PartitionFunctionDataProtocol]
             An object (normally a numpy record array) that implements the `archnemsis.database.protocols.PartitionFunctionDataProtocol`
             protocol. If `None` the data has not been retrieved from the database yet.
             
@@ -210,6 +226,46 @@ class LineData_0:
     @property
     def gas_isotopes(self) -> GasIsotopes:
         return GasIsotopes(self.ID, self.ISO)
+    
+    @property
+    def line_data_dict(self) -> dict[RadtranGasDescriptor, ans.database.protocols.LineDataProtocol]:
+        if self.line_data is None:
+            return dict((rt_gas_desc, None) for rt_gas_desc in self.gas_isotopes.as_radtran_gasses())
+        
+        _lgr.debug(f'{self.line_data.RT_GAS_DESC.dtype=}')
+        _lgr.debug(f'{self.line_data.RT_GAS_DESC.shape=}')
+        _lgr.debug(f'{self.line_data.RT_GAS_DESC=}')
+        
+        _ldd = {}
+        for rt_gas_desc in self.gas_isotopes.as_radtran_gasses():
+            _lgr.debug(f'{len(self.get_line_data_gas_desc_mask(rt_gas_desc))=}')
+            _lgr.debug(f'{type(self.get_line_data_gas_desc_mask(rt_gas_desc))=}')
+            _lgr.debug(f'{self.get_line_data_gas_desc_mask(rt_gas_desc).dtype=}')
+            _lgr.debug(f'{np.count_nonzero(self.get_line_data_gas_desc_mask(rt_gas_desc))=}')
+            
+            _ldd[rt_gas_desc] = self.line_data[self.get_line_data_gas_desc_mask(rt_gas_desc)]
+        
+        return _ldd
+    
+    
+    @property
+    def partition_data_dict(self) -> dict[RadtranGasDescriptor, ans.database.protocols.PartitionFunctionDataProtocol]:
+        if self.line_data is None:
+            return dict((rt_gas_desc, None) for rt_gas_desc in self.gas_isotopes.as_radtran_gasses())
+        
+        
+        _lgr.debug(f'{self.partition_data.RT_GAS_DESC.dtype=}')
+        _lgr.debug(f'{self.partition_data.RT_GAS_DESC.shape=}')
+        _lgr.debug(f'{self.partition_data.RT_GAS_DESC=}')
+        
+        _pfdd = {}
+        for rt_gas_desc in self.gas_isotopes.as_radtran_gasses():
+            _pfdd[rt_gas_desc] = self.partition_data[
+                self.get_partition_data_gas_desc_mask(rt_gas_desc)
+            ]
+        
+        return _pfdd
+
 
     def __repr__(self) -> str:
         return f'LineData_0(ID={self.ID}, ISO={self.ISO}, ambient_gas={self.ambient_gas}, is_line_data_ready={self.is_line_data_ready()}, is_partition_function_ready={self.is_partition_function_ready()}, database={self._database})'
@@ -233,11 +289,29 @@ class LineData_0:
             raise ValueError(f"ID must be greater than 0, got {self.ID}")
         if self.ISO < 0:   
             raise ValueError(f"ISO must be greater than or equal to 0, got {self.ISO}")
-        
+    
     ###########################################################################################################################
+    
+    def get_line_data_gas_desc_mask(self, rt_gas_desc : RadtranGasDescriptor) -> np.ndarray[bool]:
+        """
+        Returns a boolean mask of the same shape as `self.line_data` that is True where the isotopologues is the same as in `rt_gas_desc`
+        """
+        return np.logical_and((self.line_data.RT_GAS_DESC[:,0] == rt_gas_desc.gas_id),(self.line_data.RT_GAS_DESC[:,1] == rt_gas_desc.iso_id))
+    
+    def group_line_derived_array_by_gas_desc(self, array : np.ndarray[['N_LINES_OF_GAS',...],Any]) -> dict[RadtranGasDescriptor, np.ndarray]:
+        """
+        Take an `array` and group it in the same way as `self.line_data` would be grouped by `RadtranGasDescriptor` to form `self.line_data_dict`.
+        Used to separate e.g. calculated Line Strengths into a dictionary that has Line Strengths for each constitudent isotope.
+        """
+        _ldd = {}
+        assert array.shape[0] == self.line_data.shape[0], "Array to be grouped must have the same shape in the 1st dimension as `self.line_data`"
+        for rt_gas_desc in self.gas_isotopes.as_radtran_gasses():
+            _ldd[rt_gas_desc] = array[self.get_line_data_gas_desc_mask(rt_gas_desc)]
+        return _ldd
     
     def is_line_data_ready(self) -> bool:
         """
+        Tests if `self.line_data` has data stored in it or not.
         """
         if self.line_data is None:
             return False
@@ -271,12 +345,14 @@ class LineData_0:
                 If True will remove any gases from `self.line_data` that return
                 a zero size or return None from the database (i.e. no data available 
                 for that gas/isotope).
+        
+        # SIDE EFFECT #
+            Sets LineData_0.line_data as something that follows LineDataProtocol
         """
         assert vmin < vmax, f'Mimimum wave ({vmin}) must be less than maximum wave ({vmax})'
         
         # Turn wavelength range in to Wavenumbers cm^{-1} for internal use
         wave_range = WaveRange(vmin, vmax, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm)
-        
     
         if refresh or not self.is_line_data_ready():
             self.line_data = self.LINE_DATABASE.get_line_data(
@@ -288,28 +364,34 @@ class LineData_0:
         else:
             _lgr.info('Line data already loaded')
         
+        line_data_dict = self.line_data_dict
+        
         if cull_empty:
             gasses_to_remove = []
             isotopes_to_keep = []
-            for gas_desc,v in self.line_data.items():
+            for gas_desc,v in line_data_dict.items():
                 if v is None or v.size == 0:
                     gasses_to_remove.append(gas_desc)
                 else:
                     isotopes_to_keep.append(gas_desc.iso_id)
             
             if len(gasses_to_remove) > 0:
-                for gas_desc in gasses_to_remove:
-                    _lgr.info(f'Removing gas {gas_desc} from line data as no data was retrieved from database')
-                    del self.line_data[gas_desc]
                 self.ISO = tuple(sorted(isotopes_to_keep))
         
-        for gas_desc,v in self.line_data.items():
-            if v is None:
-                _lgr.warning(f'Database does not recognise gas {gas_desc} returned `None` for line_data, it should not be included further calculations. If strange things happen, try not including this isotope.')
+        return
         
     ###########################################################################################################################
     
+    def get_partition_data_gas_desc_mask(self, rt_gas_desc : RadtranGasDescriptor) -> np.ndarray[bool]:
+        """
+        Returns a boolean mask of the same shape as `self.partition_data` that is True where the isotopologue is the same as in `rt_gas_desc`
+        """
+        return np.logical_and((self.partition_data.RT_GAS_DESC[:,0] == rt_gas_desc.gas_id), (self.partition_data.RT_GAS_DESC[:,1] == rt_gas_desc.iso_id))
+    
     def is_partition_function_ready(self) -> bool:
+        """
+        Tests if `self.partition_data` has data stored it in or not
+        """
         return self.partition_data is not None
     
     def fetch_partition_function(self, refresh : bool = False) -> None:
@@ -336,7 +418,7 @@ class LineData_0:
     def calculate_doppler_width(
             self, 
             temp: float, 
-    ) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
+    ) -> np.ndarray[['N_LINES_OF_GAS'], float]:
         """
         Calculate Doppler width (HWHM), broadening due to thermal motion.
         NOTE: To get the standard deviation of the gaussian, multiply HWHM by 1/sqrt(2*ln(2))
@@ -356,15 +438,9 @@ class LineData_0:
         """
         doppler_width_const_cgs : float  = (1.0 / Data.constants.c_light_cgs) * np.sqrt(2 * np.log(2) * Data.constants.N_avogadro * Data.constants.k_boltzmann_cgs)
         _lgr.debug(f'{doppler_width_const_cgs=}')
-        dws = dict() # result
         
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            gas_line_data = self.line_data[gas_desc]
-            if gas_line_data is None:
-                dws[gas_desc] = np.nan
-                continue
-            
-            dws[gas_desc] = doppler_width_const_cgs * gas_line_data.NU * np.sqrt( temp / gas_desc.molecular_mass)
+        mol_masses = np.array([RadtranGasDescriptor(*x).molecular_mass for x in self.line_data.RT_GAS_DESC]) # This lookup is slow
+        dws = doppler_width_const_cgs * self.line_data.NU * np.sqrt( temp / mol_masses)
         
         _lgr.debug(dws)
         return dws
@@ -375,44 +451,24 @@ class LineData_0:
             temp: float,
             amb_frac: float, # fraction of ambient gas
             tref : float = 296,
-    ) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
+    ) -> np.ndarray[['N_LINES_OF_GAS'], float]:
         """
         Calculate pressure-broadened width HWHM (half-width-half-maximum) of cauchy-lorentz distribution.
         """
         _lgr.debug(f'{press=} {temp=} {amb_frac=} {tref=}')
         
-        lws = dict() # result
-        
         tratio = tref/temp
         
-        ONCE_FLAG=True
-        
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            gas_line_data = self.line_data[gas_desc]
-            
-            
-            if (_lgr.level == logging.DEBUG) and ONCE_FLAG:
-                _lgr.debug(f'{gas_line_data.N_AMB=}')
-                _lgr.debug(f'{gas_line_data.GAMMA_AMB=}')
-                _lgr.debug(f'{gas_line_data.N_SELF=}')
-                _lgr.debug(f'{gas_line_data.GAMMA_SELF=}')
-                ONCE_FLAG=False
-            
-            if gas_line_data is None:
-                lws[gas_desc] = np.nan
-                continue
-            
-            lws[gas_desc] = (
-                (tratio**gas_line_data.N_AMB) * gas_line_data.GAMMA_AMB * amb_frac 
-                 + (tratio**gas_line_data.N_SELF) * gas_line_data.GAMMA_SELF *  (1-amb_frac)
-            ) * press
-            
+        lws = (
+            (tratio**self.line_data.N_AMB) * self.line_data.GAMMA_AMB * amb_frac 
+                 + (tratio**self.line_data.N_SELF) * self.line_data.GAMMA_SELF *  (1-amb_frac)
+        ) * press
         
         _lgr.debug(lws)
         return lws
     
     
-    def calculate_partition_sums(self,T) -> dict[RadtranGasDescriptor, float]:
+    def calculate_partition_sums(self,T) -> np.ndarray[['N_LINES_OF_GAS'], float]:
         """
         Calculate the partition functions at any arbitrary temperature
 
@@ -420,23 +476,25 @@ class LineData_0:
             T (float): Temperature (K)
 
         Returns:
-            QT : np.ndarray[['N_GAS_ISOTOPES'], float]
-                Partition functions for each of the isotopes at temperature T 
+            QT : np.ndarray[['N_LINES_OF_GAS'], float]
+                Partition functions for lines at temperature T 
         """
-        QTs = dict() # result
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            gas_partition_data = self.partition_data[gas_desc]
-            if gas_partition_data is None:
-                QTs[gas_desc] = np.nan
+        QTs = np.empty((self.line_data.shape[0],), dtype=float)
+        
+        for gas_desc, gas_partition_data in self.partition_data_dict.items():
+            if gas_partition_data.size == 0:
                 continue
-            
-            QTs[gas_desc] = np.interp(T, gas_partition_data.TEMP, gas_partition_data.Q)
+            QTs[self.get_line_data_gas_desc_mask(gas_desc)] = np.interp(T, gas_partition_data.TEMP, gas_partition_data.Q)
         
         return QTs
         
     ###########################################################################################################################
     
-    def calculate_line_strength(self,T,Tref=296.) -> dict[RadtranGasDescriptor, np.ndarray[['NWAVE'], float]]:
+    def calculate_line_strength(
+            self,
+            T,
+            Tref=296.0
+    ) -> np.ndarray[['N_LINES_OF_GAS'], float]:
         """
         Calculate the line strengths at any arbitrary temperature
 
@@ -445,36 +503,33 @@ class LineData_0:
             Tref (float) :: Reference temperature at which the line strengths are listed (default 296 K)
 
         Returns:
-            line_strengths : dict[RadtranGasDescriptor, np.ndarray[['N_GAS_LINES'], float]
+            line_strengths : np.ndarray[['N_GAS_LINES'], float]
                 Line strengths at temperature T
         """
         
-        line_strengths = dict() # result
-        
         qT = self.calculate_partition_sums(T)
         qTref = self.calculate_partition_sums(Tref)
+        
+        _lgr.debug(f'{qT.shape=}')
+        _lgr.debug(f'{qTref.shape=}')
         
         _lgr.debug(f'{Data.constants.c2_cgs=}')
         
         
         t_factor = Data.constants.c2_cgs * (T - Tref)/(T*Tref)
+        _lgr.debug(f'{t_factor=}')
         
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            gas_line_data = self.line_data[gas_desc]
-            if gas_line_data is None:
-                line_strengths[gas_desc] = np.zeros((0,),dtype=float)
-                continue
+        q_ratio = qTref / qT
+        _lgr.debug(f'{q_ratio.shape=}')
             
-            # Partition function ratio
-            q_ratio = qTref[gas_desc] / qT[gas_desc]
-            
-            boltz = np.exp(t_factor*gas_line_data.ELOWER)
-            
-            stim = ( 1 - np.exp(-Data.constants.c2_cgs*gas_line_data.NU/T)) / ( 1 - np.exp(-Data.constants.c2_cgs*gas_line_data.NU/Tref))
-            
-            line_strengths[gas_desc] = gas_line_data.SW * q_ratio * boltz * stim
-            
-            # Take into account abundances here?
+        boltz = np.exp(t_factor*self.line_data.ELOWER)
+        _lgr.debug(f'{boltz.shape=}')
+        
+        stim = ( 1 - np.exp(-Data.constants.c2_cgs*self.line_data.NU/T)) / ( 1 - np.exp(-Data.constants.c2_cgs*self.line_data.NU/Tref))
+        _lgr.debug(f'{stim.shape=}')
+        
+        line_strengths = self.line_data.SW * q_ratio * boltz * stim
+        _lgr.debug(f'{line_strengths.shape=}')
         
         return line_strengths
     
@@ -487,23 +542,43 @@ class LineData_0:
             alpha_d : float, # line doppler width (gaussinan HWHM)
             gamma_l : float, # line lorentz width (cauchy-lorentz HWHM)
             lineshape_fn : Callable[[np.ndarray, float], np.ndarray], # function that calculates line shape
-            line_integral_points_delta_wn : np.ndarray,
+            line_integral_points_delta_wn : np.ndarray, # points to integrate lineshape at in wavenumber difference from line center.
             TEST : bool = False,
     ) -> np.ndarray:
         """
-        Calculates line absorbtion at `delta_wn` wavenumber difference from line center
-        for a `lineshape_fn`. Return absorption coefficient (cm^2 at `delta_wn` cm^{-1})
+        Calculates line absorbtion for bins with edges at `delta_wn_edges` wavenumber difference from line center
+        for a `lineshape_fn`.
+        
+        Accounts for the lineshape not being constant across a wavenumber bin by working out
+        the fraction of a lineshape that fills each wavenumber bin.
+        
+        As this works on wavenumber bins, must divide by size of wavenumber bins eventually.
+        
+        Used inside `calculate_absorption_in_bins`.
+        
+        # RETURNS # 
+            abs_coeff : np.ndarray
+                Absorption coefficient per wavenumber (cm^2 at `delta_wn` cm^{-1}), integrate across wavenumbers to get
         """
         #return strength* lineshape_fn(0.5*np.sum(delta_wn_edges,axis=0), alpha_d, gamma_l) # TESTING just using lineshape, no integral
         
         # Get value of absorption coefficient at all integration points
         # do this here so we don't have to repeat the calculation of endpoints.
-        ls_at_ip = lineshape_fn(line_integral_points_delta_wn, alpha_d, gamma_l)
+        
+        # get value of lineshape at integration points
+        ls_at_ip = lineshape_fn(line_integral_points_delta_wn, alpha_d, gamma_l) 
+        
+        # get integral of lineshape at each integration point
         integral_ls_at_ip = sp.integrate.cumulative_simpson(ls_at_ip, x=line_integral_points_delta_wn, initial=0)
         
-        # Assume symmetric so perform small fix
-        integral_ls_at_ip += (1 - integral_ls_at_ip[-1])/2
+        # Perform fix for lineshape integral starting at zero
+        # Assume integration points are symmetric about the lineshape center
+        # integral should always sum to 1
+        # therefore, can add 1/2 of residual to each integral, the remaining 1/2 of residual
+        # is after the last integration point.
+        integral_ls_at_ip += (1 - integral_ls_at_ip[-1])/2 
         
+        # Get the integral of the lineshape at wavenumber bin edges
         wn_edges_int = np.interp(
             delta_wn_edges,
             line_integral_points_delta_wn,
@@ -512,6 +587,10 @@ class LineData_0:
             right=1
         )
         
+        # The fraction of the lineshape in each wavenumber bin is the difference between
+        # the lineshape's integral at the wavenumber bin edges.
+        # Divide by the size of the wavenumber bin to get the fraction of lineshape in each
+        # wavenumber in each wavenumber bin.
         lineshape = (wn_edges_int[1] - wn_edges_int[0]) / (delta_wn_edges[1]-delta_wn_edges[0])
         
         if TEST:
@@ -626,6 +705,14 @@ class LineData_0:
         Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}) multiplied by a factor of 1E20. 
         Returns the value for a single molecule at the specified temperature, pressure, and ambient gas fraction.
         
+        Calculates in bins that have `waves` as midpoints. Bin edges are assumed to be half-way between each midpoint,
+        and the first and last bins are assumed to be symmetric around their midpoints.
+        
+        More exact but much slower than `calculate_monochromatic_absorption` as this tries to account for
+        all lines within a bin.
+        
+        Uses `calculate_line_absorption_in_bins` to get absorption coefficient in each bin for each line.
+        
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
         INFO_ONCE_FLAG = False
@@ -706,76 +793,80 @@ class LineData_0:
 
         _lgr.debug(f'line_integral_points_delta_wn={line_integral_points_delta_wn}')
         
-        strengths = self.calculate_line_strength(temp, tref)
-        alpha_ds = self.calculate_doppler_width(temp)
-        gamma_ls = self.calculate_lorentz_width(press, temp, amb_frac, tref)
+        strengths = self.group_line_derived_array_by_gas_desc(self.calculate_line_strength(temp, tref))
+        alpha_ds = self.group_line_derived_array_by_gas_desc(self.calculate_doppler_width(temp))
+        gamma_ls = self.group_line_derived_array_by_gas_desc(self.calculate_lorentz_width(press, temp, amb_frac, tref))
         
         k_total = np.zeros_like(wave_midpoints, dtype=float) # define here and re-use the memory
         
+        radtran_gasses = tuple(self.gas_isotopes.as_radtran_gasses())
         
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
-            gas_line_data = self.line_data[gas_desc]
         
-            if gas_line_data is None:
-                abs_coeffs[gas_desc] = np.zeros_like(wave_midpoints, dtype=float) # All zeros for gasses that are not present in database
-                continue
-            else:
-                # need a new array for each gas, need to define it before using as want to place values in in a specific order
-                abs_coeffs[gas_desc] = np.zeros_like(wave_midpoints, dtype=float) 
-            
-            k_total *= 0.0 # reset 
-            
-        
-            strength = strengths[gas_desc]
-            alpha_d = alpha_ds[gas_desc]
-            gamma_l = gamma_ls[gas_desc]
-            
-            mask_lines_above_min_wave= gas_line_data.NU >= (wave_edges[0,0] - line_calculation_wavenumber_window)
-            mask_lines_below_max_wave = gas_line_data.NU <= (wave_edges[1,-1] - line_calculation_wavenumber_window)
-            line_idxs_to_include = np.nonzero(mask_lines_above_min_wave & mask_lines_below_max_wave)
-            idx_min = np.min(line_idxs_to_include)
-            idx_max = np.max(line_idxs_to_include)
-            n_lines = idx_max - idx_min
-            _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
-            
-            progress_tracker = SimpleProgressTracker(n_lines, f"Computing line contributions from {gas_desc}. ", 5, target_logger=_lgr)
-            
-            for _j, line_idx in enumerate(range(idx_min, idx_max)):
-                if _j % n_line_progress == 0:
-                    progress_tracker.n = _j
-                    progress_tracker.log_at(logging.INFO)
+        with SimpleProgressTracker('Wavenumber bin absorption coefficient calculation', len(radtran_gasses), output_target=_lgr) as prog_tracker_1:
+            for i, (gas_desc, gas_line_data) in enumerate(self.line_data_dict.items()):
+                _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
                 
-                if strength[line_idx] < line_strength_cutoff:
+                prog_tracker_1.display()
+            
+                if gas_line_data is None or gas_line_data.size == 0:
+                    abs_coeffs[gas_desc] = np.zeros_like(wave_midpoints, dtype=float) # All zeros for gasses that are not present in database
                     continue
-            
-                line_wn_mask = np.abs(wave_midpoints - gas_line_data.NU[line_idx]) < line_calculation_wavenumber_window
-                n_line_wn_mask = np.count_nonzero(line_wn_mask)
-
+                else:
+                    # need a new array for each gas, need to define it before using as want to place values in in a specific order
+                    abs_coeffs[gas_desc] = np.zeros_like(wave_midpoints, dtype=float) 
                 
-                if n_line_wn_mask > 0:
-                    delta_wn_edges = wave_edges[:, line_wn_mask] - gas_line_data.NU[line_idx]
+                k_total *= 0.0 # reset 
+                
+            
+                strength = strengths[gas_desc]
+                alpha_d = alpha_ds[gas_desc]
+                gamma_l = gamma_ls[gas_desc]
+                
+                mask_lines_above_min_wave= gas_line_data.NU >= (wave_edges[0,0] - line_calculation_wavenumber_window)
+                mask_lines_below_max_wave = gas_line_data.NU <= (wave_edges[1,-1] - line_calculation_wavenumber_window)
+                line_idxs_to_include = np.nonzero(mask_lines_above_min_wave & mask_lines_below_max_wave)
+                idx_min = np.min(line_idxs_to_include)
+                idx_max = np.max(line_idxs_to_include)
+                n_lines = idx_max - idx_min
+                _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
+                
+                
+                with SimpleProgressTracker(f"Computing line contributions from {gas_desc}", n_lines, display_interval_n = n_line_progress, output_target=_lgr) as prog_tracker_2:
+                    for _j, line_idx in enumerate(range(idx_min, idx_max)):
+                        prog_tracker_2.display()
+                        
+                        if strength[line_idx] < line_strength_cutoff:
+                            continue
                     
-                    k_total[line_wn_mask] += self.calculate_line_absorption_in_bins(
-                        delta_wn_edges,
-                        strength[line_idx],
-                        alpha_d[line_idx],
-                        gamma_l[line_idx],
-                        lineshape_fn,
-                        line_integral_points_delta_wn,
-                        TEST = TEST and TEST_PREDICATE(line_idx, gas_line_data.NU[line_idx])
-                    ) 
+                        line_wn_mask = np.abs(wave_midpoints - gas_line_data.NU[line_idx]) < line_calculation_wavenumber_window
+                        n_line_wn_mask = np.count_nonzero(line_wn_mask)
+
+                        
+                        if n_line_wn_mask > 0:
+                            delta_wn_edges = wave_edges[:, line_wn_mask] - gas_line_data.NU[line_idx]
+                            
+                            k_total[line_wn_mask] += self.calculate_line_absorption_in_bins(
+                                delta_wn_edges,
+                                strength[line_idx],
+                                alpha_d[line_idx],
+                                gamma_l[line_idx],
+                                lineshape_fn,
+                                line_integral_points_delta_wn,
+                                TEST = TEST and TEST_PREDICATE(line_idx, gas_line_data.NU[line_idx])
+                            ) 
+                        
+                        # Add in continuum absorption here if required
+                        if not INFO_ONCE_FLAG:
+                            _lgr.info('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
+                            INFO_ONCE_FLAG = True
+                        
+                        
+                    
+                # Ensure abs coeff are not less than zero
+                k_total[k_total<0] = 0
                 
-                # Add in continuum absorption here if required
-                if not INFO_ONCE_FLAG:
-                    _lgr.info('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
-                    INFO_ONCE_FLAG = True
-            
-            # Ensure abs coeff are not less than zero
-            k_total[k_total<0] = 0
-            
-            # put into absorption coefficient dictionary, multiply by 1E20 factor here
-            abs_coeffs[gas_desc][wav_sort_idxs] = k_total*1E20
+                # put into absorption coefficient dictionary, multiply by 1E20 factor here
+                abs_coeffs[gas_desc][wav_sort_idxs] = k_total*1E20
         
         return abs_coeffs
     
@@ -784,26 +875,34 @@ class LineData_0:
             self,
             delta_wn : np.ndarray, # wavenumber difference from line center (cm^{-1}), (NWAVE)
             mask : np.ndarray, # Boolean mask (NWAVE) that determines if absorption coefficient will be calculated from lineshape (True) or from a 1/(delta_wn^2) fit (False).
-            wide_mask : np.ndarray, # Boolean mask (NWAVE) that determines if absorption coefficient will be at all.
+            wide_mask : np.ndarray, # Boolean mask (NWAVE) that determines if absorption coefficient will be calculated from a 1/(delta_wn^2) fit (True) or not accounted for at all (False).
             strength : float, # line strength
             alpha_d : float, # line doppler width (gaussinan HWHM)
             gamma_l : float, # line lorentz width (cauchy-lorentz HWHM)
             lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # function that calculates line shape
             line_calculation_wavenumber_window : float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption, should be the same as the window used to make `mask`
-            out : np.ndarray | None = None, # if not None, will place the result into this array and return it, otherwise will create an array and return it.
+            out : np.ndarray | None = None, # if not None, will place the result into this array and return it, otherwise will create an array and return it. Allocating memory is slow, so if possible try to pre-allocate the output array and pass it in here.
     ) -> np.ndarray:
+        """
+        Calculates absorption coefficient per wavenumber (cm^2 per cm^{-1}) for a single line at 
+        a specific set of `delta_wn` wavenumber difference from the center of the line. 
+        
+        Does not use wavenumber bins, so `delta_wn` must be close enough together to 
+        approximate a continuous set of values.
+        
+        Used inside `calculate_monochromatic_absorption`
+        """
     
         # At `line_calculation_wavenumber_window` the lineshape_fn and 1/x^2 fit should be equal
         # requires that`line_calculation_wavenumber_window` was applied symmetrically around zero.
         constant = lineshape_fn(np.array([line_calculation_wavenumber_window]), alpha_d, gamma_l) * (line_calculation_wavenumber_window**2)
         
         if out is None:
-            out = np.empty_like(delta_wn)
+            out = np.zeros_like(delta_wn)
         
         out[wide_mask] = strength * constant / (delta_wn[wide_mask]**2) # calculate "continuum" contribution for the wide mask
         out[mask] = strength * lineshape_fn(delta_wn[mask], alpha_d, gamma_l) # overwrite the "center" with lineshape contribution
         return out
-    
     
     def calculate_monochromatic_absorption(
             self,
@@ -811,7 +910,7 @@ class LineData_0:
             temp : float, # kelvin
             press : float, # Atmospheres
             amb_frac : float = 1, # fraction of broadening due to ambient gas
-            wave_unit : ans.enums.waveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
+            wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
             lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # lineshape function to use
             line_calculation_wavenumber_window: float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
             tref : float = 296, # Reference temperature (Kelvin). TODO: This should be set by the database used
@@ -822,9 +921,13 @@ class LineData_0:
         Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}) multiplied by a factor of 1E20. 
         Returns the value for a single molecule at the specified temperature, pressure, and ambient gas fraction.
         
+        Faster than `calculate_absorption_in_bins` but as this function only calculates at specific wavelengths
+        not over wavelength bins, must ensure that `waves` is a fine enough grid that no important spectral
+        features are missed.
+        
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
-        INFO_ONCE_FLAG = False
+        CONT_CALC_MSG_ONCE_FLAG = False
         n_line_progress = 1000
         
         abs_coeffs = dict()
@@ -846,9 +949,9 @@ class LineData_0:
             refresh=ensure_linedata_downloaded
         )
         
-        strengths = self.calculate_line_strength(temp, tref)
-        alpha_ds = self.calculate_doppler_width(temp)
-        gamma_ls = self.calculate_lorentz_width(press, temp, amb_frac, tref)
+        strengths = self.group_line_derived_array_by_gas_desc(self.calculate_line_strength(temp, tref))
+        alpha_ds = self.group_line_derived_array_by_gas_desc(self.calculate_doppler_width(temp))
+        gamma_ls = self.group_line_derived_array_by_gas_desc(self.calculate_lorentz_width(press, temp, amb_frac, tref))
         
         # Define arrays here to re-use memory
         delta_wn = np.zeros_like(waves, dtype=float)
@@ -861,78 +964,125 @@ class LineData_0:
         wide_mask = np.zeros_like(waves, dtype=bool)
         k_total = np.zeros_like(waves, dtype=float)
         
+        radtran_gasses = tuple(self.gas_isotopes.as_radtran_gasses())
         
-        for i, gas_desc in enumerate(self.gas_isotopes.as_radtran_gasses()):
-            _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
-            gas_line_data = self.line_data[gas_desc]
-        
-            if gas_line_data is None:
-                abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) # All zeros for gasses that are not present in database
-                continue
-            else:
-                # need a new array for each gas, need to define it before using as want to place values in in a specific order
-                abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) 
-            
-            k_total.fill(0.0) # reset to all zeros
-        
-            strength = strengths[gas_desc]
-            alpha_d = alpha_ds[gas_desc]
-            gamma_l = gamma_ls[gas_desc]
-            
-            line_idxs_to_include = np.nonzero((waves[0] <= gas_line_data.NU) & (gas_line_data.NU <= waves[-1]))
-            idx_min = np.min(line_idxs_to_include)
-            idx_max = np.max(line_idxs_to_include)
-            n_lines = idx_max - idx_min
-            _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
-            
-            progress_tracker = SimpleProgressTracker(n_lines, f"Computing line contributions from {gas_desc}. ", 5, target_logger=_lgr)
-            
-            for _j, line_idx in enumerate(range(idx_min, idx_max)):
-                if _j % n_line_progress == 0:
-                    progress_tracker.n = _j
-                    progress_tracker.log_at(logging.INFO)
+        with SimpleProgressTracker("Monochromatic absorption coefficient calculation", len(radtran_gasses), output_target=_lgr) as abs_coeff_progress:
+            for i, (gas_desc, gas_line_data) in enumerate(self.line_data_dict.items()):
+                _lgr.debug(f'Getting absorbtion coefficient for {i}^th gas {gas_desc=} (of {self.gas_isotopes.n_isotopes} gasses)')
                 
-                if strength[line_idx] < line_strength_cutoff:
+                abs_coeff_progress.display()
+                            
+                if gas_line_data is None or gas_line_data.size == 0:
+                    abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) # All zeros for gasses that are not present in database
                     continue
+                else:
+                    # need a new array for each gas, need to define it before using as want to place values in in a specific order
+                    abs_coeffs[gas_desc] = np.zeros_like(waves, dtype=float) 
+                
+                k_total.fill(0.0) # reset to all zeros
             
-                scratch.fill(0.0)
+                strength = strengths[gas_desc]
+                alpha_d = alpha_ds[gas_desc]
+                gamma_l = gamma_ls[gas_desc]
                 
-                np.subtract(waves, gas_line_data.NU[line_idx], out=delta_wn)
+                line_idxs_to_include = np.nonzero((waves[0] <= gas_line_data.NU) & (gas_line_data.NU <= waves[-1]))
+                idx_min = np.min(line_idxs_to_include)
+                idx_max = np.max(line_idxs_to_include)
+                n_lines = idx_max - idx_min
+                _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
                 
-                np.less_equal(delta_wn, line_calculation_wavenumber_window, out=mask_leq)
-                np.greater_equal(delta_wn, -line_calculation_wavenumber_window, out=mask_geq)
-                np.logical_and(mask_leq, mask_geq, out=mask)
+                with SimpleProgressTracker(f"Computing line contributions from {gas_desc}. ", n_lines, display_interval_n=n_line_progress, output_target=_lgr) as line_contrib_prog:
                 
-                np.less_equal(delta_wn, 10*line_calculation_wavenumber_window, out=wide_mask_leq)
-                np.greater_equal(delta_wn, -10*line_calculation_wavenumber_window, out=wide_mask_geq)
-                np.logical_and(mask_leq, mask_geq, out=wide_mask)
+                    for _j, line_idx in enumerate(range(idx_min, idx_max)):
+                        line_contrib_prog.display()
+                        
+                        if strength[line_idx] < line_strength_cutoff:
+                            continue
+                    
+                        scratch.fill(0.0)
+                        
+                        np.subtract(waves, gas_line_data.NU[line_idx], out=delta_wn)
+                        
+                        np.less_equal(delta_wn, line_calculation_wavenumber_window, out=mask_leq)
+                        np.greater_equal(delta_wn, -line_calculation_wavenumber_window, out=mask_geq)
+                        np.logical_and(mask_leq, mask_geq, out=mask)
+                        
+                        np.less_equal(delta_wn, 10*line_calculation_wavenumber_window, out=wide_mask_leq)
+                        np.greater_equal(delta_wn, -10*line_calculation_wavenumber_window, out=wide_mask_geq)
+                        np.logical_and(wide_mask_leq, wide_mask_geq, out=wide_mask)
 
-                self.calculate_monochromatic_line_absorption(
-                    delta_wn,
-                    mask, 
-                    wide_mask,
-                    strength[line_idx],
-                    alpha_d[line_idx],
-                    gamma_l[line_idx],
-                    lineshape_fn,
-                    line_calculation_wavenumber_window,
-                    out=scratch
-                )
+                        self.calculate_monochromatic_line_absorption(
+                            delta_wn,
+                            mask, 
+                            wide_mask,
+                            strength[line_idx],
+                            alpha_d[line_idx],
+                            gamma_l[line_idx],
+                            lineshape_fn,
+                            line_calculation_wavenumber_window,
+                            out=scratch
+                        )
+                        
+                        k_total = np.add(k_total, scratch, out=k_total)
+                        
+                        # Add in continuum absorption here if required
+                        if not CONT_CALC_MSG_ONCE_FLAG:
+                            _lgr.debug('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
+                            CONT_CALC_MSG_ONCE_FLAG = True
+                        
                 
-                k_total = np.add(k_total, scratch, out=k_total)
-                
-                # Add in continuum absorption here if required
-                if not INFO_ONCE_FLAG:
-                    _lgr.info('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
-                    INFO_ONCE_FLAG = True
+                # Ensure abs coeff are not less than zero
+                k_total[k_total<0] = 0
+
+                # put into absorption coefficient dictionary, multiply by 1E20 factor here
+                abs_coeffs[gas_desc][wav_sort_idxs] = k_total*1E20
             
-            # Ensure abs coeff are not less than zero
-            k_total[k_total<0] = 0
-
-            # put into absorption coefficient dictionary, multiply by 1E20 factor here
-            abs_coeffs[gas_desc][wav_sort_idxs] = k_total*1E20
-        
         return abs_coeffs
+    
+    def calculate_monochromatic_absorption_array(
+            self,
+            waves : np.ndarray, # 1D array with shape [NWAVE]
+            temp : float, # kelvin
+            press : float, # Atmospheres
+            amb_frac : float = 1, # fraction of broadening due to ambient gas
+            wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
+            lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # lineshape function to use
+            line_calculation_wavenumber_window: float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+            tref : float = 296, # Reference temperature (Kelvin). TODO: This should be set by the database used
+            line_strength_cutoff : float = 1E-32, # Strength below which a line is ignored.
+            ensure_linedata_downloaded : bool = True,
+    ) -> np.ndarray[['NWAVE'],float]:
+        """
+        Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}) multiplied by a factor of 1E20. 
+        Returns the combined value for the gas mixture at the specified temperature, pressure, and ambient gas fraction.
+        
+        NOTE: Is currently a wrapper around `calculate_monochromatic_absorption`.
+        
+        Should be faster than `calculate_monochromatic_absorption` as we perform the calculations using numpy arrays. The 
+        calculation is split into chunks of `calc_chunk_size` to avoid out-of-memory errors.
+        
+        For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
+        """
+        
+        abs_coeff = self.calculate_monochromatic_absorption(
+            waves,
+            temp,
+            press,
+            amb_frac,
+            wave_unit,
+            lineshape_fn,
+            line_calculation_wavenumber_window,
+            tref,
+            line_strength_cutoff,
+            ensure_linedata_downloaded
+        )
+        
+        abs_coeff_combined = np.zeros_like(waves, dtype=float)
+        
+        for item in abs_coeff.values():
+            abs_coeff_combined += item
+        
+        return abs_coeff_combined
         
         
     
@@ -989,31 +1139,32 @@ class LineData_0:
         # Allocate result array
         k_total = np.zeros((len(gas_descs), n_waves, pressure_profile.size, 2), dtype=float)
         
-        progress_tracker = SimpleProgressTracker(temp_points.size, "Computing absorption coefficients of temperature-pressure profile. ", target_logger=_lgr)
+        with SimpleProgressTracker("Computing absorption coefficients of temperature-pressure profile", temp_points.size, output_target=_lgr) as pt_profile_progress:
         
-        for i, press in enumerate(pressure_profile):
-            for j, temp in enumerate(temp_points[i]):
-                progress_tracker.log_at_and_increment(logging.INFO)
-                #_lgr.info(f'Calculating absorption at temperature-pressure profile point ({i},{j}) of ({pressure_profile.size},{temp_points.shape[1]}). Progress: {i*2+j} / {temp_points.size} [{100.0*(i*2+j)/temp_points.size: 6.2f} %]')
-                abs_coeffs = calc_absorption_fn(
-                    waves, 
-                    temp, 
-                    press, 
-                    wave_unit = wave_unit,
-                    **kwargs
-                )
-                for k, v in abs_coeffs.items():
-                    x = gas_descs.index(k)
-                    k_total[x, :, i, j] = v
+            for i, press in enumerate(pressure_profile):
+                for j, temp in enumerate(temp_points[i]):
+                    pt_profile_progress.display()
                     
-                    """
-                    if (temp > 100) and (press > 7):
-                        plt.title(f'{press=}\n{temp=}')
-                        plt.plot(waves, v)
-                        plt.xlim((1.64,1.68))
-                        plt.show()
-                        sys.exit()
-                    """
+                    #_lgr.info(f'Calculating absorption at temperature-pressure profile point ({i},{j}) of ({pressure_profile.size},{temp_points.shape[1]}). Progress: {i*2+j} / {temp_points.size} [{100.0*(i*2+j)/temp_points.size: 6.2f} %]')
+                    abs_coeffs = calc_absorption_fn(
+                        waves, 
+                        temp, 
+                        press, 
+                        wave_unit = wave_unit,
+                        **kwargs
+                    )
+                    for k, v in abs_coeffs.items():
+                        x = gas_descs.index(k)
+                        k_total[x, :, i, j] = v
+                        
+                        """
+                        if (temp > 100) and (press > 7):
+                            plt.title(f'{press=}\n{temp=}')
+                            plt.plot(waves, v)
+                            plt.xlim((1.64,1.68))
+                            plt.show()
+                            sys.exit()
+                        """
         
         result = []
         
@@ -1114,11 +1265,14 @@ class LineData_0:
         combined_ax.set_title('Line data coloured by isotopologue')
         
         line_strengths_max = 0
-        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
-            gas_linedata = self.line_data[gas_desc]
+        
+        line_data_dict = self.line_data_dict
+        
+        for i, (gas_desc, gas_linedata) in enumerate(line_data_dict.items()):
+            
             if gas_linedata is None or gas_linedata.size == 0:
                 continue
-                
+            
             line_strength_mask = gas_linedata.SW >= smin
             wavenumbers = gas_linedata.NU[line_strength_mask]
             line_strengths = gas_linedata.SW[line_strength_mask]
@@ -1148,11 +1302,10 @@ class LineData_0:
         combined_ax.set_ylabel('Line strength (cm$^{-1}$ / (molec cm$^{-2}$))')
         combined_ax.set(**ax_style_defaults)
     
-        for i, gas_desc in enumerate(gas_isotopes.as_radtran_gasses()):
+        for i, (gas_desc, gas_linedata) in enumerate(line_data_dict.items()):
             ax = ax_array[i+1]
             ax.set_title(f'Line data for ${ans.Data.gas_data.molecule_to_latex(gas_desc.isotope_name)}$ (ID={int(gas_desc.gas_id)}, ISO={gas_desc.iso_id})')
             
-            gas_linedata = self.line_data[gas_desc]
             if gas_linedata is None or gas_linedata.size == 0:
                 continue
             

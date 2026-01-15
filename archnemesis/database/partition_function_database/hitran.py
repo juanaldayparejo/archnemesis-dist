@@ -1,4 +1,4 @@
-from __future__ import annotations #  for 3.9 compatability
+
 
 import numpy as np
 import numpy.ma
@@ -10,6 +10,7 @@ from ..protocols import (
 )
 
 from ..datatypes.gas_descriptor import RadtranGasDescriptor
+from ..datatypes.hitran.gas_descriptor import HitranGasDescriptor
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -68,26 +69,44 @@ class HITRAN(PartitionFunctionDatabaseProtocol):
         return self._read_partition_function_data(tuple(gas_descs))
     
     
-    def _read_partition_function_data(self, gas_descs : tuple[RadtranGasDescriptor,...]) -> dict[RadtranGasDescriptor, PartitionFunctionDataProtocol]:
-        partition_function_data = dict()
+    def _read_partition_function_data(self, gas_descs : tuple[RadtranGasDescriptor,...]) -> PartitionFunctionDataProtocol:
+        
+        partition_function_data = np.array(
+            [],
+            dtype=[
+                ('RT_GAS_DESC', int, (2,)), # Radtran gas descriptor
+                ('TEMP', float), 
+                ('Q', float)
+            ]
+        ).view(np.recarray)
         
         for gas_desc in gas_descs:
-            ht_gas = gas_desc.to_hitran()
+            ht_gas = HitranGasDescriptor.from_radtran(gas_desc)
             if ht_gas is None:
-                partition_function_data[gas_desc] = None
                 continue
             
             temps = hapi.TIPS_2021_ISOT_HASH[(ht_gas.gas_id,ht_gas.iso_id)]
             qs = hapi.TIPS_2021_ISOQ_HASH[(ht_gas.gas_id,ht_gas.iso_id)]
-            partition_function_data[gas_desc] = np.array(
-                list(zip(
-                    temps,
-                    qs
-                )),
-                dtype=[
-                    ('TEMP', float), 
-                    ('Q', float)
-                ]
-            ).view(np.recarray)
+            partition_function_data = np.lib.recfunctions.stack_arrays(
+                (
+                    partition_function_data,
+                    np.array(
+                        list(zip(
+                            [(gas_desc.gas_id, gas_desc.iso_id)]*len(temps),
+                            temps,
+                            qs
+                        )),
+                        dtype=[
+                            ('RT_GAS_DESC', int, (2,)), # Radtran gas descriptor
+                            ('TEMP', float), 
+                            ('Q', float)
+                        ]
+                    ).view(np.recarray)
+                ),
+                defaults=None,
+                usemask = False,
+                asrecarray=True,
+                autoconvert=False
+            )
         return partition_function_data
     

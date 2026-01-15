@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-from __future__ import annotations #  for 3.9 compatability
+
 
 #from archnemesis import *
 from archnemesis.enums import (
@@ -423,11 +423,13 @@ class Spectroscopy_0:
             if e==False:
                 raise ValueError('error :: Spectroscopy is not defined in HDF5 file')
             else:
-                self.NGAS = np.int32(f.get(name+'/NGAS'))
-                self.ILBL = SpectralCalculationMode(np.int32(f.get(name+'/ILBL')))
+                self.NGAS = h5py_helper.retrieve_data(f, name+'/NGAS', np.int32, default=0)
+                self.ILBL = SpectralCalculationMode(h5py_helper.retrieve_data(f, name+'/ILBL', np.int32))
 
                 if self.NGAS>0:
-                    LOCATION1 = f.get(name+'/LOCATION')
+                    LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION', default=tuple())
+                    if LOCATION1 is None:
+                        LOCATION1 = []
                     LOCATION = ['']*self.NGAS
                     for igas in range(self.NGAS):
                         LOCATION[igas] = LOCATION1[igas].decode('ascii')
@@ -725,6 +727,9 @@ class Spectroscopy_0:
                     self.TEMP = templevels
                     self.NWAVE = len(wave)
                     self.WAVE = wave
+        else:
+            self.ID = np.zeros((0,),dtype=int)
+            self.ISO = np.zeros((0,),dtype=int)
 
     ######################################################################################################
     def read_tables(self, wavemin=0., wavemax=1.0e10):
@@ -1692,13 +1697,21 @@ def read_lbltable(filename,wavemin,wavemax):
 
         #Reading header
         irec0 = np.fromfile(f,dtype='int32',count=1)[0]
+        _lgr.debug(f'{irec0=}')
         nwavelta = np.fromfile(f,dtype='int32',count=1)[0]
+        _lgr.debug(f'{nwavelta=}')
         vmin = np.fromfile(f,dtype='float32',count=1)[0]
+        _lgr.debug(f'{vmin=}')
         delv = np.fromfile(f,dtype='float32',count=1)[0]
+        _lgr.debug(f'{delv=}')
         npress = np.fromfile(f,dtype='int32',count=1)[0]
+        _lgr.debug(f'{npress=}')
         ntemp = np.fromfile(f,dtype='int32',count=1)[0]
+        _lgr.debug(f'{ntemp=}')
         gasID = np.fromfile(f,dtype='int32',count=1)[0]
+        _lgr.debug(f'{gasID=}')
         isoID = np.fromfile(f,dtype='int32',count=1)[0]
+        _lgr.debug(f'{isoID=}')
 
         # Convert explicitly rounding to 7 decimals (float32 precision)
         vmin = np.round(np.float64(vmin), decimals=7)
@@ -1717,17 +1730,19 @@ def read_lbltable(filename,wavemin,wavemax):
         vmax = vmin + delv * (nwavelta-1)
         wavelta = np.linspace(vmin,vmax,nwavelta)
 
-        ins = np.where( (wavelta>=wavemin) & (wavelta<=wavemax) )[0]
-        nwave = len(ins)
+        wn_idxs = np.nonzero( (wavemin<=wavelta) & (wavelta<=wavemax) )[0]
+        _lgr.debug(f'{wn_idxs=}')
+        
+        nwave = len(wn_idxs)
         wave = np.zeros(nwave)
-        wave[:] = wavelta[ins]
+        wave[:] = wavelta[wn_idxs]
 
         #Reading the absorption coefficients
         #######################################
         k = np.zeros([nwave,npress,abs(ntemp)])
 
         #Jumping until we get to the minimum wavenumber
-        njump = npress*abs(ntemp)*(ins[0])
+        njump = npress*abs(ntemp)*(wn_idxs[0])
         ioff = njump*nbytes_float32 + (irec0-1)*nbytes_float32
         f.seek(ioff,0)
 
@@ -1738,7 +1753,7 @@ def read_lbltable(filename,wavemin,wavemax):
             for i in range(npress):
                 k[ik,i,:] = k_out[il:il+abs(ntemp)]
                 il = il + abs(ntemp)
-    
+    """
     _lgr.debug(f'{filename=}')
     _lgr.debug(f'{npress=}')
     _lgr.debug(f'{ntemp=}')
@@ -1749,7 +1764,7 @@ def read_lbltable(filename,wavemin,wavemax):
     _lgr.debug(f'{nwave=}')
     _lgr.debug(f'{wave=}')
     _lgr.debug(f'{k=}')
-    
+    """
     
     return npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wave,k
 
