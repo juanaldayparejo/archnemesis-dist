@@ -217,6 +217,7 @@ class Measurement_0:
     Measurement_0.correct_doppler_shift()
 
     Measurement_0.calc_avepoints_exoplanet()
+    Measurement_0.calc_geometry_primary_transit()
     
     Measurement_0.plot_ils()
     Measurement_0.plot_filters()
@@ -529,7 +530,7 @@ class Measurement_0:
                     lunit = 'Radiance / W cm-2 sr-1 (cm-1)-1'
                 elif self.IFORM==SpectraUnit.FluxRatio:
                     lunit = 'Secondary transit depth (Fplanet/Fstar) / Dimensionless'
-                elif self.IFORM==SpectraUnit.A_Ratio:
+                elif self.IFORM==SpectraUnit.TransitDepth:
                     lunit = 'Primary transit depth (100*Aplanet/Astar) / Dimensionless'
                 elif self.IFORM==SpectraUnit.Integrated_spectral_power:
                     lunit = 'Integrated spectral power of planet / W (cm-1)-1'
@@ -545,7 +546,7 @@ class Measurement_0:
                     lunit = 'Radiance / W cm-2 sr-1 um-1'
                 elif self.IFORM==SpectraUnit.FluxRatio:
                     lunit = 'Secondary transit depth (Fplanet/Fstar) / Dimensionless'
-                elif self.IFORM==SpectraUnit.A_Ratio:
+                elif self.IFORM==SpectraUnit.TransitDepth:
                     lunit = 'Primary transit depth (100*Aplanet/Astar) / Dimensionless'
                 elif self.IFORM==SpectraUnit.Integrated_spectral_power:
                     lunit = 'Integrated spectral power of planet / W um-1'
@@ -1885,6 +1886,45 @@ class Measurement_0:
         self.edit_EMISS_ANG(emiss_ang)
         self.edit_AZI_ANG(azi_ang)
         self.edit_WGEOM(wgeom)
+
+    #################################################################################################################
+        
+    def calc_geometry_primary_transit(self):
+        """
+        Initialise the geometry array for a primary transit observation
+
+        The initialisation here is very simple since all the angles are fixed for a primary transit
+        """
+        
+        if self.NGEOM!=1:
+            raise ValueError('error in calc_geometry_primary_transit :: NGEOM must be equal to 1')
+        
+        NAV = np.ones(self.NGEOM,dtype='int32')
+        
+        flat = np.zeros((self.NGEOM,NAV.max()))
+        flon = np.zeros((self.NGEOM,NAV.max()))
+        tanhe = np.zeros((self.NGEOM,NAV.max()))
+        wgeom = np.zeros((self.NGEOM,NAV.max()))
+        emiss_ang = np.zeros((self.NGEOM,NAV.max()))
+        sol_ang = np.zeros((self.NGEOM,NAV.max()))
+        azi_ang = np.zeros((self.NGEOM,NAV.max()))
+
+        flat[:,:] = self.LATITUDE
+        flon[:,:] = self.LONGITUDE
+        tanhe[:,:] = 0.0
+        wgeom[:,:] = 1.0
+        emiss_ang[:,:] = -90.0  #Limb viewing
+        sol_ang[:,:] = 0.0      #Star at the limb
+        azi_ang[:,:] = 0.0      #Arbitrary since sun at limb
+
+        self.NAV = NAV
+        self.edit_FLAT(flat)
+        self.edit_FLON(flon)
+        self.edit_TANHE(tanhe)
+        self.edit_WGEOM(wgeom)
+        self.edit_EMISS_ANG(emiss_ang)
+        self.edit_SOL_ANG(sol_ang)
+        self.edit_AZI_ANG(azi_ang)
 
 
     #################################################################################################################

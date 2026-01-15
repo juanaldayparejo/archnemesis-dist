@@ -35,11 +35,8 @@ from numba import jit, njit
 
 from archnemesis.helpers import h5py_helper, path_redirect
 
-
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
-
 
 ###############################################################################################
 

@@ -38,6 +38,7 @@ This sections includes Jupyter notebookes with examples showing how archNEMESIS 
    examples/Mars_DISORT/archnemesis_disort_comparisons.ipynb
    examples/mars_aotf/mars_aotf.ipynb
    examples/Exoplanet_thermal_emission/exoplanet.ipynb
+   examples/Exoplanet_primary_transit/exoplanet.ipynb
    
 Retrievals
 ------------------
@@ -48,4 +49,5 @@ This sections includes Jupyter notebookes with examples showing how archNEMESIS 
 
    examples/retrieval_Jupiter_Tprofile/Jupiter_CIRS_retrieval.ipynb
    examples/Neptune_JWST_nested_sampling/Neptune_JWST.ipynb
+   examples/retrieval_exoplanet_transit/retrieval_exoplanet.ipynb
    
