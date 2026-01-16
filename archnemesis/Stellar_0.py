@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import h5py
 
 from archnemesis.helpers import h5py_helper
+from archnemesis import planck
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -80,6 +81,7 @@ class Stellar_0:
         Stellar_0.write_sol
         Stellar_0.calc_solar_flux
         Stellar_0.calc_solar_power
+        Stellar_0.calc_luminosity_blackbody
         Stellar_0.write_solar_file
         """
 
@@ -438,6 +440,23 @@ class Stellar_0:
         AU = 1.49598e11
         area = 4.*np.pi*(self.DIST * AU * 100. )**2.
         self.SOLSPEC = self.SOLFLUX * area   #W (cm-1)-1 or W um-1
+
+    def calc_luminosity_blackbody(self, temperature):
+        """
+        Calculate the stellar luminosity assuming a blackbody spectrum at a given temperature
+        """
+
+        from scipy.constants import h, c, k, sigma
+
+        #Convert radius to cm
+        R_star_cm = self.RADIUS * 1e5
+
+        #Calculate blackbody radiance
+        bb = planck(self.ISPACE,self.WAVE,temperature)
+
+        L_star =  np.pi * 4. * np.pi * (R_star_cm)**2. * bb
+
+        self.SOLSPEC = L_star
 
 
     def write_solar_file(self,filename,header=None):
