@@ -3805,52 +3805,6 @@ class ForwardModel_0:
         #Calculating the gaseous line opacity in each layer
         ########################################################################################################
         TAUGAS, dTAUGAS = self.calculate_gaseous_line_opacity(return_grad)
-        if self.SpectroscopyX.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
-
-            TAUGAS = np.zeros((self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.LayerX.NLAY,self.SpectroscopyX.NGAS))  #Vertical opacity of each gas in each layer
-
-            #Calculating the cross sections for each gas in each layer
-            k = self.SpectroscopyX.calc_klbl(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE)
-
-            for i in range(self.SpectroscopyX.NGAS):
-                IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-
-                #Calculating vertical column density in each layer
-                VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-4 * 1.0e-20   #cm-2
-
-                #Calculating vertical opacity for each gas in each layer
-                TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
-
-            #Combining the gaseous opacity in each layer
-            TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
-            #Removing necessary data to save memory
-            del k
-
-        elif self.SpectroscopyX.ILBL==SpectralCalculationMode.K_TABLES:    #K-table
-            
-            #Calculating the k-coefficients for each gas in each layer
-            k_gas = self.SpectroscopyX.calc_k(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE) # (NWAVE,NG,NLAY,NGAS) 
-            f_gas = np.zeros((self.SpectroscopyX.NGAS,self.LayerX.NLAY))
-            utotl = np.zeros(self.LayerX.NLAY)
-            for i in range(self.SpectroscopyX.NGAS):
-                IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-
-                #When using gradients
-                f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * 1.0e-4 * 1.0e-20  #Vertical column density of the radiatively active gases in cm-2
-
-            #Combining the k-distributions of the different gases in each layer
-            k_layer = k_overlap(self.SpectroscopyX.DELG,k_gas,f_gas)
-
-            #Calculating the opacity of each layer
-            TAUGAS = k_layer #(NWAVE,NG,NLAY)
-
-            #Removing necessary data to save memory
-            del k_gas
-            del k_layer
-#             self.SpectroscopyX.K = None
-
-        else:
-            raise ValueError(f'error in CIRSrad :: ILBL must be either {SpectralCalculationMode(0)} or {SpectralCalculationMode(2)}')
         self.LayerX.TAUGAS = TAUGAS
         
         
