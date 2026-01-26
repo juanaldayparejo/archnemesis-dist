@@ -35,7 +35,7 @@ from archnemesis import (
     CIA_0,
     Scatter_0
 )
-
+from archnemesis.Layer_0 import read_play,read_hlay
 from archnemesis.Data.planet_data import planet_info
 
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
@@ -453,11 +453,11 @@ def read_input_files(runname):
     Layer = Layer_0(Atm.RADIUS)
     Scatter,Stellar,Surface,Layer = read_set(runname,Layer=Layer)
     if Layer.LAYTYP==LayerType.BASE_PRESSURE:
-        nlay, pbase = ans.Layer_0.read_play()
+        nlay, pbase = read_play()
         Layer.NLAY = nlay
         Layer.P_base = pbase*101325 
     if Layer.LAYTYP==LayerType.BASE_HEIGHT:
-        nlay,hbase = ans.Layer_0.read_hlay()
+        nlay,hbase = read_hlay()
         Layer.NLAY = nlay
         Layer.H_base = hbase*1.0e3    #Base height of each layer (m)
     if Layer.LAYTYP not in (LayerType.EQUAL_PRESSURE, LayerType.EQUAL_LOG_PRESSURE, LayerType.EQUAL_HEIGHT, LayerType.EQUAL_PATH_LENGTH, LayerType.BASE_PRESSURE, LayerType.BASE_HEIGHT):

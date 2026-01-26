@@ -1458,7 +1458,7 @@ def dmie(x, rfr, rfi, thetd, jx):
     if not nmx1 < ncap - 1:
         print('LIMIT FOR ACAP IS NOT ENOUGH')
         qext = -1
-        return
+        return 0,0,0,eltrmx
     nmx2 = int(t[0])
     if not nmx1 > 150:
         nmx1 = 150
