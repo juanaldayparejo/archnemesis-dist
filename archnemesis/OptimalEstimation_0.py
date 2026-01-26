@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-
+from __future__ import annotations  #  for 3.9 compatability
 
 #import sys
 
@@ -505,7 +505,7 @@ class OptimalEstimation_0:
             Measurement covariance matrix
         """
         SE_array = np.array(SE_array)
-        assert SE_array.shape == (self.NY, self.NY),\
+        assert SE_array.shape == (self.NY, self.NY) or SE_array.shape == (1,1),\
             'SE should be NY by NY.'
         self.SE = SE_array
 
@@ -544,45 +544,29 @@ class OptimalEstimation_0:
     
     def calc_gain_matrix(self):
         """
-        Calculate gain matrix and averaging kernels. The gain matrix is calculated with
-            dd = sx*kk_T*(kk*sx*kk_T + se)^-1    (if nx>=ny)
-            dd = ((sx^-1 + kk_T*se^-1*kk)^-1)*kk_T*se^-1  (if ny>nx)
+        Calculate gain matrix and averaging kernels. Using the Rodgers form
+
+            dd = sa * kk_T * (kk * sa * kk_T + se)^-1
+
+        implemented via linear solves instead of explicit matrix inversion.
         """
 
         # Calculating the transpose of kk
-        kt = self.KK.T
+        kt = self.KK.T  # (NX, NY)
 
-        # Calculating the gain matrix dd
-        if self.NX == self.NY:
-            # Calculate kk*sa*kt
-            a = self.KK @ (self.SA @ kt) + self.SE
+        # Compute SA * K^T
+        sa_kt = self.SA @ kt  # (NX, NY)
 
-            # Inverting a
-            c = np.linalg.inv(a)
+        # Compute the matrix in measurement space: M = K * SA * K^T + SE
+        # SE may be full, diagonal, or 1x1 (broadcasted)
+        M = self.KK @ sa_kt  # (NY, NY)
+        M = M + self.SE      # broadcasting handles (1,1) case
 
-            # Multiplying (sa*kt) by c
-            self.DD = (self.SA @ kt) @ c
-
-        else:
-            # Calculating the inverse of Sa and Se
-            sai = np.linalg.inv(self.SA)
-            
-            #if( (self.LIN == 1) or (self.LIN==3) ):
-            #    #We invert the matrix as it might be non-diagonal
-            #    sei_inv = np.linalg.inv(self.SE)
-            #else:
-            #    sei_inv = np.diag(1.0 / np.diag(self.SE))
-
-            sei_inv = np.diag(1.0 / np.diag(self.SE))
-
-            # Calculate kt*sei_inv*kk
-            a = kt @ sei_inv @ self.KK + sai
-
-            # Invert a
-            c = np.linalg.inv(a)
-
-            # Multiplying c by (kt*sei_inv)
-            self.DD = c @ (kt @ sei_inv)
+        # Solve (M^T) * X^T = (SA * K^T)^T  ->  X = SA * K^T * M^{-1}
+        # This avoids forming M^{-1} explicitly.
+        RHS_T = sa_kt.T  # (NY, NX)
+        X_T = np.linalg.solve(M.T, RHS_T)  # (NY, NX)
+        self.DD = X_T.T  # (NX, NY)
 
         self.AA = self.DD @ self.KK
 
@@ -591,42 +575,34 @@ class OptimalEstimation_0:
         Calculate the retrieval cost function to be minimized in the optimal estimation
         framework, which combines departure from a priori and closeness to spectrum.
         """
-        # Calculate values for later
-        
-        # Use this to minimise difference in `y`
+        # residuals
         b = self.YN[:self.NY] - self.Y[:self.NY]
         d = self.XN[:self.NX] - self.XA[:self.NX]
-        sai = np.linalg.inv(self.SA)
-        
-        #if( (self.LIN == 1) or (self.LIN==3) ):
-        #    #We invert the matrix as it might be non-diagonal
-        #    sei_inv = np.linalg.inv(self.SE)
-        #else:
-        #    sei_inv = np.diag(1.0 / np.diag(self.SE))
-        
-        sei_inv = np.diag(1.0 / np.diag(self.SE))
-        
-        ## Getting (yn-y)^2/sigma_y^2 ##
-        
 
-        # Multiplying se_inv*b
-        a = sei_inv @ b
-
-        # Multiplying bt*a so that (yn-y)^T * se_inv * (yn-y)
-        measurement_diff_cost = b.T @ a
+        # Measurement part: (yn - y)^T * SE^{-1} * (yn - y)
+        if self.SE.shape == (1, 1):
+            # Scalar variance applied to all measurements: SE = sigma^2 * I
+            sigma2 = float(self.SE[0, 0])
+            measurement_diff_cost = float(np.dot(b, b) / sigma2)
+        elif is_diagonal(self.SE):
+            # Diagonal covariance
+            sigma2_vec = np.diagonal(self.SE)
+            measurement_diff_cost = float(np.dot(b / sigma2_vec, b))
+        else:
+            # General covariance
+            e_meas = np.linalg.solve(self.SE, b)
+            measurement_diff_cost = float(b.T @ e_meas)
 
         self.CHISQ = measurement_diff_cost / self.NY
-        
 
-        ## Getting (xn - x)^2/sigma_x^2 ##
+        # A priori part: (xn - xa)^T * SA^{-1} * (xn - xa)
+        e_apriori = np.linalg.solve(self.SA, d)
+        apriori_diff_cost = float(d.T @ e_apriori)
 
-        # Multiply sa_inv*d
-        e = sai @ d
-
-        # Multiply dt*e so that (xn-xa)^T * sa_inv * (xn-xa)
-        apriori_diff_cost = d.T @ e
-
-        _lgr.warning(f'calc_phiret: {measurement_diff_cost=}, {apriori_diff_cost=}, chisq={self.CHISQ}, {measurement_diff_cost+apriori_diff_cost=}')
+        _lgr.warning(
+            f'calc_phiret: {measurement_diff_cost=}, {apriori_diff_cost=}, '
+            f'chisq={self.CHISQ}, {measurement_diff_cost+apriori_diff_cost=}'
+        )
         self.PHI = measurement_diff_cost + apriori_diff_cost
         
         assert not np.isnan(self.PHI), "PHI cannot be NAN"
@@ -687,26 +663,20 @@ class OptimalEstimation_0:
 
         m1 = np.zeros([self.NY,1])
         m1[:,0] = self.Y - self.YN
-        #dd1 = np.zeros([self.NX,self.NY])
-        #dd1[0:nx,0:ny] = dd[0:nx,0:ny]
 
         m2 = np.zeros([self.NX,1])
         m2[:,0] = self.XA - self.XN
-        #aa1 = np.zeros([nx,nx])
-        #aa1[0:nx,0:nx] = aa[0:nx,0:nx]
 
         mp1 = np.matmul(self.DD,m1)
         mp2 = np.matmul(self.AA,m2)
 
         x_out = np.zeros(self.NX)
 
-        #for i in range(self.NX):
-        #    x_out[i] = self.XA[i] + mp1[i,0] - mp2[i,0]
         x_out = self.XA + mp1[:self.NX,0] - mp2[:self.NX,0]
         
         return x_out
 
-    def calc_serr(self):
+    def calc_serr(self,simple=False):
         """
          Calculates the error covariance matrices after the final iteration has been completed.
 
@@ -725,7 +695,10 @@ class OptimalEstimation_0:
         """
 
         #Multiplying dd*se
-        a = np.matmul(self.DD,self.SE)
+        if simple:
+            a = self.DD*self.SE[0,0]
+        else:
+            a = np.matmul(self.DD,self.SE)
 
         #Multiplying a*dt so that dd*se*dt
         dt = np.transpose(self.DD)
@@ -1217,6 +1190,7 @@ def coreretOE(
         nemesisdisc=False,
         nemesisPT=False,
         write_itr=False,
+        nemesisC=False,
         return_forward_model=False,
         return_phi_and_chisq_history=False,
     ) -> (
@@ -1259,6 +1233,8 @@ def coreretOE(
             nemesisSO :: If True, it indicates that the retrieval is for a solar occultation observation
             nemesisdisc :: If True, it indicates that the retrieval is for a disc-averaged observation
             nemesisPT :: If True, it indicates that the retrieval is for a primary transit observation
+            nemesisC :: If True, forward models compute all geometries at once (multiple scattering)
+                         for solar occultation observations.
             
             return_forward_model :: if True will return the ForwardModel as well as the OptimalEstimation.
 
@@ -1297,7 +1273,11 @@ def coreretOE(
     OptimalEstimation.edit_SA(Variables.SA)
     OptimalEstimation.edit_Y(Measurement.Y)
     OptimalEstimation.edit_SE(Measurement.SE)
-
+    
+    simple = False
+    if Measurement.SE.shape[0] == 1 and Measurement.SE.shape[1] == 1:
+        simple = True
+        
     phi_history = np.full((NITER+1,), fill_value=np.nan)
     chisq_history = np.full((NITER+1,), fill_value=np.nan)
     state_vector_history = np.full((NITER+1, OptimalEstimation.NX), fill_value=np.nan)
@@ -1350,7 +1330,7 @@ def coreretOE(
         NCores=NCores,
     )
     _lgr.info('nemesis :: Calculating Jacobian matrix KK')
-    YN,KK = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT)
+    YN,KK = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
     
     OptimalEstimation.edit_YN(YN)
     OptimalEstimation.edit_KK(KK)
@@ -1384,17 +1364,15 @@ def coreretOE(
 
     #Assessing whether retrieval is going to be OK
     #################################################################
-
-    OptimalEstimation.assess()
+    if not simple:
+        OptimalEstimation.assess()
 
     #Run retrieval for each iteration
     #################################################################
 
     #Initializing some variables
     alambda = 1.0   #Marquardt-Levenberg-type 'braking parameter'
-    #NX11 = np.zeros(OptimalEstimation.NX)
     XN1 = deepcopy(OptimalEstimation.XN)
-    #NY1 = np.zeros(OptimalEstimation.NY)
     YN1 = deepcopy(OptimalEstimation.YN)
 
     successful_iteration = False
@@ -1408,14 +1386,14 @@ def coreretOE(
         ####################################
         if write_itr==True:
             fitr.write(f'{OptimalEstimation.CHISQ:09.4E} {OptimalEstimation.PHI:09.4E}\n')
-            for i in range(OptimalEstimation.NX):fitr.write(f'{XN1[i]:09.4E}\n')#'%10.5f \n' % (XN1[i]))
-            for i in range(OptimalEstimation.NX):fitr.write(f'{OptimalEstimation.XA[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.XA[i]))
-            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.Y[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.Y[i]))
-            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.SE[i,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.SE[i,i]))
-            for i in range(OptimalEstimation.NY):fitr.write(f'{YN1[i]:09.4E}\n')#'%10.5f \n' % (YN1[i]))
-            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.YN[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.YN[i]))
+            for i in range(OptimalEstimation.NX):fitr.write(f'{XN1[i]:09.4E}\n')
+            for i in range(OptimalEstimation.NX):fitr.write(f'{OptimalEstimation.XA[i]:09.4E}\n')
+            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.Y[i]:09.4E}\n')
+            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.SE[i,i]:09.4E}\n')
+            for i in range(OptimalEstimation.NY):fitr.write(f'{YN1[i]:09.4E}\n')
+            for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.YN[i]:09.4E}\n')
             for i in range(OptimalEstimation.NX):
-                for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.KK[j,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.KK[j,i]))
+                for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.KK[j,i]:09.4E}\n')
 
 
         #Calculating next state vector
@@ -1423,10 +1401,6 @@ def coreretOE(
 
         _lgr.info('nemesis :: Calculating next iterated state vector')
         X_OUT = OptimalEstimation.calc_next_xn()
-        #  x_out(nx) is the next iterated value of xn using classical N-L
-        #  optimal estimation. However, we want to apply a braking parameter
-        #  alambda to stop the new trial vector xn1 being too far from the
-        #  last 'best-fit' value xn
 
         check_marquardt_brake = True
         while check_marquardt_brake: #We continue in this while loop until we do not find problems with the state vector
@@ -1490,7 +1464,7 @@ def coreretOE(
             Variables=Variables,
             NCores=NCores,
         )
-        YN1,KK1 = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT)
+        YN1,KK1 = ForwardModel.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
 
         OptimalEstimation1 = deepcopy(OptimalEstimation)
         OptimalEstimation1.edit_YN(YN1)
@@ -1508,7 +1482,7 @@ def coreretOE(
             OptimalEstimation.edit_XN(XN1)
             OptimalEstimation.edit_YN(YN1)
             OptimalEstimation.edit_KK(KK1)
-            Variables.edit_XN(XN1) # This seems to be superflous as the same operation happens about 19 lines above
+            Variables.edit_XN(XN1)
 
             #Now calculate the gain matrix and averaging kernels
             OptimalEstimation.calc_gain_matrix()
@@ -1573,20 +1547,20 @@ def coreretOE(
     ####################################
     if write_itr==True:
         fitr.write(f'{OptimalEstimation.CHISQ:09.4E} {OptimalEstimation.PHI:09.4E}\n')
-        for i in range(OptimalEstimation.NX):fitr.write(f'{XN1[i]:09.4E}\n')#'%10.5f \n' % (XN1[i]))
-        for i in range(OptimalEstimation.NX):fitr.write(f'{OptimalEstimation.XA[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.XA[i]))
-        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.Y[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.Y[i]))
-        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.SE[i,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.SE[i,i]))
-        for i in range(OptimalEstimation.NY):fitr.write(f'{YN1[i]:09.4E}\n')#'%10.5f \n' % (YN1[i]))
-        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.YN[i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.YN[i]))
+        for i in range(OptimalEstimation.NX):fitr.write(f'{XN1[i]:09.4E}\n')
+        for i in range(OptimalEstimation.NX):fitr.write(f'{OptimalEstimation.XA[i]:09.4E}\n')
+        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.Y[i]:09.4E}\n')
+        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.SE[i,i]:09.4E}\n')
+        for i in range(OptimalEstimation.NY):fitr.write(f'{YN1[i]:09.4E}\n')
+        for i in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.YN[i]:09.4E}\n')
         for i in range(OptimalEstimation.NX):
-            for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.KK[j,i]:09.4E}\n')#'%10.5f \n' % (OptimalEstimation.KK[j,i]))
+            for j in range(OptimalEstimation.NY):fitr.write(f'{OptimalEstimation.KK[j,i]:09.4E}\n')
 
     #Calculating output parameters
     ######################################################
 
     #Calculating retrieved covariance matrices
-    OptimalEstimation.calc_serr()
+    OptimalEstimation.calc_serr(simple)
 
     #Make sure errors stay as a priori for kiter < 0
     if OptimalEstimation.NITER<0:
@@ -1610,5 +1584,3 @@ def coreretOE(
         result = *result, phi_history, chisq_history
     
     return result[0] if len(result) == 1 else result
-    
-####################################################################################################################################

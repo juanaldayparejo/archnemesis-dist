@@ -361,6 +361,7 @@ class ForwardModel_0:
             nemesisL : bool = False,
             nemesisdisc : bool = False,
             nemesisPT : bool = False,
+            nemesisC : bool = False,
             analytical_gradient : bool = False,
         ) -> Callable[[],np.ndarray] | Callable[[],tuple[np.ndarray,np.ndarray]]:
         """
@@ -377,6 +378,8 @@ class ForwardModel_0:
             method = self.nemesisdiscfmg if analytical_gradient else self.nemesisdiscfm
         elif nemesisPT:
             method = (lambda: self.nemesisPTfm(gradients=True)) if analytical_gradient else (lambda: self.nemesisPTfm(gradients=False))
+        elif nemesisC:
+            method = self.nemesisfmg if analytical_gradient else self.nemesisCfm
         else:
             method = self.nemesisfmg if analytical_gradient else self.nemesisfm
 
@@ -1573,6 +1576,8 @@ class ForwardModel_0:
         self.check_gas_spec_atm()
         self.check_wave_range_consistency()
         
+        n_jobs = self.NCores if self.NCores is not None else 1
+        
         SPECONV = np.zeros(self.Measurement.MEAS.shape) #Initalise the array where the spectra will be stored (NWAVE,NGEOM)
         for IGEOM in range(self.Measurement.NGEOM):
 
@@ -1585,7 +1590,7 @@ class ForwardModel_0:
             self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
             #Call process_IAV to calculate FM at each emission ray
-            results = Parallel(n_jobs=self.NCores)(
+            results = Parallel(n_jobs=n_jobs)(
                 delayed(self.process_IAV)(IAV,IGEOM,return_grad=False)
                 for IAV in range(self.Measurement.NAV[IGEOM])
             )
@@ -1682,6 +1687,8 @@ class ForwardModel_0:
         self.check_gas_spec_atm()
         self.check_wave_range_consistency()
         
+        n_jobs = self.NCores if self.NCores is not None else 1
+        
         SPECONV = np.zeros(self.Measurement.MEAS.shape) #Initalise the array where the spectra will be stored (NWAVE,NGEOM)
         dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX))
         for IGEOM in range(self.Measurement.NGEOM):
@@ -1695,7 +1702,7 @@ class ForwardModel_0:
             self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
             #Call process_IAV to calculate FM at each emission ray
-            results = Parallel(n_jobs=self.NCores)(
+            results = Parallel(n_jobs=n_jobs)(
                 delayed(self.process_IAV)(IAV,IGEOM,return_grad=True)
                 for IAV in range(self.Measurement.NAV[IGEOM])
             )
@@ -2018,25 +2025,22 @@ class ForwardModel_0:
 
             return SPEC1
 
-    ###############################################################################################
+###############################################################################################
 
     def chunked_execution(self, args):
+        """
+        This function takes chunks from the parallel execution in jacobian_nemesis and
+        distributes jobs within the chunks to execute_fm.
+
+        MODIFICATION HISTORY : Joe Penn (9/07/2024)
+        """
+        # Unpack args including both nemesisC and nemesisPT, plus n_jobs_internal
+        start, end, xnx, ixrun, nemesisSO, nemesisL, nemesisC, nemesisdisc, nemesisPT, YNtot, nfm, n_jobs_internal = args
         
-        """
-            FUNCTION NAME : chunked_execution()
-
-            DESCRIPTION :
-
-                This function takes chunks from the parallel execution in jacobian_nemesis and
-                sends distributes jobs within the chunks to execute_fm.
-
-            MODIFICATION HISTORY : Joe Penn (9/07/2024)
-
-        """
-        start, end, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, nemesisPT, YNtot, nfm = args
         results = np.copy(YNtot)  # Local copy to prevent conflicts
         for ifm in range(start, end):
-            inp = (ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, nemesisPT, results)
+            # Pass to execute_fm including all flags and internal core count
+            inp = (ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisC, nemesisdisc, nemesisPT, results, n_jobs_internal)
             results = self.execute_fm(inp)
         return start, results
 
@@ -2044,55 +2048,54 @@ class ForwardModel_0:
 
     def execute_fm(self, inp):
         
-        """
-            FUNCTION NAME : execute_fm()
-
-            DESCRIPTION :
-
-                This function is used to compute the forward models for jacobian_nemesis.
-                Print outputs from the forward models are supressed to avoid too much output.
-
-            MODIFICATION HISTORY : Joe Penn (9/07/2024)
-
-        """
         import archnemesis.cfg.logs
         
-        # Unpack input tuple
-        ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, nemesisPT, YNtot = inp
+        # Unpack input tuple (Includes nemesisC, nemesisPT, and n_jobs_internal)
+        ifm, nfm, xnx, ixrun, nemesisSO, nemesisL, nemesisC, nemesisdisc, nemesisPT, YNtot, n_jobs_internal = inp
         # ifm - index of forward model
         # nfm - number of forward models
         # xnx - array holding state vectors for all parallel forward models
-        # ixrun - seems to be the number of state vector entries for this forward model (unsure about this)
+        # ixrun - number of state vector entries for this forward model
         # nemesisSO - boolean flag to perform solar occultation forward model
         # nemesisL - boolean flag to perform limb forward model
+        # nemesisC - boolean flag (User added)
+        # nemesisPT - boolean flag (Upstream added)
         # YNtot - modelled spectra for all parallel forward models
         
         # define variables
         SPECMOD = None
         
-        
         # Find the method to use when modelling the spectrum
-        nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, nemesisdisc, nemesisPT, analytical_gradient=False)
+        # Using Keyword Arguments to safely include both C and PT flags
+        nemesis_method = self.select_nemesis_fm(
+            nemesisSO=nemesisSO, 
+            nemesisL=nemesisL, 
+            nemesisdisc=nemesisdisc, 
+            nemesisC=nemesisC, 
+            nemesisPT=nemesisPT,
+            analytical_gradient=False
+        )
         
         _lgr.info(f'Calculating forward model {ifm+1}/{nfm}')
         
         # load state vector with state for this specific forward model
         self.Variables.XN = xnx[:, ixrun[ifm]]
         
+        # --- HYBRID PARALLELIZATION ---
+        # Set the internal NCores for this specific worker instance.
+        self.NCores = int(n_jobs_internal)
+        # ------------------------------
         
-        # Put as little as possible in here so we only have to handle a small subset of state adjustment
         try:
-            # Turn off warning and below logging so we are not flooded with output
+            # Turn off warning and below logging
             archnemesis.cfg.logs.push_packagewide_level(logging.ERROR)
             
             # model the spectrum
             SPECMOD = nemesis_method()
         finally:
-            # Stop disabling logging levels
             archnemesis.cfg.logs.pop_packagewide_level()
         
         if SPECMOD is not None:
-            #Only Re-shape calculated spectrum into the shape of the measurement vector if the calculation completed
             ik = 0
             for igeom in range(self.Measurement.NGEOM):
                 YNtot[ik:ik+self.Measurement.NCONV[igeom],ifm] = SPECMOD[0:self.Measurement.NCONV[igeom],igeom]
@@ -2100,14 +2103,13 @@ class ForwardModel_0:
             
             _lgr.info(f'Calculated forward model {ifm+1}/{nfm}')
         else:
-            # If calculation failed, throw an error.
-            raise RuntimeError(f'Something went wrong when calculating forward model {ifm+1}/{nfm}. Modelled spectra was not calculated.')
+            raise RuntimeError(f'Something went wrong when calculating forward model {ifm+1}/{nfm}.')
             
         return YNtot
     
     ###############################################################################################
 
-    def jacobian_nemesis(self,NCores=1,nemesisSO=False,nemesisL=False,nemesisdisc=False,nemesisPT=False,analytical_gradient=True):
+    def jacobian_nemesis(self, NCores=1, nemesisSO=False, nemesisL=False, nemesisC=False, nemesisdisc=False, nemesisPT=False, analytical_gradient=True):
 
         """
 
@@ -2189,7 +2191,14 @@ class ForwardModel_0:
         if len(ian1)>0:
 
             _lgr.info('Calculating analytical part of the Jacobian :: Calling nemesisfmg ')
-            nemesis_method = self.select_nemesis_fm(nemesisSO, nemesisL, nemesisdisc, nemesisPT, analytical_gradient=True)
+            nemesis_method = self.select_nemesis_fm(
+                nemesisSO=nemesisSO,
+                nemesisL=nemesisL,
+                nemesisC=nemesisC,
+                nemesisdisc=nemesisdisc, 
+                nemesisPT=nemesisPT,
+                analytical_gradient=True
+            )
 
             SPECMOD,dSPECMOD = nemesis_method()
                 
@@ -2225,31 +2234,40 @@ class ForwardModel_0:
         YNtot = np.zeros((self.Measurement.NY,nfm))
 
         
-        if nfm>0:
+        if nfm > 0:
             _lgr.info('Calculating numerical part of the Jacobian :: running '+str(nfm)+' forward models ')
             
-            # Splitting into chunks and parallelising
-            NCores = min(NCores,nfm)
-            base_chunk_size = nfm // NCores
-            remainder = nfm % NCores
+            total_cores = NCores if NCores is not None else 1
+            
+            # 1. Determine Outer Parallelism (Jacobian Branches)
+            # Limit by total cores AND total models needed
+            n_jobs_jac = min(total_cores, nfm)
+            
+            # 2. Determine Inner Parallelism (Disc Integration)
+            # Distribute remaining cores to internal tasks. Ensure at least 1.
+            n_jobs_internal = max(1, total_cores // n_jobs_jac)
+            
+            base_chunk_size = nfm // n_jobs_jac
+            remainder = nfm % n_jobs_jac
 
-            chunks = [(i * base_chunk_size + min(i, remainder),
-                       (i + 1) * base_chunk_size + min(i + 1, remainder),
-                       xnx, ixrun, nemesisSO, nemesisL, nemesisdisc, nemesisPT, YNtot, nfm) for i in range(NCores)]
+            # Pack arguments including nemesisC, nemesisPT, and n_jobs_internal
+            chunks = [(
+                i * base_chunk_size + min(i, remainder),
+                (i + 1) * base_chunk_size + min(i + 1, remainder),
+                xnx, ixrun, nemesisSO, nemesisL, nemesisC, nemesisdisc, nemesisPT, YNtot, nfm, n_jobs_internal
+            ) for i in range(n_jobs_jac)]
 
-             #with Pool(NCores) as pool:
-                 #results = pool.map(self.chunked_execution, chunks)
-
-            results = Parallel(n_jobs=NCores)(
+            results = Parallel(n_jobs=n_jobs_jac)(
                 delayed(self.chunked_execution)(chunk) for chunk in chunks
             )
-            # Reorder and combine results based on their starting index
+            
             ordered_results = sorted(results, key=lambda x: x[0])
             YNtot = np.sum(np.stack([res[1] for res in ordered_results]), axis=0)
 
             if iYN==0:
                 YN = np.zeros(self.Measurement.NY)
                 YN[:] = YNtot[0:self.Measurement.NY,0]
+
 
         #################################################################################
         # Calculating the Jacobian matrix
@@ -2269,7 +2287,6 @@ class ForwardModel_0:
                 KK[:,inum[i]] = (YNtot[:,ifm]-YN)/(xn1-self.Variables.XN[inum[i]])
 
         return YN,KK
-
 
 
     ###############################################################################################
@@ -3788,6 +3805,52 @@ class ForwardModel_0:
         #Calculating the gaseous line opacity in each layer
         ########################################################################################################
         TAUGAS, dTAUGAS = self.calculate_gaseous_line_opacity(return_grad)
+        if self.SpectroscopyX.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
+
+            TAUGAS = np.zeros((self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.LayerX.NLAY,self.SpectroscopyX.NGAS))  #Vertical opacity of each gas in each layer
+
+            #Calculating the cross sections for each gas in each layer
+            k = self.SpectroscopyX.calc_klbl(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE)
+
+            for i in range(self.SpectroscopyX.NGAS):
+                IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
+
+                #Calculating vertical column density in each layer
+                VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-4 * 1.0e-20   #cm-2
+
+                #Calculating vertical opacity for each gas in each layer
+                TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
+
+            #Combining the gaseous opacity in each layer
+            TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
+            #Removing necessary data to save memory
+            del k
+
+        elif self.SpectroscopyX.ILBL==SpectralCalculationMode.K_TABLES:    #K-table
+            
+            #Calculating the k-coefficients for each gas in each layer
+            k_gas = self.SpectroscopyX.calc_k(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE) # (NWAVE,NG,NLAY,NGAS) 
+            f_gas = np.zeros((self.SpectroscopyX.NGAS,self.LayerX.NLAY))
+            utotl = np.zeros(self.LayerX.NLAY)
+            for i in range(self.SpectroscopyX.NGAS):
+                IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
+
+                #When using gradients
+                f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * 1.0e-4 * 1.0e-20  #Vertical column density of the radiatively active gases in cm-2
+
+            #Combining the k-distributions of the different gases in each layer
+            k_layer = k_overlap(self.SpectroscopyX.DELG,k_gas,f_gas)
+
+            #Calculating the opacity of each layer
+            TAUGAS = k_layer #(NWAVE,NG,NLAY)
+
+            #Removing necessary data to save memory
+            del k_gas
+            del k_layer
+#             self.SpectroscopyX.K = None
+
+        else:
+            raise ValueError(f'error in CIRSrad :: ILBL must be either {SpectralCalculationMode(0)} or {SpectralCalculationMode(2)}')
         self.LayerX.TAUGAS = TAUGAS
         
         

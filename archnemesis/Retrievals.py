@@ -35,6 +35,7 @@ def retrieval_nemesis(
         nemesisSO=False,
         nemesisdisc=False,
         nemesisPT=False,
+        nemesisC=False,
         NS_prefix='chains/'
     ):
     
@@ -59,6 +60,7 @@ def retrieval_nemesis(
             nemesisSO :: If True, it indicates that the retrieval is a solar occultation observation
             nemesisdisc :: If True, it indicates that the retrieval is a disc-averaged observation
             nemesisPT :: If True, it indicates that the retrieval is a planetary transit observation
+            nemesisC :: If True, calculates all geometries at once (multiple scattering)
         
         OUTPUTS :
         
@@ -103,7 +105,7 @@ def retrieval_nemesis(
             
             #Calculating forward model
             FM_prev = ans.ForwardModel_0(Atmosphere=Atmosphere,Measurement=Measurement,Spectroscopy=Spectroscopy,Scatter=Scatter,Stellar=Stellar,Surface=Surface,CIA=CIA,Layer=Layer,Variables=Variables_prev,Telluric=Telluric)
-            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT)
+            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
             
             #Calculating forward modelling error
             SF = KK @ Variables_prev.SA @ KK.T
@@ -178,7 +180,7 @@ def retrieval_nemesis(
 
             #Now we calculate the forward model error from the previous retrieval
             FM_prev = ans.ForwardModel_0(Atmosphere=Atmosphere,Measurement=Measurement,Spectroscopy=Spectroscopy,Scatter=Scatter,Stellar=Stellar,Surface=Surface,CIA=CIA,Layer=Layer,Variables=Variables_prev,Telluric=Telluric)
-            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT)
+            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
             
             #We do not want to include the forward model error from variables that are retrieved again now
             ix1 = 0
@@ -222,12 +224,12 @@ def retrieval_nemesis(
     if retrieval_method == RetrievalStrategy.Optimal_Estimation:
         OptimalEstimation = ans.coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,\
                                           NITER=Retrieval.NITER,PHILIMIT=Retrieval.PHILIMIT,LIN=Retrieval.LIN,NCores=NCores,
-                                          nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT)
+                                          nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
         Retrieval = OptimalEstimation
     elif retrieval_method == RetrievalStrategy.Nested_Sampling:
         from archnemesis.NestedSampling_0 import coreretNS
         
-        NestedSampling = coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,NS_prefix=NS_prefix)
+        NestedSampling = coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,NS_prefix=NS_prefix,nemesisC=nemesisC)
         Retrieval = NestedSampling
     else:
         raise ValueError('error in retrieval_nemesis :: Retrieval scheme has not been implemented yet')
