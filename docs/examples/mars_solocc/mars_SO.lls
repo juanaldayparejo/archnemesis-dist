@@ -1,3 +1,3 @@
-/exomars/data/retrievals/nemesis/Spectroscopy/LBLtables/ACSMIR/HITRAN20/ACSMIR_WN_CO_iso1.lta 
-/exomars/data/retrievals/nemesis/Spectroscopy/LBLtables/ACSMIR/HITRAN20/ACSMIR_WN_CO_iso2.lta 
-/exomars/data/retrievals/nemesis/Spectroscopy/LBLtables/ACSMIR/HITRAN20/ACSMIR_WN_CO_iso3.lta 
+../../../archnemesis/Data/reference_tables/lbltab_mars/lbltab_co_iso1.lta
+../../../archnemesis/Data/reference_tables/lbltab_mars/lbltab_co_iso2.lta
+../../../archnemesis/Data/reference_tables/lbltab_mars/lbltab_co_iso3.lta 
