@@ -4162,7 +4162,8 @@ def integrate_filterg(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil):
             
             #Integrating the product of the spectrum and the filter function
             yout[j] = np.trapz(y[inwave] * afil_interp, vwave[inwave])
-            gradout[j,:] = np.trapz(dydx[inwave,:] * afil_interp[:, None], vwave[inwave], axis=0)
+            for k in range(nx):
+                gradout[j,k] = np.trapz(dydx[inwave,k] * afil_interp, vwave[inwave])
 
     return yout,gradout
 
