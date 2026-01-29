@@ -698,7 +698,7 @@ class ForwardModel_0:
             if self.Measurement.IFORM == SpectraUnit.Integrated_radiance:
                 
                 #Integrating the radiance over the filter function
-                SPECONV1,dSPECONV1 = self.Measurement.integrate_filterg(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+                SPECONV1,dSPECONV1 = self.Measurement.integrate_filterg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
                 
             else:
             
