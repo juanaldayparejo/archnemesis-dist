@@ -31,9 +31,11 @@ import scipy
 #import matplotlib.pyplot as plt
 import os
 import os.path
+import archnemesis as ans
 from numba import jit, njit
 
 from archnemesis.helpers import h5py_helper, path_redirect
+
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -1175,6 +1177,71 @@ class Spectroscopy_0:
             )
             
         return kgood
+
+
+    ######################################################################################################
+    def calc_klbl_online(self,npoints,press,temp,self_frac=1.0,wing_cut=25.0):
+        """
+        Calculate the absorption coefficient at a given pressure and temperature
+        from the LineData class
+
+        Input parameters
+        -------------------
+        @param npoints: int
+            Number of p-T points at which to calculate the cross sections
+        @param press: 1D array
+            Pressure levels (atm)
+        @param temp: 1D array
+            Temperature levels (K)
+
+        Optional parameters
+        ---------------------
+        @param wavemin: real
+            Minimum wavenumber (cm-1) or wavelength (um)
+        @param wavemax: real
+            Maximum wavenumber (cm-1) or wavelength (um)
+
+
+        Outputs
+        ---------
+
+        K(NWAVE,NPOINTS,NGAS) :: Absorption cross sections of each gas in each p-T point
+
+        """
+
+        from archnemesis.database.line_database.hitran import HITRAN
+
+        k = np.zeros((self.NWAVE, npoints, self.NGAS))
+        for igas in range(self.NGAS):
+
+            print(self.ID[igas],self.ISO[igas],' - Calculating line-by-line cross sections...')
+
+            linedata = ans.LineData_1(
+                self.ID[igas], #ID of the gas
+                self.ISO[igas], #Isotope ID of the gas
+                LINE_DATABASE=self.LOCATION[igas] # Different database location
+            )
+
+            # Download partition function tables for the gas isotopes
+            linedata.fetch_partition_function()
+
+            for ipoint in range(npoints):
+
+                p_l = press[ipoint]
+                t_l = temp[ipoint]
+
+                k[:,ipoint,igas] = linedata.calculate_monochromatic_absorption(
+                            waves=self.WAVE,        # wavenumbers in cm^{-1}
+                            temp=t_l,               # kelvin
+                            press=p_l,              # Atmospheres
+                            amb_frac=1.-self_frac,  # fraction of broadening due to ambient gas
+                            wave_unit=self.ISPACE,  # unit of `waves` argument
+                            lineshape_fn=ans.Data.lineshapes.voigt, # lineshape function to use
+                            line_calculation_wavenumber_window=wing_cut, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                )
+
+        return k
+
 
     ######################################################################################################
     def calc_kg(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
