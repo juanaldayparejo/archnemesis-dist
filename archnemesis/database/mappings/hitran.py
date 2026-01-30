@@ -45,7 +45,7 @@ radtran_to_hitran : dict[tuple[int,int], tuple[int,int]] = {
     (6, 1): (6, 1),   #(12C)H4
     (6, 2): (6, 2),   #(13C)H4
     (6, 3): (6, 3),   #(12C)H3D
-    #(6, 4): (6, 4),   #(13C)H3D Does not exist in HITRAN but is in RADTRAN
+    (6, 4): (6, 4),   #(13C)H3D
     
     (7, 1): (7, 1),   #(16O)2
     (7, 2): (7, 2),   #(16O)(18O)
@@ -54,10 +54,15 @@ radtran_to_hitran : dict[tuple[int,int], tuple[int,int]] = {
     (8, 1): (8, 1),   #(14N)(16O)
     (8, 2): (8, 2),   #(15N)(16O)
     (8, 3): (8, 3),   #(14N)(18O)
+
+    (9, 1): (9, 1), #(32S)(16O)2
+    (9, 2): (9, 2), #(34S)(16O)2
+    (9, 3): (9, 3), #(33S)(16O)2
+    (9, 4): (9, 4), #(16O)(32S)(18O)
     
     (10, 1): (10, 1), #(14N)(16O)2
-    (10, 2): (10, 3), #(15N)(16O)2       
-    (10, 3): (10, 3), #(14N)(16O)(18O)
+    (10, 2): (10, 3), #(15N)(16O)2         ---> Changes in RADTRAN wrt HITRAN
+    (10, 3): (10, 2), #(14N)(16O)(18O)     ---> Changes in RADTRAN wrt HITRAN
 
     (11, 1): (11, 1), #(14N)H3
     (11, 2): (11, 2), #(15N)H3
@@ -214,7 +219,7 @@ radtran_to_hitran : dict[tuple[int,int], tuple[int,int]] = {
 
     (81, 1): (56, 1), #H3+
     
-    (94, 1): (51, 1), #(12C)H3
+    (94, 1): (57, 1), #(12C)H3
 
     (95, 1): (51, 1), #(12C)H3(19F)
     (95, 2): (51, 2), #(13C)H3(19F)
@@ -231,7 +236,7 @@ radtran_to_hitran : dict[tuple[int,int], tuple[int,int]] = {
     (141, 1): (58, 1), #(32S)2
 
     (142, 1): (59, 1), #(12C)(16O)(19F)(35Cl)
-    (142, 2): (59, 1), #(12C)(16O)(19F)(37Cl)
+    (142, 2): (59, 2), #(12C)(16O)(19F)(37Cl)
 
     (143, 1): (60, 1), #H(16O)(14N)(16O)
 
@@ -241,8 +246,4 @@ radtran_to_hitran : dict[tuple[int,int], tuple[int,int]] = {
 }
 
 hitran_to_radtran : dict[tuple[int,int], tuple[int,int]] = {v: k for k, v in radtran_to_hitran.items()}
-
-
-
-
 
