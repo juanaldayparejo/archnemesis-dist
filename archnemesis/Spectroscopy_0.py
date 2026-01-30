@@ -24,6 +24,7 @@ from archnemesis.enums import (
     WaveUnit,
     #SpectraUnit,
     SpectralCalculationMode,
+    SpectroscopicLineProfile,
     #Gas
 )
 import numpy as np
@@ -57,7 +58,8 @@ class Spectroscopy_0:
             RUNNAME: str = '', 
             ILBL: SpectralCalculationMode = SpectralCalculationMode.LINE_BY_LINE_TABLES, 
             NGAS: int = 2, 
-            ONLINE: bool = False
+            ONLINE: bool = False,
+            VREL: float = 25.0,
         ):
 
         """
@@ -83,6 +85,15 @@ class Spectroscopy_0:
             Isotope ID for each gas, default 0 for all isotopes in terrestrial relative abundance
         @param LOCATION: 1D array,
             List of strings indicating where the .lta or .kta tables are stored for each of the gases
+        @param IPROC: 1D array,
+            If ILBL=1, then IPROC indicates the line profile to use for each gas:
+                (0 - VOIGT) Voigt profile
+                (1 - SUBLORENTZ_CO2_BROADENING) Assume Sub-Lorentzian line broadening (CO2) 
+                (2 - VANVLECK_WEISSKOPF) VanVleck-Weisskopf lineshape (far-IR) 
+                (4 - LORENTZ) Lorentz profile
+                (12 - DOPPLER) Doppler profile
+        @param VREL: real,
+            If ILBL=1, then VREL indicates the spectral window to use around each line for the line-by-line calculation (cm-1)
         @param NWAVE: int,
             Number of wavelengths included in the K-tables or LBL-tables
         @param WAVE: 1D array,
@@ -103,6 +114,7 @@ class Spectroscopy_0:
             Intervals of g-ordinates
         @param FWHM: real,
             Full-width at half maximum (only in case of K-tables)
+        
 
 
         Methods
@@ -128,12 +140,14 @@ class Spectroscopy_0:
         #self.ILBL = SpectralCalculationMode(ILBL) if not isinstance(ILBL, SpectralCalculationMode) else ILBL
         self.NGAS = NGAS
         self.ONLINE = ONLINE
+        self.VREL = VREL
 
         # Attributes with proper typing
         #self.ISPACE: Optional[WaveUnit] = None
         self.ID: None | np.ndarray = None  # Array of Gas enum values (NGAS)
         self.ISO = None       #(NGAS)
         self._locations = path_redirect.PathRedirectList() #(NGAS)
+        self.IPROC = None     #(NGAS)
         self.NWAVE = None     
         self.WAVE = None      #(NWAVE)
         self.NP = None
@@ -150,6 +164,7 @@ class Spectroscopy_0:
         # private attributes
         self._ilbl = None
         self._ispace = None
+        self._iproc = None
         self._locations_initialised = False
         
         # set property values
@@ -187,6 +202,17 @@ class Spectroscopy_0:
         self._ilbl = SpectralCalculationMode(value)
     
     @property
+    def IPROC(self) -> list[SpectroscopicLineProfile]:
+        return self._iproc
+
+    @IPROC.setter
+    def IPROC(self, value):
+        if value is None:
+            self._iproc = None
+        else:
+            self._iproc = [SpectroscopicLineProfile(v) for v in value]
+
+    @property
     def ISPACE(self) -> WaveUnit:
         return self._ispace
     
@@ -222,6 +248,17 @@ class Spectroscopy_0:
             assert len(self.LOCATION) == self.NGAS , \
                 'LOCATION must have size (NGAS)'
 
+        if self.ILBL == 1:
+
+            assert self.IPROC is not None , \
+                'IPROC must be set when ILBL=1'
+            assert len(self.IPROC) == self.NGAS , \
+                'IPROC must have size (NGAS)'
+            for i in range(self.NGAS):
+                assert isinstance(self.IPROC[i], int), \
+                    f'IPROC[{i}] must be an integer'
+                assert isinstance(self.IPROC[i], SpectroscopicLineProfile), \
+                    f'IPROC[{i}] must be SpectroscopicLineProfile enum'
 
     ######################################################################################################
     def summary_info(self):
@@ -276,6 +313,39 @@ class Spectroscopy_0:
 
             _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
             _lgr.info(f"Pressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}")
+
+        elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (line-by-line runtime)")}')
+            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
+            gasname = ['']*self.NGAS
+            for i in range(self.NGAS):
+                gasname1 = gas_info[str(self.ID[i])]['name']
+                if self.ISO[i]!=0:
+                    gasname1 = gasname1+' ('+str(self.ISO[i])+')'
+                gasname[i] = gasname1
+            _lgr.info(f'Gaseous species ::  {(gasname)}')
+
+            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
+            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
+            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
+
+            lineshape = ['']*self.NGAS
+            for i in range(self.NGAS):
+                if self.IPROC[i]==0:
+                    lineshape1 = 'VOIGT'
+                elif self.IPROC[i]==1:
+                    lineshape1 = 'SUBLORENTZ_CO2_BROADENING'
+                elif self.IPROC[i]==2:
+                    lineshape1 = 'VANVLECK_WEISSKOPF'
+                elif self.IPROC[i]==4:
+                    lineshape1 = 'LORENTZ'
+                elif self.IPROC[i]==12:
+                    lineshape1 = 'DOPPLER'
+                else:
+                    lineshape1 = 'UNKNOWN'
+                lineshape[i] = lineshape1
+
+            _lgr.info(f'Line shapes for each gas ::  {(lineshape)}')
 
 
     ######################################################################################################
@@ -1180,7 +1250,7 @@ class Spectroscopy_0:
 
 
     ######################################################################################################
-    def calc_klbl_online(self,npoints,press,temp,self_frac=1.0,wing_cut=25.0):
+    def calc_klbl_online(self,npoints,press,temp,self_frac=1.0):
         """
         Calculate the absorption coefficient at a given pressure and temperature
         from the LineData class
@@ -1214,13 +1284,22 @@ class Spectroscopy_0:
         k = np.zeros((self.NWAVE, npoints, self.NGAS))
         for igas in range(self.NGAS):
 
-            print(self.ID[igas],self.ISO[igas],' - Calculating line-by-line cross sections...')
+            _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections...')
 
             linedata = ans.LineData_1(
                 self.ID[igas], #ID of the gas
                 self.ISO[igas], #Isotope ID of the gas
                 LINE_DATABASE=self.LOCATION[igas] # Different database location
             )
+
+            if self.IPROC[igas]==SpectroscopicLineProfile.VOIGT:
+                lineshape = ans.Data.lineshapes.voigt
+            elif self.IPROC[igas]==SpectroscopicLineProfile.DOPPLER:
+                lineshape = ans.Data.lineshapes.doppler
+            elif self.IPROC[igas]==SpectroscopicLineProfile.LORENTZ:
+                lineshape = ans.Data.lineshapes.lorentz
+            else:
+                raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
 
             # Download partition function tables for the gas isotopes
             linedata.fetch_partition_function()
@@ -1236,8 +1315,8 @@ class Spectroscopy_0:
                             press=p_l,              # Atmospheres
                             amb_frac=1.-self_frac,  # fraction of broadening due to ambient gas
                             wave_unit=self.ISPACE,  # unit of `waves` argument
-                            lineshape_fn=ans.Data.lineshapes.voigt, # lineshape function to use
-                            line_calculation_wavenumber_window=wing_cut, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                            lineshape_fn=lineshape, # lineshape function to use
+                            line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
                 )
 
         return k

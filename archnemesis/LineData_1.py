@@ -195,7 +195,7 @@ class LineData_1:
     def PARTITION_FUNCTION_DATABASE(self, value : ans.database.protocols.PartitionFunctionDatabaseProtocol):
         if value is None:
             db = ans.database.partition_function_database.hitran.HITRAN()
-            _lgr.info(f'Using default partition function database {db}')
+            _lgr.debug(f'Using default partition function database {db}')
             self._partition_function_database = db
         else:
             self._partition_function_database = value
@@ -415,9 +415,9 @@ class LineData_1:
             self.partition_data = self.PARTITION_FUNCTION_DATABASE.get_partition_function_data(
                 self.gas_isotopes.as_radtran_gasses()
             )
-            _lgr.info(f'Retrieved partition function data from database {self.PARTITION_FUNCTION_DATABASE}')
+            _lgr.debug(f'Retrieved partition function data from database {self.PARTITION_FUNCTION_DATABASE}')
         else:
-            _lgr.info('Partition function data already loaded')
+            _lgr.debug('Partition function data already loaded')
     
     ###########################################################################################################################
     
