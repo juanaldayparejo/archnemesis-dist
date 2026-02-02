@@ -648,9 +648,8 @@ class LineData_1:
         
         radtran_gasses = tuple(self.gas_isotopes.as_radtran_gasses())
         
-        line_idxs_to_include = np.nonzero((waves[0] <= self.line_data.NU) & (self.line_data.NU <= waves[-1]))
-        idx_min = np.min(line_idxs_to_include)
-        idx_max = np.max(line_idxs_to_include)
+        idx_min = 0
+        idx_max = len(self.line_data.NU) - 1
         n_lines = idx_max - idx_min
         _lgr.debug(f'{idx_min=} {idx_max=} {n_lines=}')
 
