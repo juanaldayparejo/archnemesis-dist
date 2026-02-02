@@ -36,6 +36,7 @@ import archnemesis as ans
 from numba import jit, njit
 
 from archnemesis.helpers import h5py_helper, path_redirect
+import matplotlib.pyplot as plt
 
 
 import logging
@@ -2218,3 +2219,93 @@ def interpolate_k_values(npoints, NGAS, NWAVEC, precomputed_indices, precomputed
 
     return kret
 
+######################################################################################################
+
+def calc_lbltable(outname,                       #Name of the output .lta file
+                  gasID,isoID,                   #Gas information
+                  npress,p0,pn,                  #Pressure grid
+                  ntemp,t0,tn,                   #Temperature grid
+                  ispace,nwave,wavemin,delwave,  #Wavenumber grid
+                  iproc,                         #Lineshape
+                  vrel,                          #Wavenumber window 
+                  self_frac,                     #Self-broadening fraction
+                  database,                      #Database
+):
+    """
+    Calculate a line-by-line look-up table for a given gas
+    at specified pressure and temperature levels
+
+    Input parameters
+    -----------------
+    @param gasID: int
+        Nemesis gas identifier
+    @param isoID: int
+        Nemesis isotopologue identifier
+    @param npress: int
+        Number of pressure levels
+    @param p0: float
+        Minimum pressure level (atm)
+    @param pn: float
+        Maximum pressure level (atm)
+    @param ntemp: int
+        Number of temperature levels
+    @param t0: float
+        Minimum temperature level (K)
+    @param tn: float
+        Maximum temperature level (K)
+    @param ispace: int
+        Spectral unit (0 - wavenumbers (cm-1); 1 - wavelength (um))
+    @param nwave: int
+        Number of wavenumber/wavelength points
+    @param wavemin: float
+        Minimum wavenumber/wavelength (cm-1/um)
+    @param delwave: float
+        Wavenumber/wavelength step (cm-1/um)
+    @param iproc: int
+        Lineshape processing mode (see Nemesis manual)
+    @param vrel: float
+        Wavenumber window for lineshape calculation (cm-1)
+    @param self_frac: float
+        Self-broadening fraction (0 - complete self-broadening, 1 - complete air broadening)
+    @param database: str
+        Path to archnemesis spectroscopic database to use ('HITRAN','GEISA', etc.)
+
+    """
+
+    #Initialising spectroscopy class
+    Spectroscopy  = ans.Spectroscopy_0()
+    Spectroscopy.NGAS = 1
+    Spectroscopy.ID = [gasID]
+    Spectroscopy.ISO = [isoID]
+    Spectroscopy.LOCATION = [database]
+
+    #Calculating the pressure grid
+    presslevels = np.linspace( np.log(p0) , np.log(pn), npress )
+    Spectroscopy.NP = npress
+    Spectroscopy.PRESS = np.exp(presslevels)
+
+    #Calculating the temperature grid
+    templevels = np.linspace( t0 , tn, ntemp )
+    Spectroscopy.NT = ntemp
+    Spectroscopy.TEMP = templevels
+
+    #Calculating the spectral grid
+    wavemax = wavemin + delwave * (nwave - 1)
+    wave = np.linspace( wavemin , wavemax , nwave )
+    Spectroscopy.NWAVE = nwave
+    Spectroscopy.WAVE = wave
+
+    #Other parameters
+    Spectroscopy.IPROC = np.array([iproc],dtype="int32")
+    Spectroscopy.VREL = vrel
+
+    Spectroscopy.assess()
+
+    k = np.zeros((Spectroscopy.NWAVE, Spectroscopy.NP, Spectroscopy.NT, Spectroscopy.NGAS))
+    for i in range(Spectroscopy.NP):
+        pressx = np.ones(Spectroscopy.NT) * Spectroscopy.PRESS[i]
+        k[:,i,:,0] = Spectroscopy.calc_klbl_online(Spectroscopy.NT,pressx,Spectroscopy.TEMP,self_frac=self_frac)[:,:,0]
+
+
+    #Writing the look-up table
+    write_lbltable(outname,npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wavemin,delwave,k*1.0e-20,DOUBLE=False)
