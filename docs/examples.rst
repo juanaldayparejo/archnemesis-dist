@@ -39,6 +39,7 @@ This sections includes Jupyter notebookes with examples showing how archNEMESIS 
    examples/mars_aotf/mars_aotf.ipynb
    examples/Exoplanet_thermal_emission/exoplanet.ipynb
    examples/Exoplanet_primary_transit/exoplanet.ipynb
+   examples/mars_rover/mars_rover.ipynb
    
 Retrievals
 ------------------

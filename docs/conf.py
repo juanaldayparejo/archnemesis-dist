@@ -50,6 +50,7 @@ nbsphinx_thumbnails = {
     'examples/retrieval_exoplanet_transit/retrieval_exoplanet': '_static/exoplanet_orbit.png',
     #'examples/Jupiter_CIRS_nadir_thermal_emission/Jupiter_CIRS': '_static/jupiter_cassini.jpg',
     #'examples/Measurement/Measurement': '_static/observation_sketch.png',
+    'examples/mars_rover/mars_rover': 'images/mars_rover.jpg',
 }
 
 #Adding logo
