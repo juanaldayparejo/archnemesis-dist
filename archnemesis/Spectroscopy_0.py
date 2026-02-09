@@ -34,6 +34,7 @@ import os
 import os.path
 import archnemesis as ans
 from numba import jit, njit
+from archnemesis.database.datatypes.wave_range import WaveRange
 
 from archnemesis.helpers import h5py_helper, path_redirect
 import matplotlib.pyplot as plt
@@ -1251,7 +1252,7 @@ class Spectroscopy_0:
 
 
     ######################################################################################################
-    def calc_klbl_online(self,npoints,press,temp,self_frac=1.0):
+    def calc_klbl_online(self,npoints,press,temp,self_frac=1.0,wave=None,add_pressure_shift=True):
         """
         Calculate the absorption coefficient at a given pressure and temperature
         from the LineData class
@@ -1271,6 +1272,10 @@ class Spectroscopy_0:
             Minimum wavenumber (cm-1) or wavelength (um)
         @param wavemax: real
             Maximum wavenumber (cm-1) or wavelength (um)
+        @param self_frac: real
+            Fraction of the line broadening that is due to self-broadening (as opposed to broadening by the ambient gas)
+        @param add_pressure_shift: bool
+            Whether to include pressure shift in the line positions (NEMESIS does not include it)
 
 
         Outputs
@@ -1280,9 +1285,14 @@ class Spectroscopy_0:
 
         """
 
-        from archnemesis.database.line_database.hitran import HITRAN
+        if wave is None:
+            wave = self.WAVE
+            nwave = self.NWAVE
+        else:
+            wave = np.array(wave)
+            nwave = len(wave)
 
-        k = np.zeros((self.NWAVE, npoints, self.NGAS))
+        k = np.zeros((nwave, npoints, self.NGAS))
         for igas in range(self.NGAS):
 
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections...')
@@ -1311,13 +1321,14 @@ class Spectroscopy_0:
                 t_l = temp[ipoint]
 
                 k[:,ipoint,igas] = linedata.calculate_monochromatic_absorption(
-                            waves=self.WAVE,        # wavenumbers in cm^{-1}
+                            waves=wave,        # wavenumbers in cm^{-1}
                             temp=t_l,               # kelvin
                             press=p_l,              # Atmospheres
                             amb_frac=1.-self_frac,  # fraction of broadening due to ambient gas
                             wave_unit=self.ISPACE,  # unit of `waves` argument
                             lineshape_fn=lineshape, # lineshape function to use
                             line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                            add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
                 )
 
         return k
@@ -2131,6 +2142,90 @@ def write_lbltable(filename,npress,ntemp,gasID,isoID,presslevels,templevels,nwav
                 f.write(bin)
 
     
+###############################################################################################
+def write_ktable(filename,gasID,isoID,g_ord,del_g,presslevels,templevels,nwave,vmin,delv,fwhm,k_g):
+    """
+    FUNCTION NAME : write_ktable()
+
+    DESCRIPTION : Write a correlated-k look-up table in standard Nemesis .kta format
+
+    INPUTS :
+
+        filename :: Name of the output file ('.kta' appended if missing)
+        gasID :: Nemesis gas identifier
+        isoID :: Nemesis isotopologue identifier
+        g_ord(ng) :: g-ordinates
+        del_g(ng) :: g-intervals
+        presslevels(npress) :: Pressure levels (atm)
+        templevels(ntemp) :: Temperature levels (K)
+        nwave :: Number of spectral points
+        vmin :: Minimum wavenumber/wavelength
+        delv :: Increment in wavenumber/wavelength
+        fwhm :: Full width at half maximum of instrument lineshape
+        k_g(nwave,ng,npress,ntemp) :: K coefficients
+
+    """
+
+    if not filename.endswith('.kta'):
+        filename += '.kta'
+
+    # Dimensions
+    ng = g_ord.size
+    npress = presslevels.size
+    ntemp = templevels.size
+
+    # -------------------------
+    # Compute IREC0 (in float32 words)
+    # -------------------------
+    irec0 = (10 + 2*ng + 3 + npress + ntemp)
+
+    if delv <= 0.0:
+        irec0 += nwave
+
+    with open(filename, 'wb') as f:
+
+        # Header
+        np.int32(irec0).tofile(f)
+        np.int32(nwave).tofile(f)
+        np.float32(vmin).tofile(f)
+        np.float32(delv).tofile(f)
+        np.float32(fwhm).tofile(f)
+        np.int32(npress).tofile(f)
+        np.int32(ntemp).tofile(f)
+        np.int32(ng).tofile(f)
+        np.int32(gasID).tofile(f)
+        np.int32(isoID).tofile(f)
+
+        # g-ordinates
+        np.asarray(g_ord, dtype='float32').tofile(f)
+        np.asarray(del_g, dtype='float32').tofile(f)
+
+        # Dummy padding (Nemesis legacy)
+        np.float32(0.0).tofile(f)
+        np.float32(0.0).tofile(f)
+
+        # Pressure & temperature
+        np.asarray(presslevels, dtype='float32').tofile(f)
+        np.asarray(templevels, dtype='float32').tofile(f)
+
+        # Non-uniform spectral grid
+        if delv <= 0.0:
+            np.asarray(wave, dtype='float32').tofile(f)
+
+        # -------------------------
+        # k-coefficients
+        # Order MUST match read_ktable():
+        # wave → press → temp → g
+        # -------------------------
+        for iw in range(nwave):
+            for ip in range(npress):
+                for it in range(ntemp):
+                    np.asarray(
+                        k_g[iw, :, ip, it],
+                        dtype='float32'
+                    ).tofile(f)
+
+
 ######################################################################################################
     
 @jit(nopython=True)
@@ -2230,6 +2325,7 @@ def calc_lbltable(outname,                       #Name of the output .lta file
                   vrel,                          #Wavenumber window 
                   self_frac,                     #Self-broadening fraction
                   database,                      #Database
+                  add_pressure_shift=True,       #Flag to include pressure shift in the waveumbers
 ):
     """
     Calculate a line-by-line look-up table for a given gas
@@ -2304,8 +2400,188 @@ def calc_lbltable(outname,                       #Name of the output .lta file
     k = np.zeros((Spectroscopy.NWAVE, Spectroscopy.NP, Spectroscopy.NT, Spectroscopy.NGAS))
     for i in range(Spectroscopy.NP):
         pressx = np.ones(Spectroscopy.NT) * Spectroscopy.PRESS[i]
-        k[:,i,:,0] = Spectroscopy.calc_klbl_online(Spectroscopy.NT,pressx,Spectroscopy.TEMP,self_frac=self_frac)[:,:,0]
+        k[:,i,:,0] = Spectroscopy.calc_klbl_online(Spectroscopy.NT,pressx,Spectroscopy.TEMP,self_frac=self_frac,add_pressure_shift=add_pressure_shift)[:,:,0]
 
 
     #Writing the look-up table
     write_lbltable(outname,npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wavemin,delwave,k*1.0e-20,DOUBLE=False)
+
+
+def calc_ktable(outname,                       #Name of the output .lta file
+                gasID,isoID,                   #Gas information
+                npress,p0,pn,                  #Pressure grid
+                ntemp,t0,tn,                   #Temperature grid
+                ispace,nwave,wavemin,delwave,  #Wavenumber grid
+                ng,                            #Number of g-ordinates
+                iproc,                         #Lineshape
+                vrel,                          #Wavenumber window 
+                self_frac,                     #Self-broadening fraction
+                database,                      #Database
+                Measurement=None,              #Measurement class to read the ILS (NFIL,VFIL,AFIL parameters) 
+                add_pressure_shift=True,       #Flag to include pressure shift in the waveumbers
+):
+
+
+    #Initialising spectroscopy class
+    Spectroscopy  = ans.Spectroscopy_0()
+    Spectroscopy.NGAS = 1
+    Spectroscopy.ID = [gasID]
+    Spectroscopy.ISO = [isoID]
+    Spectroscopy.LOCATION = [database]
+
+    #Calculating the pressure grid
+    presslevels = np.linspace( np.log(p0) , np.log(pn), npress )
+    Spectroscopy.NP = npress
+    Spectroscopy.PRESS = np.exp(presslevels)
+
+    #Calculating the temperature grid
+    templevels = np.linspace( t0 , tn, ntemp )
+    Spectroscopy.NT = ntemp
+    Spectroscopy.TEMP = templevels
+
+    #Calculating the spectral grid
+    wavemax = wavemin + delwave * (nwave - 1)
+    wave = np.linspace( wavemin , wavemax , nwave )
+    Spectroscopy.NWAVE = nwave
+    Spectroscopy.WAVE = wave
+
+    #Other parameters
+    Spectroscopy.IPROC = np.array([iproc],dtype="int32")
+    Spectroscopy.VREL = vrel
+
+    # Gauss–Legendre points and weights for g-ordinates
+    Spectroscopy.NG = ng
+    x, w = np.polynomial.legendre.leggauss(ng)
+    Spectroscopy.G_ORD = 0.5 * (x + 1.0)
+    Spectroscopy.DELG = 0.5 * w
+
+    Spectroscopy.assess()
+
+
+    #Starting calculations
+    ############################################################################
+
+    #Initialising the LineData class
+    linedata = ans.LineData_1(
+        gasID, #ID of the gas
+        isoID, #Isotope ID of the gas
+        LINE_DATABASE=database # Different database location
+    )
+
+    #Defining the lineshape function to use in the line-by-line calculations
+    if Spectroscopy.IPROC[0]==SpectroscopicLineProfile.VOIGT:
+        lineshape = ans.Data.lineshapes.voigt
+    elif Spectroscopy.IPROC[0]==SpectroscopicLineProfile.DOPPLER:
+        lineshape = ans.Data.lineshapes.doppler
+    elif Spectroscopy.IPROC[0]==SpectroscopicLineProfile.LORENTZ:
+        lineshape = ans.Data.lineshapes.lorentz
+    else:
+        raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
+
+    #Selecting the spectral range needed for the calculations
+    if Measurement is not None:
+        assert np.allclose(Measurement.VCONV[0:Measurement.NCONV[0],0], Spectroscopy.WAVE, rtol=0.5)
+        vbinmin = Spectroscopy.WAVE.min() - (Measurement.VFIL[0:Measurement.NFIL[0],0]-Measurement.VCONV[0,0]).max()
+        vbinmax = Spectroscopy.WAVE.max() + (Measurement.VFIL[0:Measurement.NFIL[-1],-1]-Measurement.VCONV[-1,0]).max()
+    else:
+        vbinmin = Spectroscopy.WAVE.min() - delwave / 2.
+        vbinmax = Spectroscopy.WAVE.max() + delwave / 2.
+
+    _lgr.info(f'Selecting lines in the spectral range {vbinmin:.2f} - {vbinmax:.2f} for the calculations')
+
+    linedata.fetch_linedata(
+        vmin = vbinmin, 
+        vmax = vbinmax, 
+        wave_unit = ispace
+    )
+
+    # Download partition function tables for the gas isotopes
+    linedata.fetch_partition_function()
+
+    #Looping through the pressure and temperature levels to calculate the k-coefficients
+    k_coefficients = np.zeros((Spectroscopy.NWAVE, Spectroscopy.NG, Spectroscopy.NP, Spectroscopy.NT))
+    for ip in range(Spectroscopy.NP):
+
+        for it in range(Spectroscopy.NT):
+
+            pressx = Spectroscopy.PRESS[ip]
+            tempx = Spectroscopy.TEMP[it]
+
+            _lgr.info(f'Calculating k-coefficients at p = {pressx} atm and t = {tempx} K')
+
+            if ispace == WaveUnit.Wavenumber_cm:
+                nus = linedata.line_data.NU
+            elif ispace == WaveUnit.Wavelength_um:
+                nus = 1e4 / linedata.line_data.NU
+
+            #Estimating the spacing in the cross section calculations
+            alpha_d = linedata.calculate_doppler_width(tempx)
+            gamma_l = linedata.calculate_lorentz_width(pressx,tempx,amb_frac=1.-self_frac)
+
+            delv_calc_doppler = np.min(alpha_d * nus / linedata.line_data.NU)
+            delv_calc_lorentz = np.min(gamma_l * nus / linedata.line_data.NU) 
+            delv_calc = np.min([delv_calc_doppler]) / 5.
+
+            ncalc = int((vbinmax-vbinmin)/delv_calc)
+            wavecalc = np.linspace(vbinmin,vbinmax,ncalc)
+
+            _lgr.info(f'Number of absorption lines in the range = {len(linedata.line_data.NU)}')
+            _lgr.info(f'Number of spectral points in the range = {ncalc} - delta_wave = {delv_calc}')    
+            _lgr.info(f'Calculating line-by-line absorption coefficients')        
+
+            #Calculating the absorption coefficients at the line-by-line level for the given pressure and temperature
+            kabs = linedata.calculate_monochromatic_absorption(
+                        waves=wavecalc,     # spectral points
+                        temp=tempx,         # kelvin
+                        press=pressx,       # Atmospheres
+                        amb_frac=1.-self_frac,  # fraction of broadening due to ambient gas
+                        wave_unit=ispace,   # unit of `waves` argument
+                        lineshape_fn=lineshape, # lineshape function to use
+                        line_calculation_wavenumber_window=vrel, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                        add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+            )
+
+
+            #Calculating fo each wavelength bin
+            _lgr.info(f'Calculating the cumulative distributions and k-coefficients for each bin')
+            for iwave in range(Spectroscopy.NWAVE):
+
+                #Calculating the bin size
+                if Measurement is not None:
+                    vbinminx = Spectroscopy.WAVE[iwave] - (Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0]).max()
+                    vbinmaxx = Spectroscopy.WAVE[iwave] + (Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0]).max()
+                else:
+                    vbinminx = Spectroscopy.WAVE[iwave] - delwave / 2.
+                    vbinmaxx = Spectroscopy.WAVE[iwave] + delwave / 2.
+
+                #Sorting the absorption coefficients in the bin
+                mask = (wavecalc >= vbinminx) & (wavecalc <= vbinmaxx)
+                idx = np.argsort(kabs[mask])
+                wavesel = wavecalc[mask]
+                k_sorted = kabs[mask][idx]
+
+                #Considering the instrument lineshape if needed
+                if Measurement is not None:
+                    delta_wave = wavesel[idx] - Spectroscopy.WAVE[iwave]
+                    ils_sorted = np.interp(delta_wave,Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0],Measurement.AFIL[0:Measurement.NFIL[iwave],iwave])
+                else:
+                    ils_sorted = np.ones_like(wavesel)
+
+                #Calculating the cumulative distribution function of the absorption coefficients in the bin
+                delvarray = np.zeros_like(k_sorted) + (wavecalc[1]-wavecalc[0])
+                g_sorted = np.cumsum(ils_sorted * delvarray) / np.sum(ils_sorted * delvarray)
+
+                #Interpolate to get the k-coefficients at the g-ordinates
+                k_coefficients[iwave,:,ip,it] = np.interp(Spectroscopy.G_ORD, g_sorted, k_sorted)
+
+
+    Spectroscopy.K = k_coefficients[:,:,:,:,np.newaxis]
+
+    if Measurement is not None:
+        fwhm = Measurement.FWHM
+    else:
+        fwhm = 0.0
+
+    #Writing the look-up table
+    write_ktable(outname,gasID,isoID,Spectroscopy.G_ORD,Spectroscopy.DELG,Spectroscopy.PRESS,Spectroscopy.TEMP,Spectroscopy.NWAVE,Spectroscopy.WAVE.min(),delwave,fwhm,k_coefficients)
+
