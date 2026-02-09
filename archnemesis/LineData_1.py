@@ -181,6 +181,7 @@ class LineData_1:
         self.PARTITION_FUNCTION_DATABASE = PARTITION_FUNCTION_DATABASE
         
         self.line_data = None
+        self.line_data_information = None
         self.partition_data = None
         
     ##################################################################################
@@ -300,6 +301,7 @@ class LineData_1:
             vmin : float , 
             vmax : float, 
             wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
+            include_transition_information : bool = False,
     ) -> None:
         """
         Fetch the line data from the specified database. 
@@ -322,12 +324,18 @@ class LineData_1:
         #Opening line database
         with h5py.File(self.LINE_DATABASE, "r") as f:
 
+            #Checking the type of linedatabase
+            if "HITRAN" in f:
+                database_type = "HITRAN"
+            else:
+                raise ValueError("Line database is not in a recognised format, currently only archNEMESIS HDF5 line databases are supported")
+
             #Finding gas name
             name = ans.Data.gas_data.id_to_name(self.ID, 0)
 
             #Reading key data
-            grp = f[name]
-            nu = grp["nu"][:]  # Transition wavenumber cm-1
+            grp = f[database_type + "/" + name]
+            nu = grp["nu"][:]  # Transition wavenumber cm-1s
             local_iso_id = grp["local_iso_id"][:] # Radtran isotope ID
 
             #Filtering lines
@@ -386,6 +394,31 @@ class LineData_1:
 
             self.line_data = np.lib.recfunctions.stack_arrays([self.line_data, new_lines],
                                                             asrecarray=True)
+
+            if include_transition_information:
+
+                global_upper_quanta_sel = grp["global_upper_quanta"][:][mask].astype(str)
+                global_lower_quanta_sel = grp["global_lower_quanta"][:][mask].astype(str)
+                local_upper_quanta_sel  = grp["local_upper_quanta"][:][mask].astype(str)
+                local_lower_quanta_sel  = grp["local_lower_quanta"][:][mask].astype(str)
+
+                dtype_info = [
+                    ('GLOBAL_UPPER_QUANTA', 'U15'),
+                    ('GLOBAL_LOWER_QUANTA', 'U15'),
+                    ('LOCAL_UPPER_QUANTA', 'U15'),
+                    ('LOCAL_LOWER_QUANTA', 'U15'),
+                ]
+
+                self.line_data_information = np.recarray((0,), dtype=dtype_info)
+                new_lines_info = np.recarray(len(nu_sel), dtype=dtype_info)
+                new_lines_info['GLOBAL_UPPER_QUANTA'] = global_upper_quanta_sel
+                new_lines_info['GLOBAL_LOWER_QUANTA'] = global_lower_quanta_sel
+                new_lines_info['LOCAL_UPPER_QUANTA'] = local_upper_quanta_sel
+                new_lines_info['LOCAL_LOWER_QUANTA'] = local_lower_quanta_sel
+
+                self.line_data_information = np.lib.recfunctions.stack_arrays([self.line_data_information, new_lines_info],
+                                                            asrecarray=True)
+
 
     ###########################################################################################################################
     
@@ -451,6 +484,17 @@ class LineData_1:
         _lgr.debug(dws)
         return dws
     
+    def calculate_pressure_shift(
+            self, 
+            press: float, 
+    ) -> np.ndarray[['N_LINES_OF_GAS'], float]:
+        """
+        Calculate pressure-broadened width HWHM (half-width-half-maximum) of cauchy-lorentz distribution.
+        """
+        _lgr.debug(f'{press=}')
+        
+        return self.line_data.DELTA_AMB * press
+
     def calculate_lorentz_width(
             self, 
             press: float, 
@@ -590,6 +634,7 @@ class LineData_1:
             line_strength_cutoff : float = 1E-32, # Strength below which a line is ignored.
             ensure_linedata_downloaded : bool = True,
             isotopic_abundances : None | dict[RadtranGasDescriptor, float] = None, # If not None, use these abundances for each isotopologue instead of the default terrestrial ones. 
+            add_pressure_shift : bool = True, # Whether to include pressure shift in the line center positions. For some applications may want to ignore this as it is a small effect and including it requires an additional lookup of the pressure shift coefficients.
     ) -> dict[RadtranGasDescriptor, np.ndarray]:
         """
         Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}) multiplied by a factor of 1E20. 
@@ -624,7 +669,10 @@ class LineData_1:
         strength = self.calculate_line_strength(temp, tref)
         alpha_d = self.calculate_doppler_width(temp)
         gamma_l = self.calculate_lorentz_width(press, temp, amb_frac, tref)
-
+        if add_pressure_shift:
+            delta_p = self.calculate_pressure_shift(press)
+        else:
+            delta_p = np.zeros_like(gamma_l)
 
         #Weighting line strengths with isotopic abundances if needed
         if self.ISO == 0:
@@ -660,14 +708,14 @@ class LineData_1:
         
             scratch.fill(0.0)
             
-            np.subtract(waves, self.line_data.NU[line_idx], out=delta_wn)
+            np.subtract(waves, self.line_data.NU[line_idx]+delta_p[line_idx], out=delta_wn)
             
             np.less_equal(delta_wn, line_calculation_wavenumber_window, out=mask_leq)
             np.greater_equal(delta_wn, -line_calculation_wavenumber_window, out=mask_geq)
             np.logical_and(mask_leq, mask_geq, out=mask)
             
-            np.less_equal(delta_wn, 10*line_calculation_wavenumber_window, out=wide_mask_leq)
-            np.greater_equal(delta_wn, -10*line_calculation_wavenumber_window, out=wide_mask_geq)
+            np.less_equal(delta_wn, line_calculation_wavenumber_window, out=wide_mask_leq)
+            np.greater_equal(delta_wn, -line_calculation_wavenumber_window, out=wide_mask_geq)
             np.logical_and(wide_mask_leq, wide_mask_geq, out=wide_mask)
 
             self.calculate_monochromatic_line_absorption(
