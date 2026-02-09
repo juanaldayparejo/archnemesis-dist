@@ -2143,7 +2143,7 @@ def write_lbltable(filename,npress,ntemp,gasID,isoID,presslevels,templevels,nwav
 
     
 ###############################################################################################
-def write_ktable(filename,gasID,isoID,g_ord,del_g,presslevels,templevels,nwave,vmin,delv,fwhm,k_g):
+def write_ktable(filename,gasID,isoID,g_ord,del_g,presslevels,templevels,nwave,vmin,delv,fwhm,k_g,wave=None):
     """
     FUNCTION NAME : write_ktable()
 
