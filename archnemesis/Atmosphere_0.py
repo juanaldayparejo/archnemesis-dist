@@ -1493,8 +1493,9 @@ class Atmosphere_0:
         Read the aerosol profiles from an aerosol.ref file
         
         Note: The units of the aerosol.ref file in NEMESIS are in particles per gram of atmosphere, while the units of the aerosols
-              in the Atmosphere class are in particles per m3. Therefore, when reading the file an internal unit conversion is
-              applied, but it requires the pressure and temperature profiles to be defined prior to reading the aerosol.ref file.
+              in the Atmosphere class are in particles per m3 (when reading from the HDF5 file). To keep backward compatibility with 
+              NEMESIS, a DUST_UNITS_FLAG is activated when reading the aerosols from the aerosol.ref file, and it is assumed the units
+              of the aerosol density are in particles per gram of atmosphere.
         """
 
         if self.NLOCATIONS!=1:
@@ -1554,23 +1555,22 @@ class Atmosphere_0:
         """
         Write current aerosol profile to a aerosol.ref file in Nemesis format.
         
-        Note: The units of the aerosol.ref file in NEMESIS are in particles per gram of atmosphere, while the units of the aerosols
-              in the Atmosphere class are in particles per m3. Therefore, when writing the file an internal unit conversion is
-              applied, but it requires the pressure and temperature profiles to be defined prior to writing the aerosol.ref file.
+        Note: The units of the aerosol.ref file in NEMESIS are in particles per gram of atmosphere, but the default units
+              of archNEMESIS are particles per m3. To allow backward compatibility with NEMESIS, this class incorporates a
+              DUST_UNITS_FLAG that indicates that the dust density is in particles per gram of atmosphere.
+
+              If using this write_aerosol() function, the user must make sure the units are particles per gram of atmosphere.
+
         """
 
         if self.NLOCATIONS!=1:
-            raise ValueError('error :: read_aerosol only works if NLOCATIONS=1')
+            raise ValueError('error :: write_aerosol only works if NLOCATIONS=1')
             
         #Check if the density can be calculated
-        if((self.T is not None) & (self.P is not None)):
-            rho = self.calc_rho()  #kg/m3
-            xscale = rho * 1000.
-        else:
-            xscale = 1.
-            _lgr.warning(' :: reading aerosol.ref file but density is not define. Units of Atmosphere_0.DUST are in particles per gram of atmosphere')
+        if self.DUST_UNITS_FLAG is None:
+            _lgr.warning('DUST_UNITS_FLAG is not activated when writing aerosol.ref')
+            _lgr.warning('Note that the dust units must be in particles per gram of atmosphere')
             
-
         f = open('aerosol.ref','w')
         f.write('#aerosol.ref\n')
         f.write('{:<15} {:<15}'.format(self.NP, self.NDUST))
@@ -1578,7 +1578,7 @@ class Atmosphere_0:
             f.write('\n{:<15.3f} '.format(self.H[i]*1e-3))
             if self.NDUST >= 1:
                 for j in range(self.NDUST):
-                    f.write('{:<15.3E} '.format(self.DUST[i][j]/xscale[i]))    #particles per m-3
+                    f.write('{:<15.3E} '.format(self.DUST[i][j]))    #particles per gram of atm
             else:
                 f.write('{:<15.3E}'.format(self.DUST[i]))
         f.close()
