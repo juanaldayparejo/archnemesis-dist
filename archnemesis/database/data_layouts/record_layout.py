@@ -2,9 +2,9 @@
 from typing import Annotated, get_origin, get_args, Type
 import itertools
 
-from archnemesis.database.offline.structured_qualifiers import StructuredQualifier
+from archnemesis.database.data_layouts.structured_qualifiers import StructuredQualifier
 
-class RecordFormatMeta(type):
+class RecordLayoutMeta(type):
 	def __new__(meta, name, bases, ctx):
 		#print(f'Creating class {name}')
 		
@@ -70,7 +70,7 @@ class RecordFormatMeta(type):
 	
 
 
-class RecordFormat(metaclass = RecordFormatMeta):
+class RecordLayout(metaclass = RecordLayoutMeta):
 	def __init__(self, *args, **kwargs):
 		raise NotImplementedError("Record classes should not be instantiated")
 		for attr, value in zip(self._fields, args):

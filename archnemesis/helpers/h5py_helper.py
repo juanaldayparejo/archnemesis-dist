@@ -1,7 +1,7 @@
 
 
 import h5py
-from typing import Callable, Any, Literal, Type
+from typing import Callable, Any, Literal, NamedTuple#, Type
 
 import numpy as np
 
@@ -9,6 +9,11 @@ import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.WARN)
 
+
+class VirtualSourceInfo(NamedTuple):
+    src_name : str
+    src_file : str
+    src_grp : str
 
 def ensure_grp(
         grp : h5py.Group, 

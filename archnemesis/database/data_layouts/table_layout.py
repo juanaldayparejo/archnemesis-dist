@@ -2,17 +2,17 @@
 
 from typing import Type
 
-from archnemesis.database.offline.record_format import RecordFormat
+from archnemesis.database.data_layouts.record_layout import RecordLayout
 
 
 
-class TableFormatMeta(type):
+class TableLayoutMeta(type):
 	def __new__(meta, name, bases, ctx):
 		#print(f'Creating class {name}')
 		
 		
 		record_format = ctx.get('record_format',None)
-		assert record_format is not None and issubclass(record_format, RecordFormat), "TableFormat class must have a `record_format` class attribute of class (or subclass) `RecordFormat`"
+		assert record_format is not None and issubclass(record_format, RecordLayout), "TableLayout class must have a `record_layout` class attribute of class (or subclass) `RecordLayout`"
 		
 		ctx['__slots__'] = record_format._fields
 
@@ -23,8 +23,8 @@ class TableFormatMeta(type):
 		return f'{cls.__name__}:' + '\n    '+' | '.join(attr for attr in cls.__slots__)
 
 
-class TableFormat(metaclass = TableFormatMeta):
-	record_format : Type[RecordFormat] = RecordFormat
+class TableLayout(metaclass = TableLayoutMeta):
+	record_format : Type[RecordLayout] = RecordLayout
 	min_col_size = 10
 	
 	def __init__(self, *args, **kwargs):

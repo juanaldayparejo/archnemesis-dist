@@ -15,7 +15,15 @@ from archnemesis.enums import AmbientGas
 from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
 from archnemesis.database.datatypes.hitran.gas_descriptor import HitranGasDescriptor
 
-from archnemesis.database.offline.ans_line_data_file import AnsLineDataFile, LineDataHolder, LineBroadenerHolder
+from archnemesis.database.data_holders.line_broadener_holder import LineBroadenerHolder
+from archnemesis.database.data_holders.line_data_holder import LineDataHolder
+from archnemesis.database.data_holders.partition_function_data_holder import PartitionFunctionDataHolder
+from archnemesis.database.datatypes.pf_data.tabulated_pf_data import TabulatedPFData
+from archnemesis.database.datatypes.pf_data.polynomial_pf_data import PolynomialPFData
+
+from archnemesis.database.filetypes.ans_line_data_file import AnsLineDataFile
+from archnemesis.database.filetypes.ans_partition_fn_data_file import AnsPartitionFunctionDataFile
+
 
 
 linedata_file = Path(__file__).parent / 'hitran24.h5'
@@ -151,8 +159,6 @@ else:
 
 
 
-# Partition function
-from archnemesis.database.offline.ans_partition_fn_data_file import AnsPartitionFunctionDataFile, PartitionFunctionDataHolder, TabulatedPFData, PolynomialPFData
 
 mol_list = []
 iso_list = []
@@ -207,10 +213,12 @@ for mol_id_rt, iso_id_rt in yy:
 		pfdh.add(
 			mol_id_rt,
 			iso_id_rt,
-			TabulatedPFData(
-				temp,
-				q
-			).as_poly()
+			PolynomialPFData(
+				*TabulatedPFData(
+					temp,
+					q
+				).as_poly()
+			)
 		)
 
 """

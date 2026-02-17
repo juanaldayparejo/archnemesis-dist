@@ -1,16 +1,19 @@
 import os
 from pathlib import Path
 import dataclasses as dc
-from typing import NamedTuple, Type, Self, Literal#, Annotated, Callable, Any, Iterable
+from typing import Type, Literal#, NamedTuple, Self, Annotated, Callable, Any, Iterable
 import textwrap
 
 
-import numpy as np
 import h5py
 
 
 from archnemesis.helpers import h5py_helper
-from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
+from archnemesis.helpers.h5py_helper import VirtualSourceInfo
+from archnemesis.database.datatypes.pf_data.polynomial_pf_data import PolynomialPFData
+from archnemesis.database.datatypes.pf_data.tabulated_pf_data import TabulatedPFData
+from archnemesis.database.datatypes.pf_list import PFList
+from archnemesis.database.data_holders.partition_function_data_holder import PartitionFunctionDataHolder
 
 # Logging
 import logging
@@ -18,173 +21,6 @@ _lgr = logging.getLogger(__name__)
 #_lgr.setLevel(logging.INFO)
 _lgr.setLevel(logging.DEBUG)
 
-
-@dc.dataclass(slots=True)
-class PFData:
-	
-	def __post_init__(self):
-		self.init_domain()
-	
-	def init_domain(self):
-		raise NotImplementedError
-	
-	def in_domain(self, T : float | np.ndarray) -> bool | np.ndarray:
-		return ((self.domain[0] <= T) & (T <= self.domain[1]))
-	
-	def as_structured_array(self) -> np.ndarray:
-		raise NotImplementedError
-	
-	def __call__(self, T: float | np.ndarray) -> float | np.ndarray:
-		raise NotImplementedError
-	
-	def as_table(self, t_array : None | np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
-		raise NotImplementedError
-
-@dc.dataclass(slots=True)
-class TabulatedPFData(PFData):
-	temp : np.ndarray
-	q : np.ndarray
-	domain : np.ndarray = dc.field(default_factory=lambda : np.array([0,np.inf],dtype=float))
-	
-	
-	def init_domain(self):
-		min, max = (np.min(self.temp), np.max(self.temp))
-		if self.domain[0] < min:
-			self.domain[0] = min
-		if self.domain[1] > max:
-			self.domain[1] = max
-		return
-	
-	def as_structured_array(self) -> np.ndarray:
-		return np.array(
-			[
-				self.temp, 
-				self.q
-			], 
-			dtype=[('temp',float), ('q',float)]
-		)
-	
-	def __call__(self, T : float | np.ndarray) -> float | np.ndarray:
-		return np.interp(T, self.temp, self.q)
-	
-	def as_table(self, t_array : None | np.ndarray = None) -> Self:
-		if t_array is None:
-			return TabulatedPFData(self.temp, self.q, self.domain) 
-		else:
-			return TabulatedPFData(t_array, np.interp(t_array, self.temp, self.q), np.array([np.min(t_array), np.max(t_array)], dtype=float))
-		
-	
-	def as_poly(self, t_array : None | np.ndarray = None, n : int = 5) -> PFData:
-		instance = self.as_table(t_array)
-		return PolynomialPFData(np.polynomial.Polynomial.fit(instance.temp, instance.q, deg=n).coef, instance.domain)
-
-@dc.dataclass(slots=True)
-class PolynomialPFData(PFData):
-	coeffs : np.ndarray
-	domain : np.ndarray = dc.field(default_factory=lambda : np.array([0,np.inf],dtype=float))
-	
-	_poly : np.polynomial.Polynomial = dc.field(init=False, repr=False)
-	
-	def init_domain(self):
-		return
-	
-	
-	
-	def __setattr__(self, name, value):
-		if name == 'coeffs':
-			#self.coeffs = value
-			super(PolynomialPFData, self).__setattr__(name, value) # have to add arguments to `super()` due to using `slots=True`
-			self._poly = np.polynomial.Polynomial(self.coeffs, symbol='T')
-		else:
-			super(PolynomialPFData, self).__setattr__(name, value)
-
-	def as_structured_array(self) -> np.ndarray:
-		return np.array(
-			[
-				self._poly.coef
-			], 
-			dtype=[('coeffs',float, self.poly.coef.shape)]
-		)
-	
-	def __call__(self, T : float | np.ndarray) -> float | np.ndarray:
-		return self._poly(T)
-	
-	def as_table(self, t_array : np.ndarray = None) -> PFData:
-		if t_array is None:
-			t_array = np.linspace(50, 500, 1000)
-		return TabulatedPFData(t_array, self._poly(t_array), np.array([np.min(t_array), np.max(t_array)], dtype=float))
-	
-	def as_poly(self, t_array : None | np.ndarray = None, n : None | int = None) -> Self:
-		if n is None:
-			return PolynomialPFData(self.coeffs, self.domain)
-		
-		return PolynomialPFData(np.polynomial.Polynomial.fit(*self.as_table(t_array), deg=n).coef, self.domain)
-
-
-@dc.dataclass(slots=True)
-class PFList:
-	pf_data_list : list[PFData,...] = dc.field(default_factory=list)
-	
-	def append(self, pf_data : PFData) -> Self:
-		self.pf_data_list.append(pf_data)
-		return self
-	
-	def __call__(self, T : float | np.ndarray) -> float | np.ndarray:
-		if len(self.pf_data_list) == 0:
-			raise RuntimeError(f'{self} has no partition data.')
-	
-		if isinstance(T, np.ndarray):
-			acc = np.zeros_like(T, float)
-			n = np.zeros_like(T, int)
-			for pf_data in self.pf_data_list:
-				mask = pf_data.in_domain(T)
-				acc[mask] += pf_data(T[mask])
-				n[mask] += 1
-			
-			if np.any(~np.nonzero(n)):
-				raise RuntimeError(f'Partition functions do not completely cover the range of temperatures provided. Missing data for T={T[~np.nonzero(n)]}')
-		
-		else:
-			acc = 0
-			n = 0
-			for pf_data in self.pf_data_list:
-				#print(f'DEBUG : {pf_data=} {acc=} {n=} {T=}')
-				if pf_data.in_domain(T):
-					acc += pf_data(T)
-					n += 1
-			
-			if n == 0:
-				raise RuntimeError(f'Partition functions do not cover the requested temperature {T=}.')
-		
-		return acc/n
-		
-
-@dc.dataclass(slots=True)
-class PartitionFunctionDataHolder:
-	# source information
-	name : str # Name of source, will result in a "/sources/X" group
-	description : str # Description of source, will be the "description" attribute of the "/sources/X" group
-	
-	# A dictionary of partition function data. Keys are `RadtranGasDescriptor` instances, 
-	# values are a list of `PFData` instances. `PFData` sub-classes define a callable class that
-	# returns the partition function of an isotopologue at a specified temperature for a specified
-	# temperature domain.
-	# Will define the "/sources/X/partition_function/<mol_name>/<iso_id>/pf_data_0000"
-	# groups that hold data for each of the `PFData` instances in the list.
-	data : dict[RadtranGasDescriptor, list[PFData,...]] = dc.field(default_factory=dict) 
-	
-	def add(self, mol_id, local_iso_id, pf_data : PFData):
-		self.data.setdefault(RadtranGasDescriptor(mol_id, local_iso_id), []).append(pf_data)
-	
-	def items(self):
-		yield from self.data.items()
-
-
-
-class VirtualSourceInfo(NamedTuple):
-	src_name : str
-	src_file : str
-	src_grp : str
 
 
 class AnsPartitionFunctionDataFile:

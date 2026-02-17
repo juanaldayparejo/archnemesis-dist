@@ -1,222 +1,31 @@
 
 import os
 from pathlib import Path
-import dataclasses as dc
-from typing import NamedTuple, Type, Annotated, Callable, Literal, Any, Iterable
+from typing import Callable, Literal
 import textwrap 
 
 import numpy as np
 import h5py
 
 from archnemesis.helpers import h5py_helper
+from archnemesis.helpers.h5py_helper import VirtualSourceInfo
+
 from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
+from archnemesis.database.data_holders.line_data_holder import LineDataHolder
 
 from archnemesis.enums import AmbientGas
 
-from archnemesis.database.offline.structured_qualifiers import IDNumber, Quantity
-from archnemesis.database.offline.record_format import RecordFormat
-from archnemesis.database.offline.table_format import TableFormat
+
+from archnemesis.database.data_layouts.line_data_record_layout import LineDataRecordLayout
+from archnemesis.database.data_layouts.line_broadener_record_layout import LineBroadenerRecordLayout
+from archnemesis.database.data_layout_writers.line_broadener_table_writer import LineBroadenerTableWriter
+from archnemesis.database.data_layout_writers.line_data_table_writer import LineDataTableWriter
 
 # Logging
 import logging
 _lgr = logging.getLogger(__name__)
 #_lgr.setLevel(logging.INFO)
 _lgr.setLevel(logging.DEBUG)
-
-class VirtualSourceInfo(NamedTuple):
-	src_name : str
-	src_file : str
-	src_grp : str	
-
-class VirtualSourceDescriptor(NamedTuple):
-	src_file : str
-	src_dset_path : str
-	dest_dset_path : str
-	src_shape : np.ndarray
-	dest_offset : np.ndarray
-
-class VirtualDestinationInfo:
-	def __init__(
-			self,
-			expected_ndim : int = 1,
-			end_offset : np.ndarray = None,
-			dtype : Type = None,
-			default : None | Any = None,
-		):
-		
-		self.expected_ndim = expected_ndim
-		self.end_offset = end_offset if end_offset is not None else np.zeros((self.expected_ndim,), dtype=int)
-		self._dtype = dtype
-		self.default = default
-	
-	@property
-	def dtype(self):
-		return self._dtype
-	
-	@dtype.setter
-	def dtype(self, v : Type):
-		if self._dtype is None:
-			self._dtype = v
-		elif v == self._dtype:
-			pass
-		else:
-			raise ValueError(f'Trying to set dtype to {v} but it is already set to {self._dtype}')
-	
-	def __repr__(self):
-		return f'VirtualDestinationInfo(expected_ndim={self.expected_ndim}, end_offset={self.end_offset}, dtype={self.dtype}, default={self.default})'
-
-
-@dc.dataclass
-class LineBroadenerHolder:
-	name : str
-	gamma_amb : None | np.ndarray = None
-	n_amb : None | np.ndarray = None
-	delta_amb : None | np.ndarray = None
-	
-	def __post_init__(self):
-		if all(x is None for x in (self.gamma_amb, self.n_amb, self.delta_amb)):
-			raise ValueError('LineBroadenerHolder cannot be instantiated with all ("gamma_amb", "n_amb", "delta_amb") = `None`')
-		
-		shape = None
-		for x in (self.gamma_amb, self.n_amb, self.delta_amb):
-			if x is None:
-				continue
-			if shape is None:
-				shape = x.shape
-			assert len(shape) == len(x.shape), \
-				'LineBroadenerHolder must have same number of dimensions for "gamma_amb", "n_amb", "delta_amb" if they are not None'
-			
-			assert all(s1==s2 for s1,s2 in zip(shape,x.shape)), \
-				'LineBroadenerHolder must have same shape for "gamma_amb", "n_amb", "delta_amb" if they are not None'
-		
-		if self.gamma_amb is None:
-			self.gamma_amb = np.ones(shape, dtype=float)
-		
-		if self.n_amb is None:
-			self.n_amb = np.zeros(shape, dtype=float)
-			
-		if self.delta_amb is None:
-			self.delta_amb = np.zeros(shape, dtype=float)
-
-@dc.dataclass
-class LineDataHolder:
-	# source information
-	name : str
-	description : str
-	
-	# spectral line data
-	mol_id : np.ndarray
-	local_iso_id : np.ndarray
-	nu : np.ndarray
-	sw : np.ndarray
-	a : np.ndarray
-	elower : np.ndarray
-	
-	# self broadening
-	gamma_self : None | np.ndarray = None
-	n_self : None | np.ndarray = None
-	
-	# foreign broadening
-	broadeners : Iterable[LineBroadenerHolder] = tuple()
-	
-	_rt_gas_descs : None | tuple = None
-	
-	def __post_init__(self):
-		
-		if self.gamma_self is None:
-			self.gamma_self = np.ones_like(self.nu, dtype=float)
-		
-		if self.n_self is None:
-			self.n_self = np.zeros_like(self.nu, dtype=float)
-		
-		
-		
-		
-	
-	@property
-	def rt_gas_descs(self):
-		if self._rt_gas_descs is None:
-			u_ids = np.unique(np.array([self.mol_id, self.local_iso_id], dtype=int), axis=1)
-			print(f'DEBUG : {u_ids.shape=}')
-			self._rt_gas_descs = tuple(RadtranGasDescriptor(int(gas_id), int(iso_id)) for gas_id, iso_id in u_ids.T)
-		return self._rt_gas_descs
-
-
-class LineDataRecordFormat(RecordFormat):
-	mol_id       : Annotated[int,   IDNumber('RADTRAN ID of molecule')]
-	local_iso_id : Annotated[int,   IDNumber('Isotope ID in context of parent molecule')]
-	nu           : Annotated[float, Quantity('Wavenumber of line', 'cm^{-1}')]
-	sw           : Annotated[float, Quantity('Line intensity at T = 296 K', 'cm^{-1}/(molec.cm^{-2})')]
-	a            : Annotated[float, Quantity('Einstein A-coefficient', 's^{-1}')]
-	elower       : Annotated[float, Quantity('Lower-state energy', 'cm^{-1}')]
-	gamma_self   : Annotated[float, Quantity('Self-broadened HWHM at 1 atm pressure and 296 K', 'cm{^-1} atm^{-1}')]
-	n_self       : Annotated[float, Quantity('Temperature exponent for the self-broadened HWHM', 'NUMBER')]
-
-class LineBroadenerRecordFormat(RecordFormat):
-	gamma_amb    : Annotated[float, Quantity('Ambient gas broadened Lorentzian half-width at half-maximum at p = 1 atm and T = 296 K', 'cm{^-1} atm^{-1}')]
-	n_amb        : Annotated[float, Quantity('Temperature exponent for the ambieng gas broadened HWHM', 'NUMBER')]
-	delta_amb    : Annotated[float, Quantity('Pressure shift induced by ambient gas, referred to p=1 atm', 'cm^{-1} atm^{-1}')]
-
-class LineBroadenerTableFormat(TableFormat):
-	record_format : type[RecordFormat] = LineBroadenerRecordFormat
-	
-	def to_hdf5(self, grp : h5py.Group, extend : None | Literal['stack'] | int = None):
-		for i, name in enumerate(self.__slots__):
-			#print(f'LineDataTableFormat.to_hdf5(...) {grp=} {i=} {name=} {len(getattr(self, name))=}')
-			h5py_helper.ensure_dataset(
-				grp, 
-				name, 
-				attrs=self.record_format.metadata(name).as_dict(),
-				extend = extend,
-				data=getattr(self, name), dtype=self.record_format.type(name), maxshape=(None,)
-			)
-
-class LineDataTableFormat(TableFormat):
-	record_format : type[RecordFormat] = LineDataRecordFormat
-	
-	def to_hdf5(self, grp : h5py.Group, extend : None | Literal['stack'] | int = None):
-		for i, name in enumerate(self.__slots__):
-			#print(f'LineDataTableFormat.to_hdf5(...) {grp=} {i=} {name=} {len(getattr(self, name))=}')
-			h5py_helper.ensure_dataset(
-				grp, 
-				name, 
-				attrs=self.record_format.metadata(name).as_dict(),
-				extend = extend,
-				data=getattr(self, name), dtype=self.record_format.type(name), maxshape=(None,)
-			)
-	
-	def update_hdf5(self, grp : h5py.Group, wave_attr : str = 'nu', min_wave_delta_frac = 1E-4):
-	
-		dsets = {}
-		for i, name in enumerate(self.__slots__):
-			dsets[name] = h5py_helper.get_dataset(grp, name, defaults=dict(shape=(0,), dtype=self.record_format.type(name), maxshape=(None,)))
-		
-		# find duplicate entries, for now assume that a line is duplicated if the fractional difference in wavelength is less than `min_wave_delta_frac`
-		mask = np.zeros_like(getattr(self, self.__slots__[0]), dtype=bool)
-		wave_values = getattr(self, wave_attr)
-		
-		print('DEBUG : Updating HDF5, therefore must check to see if data is already present.')
-		dset_size = dsets[wave_attr].size
-		for i, wave_dset_value in enumerate(dsets[wave_attr]):
-			if i%1000 == 0:
-				print(f'DEBUG : Updating HDF5 testing if data already present {i}/{dset_size} [{100*i/dset_size:6.2f} %]')
-			wave_delta_frac = np.abs((wave_dset_value - wave_values)/wave_values)
-			mask |= wave_delta_frac < min_wave_delta_frac # exclude entries that have small differences in wavelength
-		
-		mask = ~mask # negate mask so it now selects things we want to include (instead of exclude)
-		n_old = dsets[wave_attr].size # old number of entries in dataset
-		n_new = np.count_nonzero(mask) # number of entries to add to dataset
-		print(f'DEBUG : Updating HDF5 {n_old=} {n_new=} {n_old+n_new=}')
-		
-		for i, name in enumerate(self.__slots__):
-			#print(f'LineDataTableFormat.to_hdf5(...) {grp=} {i=} {name=} {len(getattr(self, name))=}')
-			dsets[name].resize(n_old+n_new, axis=0)
-			dsets[name][n_old:n_old+n_new] = getattr(self,name)[mask]
-			
-			for k, v in self.record_format.metadata(name).as_dict().items():
-				dsets[name].attrs[k] = v
-
-
 
 
 
@@ -526,19 +335,16 @@ class AnsLineDataFile:
 								v_iso_end_updated_once_per_source[v_iso_dest_path] = True
 							
 							v_iso_dset_source_list.append(
-								VirtualSourceDescriptor(
-									src_file = x_file_name,
-									src_dset_path = xdset.name,
-									dest_dset_path = v_iso_dset_dest_path,
-									src_shape = v_shape,
-									dest_offset = (v_iso_end_offset - v_shape),
+								(
+									x_file_name, # src_file
+									xdset.name, # src_dset_path
+									v_iso_dset_dest_path, # dest_dset_path
+									v_shape, # src_shape
+									(v_iso_end_offset - v_shape), # dest_offset
 								)
 							)
 							
-							v_dset_dest_info = v_dset_dest_info_map.setdefault(v_iso_dset_dest_path, VirtualDestinationInfo())
-							v_dset_dest_info.end_offset[...] = v_iso_end_offset
-							v_dset_dest_info.dtype = xdset.dtype
-							v_dset_dest_info.default = self.default_broadening_values.get(xdset.name.rsplit('/')[1],None)
+							v_dset_dest_info_map[v_iso_dset_dest_path] = (v_iso_end_offset, xdset.dtype, self.default_broadening_values.get(xdset.name.rsplit('/')[1],None))
 							
 							return
 						
@@ -562,35 +368,35 @@ class AnsLineDataFile:
 					else:
 						del ld_grp[v_iso_dset_dest_path]
 				
-				v_dset_dest_info = v_dset_dest_info_map[v_iso_dset_dest_path]
+				v_dset_dest_end_offset, v_dset_dest_dtype, v_dset_dest_default = v_dset_dest_info_map[v_iso_dset_dest_path]
 				
 				layout = h5py.VirtualLayout(
-					shape=tuple(int(x) for x in v_dset_dest_info.end_offset), 
-					dtype=v_dset_dest_info.dtype, 
-					maxshape=tuple(None for x in v_dset_dest_info.end_offset)
+					shape=tuple(int(x) for x in v_dset_dest_end_offset), 
+					dtype=v_dset_dest_dtype, 
+					maxshape=tuple(None for x in v_dset_dest_end_offset)
 				)
 				
-				for v_src_desc in v_iso_dset_source_list:
+				for src_file, src_dset_path, dest_dset_path, src_shape, dest_offset in v_iso_dset_source_list:
 					#print(f'DEBUG : {v_src_desc=}')
-					slice_start = v_src_desc.dest_offset
-					slice_end = slice_start + v_src_desc.src_shape
+					slice_start = dest_offset
+					slice_end = slice_start + src_shape
 					#print(f'DEBUG : {slice_start=} {slice_end=}')
-					shape = tuple(int(s) for s in v_src_desc.src_shape)
+					shape = tuple(int(s) for s in src_shape)
 					dest_slices = tuple(slice(int(p),int(q)) for p,q in zip(slice_start, slice_end))
 					src_slices = tuple(slice(0,s) for s in shape)
 					#print(f'DEBUG : {dest_slices=}')
 					#print(f'DEBUG : {src_slices=}')
 					
 					vsource = h5py.VirtualSource(
-						v_src_desc.src_file, 
-						name=v_src_desc.src_dset_path, 
+						src_file, 
+						name=src_dset_path, 
 						shape=shape, 
-						dtype=v_dset_dest_info.dtype, 
-						maxshape=tuple(None for s in v_src_desc.src_shape)
+						dtype=v_dset_dest_dtype, 
+						maxshape=tuple(None for s in src_shape)
 					)
 					layout[*dest_slices] = vsource[*src_slices]
 					
-				ld_grp.create_virtual_dataset(v_iso_dset_dest_path, layout, fillvalue=v_dset_dest_info.default)
+				ld_grp.create_virtual_dataset(v_iso_dset_dest_path, layout, fillvalue=v_dset_dest_default)
 		
 		
 	
@@ -711,7 +517,7 @@ class AnsLineDataFile:
 				mol_grp = h5py_helper.ensure_grp(d_grp, rt_gas_desc.gas_name)
 				iso_grp = h5py_helper.ensure_grp(mol_grp, f'{rt_gas_desc.iso_id}')
 				
-				line_data_table = LineDataTableFormat(
+				line_data_table = LineDataTableWriter(
 					ldh.mol_id[iso_mask],
 					ldh.local_iso_id[iso_mask],
 					ldh.nu[iso_mask],
@@ -728,7 +534,7 @@ class AnsLineDataFile:
 				if ldh.broadeners is not None:
 					for line_broadener_holder in ldh.broadeners:
 				
-						line_broadener_table = LineBroadenerTableFormat(
+						line_broadener_table = LineBroadenerTableWriter(
 							line_broadener_holder.gamma_amb[iso_mask],
 							line_broadener_holder.n_amb[iso_mask],
 							line_broadener_holder.delta_amb[iso_mask],
@@ -741,106 +547,6 @@ class AnsLineDataFile:
 				
 		
 		self.update_from_sources()
-
-	def update_source(
-		self,
-		ldh : LineDataHolder
-	):
-		with h5py.File(self.path,'a') as f:
-
-			s_grp = self.get_sources_grp(f)
-
-			x_grp = h5py_helper.ensure_grp(s_grp, ldh.name, attrs=dict(description=ldh.description))
-
-			molecules_grp = self.get_mols_grp(x_grp)
-			
-			molecule_ids = np.array(sorted(list(set([rt_gas_desc.gas_id for rt_gas_desc in ldh.rt_gas_descs]))), dtype=int)
-			molecule_names = np.array([RadtranGasDescriptor(id,0).gas_name for id in molecule_ids], dtype='T')
-			
-			mol_id_dset = h5py_helper.get_dataset(molecules_grp, 'mol_id', defaults=dict(shape=(0,), dtype=int, maxshape=(None,)))
-			mol_name_dset = h5py_helper.get_dataset(molecules_grp, 'mol_name', defaults=dict(shape=(0,), dtype='T', maxshape=(None,)))
-			
-			
-			mask = np.zeros_like(molecule_ids, dtype=bool)
-			for mol_id in mol_id_dset:
-				mask |= molecule_ids == mol_id
-			mask = ~mask
-			
-			n_old_mols = mol_id_dset.size
-			n_new_mols = np.count_nonzero(mask)
-			
-			mol_id_dset.resize(n_old_mols + n_new_mols, axis=0)
-			mol_name_dset.resize(n_old_mols+n_new_mols, axis=0)
-			
-			mol_id_dset[n_old_mols:n_old_mols+n_new_mols] = molecule_ids[mask]
-			mol_name_dset[n_old_mols:n_old_mols+n_new_mols] = molecule_names[mask]
-			
-			
-			isotopologues_grp = self.get_isos_grp(x_grp)
-			
-			mol_id_dset = h5py_helper.get_dataset(isotopologues_grp, 'mol_id', defaults=dict(shape=(0,), dtype=int, maxshape=(None,)))
-			iso_id_dset = h5py_helper.get_dataset(isotopologues_grp, 'iso_id', defaults=dict(shape=(0,), dtype=int, maxshape=(None,)))
-			global_iso_id_dset = h5py_helper.get_dataset(isotopologues_grp, 'global_iso_id', defaults=dict(shape=(0,), dtype=int, maxshape=(None,)))
-			iso_name_dset = h5py_helper.get_dataset(isotopologues_grp, 'iso_name', defaults=dict(shape=(0,), dtype='T', maxshape=(None,)))
-			
-			mol_ids = np.array([rt_gas_desc.gas_id for rt_gas_desc in ldh.rt_gas_descs], dtype=int)
-			iso_ids = np.array([rt_gas_desc.iso_id for rt_gas_desc in ldh.rt_gas_descs], dtype=int)
-			global_iso_ids = np.array([rt_gas_desc.global_iso_id for rt_gas_desc in ldh.rt_gas_descs], dtype=int)
-			iso_names = np.array([rt_gas_desc.isotope_name for rt_gas_desc in ldh.rt_gas_descs], dtype='T')
-			
-			mask = np.zeros_like(mol_ids, dtype=bool)
-			for mol_id in mol_id_dset:
-				mask |= mol_ids == mol_id
-			mask = ~mask
-			
-			n_old = mol_id_dset.size
-			n_new = np.count_nonzero(mask)
-			
-			mol_id_dset.resize(n_old+n_new, axis=0)
-			mol_id_dset[n_old:n_old+n_new] = mol_ids[mask]
-			
-			iso_id_dset.resize(n_old+n_new, axis=0)
-			iso_id_dset[n_old:n_old+n_new] = iso_ids[mask]
-			
-			global_iso_id_dset.resize(n_old+n_new, axis=0)
-			global_iso_id_dset[n_old:n_old+n_new] = global_iso_ids[mask]
-			
-			iso_name_dset.resize(n_old+n_new, axis=0)
-			iso_name_dset[n_old:n_old+n_new] = iso_names[mask]
-			
-			
-			d_grp = self.get_line_data_grp(x_grp)
-			
-			mol_mask = np.ones_like(ldh.mol_id, dtype=bool)
-			iso_mask = np.ones_like(ldh.mol_id, dtype=bool)
-			
-			for rt_gas_desc in ldh.rt_gas_descs:
-				mol_mask[...] = ldh.mol_id == rt_gas_desc.gas_id
-				iso_mask[...] = mol_mask & (ldh.local_iso_id == rt_gas_desc.iso_id)
-				
-				mol_grp = h5py_helper.ensure_grp(d_grp, rt_gas_desc.gas_name)
-				iso_grp = h5py_helper.ensure_grp(mol_grp, f'{rt_gas_desc.iso_id}')
-				
-				line_data_table = LineDataTableFormat(
-					ldh.mol_id[iso_mask],
-					ldh.local_iso_id[iso_mask],
-					ldh.nu[iso_mask],
-					ldh.sw[iso_mask],
-					ldh.a[iso_mask],
-					ldh.gamma_air[iso_mask],
-					ldh.n_air[iso_mask],
-					ldh.delta_air[iso_mask],
-					ldh.gamma_self[iso_mask],
-					ldh.n_self[iso_mask],
-					ldh.elower[iso_mask],
-					ldh.gp[iso_mask],
-					ldh.gpp[iso_mask],
-				)
-				
-				line_data_table.update_hdf5(iso_grp)
-		
-		self.update_from_sources()
-
 
 	
 
@@ -882,8 +588,8 @@ class AnsLineDataFile:
 	) -> tuple[np.ndarray,...]:
 	
 		null_data = tuple(
-			[np.zeros((0,), dtype=LineDataRecordFormat.type(k)) for k in iso_keys] 
-			+ [np.zeros((0,), dtype=LineBroadenerRecordFormat.type(k)) for k in broad_keys]
+			[np.zeros((0,), dtype=LineDataRecordLayout.type(k)) for k in iso_keys] 
+			+ [np.zeros((0,), dtype=LineBroadenerRecordLayout.type(k)) for k in broad_keys]
 		)
 	
 		with h5py.File(self.path, 'r') as f:
