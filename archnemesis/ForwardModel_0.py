@@ -3928,6 +3928,94 @@ class ForwardModel_0:
         
         return TAUTOT_LAYINC, TAUTOT_PATH, dTAUTOT_LAYINC
 
+
+    def calculate_layer_emission(self, return_grad=False):
+        #This function calculates the emission radiance per layer along the line-of-sight
+
+        if self.EmissionsX is None:
+
+            EMITOT_LAYINC = None
+            dEMITOT_LAYINC = None
+
+        else:
+
+            if return_grad is True:
+                raise ValueError("analytical gradients have not yet been introduced with atmospheric emissions")
+
+            #(NWAVE,NGAS+2+NDUST,NLAY)
+            EMI = np.zeros((self.SpectroscopyX.NWAVE,self.LayerX.NLAY)) 
+            if return_grad is True:
+                #(NWAVE,NGAS+2+NDUST,NLAY)
+                dEMI = np.zeros((self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST,self.LayerX.NLAY))
+
+            #Defining the stellar distance
+            if( (self.StellarX is not None) & (self.StellarX.SOLEXIST is True) ):  
+                dist = self.StellarX.DIST
+            else:
+                dist = None
+
+            #Calculating the emission rates in [photons cm-2 um-1] or [photons cm-2 (cm-1)-1]
+            #(NWAVE,NLAYER,NEM)
+            emission_rate = self.EmissionsX.calc_rates_hdf5(self.LayerX.TEMP,dist=self.StellarX.DIST)
+
+            #Calculating the density of the gases that contribute to the emission and the layer emitted intensity
+            for iemi in range(self.EmissionsX.NEM):
+
+                if self.EmissionsX.NGAS[iemi]>1:
+                    #the problem is that to get the reaction rate in cm-3 s-1 (as typically included in photochemical models)
+                    #we need something that is k*n1*n2, where k is the reaction rate coefficient in cm3 s-1
+                    #if we assume k is constant for the layer, then in order to find the integral we need
+                    #int(n1*n2*dz). However, here we are doing int(n1*dz)*int(n2*dz), which is not the same.
+
+                    #the solution would be to calculate int(n1*n2*dz) when the layering is performed, but we need
+                    #to think how this would be performed
+                    raise ValueError("right now we can only deal with emissions that only involve 1 gas")
+
+
+                for igas in range(self.EmissionsX.NGAS[iemi]):
+                    
+                    #Finding the index of the gas in the atmosphere
+                    igasx = np.where( (self.AtmosphereX.ID==self.EmissionsX.ID[igas,iemi]) & (self.AtmosphereX.ISO==self.EmissionsX.ISO[igas,iemi]) )[0][0]
+                    
+                    #Calculating the vertical column density in cm-2
+                    VLOSDENS = ForwardModel.LayerX.AMOUNT[:,igasx] * 1.0e-4   #cm-2
+
+                    #Calculating the emitted radiance from the layer
+                    EMI[:,:] += emission_rate[:,:,iemi] * VLOSDENS[np.newaxis,:] / (4.*np.pi) #photons s-1 cm-2 sr-1 um-1
+
+                    if return_grad:
+                        #Calculating the gradients
+                        dEMI[:,igasx,:] += emission_rate[:,:,iemi] / (4.*np.pi) 
+
+
+            #Converting from emitted intensity to emitted radiance
+            if self.EmissionsX.ISPACE==WaveUnit.Wavenumber_cm:
+                factor = (ans.Data.constants.h_planck *ans.Data.constants.c_light_cgs * self.EmissionsX.WAVE)
+                EMI *= factor[:,np.newaxis]  #W cm-2 sr-1 (cm-1)-1
+                if return_grad:
+                    dEMI *= factor[:,np.newaxis,np.newaxis]
+            elif self.EmissionsX.ISPACE==WaveUnit.Wavelength_um:
+                factor = (ans.Data.constants.h_planck *ans.Data.constants.c_light / (self.EmissionsX.WAVE * 1.0e-6) )
+                EMI *= factor[:,np.newaxis]  #W cm-2 sr-1 um-1
+                if return_grad:
+                    dEMI *= factor[:,np.newaxis,np.newaxis]
+
+            #Calculating the line-of-sight opacities
+            #################################################################################################################
+
+            _lgr.info('CIRSradg :: Calculating TOTAL line-of-sight opacity')
+            
+            #Calculating the line-of-sight opacities
+            EMITOT_LAYINC = EMI[:,self.PathX.LAYINC[:,:]] * self.PathX.SCALE[:,:]  #(NWAVE,NLAYIN,NPATH)
+            
+            if return_grad:
+                dEMITOT_LAYINC = dEMI[:,:,self.PathX.LAYINC[:,:]] * self.PathX.SCALE[:,:] #(NWAVE,NGAS+2+NDUST,NLAYIN,NPATH)
+            else:
+                dEMITOT_LAYINC = None
+
+        return EMITOT_LAYINC,dEMITOT_LAYINC
+
+
     def calculate_transmission_spectrum(
             self,
             TAUTOT_PATH,
@@ -3966,6 +4054,8 @@ class ForwardModel_0:
             self,
             TAUTOT_LAYINC,
             dTAUTOT_LAYINC,
+            EMITOT_LAYINC,
+            dEMITOT_LAYINC,
             return_grad = False
         ) -> tuple[np.ndarray, None|np.ndarray, None|np.ndarray]:
         
@@ -3991,6 +4081,18 @@ class ForwardModel_0:
             f = scipy.interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
             solflux = f(self.SpectroscopyX.WAVE)  #stellar flux spectrum (W cm-2 um-1 or W cm-2 (cm-1)-1)
             xfac = xfac / solflux
+
+        #Interpolating the emitted radiance in each layer to the Spectroscopy units
+        if((self.EmissionsX is not None)):
+            if((self.EmissionsX.NEM>0)):
+
+                if self.EmissionsX.ISPACE != self.MeasurementX.ISPACE:
+                    raise ValueError("error :: ISPACE must be the same in Emissions and Measurement")
+            
+                f_emit = scipy.interpolate.interp1d(self.EmissionsX.WAVE,EMITOT_LAYINC,axis=0,bounds_error=False,fill_value=0.0)
+                f_demit = scipy.interpolate.interp1d(self.EmissionsX.WAVE,dEMITOT_LAYINC,axis=0,bounds_error=False,fill_value=0.0)
+                EMITOT_LAYINC = f_emit(self.SpectroscopyX.WAVE)
+                dEMITOT_LAYINC = f_demit(self.SpectroscopyX.WAVE)
 
         #Interpolating the emissivity of the self.SurfaceX to the calculation wavelengths
         if self.SurfaceX.TSURF>0.0:
@@ -4028,11 +4130,28 @@ class ForwardModel_0:
             NLAYIN = self.PathX.NLAYIN[ipath]
             EMTEMP = self.PathX.EMTEMP[0:NLAYIN,ipath]
             EMPRESS = self.LayerX.PRESS[self.PathX.LAYINC[0:NLAYIN,ipath]]
-            
+
             if return_grad:
+
+                if EMITOT_LAYINC is not None:
+                    EMRAD = EMITOT_LAYINC[:,0:NLAYIN,ipath]
+                else:
+                    EMRAD = None
+
+                if dEMITOT_LAYINC is not None:
+                    dEMRAD = dEMITOT_LAYINC[:,:,0:NLAYIN,ipath]
+                else:
+                    dEMRAD = None
+
                 SPECOUT[:,:,ipath],dSPECOUT[:,:,:,0:NLAYIN,ipath],dTSURF[:,:,ipath] = calc_thermal_emission_spectrumg(self.MeasurementX.ISPACE,self.SpectroscopyX.WAVE,TAUTOT_LAYINC[:,:,0:NLAYIN,ipath],dTAUTOT_LAYINC[:,:,:,0:NLAYIN,ipath],self.AtmosphereX.NVMR,EMTEMP,EMPRESS,self.SurfaceX.TSURF,EMISSIVITY)
             else:
-                SPECOUT[:,:,ipath] = calc_thermal_emission_spectrum(self.MeasurementX.ISPACE,self.SpectroscopyX.WAVE,TAUTOT_LAYINC[:,:,0:NLAYIN,ipath],EMTEMP,EMPRESS,self.SurfaceX.TSURF,EMISSIVITY,SOLFLUX,REFLECTANCE,self.PathX.SOL_ANG[ipath],self.PathX.EMISS_ANG[ipath])
+
+                if EMITOT_LAYINC is not None:
+                    EMRAD = EMITOT_LAYINC[:,0:NLAYIN,ipath]
+                else:
+                    EMRAD = None
+
+                SPECOUT[:,:,ipath] = calc_thermal_emission_spectrum(self.MeasurementX.ISPACE,self.SpectroscopyX.WAVE,TAUTOT_LAYINC[:,:,0:NLAYIN,ipath],EMRAD,EMTEMP,EMPRESS,self.SurfaceX.TSURF,EMISSIVITY,SOLFLUX,REFLECTANCE,self.PathX.SOL_ANG[ipath],self.PathX.EMISS_ANG[ipath])
             
             #Changing the units of the spectra and gradients
             SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
@@ -4204,13 +4323,27 @@ class ForwardModel_0:
         #Initialise some arrays
         ###################################
 
-        #Calculating the vertical opacity of each layer
+        #Calculating the line-of-sight opacity of each layer
         ######################################################
         (
             TAUTOT_LAYINC, 
             TAUTOT_PATH, 
             dTAUTOT_LAYINC,
         ) = self.calculate_layer_opacity(return_grad)
+
+        #TAUTOT_LAYINC is the line-of-sight opacity in each layer and path (NWAVE,NG,NLAYIN,NPATH)
+        #TAUTOT_PATH is the line-of-sight opacity integrated across all layers (NWAVE,NG,NPATH)
+        #dTAUTOT_LAYINC are the derivatives of the line-of-sight opacity in each layer and path for each atmospheric parameter
+
+        #Calculating the line-of-sight emission of each layer (non thermal emission)
+        ############################################################################
+
+        (
+            EMITOT_LAYINC,
+            dEMITOT_LAYINC,
+        ) = self.calculate_layer_emission(return_grad)
+
+
         
         #Step through the different number of paths and calculate output spectrum
         ############################################################################
@@ -4266,7 +4399,7 @@ class ForwardModel_0:
             SPECOUT, dSPECOUT = self.calculate_absorption_spectrum(TAUTOT_PATH, return_grad)
         
         elif PathCalc.THERMAL_EMISSION in IMODM: #Thermal emission from planet 
-            SPECOUT, dSPECOUT, dTSURF = self.calculate_thermal_emission_spectrum(TAUTOT_LAYINC, dTAUTOT_LAYINC, return_grad)
+            SPECOUT, dSPECOUT, dTSURF = self.calculate_thermal_emission_spectrum(TAUTOT_LAYINC, dTAUTOT_LAYINC, EMITOT_LAYINC, dEMITOT_LAYINC, return_grad)
         
         elif PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL in IMODM: #Single scattering calculation
             SPECOUT = self.calculate_single_scattering_plane_parallel_spectrum(TAUTOT_LAYINC, return_grad)
@@ -6065,7 +6198,7 @@ def planckg(ispace,wave,temp):
 
 ###############################################################################################
 @jit(nopython=True)
-def calc_thermal_emission_spectrum(ISPACE,WAVE,TAUTOT_PATH,TEMP,PRESS,TSURF,EMISSIVITY,SOLFLUX,REFLECTANCE,SOL_ANG,EMISS_ANG):
+def calc_thermal_emission_spectrum(ISPACE,WAVE,TAUTOT_PATH,EMITOT_PATH,TEMP,PRESS,TSURF,EMISSIVITY,SOLFLUX,REFLECTANCE,SOL_ANG,EMISS_ANG):
 
 
     """
@@ -6079,6 +6212,7 @@ def calc_thermal_emission_spectrum(ISPACE,WAVE,TAUTOT_PATH,TEMP,PRESS,TSURF,EMIS
         ISPACE :: Flag indicating the spectral units (0 - Wavenumber in cm-1 ; 1 - Wavelength in um)
         WAVE(NWAVE) :: Wavenumber of wavelength array
         TAUTOT_PATH(NWAVE,NG,NLAYIN) :: Total optical depth along the line-of-sight in each layer and wavelength
+        EMITOT_PATH(NWAVE,NLAYIN) :: Total emitted radiance along the line-of-sight in each layer and wavelength (W cm-2 sr-1 um-1 or W cm-2 sr-1 (cm-1)-1)
         TEMP(NLAYIN) :: Temperature of each layer along the path (K)
         PRESS(NLAYIN) :: Pressure of each layer along the path (Pa)
         TSURF :: Surface temperature (K) - If TSURF<0, then the planet is considered not to have surface
@@ -6125,6 +6259,8 @@ def calc_thermal_emission_spectrum(ISPACE,WAVE,TAUTOT_PATH,TEMP,PRESS,TSURF,EMIS
                 tr = np.exp(-taud)
                 bb = planck(ISPACE,WAVE[iwave],TEMP[j])
                 specg += (trold-tr)*bb
+                if EMITOT_PATH is not None:
+                    specg += EMITOT_PATH[iwave,j] * tr
                 trold = tr
 
             #Calculating surface contribution

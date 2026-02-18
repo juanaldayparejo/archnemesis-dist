@@ -398,3 +398,11 @@ class SpectroscopicLineProfile(IntEnum):
     ROSENKRANTZ_BENREUVEN = 6
     SUBLORENTZ_CO2_BROADENING_VENUS = 7
     DOPPLER = 12
+
+class EmissionType(IntEnum):
+    """
+    Defines the type of atmospheric emission included
+    """
+    FLUORESCENCE=0
+    CHEMICAL=1
+    PHOTOLYSIS=2
