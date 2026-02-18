@@ -3978,7 +3978,7 @@ class ForwardModel_0:
                     igasx = np.where( (self.AtmosphereX.ID==self.EmissionsX.ID[igas,iemi]) & (self.AtmosphereX.ISO==self.EmissionsX.ISO[igas,iemi]) )[0][0]
                     
                     #Calculating the vertical column density in cm-2
-                    VLOSDENS = ForwardModel.LayerX.AMOUNT[:,igasx] * 1.0e-4   #cm-2
+                    VLOSDENS = self.LayerX.AMOUNT[:,igasx] * 1.0e-4   #cm-2
 
                     #Calculating the emitted radiance from the layer
                     EMI[:,:] += emission_rate[:,:,iemi] * VLOSDENS[np.newaxis,:] / (4.*np.pi) #photons s-1 cm-2 sr-1 um-1
