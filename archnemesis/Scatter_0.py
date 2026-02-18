@@ -53,10 +53,10 @@ class Scatter_0:
 
     def __init__(self, 
         ISPACE=WaveUnit.Wavenumber_cm,
-        ISCAT=ScatteringCalculationMode.MULTIPLE_SCATTERING,
+        ISCAT=ScatteringCalculationMode.THERMAL_EMISSION,
         IRAY=RayleighScatteringMode.NOT_INCLUDED,
         IMIE=AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN,
-        NMU=5, NF=2, NPHI=101, NDUST=1,
+        NMU=5, NF=2, NPHI=101, NDUST=0,
         SOL_ANG=0.0, EMISS_ANG=0.0, AZI_ANG=0.0,
         NTHETA=None, THETA=None):
 

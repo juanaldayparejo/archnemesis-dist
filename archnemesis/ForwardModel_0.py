@@ -101,6 +101,7 @@ class ForwardModel_0:
             Layer=None, 
             Variables=None, 
             Telluric=None, 
+            Emissions=None,
             adjust_hydrostat=True,
             NCores=None
     ):
@@ -134,6 +135,8 @@ class ForwardModel_0:
             Class defining the Variables
         @class Telluric:,
             Class defining the Telluric
+        @class Emissions:,
+            Class defining the Emissions
         @log adjust_hydrostat:,
             Flag indicating whether the re-adjustment of the pressure or altitude levels
             based on the hydrostatic equilibrium equation must be performed or not.
@@ -167,6 +170,8 @@ class ForwardModel_0:
             Class defining the Path for a particular forward model
         @attribute TelluricX:
             Class defining the Telluric for a particular forward model
+        @attribute EmissionsX:
+            Class defining the Emissions for a particular forward model
 
         Methods
         -------
@@ -242,68 +247,91 @@ class ForwardModel_0:
         self.Variables = Variables
         self.Layer = Layer
         self.Telluric = Telluric
+        self.Emissions = Emissions
         self.adjust_hydrostat=adjust_hydrostat
         self.NCores = NCores
 
         
+        #Check that the Spectroscopy class exists (as it defines the calculation wavelengths)
+        if self.Spectroscopy is None:
+            
+            assert self.Emissions is not None, "if Spectroscopy does not exist, Emissions must exist (to define the calculation wavelengths)"
+
+            self.Spectroscopy = ans.Spectroscopy_0()
+            self.Spectroscopy.ILBL=SpectralCalculationMode.LINE_BY_LINE_TABLES
+            self.Spectroscopy.NGAS=0
         
+        if((self.Spectroscopy.NGAS == 0)):
+            
+            self.Spectroscopy.NWAVE = self.Emissions.NWAVE
+            self.Spectroscopy.WAVE = self.Emissions.WAVE
+        
+
+        #Check that Scatter exists 
+        if self.Scatter is not None:
+            assert self.Scatter.NDUST == self.Atmosphere.NDUST, "NDUST must be the same in the Scatter and Atmosphere classes"
+        else:
+            assert self.Atmosphere.NDUST == 0, "if Scatter does not exist, then NDUST should be 0 in Atmosphere class"
+            self.Scatter = ans.Scatter_0()
+
         # Check that Measurement has an instrument response function when LBL tables are used
         if self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
             assert self.Measurement.FWHM != 0.0, "LINE_BY_LINE spectral calculation mode requires a non-zero Measurement_0.FWHM"
         
-        
-        if not self.get_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG():
-            _lgr.info('Checking atmospheric gasses have spectroscopy data.')
-            should_warn = False
+        if self.Spectroscopy.NGAS > 0:
             
-            # Test that the forward model has Spectroscopy data for each
-            # gas in the atmosphere.
-            if self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:
-                spect_table_type_str = 'k-table'
+            if not self.get_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG():
+                _lgr.info('Checking atmospheric gasses have spectroscopy data.')
+                should_warn = False
+                
+                # Test that the forward model has Spectroscopy data for each
+                # gas in the atmosphere.
+                if self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:
+                    spect_table_type_str = 'k-table'
+                    #spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
+                    spect_legacy_filename = f'{self.runname}.kls'
+                elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                    spect_table_type_str = 'line-by-line-table'
+                    spect_legacy_filename = f'{self.runname}.lls'
+                else:
+                    raise RuntimeError(f'Unknown SpectralCalculationMode: {self.Spectroscopy.ILBL}.')
                 #spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
-                spect_legacy_filename = f'{self.runname}.kls'
-            elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-                spect_table_type_str = 'line-by-line-table'
-                spect_legacy_filename = f'{self.runname}.lls'
-            else:
-                raise RuntimeError(f'Unknown SpectralCalculationMode: {self.Spectroscopy.ILBL}.')
-            #spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
+                
+                atmos_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Atmosphere.ID, self.Atmosphere.ISO))
+                spect_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Spectroscopy.ID, self.Spectroscopy.ISO))
+                
+                warning_lines = [
+                    'Not all atmospheric gasses have spectroscopy data.',
+                    '# WARNING #########################################################################',
+                    '',
+                    'The following atmospheric gasses ARE NOT PRESENT in the spectroscopy data and WILL NOT CONTRIBUTE TO OPACITY:',
+                    '',
+                ]
+                for gas_spec in atmos_gas_specifiers:
+                    if gas_spec not in spect_gas_specifiers:
+                        should_warn = True
+                        warning_lines.append(
+                            f'    {archnemesis.enums.Gas(gas_spec[0]).name} (id {gas_spec[0]}) isotopologue {gas_spec[1]}'
+                        )
+                
+                if should_warn:
+                    warning_lines.extend([
+                        '',
+                        f'To deactivate this warning place a path to a {spect_table_type_str} file for these gasses in one of the following locations (depending upon your input file type):',
+                        '',
+                        '    [HDF5 Input]',
+                        f'        In the "{self.runname}.h5" file, add an entry to "/Spectroscopy/LOCATION"',
+                        '        and update "/Spectroscopy/NGAS" appropriately.',
+                        '',
+                        '    [LEGACY Input]',
+                        f'        Add an entry to the "{spect_legacy_filename}" file.',
+                        '',
+                        '# END WARNING #####################################################################',
+                    ])
+                    _lgr.warning('\n'.join(warning_lines))
+                    self.set_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG()
             
-            atmos_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Atmosphere.ID, self.Atmosphere.ISO))
-            spect_gas_specifiers = tuple((gas_id, iso_id) for gas_id, iso_id in zip(self.Spectroscopy.ID, self.Spectroscopy.ISO))
             
-            warning_lines = [
-                'Not all atmospheric gasses have spectroscopy data.',
-                '# WARNING #########################################################################',
-                '',
-                'The following atmospheric gasses ARE NOT PRESENT in the spectroscopy data and WILL NOT CONTRIBUTE TO OPACITY:',
-                '',
-            ]
-            for gas_spec in atmos_gas_specifiers:
-                if gas_spec not in spect_gas_specifiers:
-                    should_warn = True
-                    warning_lines.append(
-                        f'    {archnemesis.enums.Gas(gas_spec[0]).name} (id {gas_spec[0]}) isotopologue {gas_spec[1]}'
-                    )
-            
-            if should_warn:
-                warning_lines.extend([
-                    '',
-                    f'To deactivate this warning place a path to a {spect_table_type_str} file for these gasses in one of the following locations (depending upon your input file type):',
-                    '',
-                    '    [HDF5 Input]',
-                    f'        In the "{self.runname}.h5" file, add an entry to "/Spectroscopy/LOCATION"',
-                    '        and update "/Spectroscopy/NGAS" appropriately.',
-                    '',
-                    '    [LEGACY Input]',
-                    f'        Add an entry to the "{spect_legacy_filename}" file.',
-                    '',
-                    '# END WARNING #####################################################################',
-                ])
-                _lgr.warning('\n'.join(warning_lines))
-                self.set_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG()
-        
-        
         
 
         #Creating extra class to hold the variables class in each permutation of the Jacobian Matrix
@@ -320,6 +348,7 @@ class ForwardModel_0:
         self.StellarX = deepcopy(Stellar)
         self.LayerX = deepcopy(Layer)
         self.TelluricX = deepcopy(Telluric)
+        self.EmissionsX = deepcopy(Emissions)
         self.PathX = None
 
 
@@ -804,6 +833,7 @@ class ForwardModel_0:
                 #Calculating the atmospheric paths
                 self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
                 self.calc_path_SO()
+
                 BASEH_TANHE = np.zeros(self.PathX.NPATH)
                 for i in range(self.PathX.NPATH):
                     BASEH_TANHE[i] = self.LayerX.BASEH[self.PathX.LAYINC[int(self.PathX.NLAYIN[i]/2),i]]/1.0e3
@@ -4566,12 +4596,12 @@ class ForwardModel_0:
             Layer = self.LayerX
 
         #from scipy import interpolate
-
-        if (WAVEC.min() < Scatter.WAVE.min()) & (WAVEC.max() > Scatter.WAVE.min()):
-            _lgr.info(f"spectral range for calculation =  {(WAVEC.min(),'-',WAVEC.max())}")
-            _lgr.info(f"spectra range for optical properties =  {(Scatter.WAVE.min(),'-',Scatter.WAVE.max())}")
-            raise ValueError('error calc_tau_dust :: Spectral range for calculation is outside of range in which the Aerosol properties are defined')
-        
+        if self.Scatter.NDUST > 0:
+            if (WAVEC.min() < Scatter.WAVE.min()) & (WAVEC.max() > Scatter.WAVE.min()):
+                _lgr.info(f"spectral range for calculation =  {(WAVEC.min(),'-',WAVEC.max())}")
+                _lgr.info(f"spectra range for optical properties =  {(Scatter.WAVE.min(),'-',Scatter.WAVE.max())}")
+                raise ValueError('error calc_tau_dust :: Spectral range for calculation is outside of range in which the Aerosol properties are defined')
+            
         # Calculating the opacity at each vertical layer for each dust population
         NWAVEC = len(WAVEC)
         TAUDUST = np.zeros((NWAVEC, Layer.NLAY, Scatter.NDUST))
@@ -5034,8 +5064,12 @@ class ForwardModel_0:
         wavespec_max = self.SpectroscopyX.WAVE.max()
         
         # Retrieve min and max wavelengths for aerosols (scatter)
-        wavetau_min = self.ScatterX.WAVE.min()
-        wavetau_max = self.ScatterX.WAVE.max()
+        if self.ScatterX.NDUST > 0:
+            wavetau_min = self.ScatterX.WAVE.min()
+            wavetau_max = self.ScatterX.WAVE.max()
+        else:
+            wavetau_min = 0.
+            wavetau_max = 1.0e12
         
         # Apply tolerance check
         if (wavespec_min > (1. + rel_tolerance) * wavecalc_min) or (wavespec_max < (1. - rel_tolerance) * wavecalc_max):
