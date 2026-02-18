@@ -222,7 +222,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
         Spectroscopy = Spectroscopy_0(RUNNAME=runname)
         Spectroscopy.read_hdf5(runname)
     else:
-        raise ValueError('error :: Spectroscopy needs to be defined in HDF5 file')
+        Spectroscopy = None
 
     #Initialise Telluric class and read file
     ###############################################################
