@@ -2094,6 +2094,9 @@ def write_lbltable(filename,npress,ntemp,gasID,isoID,presslevels,templevels,nwav
     if not filename.endswith('.lta'):
         filename += '.lta'
     
+    if np.any(presslevels < 0):
+        raise ValueError("error in write_lbltable :: Pressure levels must be non-negative")
+
     with open(filename, 'wb') as f:
 
         irec0 = 9 + npress + ntemp    #Don't know why this 9 is like this, but it works for a Linux/Ubuntu machine
@@ -2402,9 +2405,8 @@ def calc_lbltable(outname,                       #Name of the output .lta file
         pressx = np.ones(Spectroscopy.NT) * Spectroscopy.PRESS[i]
         k[:,i,:,0] = Spectroscopy.calc_klbl_online(Spectroscopy.NT,pressx,Spectroscopy.TEMP,self_frac=self_frac,add_pressure_shift=add_pressure_shift)[:,:,0]
 
-
     #Writing the look-up table
-    write_lbltable(outname,npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wavemin,delwave,k*1.0e-20,DOUBLE=False)
+    write_lbltable(outname,npress,ntemp,gasID,isoID,Spectroscopy.PRESS,Spectroscopy.TEMP,nwave,wavemin,delwave,k*1.0e-20,DOUBLE=False)
 
 
 def calc_ktable(outname,                       #Name of the output .lta file
