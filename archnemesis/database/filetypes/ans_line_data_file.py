@@ -34,10 +34,8 @@ class AnsLineDataFile:
 	def __init__(
 			self, 
 			path : None | Path = None,
-			combined_isotope_group_name : str = '0'
 	):
 		self.path = path
-		self.combined_isotope_group_name = combined_isotope_group_name
 		self.default_broadening_values = {
 			'gamma_amb' : 1.0,
 			'n_amb' : 0.0,
@@ -156,80 +154,6 @@ class AnsLineDataFile:
 				raise ValueError(f'Expected h5py.Group for entries of "{s_grp.name}" in "{s_grp.file}", but entry "{x_item_name}" has type {type(x_item)}.')
 			
 		return sources
-
-
-	def create_combined_isotope_groups(self, ld_grp : h5py.Group):
-		
-		class CombineIsotopeGroupsVisitor:
-			def __init__(self, combined_isotope_group_name):
-				self.combined_isotope_group_name = combined_isotope_group_name
-				self.v_dest_path_map = dict()
-				self.v_dest_end_offset = None
-				self.last_iso_id_visited = None
-			
-			def __call__(self, name_tail, item):
-				if not isinstance(item, h5py.Dataset):
-					return
-				if name_tail.startswith(self.combined_isotope_group_name):
-					return
-				
-				v_dest_path = '/'.join((self.combined_isotope_group_name, name_tail.split('/',1)[1]))
-				v_dest_src_list = self.v_dest_path_map.setdefault(v_dest_path, [])
-				
-				changed_iso_id = False
-				if (self.last_iso_id_visited is None) or (not name_tail.startswith(self.last_iso_id_visited)):
-					self.last_iso_id_visited = name_tail.split('/',1)[0]
-					changed_iso_id = True
-				
-				v_shape = np.array(item.shape, dtype=int)
-				if self.v_dest_end_offset is None:
-					self.v_dest_end_offset = np.zeros_like(v_shape, dtype=int)
-				
-				if changed_iso_id:
-					self.v_dest_end_offset += v_shape
-				
-				v_dest_src_list.append((item.name, v_shape, self.v_dest_end_offset - v_shape, item.dtype))
-			
-			
-			def to_combined_iso_group(self, mol_grp : h5py.Group):
-				
-				for v_dest_path, v_dest_src_list in self.v_dest_path_map.items():
-				
-					if v_dest_path in mol_grp:
-						del mol_grp[v_dest_path]
-
-					layout = h5py.VirtualLayout(
-						shape=tuple(int(s) for s in self.v_dest_end_offset), 
-						dtype = np.result_type(*(x[3] for x in v_dest_src_list)),
-						maxshape = tuple(None for s in self.v_dest_end_offset)
-					)
-					
-					for v_src_path, v_shape, v_offset, dtype in v_dest_src_list:
-					
-						src_slices = tuple(slice(0,int(s)) for s in v_shape)
-						dest_slices = tuple(slice(int(x),int(x+s)) for x,s in zip(v_offset, v_shape))
-					
-						vsource = h5py.VirtualSource(
-							'.',
-							v_src_path,
-							shape=tuple(int(s) for s in v_shape),
-							dtype = dtype,
-							maxshape = tuple(None for s in v_shape)
-						)
-						
-						layout[*dest_slices] = vsource[*src_slices]
-							
-					
-					mol_grp.create_virtual_dataset(v_dest_path, layout, fillvalue=None)
-		
-		
-		for mol_grp_name, mol_grp in ld_grp.items():
-			cigv = CombineIsotopeGroupsVisitor(self.combined_isotope_group_name)
-			
-			mol_grp.visititems(cigv)
-			
-			cigv.to_combined_iso_group(mol_grp)
-		
 
 
 	def update_from_sources(self):
