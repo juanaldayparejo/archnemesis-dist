@@ -166,4 +166,7 @@ cython_debug/
 
 local_*_database/
 *.h5
+*.zip
 HITRAN??/
+HITRAN_TEST/
+test_data/

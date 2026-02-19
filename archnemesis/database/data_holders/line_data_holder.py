@@ -42,6 +42,5 @@ class LineDataHolder:
 	def rt_gas_descs(self):
 		if self._rt_gas_descs is None:
 			u_ids = np.unique(np.array([self.mol_id, self.local_iso_id], dtype=int), axis=1)
-			print(f'DEBUG : {u_ids.shape=}')
 			self._rt_gas_descs = tuple(RadtranGasDescriptor(int(gas_id), int(iso_id)) for gas_id, iso_id in u_ids.T)
 		return self._rt_gas_descs

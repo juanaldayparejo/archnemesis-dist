@@ -24,8 +24,8 @@ from archnemesis.database.data_layout_writers.line_data_table_writer import Line
 # Logging
 import logging
 _lgr = logging.getLogger(__name__)
-#_lgr.setLevel(logging.INFO)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
+#_lgr.setLevel(logging.DEBUG)
 
 
 
@@ -118,47 +118,43 @@ class AnsLineDataFile:
 				
 				iso_grp.visititems(EachChildDatasetHasSameShapeVisitor())
 		
-		print(f'DEBUG : Validation for "{g.name}" in "{g.file.filename}" succeeded')
+		_lgr.info(f'Validation for "{g.name}" in "{g.file.filename}" succeeded')
 		
 
 	def get_sources(
 		self,
-		s_grp : h5py.Group,
+		s_grp : h5py.Group, # /sources group
 	) -> list[VirtualSourceInfo,...]:
 	
 		sources = []
-			
-		for x_name in s_grp.keys(): # loop over 'X' in /sources/X/
-			x_dset = None
-			x_grp = None
-			x_item = s_grp[x_name]
-			if isinstance(x_item, h5py.Group):
-				x_grp = x_item
-			elif isinstance(x_item, h5py.Dataset):
-				x_dset = x_item
-			else:
-				raise ValueError(f'Expected h5py.Group or h5py.Dataset for entries of {s_grp.name} in {s_grp.file}, but entry {x_name} has type {type(x_item)}.')
+		target_group_name = 'line_data'
 		
-			if x_grp is not None: # handle case where '/sources/X' entry is a group, and therefore should have a 'line_data' sub-group inside it.
-				if 'line_data' not in x_grp.keys():
-					print(f"WARNING : Source group '{x_grp.name}' in '{x_grp.file}' should have a 'line_data' sub-group. This one has entries {tuple(x_grp.keys())}, therefore not using as a source.")
+		for x_item_name, x_item in s_grp.items():
+		
+			if isinstance(x_item, h5py.Group): # handle case where '/sources/X' entry is a group, and therefore should have a 'target_group_name' sub-group inside it.
+				if target_group_name not in x_item.keys():
+					print(f"WARNING : Source group '{x_item.name}' in '{x_item.file.filename}' should have a '{target_group_name}' sub-group. This one has entries {tuple(x_item.keys())}, therefore not using as a source for '/{target_group_name}'.")
 					continue
-				sources.append(VirtualSourceInfo(x_grp.name, '.', x_grp.name+'/line_data'))
 				
-			
-			if x_dset is not None: # handle case where '/sources/X' entry is a dataset, therefore should have either a single string or two strings that specify an external HDF5 [file,group] pair
-				external_file = None
-				external_group = '/line_data'
-				if len(x_dset.shape) == 0: # dataset is a scalar, so we only have the filename
-					external_file = str(x_dset.astype('T')[tuple()])
-				elif len(x_dset.shape) == 1 and x_dset.shape[0] == 2: #  dataset is a pair, so we have the filename and the group
-					external_file, external_group = (str(x) for x in x_dset.astype('T')[:])
+				sxpf_item = x_item[target_group_name]
+				if isinstance(sxpf_item, h5py.Dataset):
+					external_file = '.'
+					external_group = target_group_name
+					if len(sxpf_item.shape) == 0:
+						# dataset is a scalar, so we only have the filename
+						external_file = sxpf_item.asstr()[tuple()]
+					elif len(sxpf_item.shape) == 1 and sxpf_item.shape[0] == 2: #  dataset is a pair, so we have the filename and the group
+						external_file, external_group = (str(x) for x in sxpf_item.astype('T')[:])
+					else:
+						raise ValueError(f'Dataset "{sxpf_item.name}" in "{sxpf_item.file.filename}" should either be a scalar string, or a string array of shape (2,), but has dtype={x_item.dtype} shape={x_item.shape}')
+					
+					sources.append(VirtualSourceInfo(sxpf_item.name, external_file, external_group))
 				else:
-					raise ValueError(f'Dataset "{x_dset.name}" in "{x_dset.file}" should either be a scalar string, or a string array of shape (2,), but has dtype={x_dset.dtype} shape={x_dset.shape}')
-				
-				print(f'DEBUG : {external_file=} {external_group=}')
-				
-				sources.append(VirtualSourceInfo(x_dset.name, external_file, external_group))
+					sources.append(VirtualSourceInfo(x_item.name, '.', x_item.name+f'/{target_group_name}'))
+			
+			else:
+				raise ValueError(f'Expected h5py.Group for entries of "{s_grp.name}" in "{s_grp.file}", but entry "{x_item_name}" has type {type(x_item)}.')
+			
 		return sources
 
 
@@ -397,74 +393,6 @@ class AnsLineDataFile:
 					layout[*dest_slices] = vsource[*src_slices]
 					
 				ld_grp.create_virtual_dataset(v_iso_dset_dest_path, layout, fillvalue=v_dset_dest_default)
-		
-		
-	
-
-
-	def consolidate_external_datasets(
-		self,
-		temp_grp_name : str = 'SCRATCH',
-	):
-	
-		with h5py.File(self.path, 'a') as f:
-			s_grp = h5py_helper.ensure_grp(f, 'sources')
-			sources = self.get_sources(s_grp)
-			
-			for s_name, s_file, s_grp_path in sources:
-				print(f'DEBUG : {s_name=} {s_file=} {s_grp_path=}')
-				if s_file == '.': # these are already in the file, no need to consolidate them
-					continue
-				
-				
-				# Copy everything inside the source group to the current file
-				if temp_grp_name in s_grp.keys():
-					del s_grp[temp_grp_name]
-				x_grp = h5py_helper.ensure_grp(s_grp, temp_grp_name)
-				
-				with h5py.File(Path(f.file.filename).parent / s_file, 'r') as g:
-					g.copy(s_grp_path, x_grp, name=x_grp.name + '/line_data')
-				
-				# delete old source
-				del s_grp[s_name]
-				
-				# move scratch space to replace old source
-				s_grp.move(temp_grp_name, s_name)
-				
-			# loop over all source line data and remove:
-			# * any combined isotope groups
-			# * any virtual datasets
-			# * any empty isotope groups
-			# * any empty molecule groups
-			# * any empty sources
-			for x_name, x_grp in s_grp.items():
-				if not isinstance(x_grp, h5py.Group):
-					continue
-				
-				ld_grp = x_grp['line_data']
-				for mol_name, mol_grp in ld_grp.items():
-					if not isinstance(mol_grp, h5py.Group):
-						continue
-					
-					if self.combined_isotope_group_name in mol_grp:
-						del mol_grp[self.combined_isotope_group_name]
-					
-					for iso_name, iso_grp in mol_grp.items():
-						if not isinstance(iso_grp, h5py.Group):
-							continue
-						
-						for dset_name, dset in iso_grp.items():
-							if not isinstance(dset, h5py.Dataset):
-								continue
-							if dset.is_virtual:
-								del iso_grp[dset_name]
-						
-						if len(tuple(iso_grp.keys())) == 0:
-							del mol_grp[iso_name]
-					if len(tuple(mol_grp.keys())) == 0:
-						del ld_grp[mol_name]
-				if len(tuple(ld_grp.keys())) == 0:
-					del s_grp[x_name]
 
 
 	def get_sources_grp(self, root_grp : h5py.Group):

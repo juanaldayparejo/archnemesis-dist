@@ -10,8 +10,8 @@ import numpy as np
 import h5py
 from archnemesis.helpers import h5py_helper
 
-from ans_line_data_file import AnsLineDataFile
-from ans_partition_fn_data_file import AnsPartitionFunctionDataFile
+from archnemesis.database.filetypes.ans_line_data_file import AnsLineDataFile
+from archnemesis.database.filetypes.ans_partition_fn_data_file import AnsPartitionFunctionDataFile
 
 hdf5_file = Path(__file__).parent / "hitran24.h5"
 
@@ -116,6 +116,8 @@ if False:
 
 
 if True:
+	target_group_name = 'partition_function'
+	
 	partition_function_data_file_source = Path(__file__).parent / 'hitran24_pf_copy.h5'
 	partition_function_data_file_subset = Path(__file__).parent / 'hitran24_pf_external_subset.h5'
 	partition_function_data_file_source_subset = Path(__file__).parent / 'hitran24_pf_external_source_subset.h5'
@@ -131,28 +133,28 @@ if True:
 	
 	with h5py.File(partition_function_data_file_source, 'r') as f:
 		with h5py.File(partition_function_data_file_subset, 'w') as g:
-			xpf_grp = h5py_helper.ensure_grp(g, 'partition_function')
+			xpf_grp = h5py_helper.ensure_grp(g, target_group_name)
 			for mol in mols_1:
 				f.copy(f'/sources/HITRAN24/partition_function/{mol}', xpf_grp)
 		
 		with h5py.File(partition_function_data_file_source_subset, 'w') as g:
 			s_grp = h5py_helper.ensure_grp(g, 'sources')
 			xs_grp_1 = h5py_helper.ensure_grp(s_grp, 'HITRAN24')
-			pfxs_grp_1 = h5py_helper.ensure_grp(xs_grp_1, 'partition_function')
+			pfxs_grp_1 = h5py_helper.ensure_grp(xs_grp_1, target_group_name)
 			
 			xs_grp_2 = h5py_helper.ensure_grp(s_grp, 'TEST_SOURCE')
-			pfxs_grp_2 = h5py_helper.ensure_grp(xs_grp_2, 'partition_function')
+			pfxs_grp_2 = h5py_helper.ensure_grp(xs_grp_2, target_group_name)
 			
 			for mol in mols_2:
-				f.copy(f'/sources/HITRAN24/partition_function/{mol}', pfxs_grp_1)
+				f.copy(f'/sources/HITRAN24/{target_group_name}/{mol}', pfxs_grp_1)
 			
 			for mol in mols_3:
-				f.copy(f'/sources/HITRAN24/partition_function/{mol}', pfxs_grp_2)
+				f.copy(f'/sources/HITRAN24/{target_group_name}/{mol}', pfxs_grp_2)
 		
 		with h5py.File(partition_function_data_file_subset_badname, 'w') as g:
 			xpf_grp = h5py_helper.ensure_grp(g, 'part_func_data')
 			for mol in mols_4:
-				f.copy(f'/sources/HITRAN24/partition_function/{mol}', xpf_grp)
+				f.copy(f'/sources/HITRAN24/{target_group_name}/{mol}', xpf_grp)
 	
 	
 	partition_function_data_file_external_sources = Path(__file__).parent / 'hitran24_pf_with_external_sources.h5'
@@ -166,10 +168,13 @@ if True:
 	with h5py.File(partition_function_data_file_external_sources, 'w') as f:
 		s_grp = h5py_helper.ensure_grp(f, 'sources')
 		for source_name, source_info in source_map.items():
+			sx_grp = h5py_helper.ensure_grp(s_grp, source_name)
+			
 			if isinstance(source_info, str):
-				h5py_helper.ensure_dataset(s_grp, source_name, shape=tuple(), data=source_info, dtype='T')
-			elif isinstance(source_info, tuple) and (len(source_info)==2):
-				h5py_helper.ensure_dataset(s_grp, source_name, shape=(2,), data=source_info, dtype='T')
+				h5py_helper.ensure_dataset(sx_grp, target_group_name, shape=tuple(), data=source_info, dtype='T')
+			
+			elif isinstance(source_info, tuple) and (len(source_info)==2):	
+				h5py_helper.ensure_dataset(sx_grp, target_group_name, shape=(2,), data=source_info, dtype='T')
 			else:
 				raise TypeError(f'{source_name=} {source_info=}. `source_info` should be a string or a tuple of two strings')
 	
@@ -181,6 +186,8 @@ if True:
 
 
 if True:
+	target_group_name = 'line_data'
+
 	line_data_data_file_source = Path(__file__).parent / 'hitran24_copy.h5'
 	line_data_data_file_subset = Path(__file__).parent / 'hitran24_external_subset.h5'
 	line_data_data_file_source_subset = Path(__file__).parent / 'hitran24_external_source_subset.h5'
@@ -231,10 +238,13 @@ if True:
 	with h5py.File(line_data_data_file_external_sources, 'w') as f:
 		s_grp = h5py_helper.ensure_grp(f, 'sources')
 		for source_name, source_info in source_map.items():
+			sx_grp = h5py_helper.ensure_grp(s_grp, source_name)
+			
 			if isinstance(source_info, str):
-				h5py_helper.ensure_dataset(s_grp, source_name, shape=tuple(), data=source_info, dtype='T')
-			elif isinstance(source_info, tuple) and (len(source_info)==2):
-				h5py_helper.ensure_dataset(s_grp, source_name, shape=(2,), data=source_info, dtype='T')
+				h5py_helper.ensure_dataset(sx_grp, target_group_name, shape=tuple(), data=source_info, dtype='T')
+			
+			elif isinstance(source_info, tuple) and (len(source_info)==2):	
+				h5py_helper.ensure_dataset(sx_grp, target_group_name, shape=(2,), data=source_info, dtype='T')
 			else:
 				raise TypeError(f'{source_name=} {source_info=}. `source_info` should be a string or a tuple of two strings')
 	

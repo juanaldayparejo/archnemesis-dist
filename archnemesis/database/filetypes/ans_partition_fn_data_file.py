@@ -18,8 +18,8 @@ from archnemesis.database.data_holders.partition_function_data_holder import Par
 # Logging
 import logging
 _lgr = logging.getLogger(__name__)
-#_lgr.setLevel(logging.INFO)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
+#_lgr.setLevel(logging.DEBUG)
 
 
 
@@ -145,7 +145,7 @@ class AnsPartitionFunctionDataFile:
 				
 				iso_grp.visititems(EachImmediateChildGroupIsLikeAPFDataInstanceVisitor())
 		
-		_lgr.debug(f'Validation for "{g.name}" in "{g.file.filename}" succeeded')
+		_lgr.info(f'Validation for "{g.name}" in "{g.file.filename}" succeeded')
 
 
 	def update_from_sources(self):
@@ -167,34 +167,37 @@ class AnsPartitionFunctionDataFile:
 
 	def get_sources(
 		self,
-		s_grp : h5py.Group,
+		s_grp : h5py.Group, # /sources group
 	) -> list[VirtualSourceInfo,...]:
 	
 		sources = []
+		target_group_name = 'partition_function'
 		
 		for x_item_name, x_item in s_grp.items():
 		
-			if isinstance(x_item, h5py.Dataset):
-				external_file = '.'
-				external_group = 'partition_function'
-				if len(x_item.shape) == 0:
-					 # dataset is a scalar, so we only have the filename
-					 external_file = x_item.asstr()[tuple()]
-				elif len(x_item.shape) == 1 and x_item.shape[0] == 2: #  dataset is a pair, so we have the filename and the group
-					external_file, external_group = (str(x) for x in x_item.astype('T')[:])
-				else:
-					raise ValueError(f'Dataset "{x_item.name}" in "{x_item.file.filename}" should either be a scalar string, or a string array of shape (2,), but has dtype={x_item.dtype} shape={x_item.shape}')
-				
-				sources.append(VirtualSourceInfo(x_item.name, external_file, external_group))
-			
-			elif isinstance(x_item, h5py.Group): # handle case where '/sources/X' entry is a group, and therefore should have a 'partition_function' sub-group inside it.
-				if 'partition_function' not in x_item.keys():
-					print(f"WARNING : Source group '{x_item.name}' in '{x_item.file.filename}' should have a 'partition_function' sub-group. This one has entries {tuple(x_item.keys())}, therefore not using as a source.")
+			if isinstance(x_item, h5py.Group): # handle case where '/sources/X' entry is a group, and therefore should have a 'target_group_name' sub-group inside it.
+				if target_group_name not in x_item.keys():
+					print(f"WARNING : Source group '{x_item.name}' in '{x_item.file.filename}' should have a '{target_group_name}' sub-group. This one has entries {tuple(x_item.keys())}, therefore not using as a source for '/{target_group_name}'.")
 					continue
-				sources.append(VirtualSourceInfo(x_item.name, '.', x_item.name+'/partition_function'))
+				
+				sxpf_item = x_item[target_group_name]
+				if isinstance(sxpf_item, h5py.Dataset):
+					external_file = '.'
+					external_group = target_group_name
+					if len(sxpf_item.shape) == 0:
+						# dataset is a scalar, so we only have the filename
+						external_file = sxpf_item.asstr()[tuple()]
+					elif len(sxpf_item.shape) == 1 and sxpf_item.shape[0] == 2: #  dataset is a pair, so we have the filename and the group
+						external_file, external_group = (str(x) for x in sxpf_item.astype('T')[:])
+					else:
+						raise ValueError(f'Dataset "{sxpf_item.name}" in "{sxpf_item.file.filename}" should either be a scalar string, or a string array of shape (2,), but has dtype={x_item.dtype} shape={x_item.shape}')
+					
+					sources.append(VirtualSourceInfo(sxpf_item.name, external_file, external_group))
+				else:
+					sources.append(VirtualSourceInfo(x_item.name, '.', x_item.name+f'/{target_group_name}'))
 			
 			else:
-				raise ValueError(f'Expected h5py.Group or h5py.Dataset for entries of {s_grp.name} in {s_grp.file}, but entry {x_item_name} has type {type(x_item)}.')
+				raise ValueError(f'Expected h5py.Group for entries of "{s_grp.name}" in "{s_grp.file}", but entry "{x_item_name}" has type {type(x_item)}.')
 			
 		return sources
 
@@ -327,7 +330,6 @@ class AnsPartitionFunctionDataFile:
 						for field in dc.fields(pf_data):
 							if field.name.startswith('_'):
 								continue
-							_lgr.info(f'{field=}')
 							h5py_helper.ensure_dataset(pf_data_grp, field.name, data=getattr(pf_data, field.name))
 					else:
 						raise TypeError(f'`pfdh.data` must be an instance of one of the following types {tuple(typ for typ in self.pf_data_types)}, not {type(pf_data)}.')
