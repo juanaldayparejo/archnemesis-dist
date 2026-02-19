@@ -311,7 +311,7 @@ class AnsLineDataFile:
 						dtype=v_dset_dest_dtype, 
 						maxshape=tuple(None for s in src_shape)
 					)
-					layout[*dest_slices] = vsource[*src_slices]
+					layout[dest_slices] = vsource[src_slices]
 					
 				ld_grp.create_virtual_dataset(v_iso_dset_dest_path, layout, fillvalue=v_dset_dest_default)
 
