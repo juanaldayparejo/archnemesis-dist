@@ -79,7 +79,7 @@ class AnsLineDataFile:
 					print(f'{self.indent_1*level}{self.indent_2}{name_last} : {item_type}')
 				
 				elif self.mode == 'full_paths':
-					item_type = 'Group' if isinstance(item, h5py.Group) else f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), ' '*(len(name_tail)+6))}'
+					item_type = 'Group' if isinstance(item, h5py.Group) else f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), " "*(len(name_tail)+6))}'
 					print(f'{name_tail} : {item_type}')
 				
 				else:
