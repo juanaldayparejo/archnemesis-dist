@@ -241,9 +241,6 @@ class AnsLineDataFile:
 						def isotope_dataset_items_visitor(name_tail : str, xdset : h5py.Group | h5py.Dataset):
 							if not isinstance(xdset, h5py.Dataset): # Do not bother with groups, only datasets
 								return
-							elif name_tail == self.combined_isotope_group_name:
-								print(f'WARNING : External source for virtual datasets should not include a "combined isotope" group {self.combined_isotope_group_name=}. However, "{xmol_grp.name}" in file "{xmol_grp.file}" includes this group, so we will skip it.')
-								return 
 							
 							v_iso_dset_dest_path = f"{xmol_grp_name}/{xiso_grp_name}/{name_tail}"
 							v_iso_dset_source_list = v_iso_dset_sources[v_iso_dest_path].setdefault(v_iso_dset_dest_path,[])
