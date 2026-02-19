@@ -1,13 +1,163 @@
 
 
 import h5py
-from typing import Callable, Any
+from typing import Callable, Any, Literal, NamedTuple#, Type
 
 import numpy as np
 
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.WARN)
+
+
+class VirtualSourceInfo(NamedTuple):
+    src_name : str
+    src_file : str
+    src_grp : str
+
+def ensure_grp(
+        grp : h5py.Group, 
+        name: str, 
+        attrs : None | dict[str,Any] = None, 
+        **kwargs
+    ) -> h5py.Group:
+    """
+    Return `name` sub-group of `grp`, create `name` sub-group if it does not already exist
+    """
+    create_group_flag = True
+    if name in grp.keys():
+        group = grp[name]
+        if not isinstance(group, h5py.Group):
+            del grp[name]
+        else:
+            create_group_flag = False
+    
+    if create_group_flag:
+        group = grp.create_group(name, **kwargs)
+    
+    if attrs is not None:
+        for attr, value in attrs.items():
+            if attr in group.attrs and group.attrs[attr] == value:
+                continue
+            group.attrs[attr] = value
+    return group
+
+def get_dataset(
+        grp : h5py.Group,
+        name : str,
+        defaults : dict[str, Any] = {},
+        on_is_not_dataset : Literal['ignore', 'warn','error'] = 'error',
+        on_missing : Literal['ignore', 'warn','error'] = 'ignore',
+    ) -> h5py.Dataset:
+    """
+    Return `name` dataset of `grp` if dataset does not exist, create it with passed arguments
+    """
+    if name in grp.keys():
+        dset = grp[name]
+        if isinstance(dset, h5py.Dataset):
+            return dset
+        else:
+            match on_is_not_dataset:
+                case 'ignore':
+                    _lgr.debug(f'Item "{name}" of group "{grp.name}" in HDF5 file "{grp.file.filename}" is type "{type(dset)}" not "{h5py.Dataset}". Returning object anyway.')
+                    return dset
+                case 'warn':
+                    _lgr.warning(f'Item "{name}" of group "{grp.name}" in HDF5 file "{grp.file.filename}" is type "{type(dset)}" not "{h5py.Dataset}". Returning object anyway.')
+                    return dset
+                case _:
+                    raise TypeError(f'Item "{name}" of group "{grp.name}" in HDF5 file "{grp.file.filename}" is type "{type(dset)}" not "{h5py.Dataset}".')
+    
+    match on_missing:
+        case 'ignore':
+            _lgr.debug(f'No item "{name}" of group "{grp.name}" in HDF5 file "{grp.file.filename}", creating and returning a default dataset')
+            return grp.create_dataset(name, **defaults)
+        case 'warn':
+            _lgr.warning(f'No item "{name}" of group "{grp.name}" in HDF5 file "{grp.file.filename}", creating and returning a default dataset')
+            return grp.create_dataset(name, **defaults)
+        case _:
+            raise KeyError(f'No item "{name}" of group "{grp.name}" in HDF5 file "{grp.file.filename}".')
+
+def ensure_dataset(
+        grp : h5py.Group, 
+        name : str, 
+        attrs : None | dict[str,Any] = None, 
+        extend : None | Literal['stack'] | int = None, 
+        **kwargs
+    ) -> h5py.Dataset:
+    """
+    Return `name` dataset of `grp`, if dataset already exists remove it and re-create it with passed arguments. If `extend` is not None, either stack or extend the data in the dataset.
+    
+    ## ARGUMENTS ##
+        extend : None | Literal['stack'] | int = None
+            Should we extend the dataset instead of overwriting it? 
+            If `extend` == 'stack', will stack along a new 0th axis if existing data and new data 
+            are the same shape, otherwise will assume that the 0th axis is the axis to stack along,
+            and other axes must be the same between old data and new data.
+            If `extend` is an integer, will extend along that axis, shape of old and new data must
+            be the same along other axes.
+    """
+    old_data = None
+    del_flag = False
+    
+    data = kwargs.pop('data', None)
+    
+    
+    if extend:
+        if extend != 'stack' or not isinstance(extend, int):
+            raise ValueError(f'h5py_helper.ensure_dataset(...) `extend` must be one of {{{None}, "stack", {int} instance}}, not "{extend}".')
+    
+    if name in grp.keys():
+        del_flag = True
+        if extend:
+            old_data = grp[name][tuple()]
+        
+    
+    
+    
+    if extend:
+        if data is None: # if no new data, just keep old data
+            data = old_data
+        else: # otherwise, must stack or extend.
+            if extend == 'stack':
+                if old_data.ndim == data.ndim:
+                    assert all(s0==s1 for s0,s1 in zip(old_data.shape, data.shape)), \
+                        f"When extending via 'stack', if old data and new data have the same number of dimensions, they must also must have the same shape but have {old_data.shape=} {data.shape=}"
+                    data = np.stack((old_data, data),axis=0)
+                elif old_data.ndim == (data.ndim+1):
+                    assert all(s0==s1 for s0,s1 in zip(old_data.shape[1:], data.shape)), \
+                        f"When extending via 'stack', if old data has one more dimension than new data, the 0th dimension is assumed to be stacked along so the last dimensions of old data must have the same shape as new data but have {old_data.shape=} {data.shape=}"
+                    data = np.stack((*old_data, data), axis=0)
+                else:
+                    raise ValueError(f"When extending via 'stack', old data must have the same or one more dimensions than new data but have {old_data.shape=} {data.shape=}")
+                
+            elif isinstance(extend, int):
+                assert old_data.ndim == data.ndim, \
+                    f"When `extend` is an integer, old data and new data must have same number of dimensions but have {old_data.ndim=} {data.ndim=}"
+                assert all(s0 == s1 for i, (s0,s1) in enumerate(zip(old_data.shape, data.shape)) if i!=extend), \
+                    f"When `extend` is an integer, old data and new data must have the same shape along all dimensions except the specified one but have {extend=} {old_data.shape=} {data.shape=}"
+                
+                new_shape = tuple(s0 if i != extend else (s0+s1) for i, (s0,s1) in enumerate(zip(old_data.shape, data.shape)))
+                new_data = np.empty(new_shape, dtype=np.promote_types(old_data.dtype, data.dtype))
+                
+                new_data[tuple(slice(0,s) for s in old_data.shape)] = old_data
+                new_data[tuple(slice(0,s1) if i != extend else slice(s0,s0+s1) for i, (s0,s1) in enumerate(zip(old_data.shape, data.shape)))] = data
+                
+                data = new_data
+            else:
+                raise ValueError(f'h5py_helper.ensure_dataset(...) `extend` must be one of {{{None}, "stack", {int} instance}}, not "{extend}".')
+                
+    if del_flag:
+        del grp[name]
+    
+    dset = grp.create_dataset(name, data=data, **kwargs)
+    
+    if attrs is not None:
+        for attr, value in attrs.items():
+            if attr in dset.attrs and dset.attrs[attr] == value:
+                continue
+            dset.attrs[attr] = value
+    
+    return dset
 
 def retrieve_data(
         h5py_file : h5py.File | h5py.Group,
