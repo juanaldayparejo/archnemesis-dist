@@ -854,10 +854,13 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
     else:
         NVMR = len(VMR[0])
 
-    if DUST.ndim == 1:
-        NDUST = 1
+    if DUST is not None:
+        if DUST.ndim == 1:
+            NDUST = 1
+        else:
+            NDUST = len(DUST[0])
     else:
-        NDUST = len(DUST[0])
+        NDUST = 0
 
     #Checking consistency of DUST_UNITS and XMOLWT
     if DUST_UNITS is not None:
@@ -922,25 +925,26 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
             AMOUNT = AMOUNT * TOTAM
 
         #Use the dust density information
-        if DUST.ndim > 1:
-            for J in range(NDUST):
-                DD = interp(H, DUST[:,J],HEIGHT)  
+        if DUST is not None:
+            if DUST.ndim > 1:
+                for J in range(NDUST):
+                    DD = interp(H, DUST[:,J],HEIGHT)  
+                    if DUST_UNITS is not None:
+                        if DUST_UNITS[J] == -1:  #dust units are particles per gram of atm
+                            CONT[:,J] =  DD * TOTAM * MOLWT / AVOGAD
+                        else:
+                            CONT[:,J] = DD * DELS  
+                    else:  
+                        CONT[:,J] = DD * DELS
+            else:
+                DD = interp(H, DUST,HEIGHT)  
                 if DUST_UNITS is not None:
-                    if DUST_UNITS[J] == -1:  #dust units are particles per gram of atm
-                        CONT[:,J] =  DD * TOTAM * MOLWT / AVOGAD
+                    if DUST_UNITS[0] == -1: #dust units are particles per gram of atm
+                        CONT =  DD * TOTAM * MOLWT / AVOGAD
                     else:
-                         CONT[:,J] = DD * DELS  
-                else:  
-                    CONT[:,J] = DD * DELS
-        else:
-            DD = interp(H, DUST,HEIGHT)  
-            if DUST_UNITS is not None:
-                if DUST_UNITS[0] == -1: #dust units are particles per gram of atm
-                    CONT =  DD * TOTAM * MOLWT / AVOGAD
+                        CONT = DD * DELS
                 else:
                     CONT = DD * DELS
-            else:
-                CONT = DD * DELS
 
     elif LAYINT == LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE:
         # Curtis-Godson equivalent path for a gas with constant mixing ratio
@@ -982,27 +986,28 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
                 pp = amount * p
                 AMOUNT[I] = simpson(amount*duds,x=S)
                 PP[I] = simpson(pp*duds,x=S)/TOTAM[I]
-                        
-            if DUST.ndim > 1:
-                dd = np.zeros((NINT,NDUST))
-                for J in range(NDUST):
-                    dd[:,J] = interp(H, DUST[:,J], h)
-                    if DUST_UNITS is not None:
-                        if DUST_UNITS[J] == -1: #dust units are particles per gram of atm
-                            CONT[I,J] = simpson(dd[:,J]*duds*molwt/AVOGAD,x=S)
+
+            if DUST is not None:     
+                if DUST.ndim > 1:
+                    dd = np.zeros((NINT,NDUST))
+                    for J in range(NDUST):
+                        dd[:,J] = interp(H, DUST[:,J], h)
+                        if DUST_UNITS is not None:
+                            if DUST_UNITS[J] == -1: #dust units are particles per gram of atm
+                                CONT[I,J] = simpson(dd[:,J]*duds*molwt/AVOGAD,x=S)
+                            else:
+                                CONT[I,J] = simpson(dd[:,J],x=S)
                         else:
-                            CONT[I,J] = simpson(dd[:,J],x=S)
-                    else:
-                        CONT[I,J] = simpson(dd[:,J],x=S)     
-            else:
-                dd = interp(H, DUST, h) 
-                if DUST_UNITS is not None:
-                    if DUST_UNITS[0] == -1: #dust units are particles per gram of atm
-                        CONT[I] = simpson(dd*duds*molwt/AVOGAD,x=S)
+                            CONT[I,J] = simpson(dd[:,J],x=S)     
+                else:
+                    dd = interp(H, DUST, h) 
+                    if DUST_UNITS is not None:
+                        if DUST_UNITS[0] == -1: #dust units are particles per gram of atm
+                            CONT[I] = simpson(dd*duds*molwt/AVOGAD,x=S)
+                        else:
+                            CONT[I] = simpson(dd,x=S)
                     else:
                         CONT[I] = simpson(dd,x=S)
-                else:
-                    CONT[I] = simpson(dd,x=S)
             
     # Scale back to vertical layers
     TOTAM = TOTAM / LAYSF
@@ -1011,10 +1016,11 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
     else:
         AMOUNT = AMOUNT/LAYSF
 
-    if DUST.ndim > 1:
-        CONT = (CONT.T * LAYSF**-1 ).T
-    else:
-        CONT = CONT/LAYSF
+    if DUST is not None:
+        if DUST.ndim > 1:
+            CONT = (CONT.T * LAYSF**-1 ).T
+        else:
+            CONT = CONT/LAYSF
         
     if DUST_UNITS is not None:
         XMOLWT /= 1000. #Converting back to molecular weight in kg mol-1
@@ -1131,10 +1137,13 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
     else:
         NVMR = len(VMR[0])
 
-    if DUST.ndim == 1:
-        NDUST = 1
+    if DUST is not None:
+        if DUST.ndim == 1:
+            NDUST = 1
+        else:
+            NDUST = len(DUST[0])
     else:
-        NDUST = len(DUST[0])
+        NDUST = 0
 
     #Checking consistency of DUST_UNITS and XMOLWT
     if DUST_UNITS is not None:
@@ -1227,48 +1236,49 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
             DAM[ilay,JJ[ilay]+1] = DAM[ilay,JJ[ilay]+1] + (F[ilay])*TOTAM[ilay]
 
         #Use the dust density information
-        if DUST.ndim > 1:
-            for J in range(NDUST):
-                DD,JJ,F = interpg(H, DUST[:,J],HEIGHT)  
-                CONT[:,J] = DD * DELS
-        else:
-            #DD = interp(H, DUST,HEIGHT)  
-            DD,JJ,F = interpg(H, DUST,HEIGHT)
-            CONT = DD * DELS            
+        if DUST is not None:
 
-
-        #Use the dust density information
-        dust_units_flag = False
-        if DUST.ndim > 1:
-            for J in range(NDUST):
-                DD = interp(H, DUST[:,J],HEIGHT)  
-                if DUST_UNITS is not None:
-                    if DUST_UNITS[J] == -1:  #dust units are particles per gram of atm
-                        dust_units_flag = True
-                        CONT[:,J] =  DD * TOTAM * MOLWT / AVOGAD
-                    else:
-                         CONT[:,J] = DD * DELS  
-                else:  
+            if DUST.ndim > 1:
+                for J in range(NDUST):
+                    DD,JJ,F = interpg(H, DUST[:,J],HEIGHT)  
                     CONT[:,J] = DD * DELS
-        else:
-            DD = interp(H, DUST,HEIGHT)  
-            if DUST_UNITS is not None:
-                if DUST_UNITS[0] == -1: #dust units are particles per gram of atm
-                    dust_units_flag = True
-                    CONT =  DD * TOTAM * MOLWT / AVOGAD
+            else:
+                #DD = interp(H, DUST,HEIGHT)  
+                DD,JJ,F = interpg(H, DUST,HEIGHT)
+                CONT = DD * DELS            
+
+            #Use the dust density information
+            dust_units_flag = False
+            if DUST.ndim > 1:
+                for J in range(NDUST):
+                    DD = interp(H, DUST[:,J],HEIGHT)  
+                    if DUST_UNITS is not None:
+                        if DUST_UNITS[J] == -1:  #dust units are particles per gram of atm
+                            dust_units_flag = True
+                            CONT[:,J] =  DD * TOTAM * MOLWT / AVOGAD
+                        else:
+                            CONT[:,J] = DD * DELS  
+                    else:  
+                        CONT[:,J] = DD * DELS
+            else:
+                DD = interp(H, DUST,HEIGHT)  
+                if DUST_UNITS is not None:
+                    if DUST_UNITS[0] == -1: #dust units are particles per gram of atm
+                        dust_units_flag = True
+                        CONT =  DD * TOTAM * MOLWT / AVOGAD
+                    else:
+                        CONT = DD * DELS
                 else:
                     CONT = DD * DELS
-            else:
-                CONT = DD * DELS
 
-        if dust_units_flag is False:
-            for ilay in range(NLAY):
-                DCO[ilay,JJ[ilay]] = DCO[ilay,JJ[ilay]] + (1.0-F[ilay])
-                DCO[ilay,JJ[ilay]+1] = DCO[ilay,JJ[ilay]+1] + (F[ilay])
-        else:
-                DCO[ilay,JJ[ilay]] = DCO[ilay,JJ[ilay]] + (1.0-F[ilay]) * TOTAM * MOLWT /AVOGAD
-                DCO[ilay,JJ[ilay]+1] = DCO[ilay,JJ[ilay]+1] + (F[ilay]) * TOTAM * MOLWT /AVOGAD
-            
+            if dust_units_flag is False:
+                for ilay in range(NLAY):
+                    DCO[ilay,JJ[ilay]] = DCO[ilay,JJ[ilay]] + (1.0-F[ilay])
+                    DCO[ilay,JJ[ilay]+1] = DCO[ilay,JJ[ilay]+1] + (F[ilay])
+            else:
+                    DCO[ilay,JJ[ilay]] = DCO[ilay,JJ[ilay]] + (1.0-F[ilay]) * TOTAM * MOLWT /AVOGAD
+                    DCO[ilay,JJ[ilay]+1] = DCO[ilay,JJ[ilay]+1] + (F[ilay]) * TOTAM * MOLWT /AVOGAD
+                
     elif LAYINT == LayerIntegrationScheme.ABSORBER_WEIGHTED_AVERAGE:
         
         # Curtis-Godson equivalent path for a gas with constant mixing ratio
@@ -1324,38 +1334,39 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
 
 
             #Computing the aerosol column densities and gradients
-            dust_units_flag = False
-            if DUST.ndim > 1:
-                dd = np.zeros((NINT,NDUST))
-                for J in range(NDUST):
-                    dd[:,J],JJ,F = interpg(H, DUST[:,J], h)   #dust density (m-3) of dust population J at the NINT points
-                    if DUST_UNITS is not None:
-                        if DUST_UNITS[J] == -1: #dust units are in particles per gram of atm
-                            dust_units_flag = True
-                            CONT[I,J] = simpson(dd[:,J]*duds*molwt/AVOGAD,x=S)  #column density of dust population J in the layer (m-2)
+            if DUST is not None:
+                dust_units_flag = False
+                if DUST.ndim > 1:
+                    dd = np.zeros((NINT,NDUST))
+                    for J in range(NDUST):
+                        dd[:,J],JJ,F = interpg(H, DUST[:,J], h)   #dust density (m-3) of dust population J at the NINT points
+                        if DUST_UNITS is not None:
+                            if DUST_UNITS[J] == -1: #dust units are in particles per gram of atm
+                                dust_units_flag = True
+                                CONT[I,J] = simpson(dd[:,J]*duds*molwt/AVOGAD,x=S)  #column density of dust population J in the layer (m-2)
+                            else:
+                                CONT[I,J] = simpson(dd[:,J],x=S)          #column density of dust population J in the layer (m-2)
                         else:
                             CONT[I,J] = simpson(dd[:,J],x=S)          #column density of dust population J in the layer (m-2)
-                    else:
-                        CONT[I,J] = simpson(dd[:,J],x=S)          #column density of dust population J in the layer (m-2)
-            else:
-                dd,JJ,F = interpg(H, DUST, h) 
-                if DUST_UNITS is not None:
-                    if DUST_UNITS[0] == -1: #dust units are in particles per gram of atm
-                        dust_units_flag = True
-                        CONT[I] = simpson(dd*duds*molwt/AVOGAD,x=S)
+                else:
+                    dd,JJ,F = interpg(H, DUST, h) 
+                    if DUST_UNITS is not None:
+                        if DUST_UNITS[0] == -1: #dust units are in particles per gram of atm
+                            dust_units_flag = True
+                            CONT[I] = simpson(dd*duds*molwt/AVOGAD,x=S)
+                        else:
+                            CONT[I] = simpson(dd,x=S)
                     else:
                         CONT[I] = simpson(dd,x=S)
+                    
+                if dust_units_flag is False:
+                    for iint in range(NINT):
+                        DCO[I,JJ[iint]] = DCO[I,JJ[iint]] + (1.-F[iint])*w[iint]
+                        DCO[I,JJ[iint]+1] = DCO[I,JJ[iint]+1] + (F[iint])*w[iint]
                 else:
-                    CONT[I] = simpson(dd,x=S)
-                
-            if dust_units_flag is False:
-                for iint in range(NINT):
-                    DCO[I,JJ[iint]] = DCO[I,JJ[iint]] + (1.-F[iint])*w[iint]
-                    DCO[I,JJ[iint]+1] = DCO[I,JJ[iint]+1] + (F[iint])*w[iint]
-            else:
-                for iint in range(NINT):
-                    DCO[I,JJ[iint]] = DCO[I,JJ[iint]] + (1.-F[iint])*w[iint]*duds[iint]*molwt[iint]/AVOGAD
-                    DCO[I,JJ[iint]+1] = DCO[I,JJ[iint]+1] + (F[iint])*w[iint]*duds[iint]*molwt[iint]/AVOGAD
+                    for iint in range(NINT):
+                        DCO[I,JJ[iint]] = DCO[I,JJ[iint]] + (1.-F[iint])*w[iint]*duds[iint]*molwt[iint]/AVOGAD
+                        DCO[I,JJ[iint]+1] = DCO[I,JJ[iint]+1] + (F[iint])*w[iint]*duds[iint]*molwt[iint]/AVOGAD
 
         #Finishing the integration for the matrices
         for IPRO in range(NPRO):
@@ -1371,10 +1382,11 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
     else:
         AMOUNT = AMOUNT/LAYSF
 
-    if DUST.ndim > 1:
-        CONT = (CONT.T * LAYSF**-1 ).T
-    else:
-        CONT = CONT/LAYSF
+    if DUST is not None:
+        if DUST.ndim > 1:
+            CONT = (CONT.T * LAYSF**-1 ).T
+        else:
+            CONT = CONT/LAYSF
 
     for IPRO in range(NPRO):
         DAM[:,IPRO] = DAM[:,IPRO] / LAYSF

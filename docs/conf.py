@@ -48,8 +48,11 @@ nbsphinx_thumbnails = {
     'examples/Exoplanet_thermal_emission/exoplanet': '_static/exoplanet_orbit.png',
     'examples/Exoplanet_primary_transit/exoplanet': '_static/exoplanet_orbit.png',
     'examples/retrieval_exoplanet_transit/retrieval_exoplanet': '_static/exoplanet_orbit.png',
-    #'examples/Jupiter_CIRS_nadir_thermal_emission/Jupiter_CIRS': '_static/jupiter_cassini.jpg',
+    'examples/Jupiter_CIRS_nadir_thermal_emission/Jupiter_CIRS': '_static/jupiter_cassini.jpg',
     #'examples/Measurement/Measurement': '_static/observation_sketch.png',
+    'examples/mars_rover/mars_rover': '_static/mars_rover.jpg',
+    'examples/Mars_DISORT/archnemesis_disort_comparisons': '_static/mars_orbiter.jpg',
+    'examples/mars_groundbased/mars_groundbased': '_static/nasa_irtf.jpg',
 }
 
 #Adding logo

@@ -279,7 +279,7 @@ class AtmCalc_0:
                     raise ValueError('error in AtmCalc_0.py file :: SPHSINGLE and LIMB not catered for')  
             else:
                 if self.ANGLE != 0.0:
-                    _lgr.warning(' in AtmCalc_0.py file :: ANGLE must be 0.0 for scattering calculations - resetting')
+                    #_lgr.warning(' in AtmCalc_0.py file :: ANGLE must be 0.0 for scattering calculations - resetting')
                     self.ANGLE = 0.0
 
         if PathCalc.HEMISPHERE in self.path_calc:

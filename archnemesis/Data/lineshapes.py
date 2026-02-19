@@ -100,3 +100,40 @@ def hartmann_empirical_infrared_ch4_h2_broadening(
     
     
     return chi*voigt(delta_wn, alpha_d, gamma_l)
+
+
+def lorentz(
+        delta_wn : np.ndarray, 
+        alpha_d : float, 
+        gamma_l : float
+    ) -> np.ndarray:
+    """
+    Compute Lorentz profile
+    
+    ## ARGUMENTS ##
+        delta_wn : np.ndarray
+            Wavenumber difference from line center
+        alpha_d : float
+            Doppler width (gaussian HWHM) - not used in lorentz profile
+        gamma_l : float
+            Lorentz width (cauchy-lorentz HWHM)
+    """
+    return gamma_l / (np.pi * (gamma_l**2 + delta_wn**2))
+
+def gaussian(
+        delta_wn : np.ndarray, 
+        alpha_d : float, 
+        gamma_l : float
+    ) -> np.ndarray:
+    """
+    Compute Gaussian profile
+    
+    ## ARGUMENTS ##
+        delta_wn : np.ndarray
+            Wavenumber difference from line center
+        alpha_d : float
+            Doppler width (gaussian HWHM)
+        gamma_l : float
+            Lorentz width (cauchy-lorentz HWHM) - not used in gaussian profile
+    """
+    return np.sqrt(np.log(2)/np.pi) / alpha_d * np.exp(- (delta_wn**2 * np.log(2)) / (alpha_d**2))

@@ -247,7 +247,3 @@ radtran_to_hitran : dict[tuple[int,int], tuple[int,int]] = {
 
 hitran_to_radtran : dict[tuple[int,int], tuple[int,int]] = {v: k for k, v in radtran_to_hitran.items()}
 
-
-
-
-
