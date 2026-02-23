@@ -304,8 +304,26 @@ class AnsPartitionFunctionDataFile:
 	
 	def get_pf_grp(self, x_grp : h5py.Group):
 		return h5py_helper.ensure_grp(x_grp, 'partition_function',attrs={'description':'Contains data that classifies the partition function for molecule/isotopologues'})
+	
+	def add_source_link(
+			self,
+			source_name : str,
+			fpath : Path, # Path to file
+			gpath : None | str = None, # Path to group within source.
+	):
+		rel_fpath = str(Path(fpath).relative_to(self.path.parent))
 		
-	def set_source(
+		with h5py.File(self.path,'a') as f:
+			s_grp = self.get_sources_grp(f)
+			xs_grp = h5py_helper.ensure_grp(s_grp, source_name)
+			
+			if gpath is None:
+				h5py_helper.ensure_dataset(xs_grp, 'partition_function', shape=tuple(), data=rel_fpath, dtype='T')
+			else:
+				h5py_helper.ensure_dataset(xs_grp, 'partition_function', shape=(2,), data=(rel_fpath, gpath), dtype='T')
+		self.update_from_sources()
+	
+	def add_source_data(
 			self,
 			pfdh : PartitionFunctionDataHolder
 	):

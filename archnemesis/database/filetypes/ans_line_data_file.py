@@ -328,7 +328,25 @@ class AnsLineDataFile:
 	def get_line_data_grp(self, x_grp : h5py.Group):
 		return h5py_helper.ensure_grp(x_grp, 'line_data',attrs={'description':'Contains nested tables of line data for each molecule/isotopologue.'})
 
-	def set_source(
+	def add_source_link(
+			self,
+			source_name : str,
+			fpath : Path, # Path to file
+			gpath : None | str = None, # Path to group within source.
+	):
+		rel_fpath = str(Path(fpath).relative_to(self.path.parent))
+	
+		with h5py.File(self.path,'a') as f:
+			s_grp = self.get_sources_grp(f)
+			xs_grp = h5py_helper.ensure_grp(s_grp, source_name)
+			
+			if gpath is None:
+				h5py_helper.ensure_dataset(xs_grp, 'line_data', shape=tuple(), data=rel_fpath, dtype='T')
+			else:
+				h5py_helper.ensure_dataset(xs_grp, 'line_data', shape=(2,), data=(rel_fpath, gpath), dtype='T')
+		self.update_from_sources()
+		
+	def add_source_data(
 			self,
 			ldh : LineDataHolder
 	):
