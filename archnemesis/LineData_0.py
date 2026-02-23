@@ -199,12 +199,7 @@ class LineData_0:
 
     @PARTITION_FUNCTION_DATABASE.setter
     def PARTITION_FUNCTION_DATABASE(self, value : ans.database.protocols.PartitionFunctionDatabaseProtocol):
-        if value is None:
-            db = ans.database.partition_function_database.hitran.HITRAN()
-            _lgr.info(f'Using default partition function database {db}')
-            self._partition_function_database = db
-        else:
-            self._partition_function_database = value
+        self._partition_function_database = value
 
     @property
     def ambient_gas(self) -> ans.enums.AmbientGas:
@@ -602,8 +597,10 @@ class LineData_0:
         
         return line_strengths
     
+    
+    @classmethod
     def calculate_monochromatic_line_absorption(
-            self,
+            cls,
             delta_wn : np.ndarray, # wavenumber difference from line center (cm^{-1}), (NWAVE)
             mask : np.ndarray, # Boolean mask (NWAVE) that determines if absorption coefficient will be calculated from lineshape (True) or from a 1/(delta_wn^2) fit (False).
             wide_mask : np.ndarray, # Boolean mask (NWAVE) that determines if absorption coefficient will be calculated from a 1/(delta_wn^2) fit (True) or not accounted for at all (False).
@@ -635,6 +632,97 @@ class LineData_0:
         out[mask] = strength * lineshape_fn(delta_wn[mask], alpha_d, gamma_l) # overwrite the "center" with lineshape contribution
         return out
     
+    @classmethod 
+    def calculate_monochromatic_spectrum(
+            cls,
+            nu : np.ndarray, #1D array with the wavenumber of the lines
+            strength : np.ndarray, #1D array with the intensity of the lines
+            alpha_d : np.ndarray, #1D array with the Doppler HWHM of the lines
+            gamma_l : np.ndarray, #1D array with the Lorentzian HWHM of the lines
+            waves : np.ndarray, # 1D array with shape [NWAVE]
+            wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
+            lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # lineshape function to use
+            line_calculation_wavenumber_window: float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+    ) -> np.ndarray:
+        """
+        Calculates the combined spectrum from many absorption lines considering their relative broadening.
+        This function differs from calculate_monochromatic_spectrum() because that one is intended to be used for
+        the calculation of absorption coefficients. In this one, we explicitly provide the "line strengths" and the
+        broadening parameters, so that it can be used for other types of spectra, not necessarily absorption
+        (e.g., emission profiles or g-factors)
+        """
+
+        CONT_CALC_MSG_ONCE_FLAG = False
+        n_line_progress = 1000
+        
+        # Convert waves to wavenumber (cm^{-1})
+        wavenumbers = np.array(WavePoint(waves, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value)
+        
+        # Remember the ordering we got as input
+        wav_sort_idxs = np.argsort(wavenumbers)
+        wavenumbers = wavenumbers[wav_sort_idxs]
+        
+        # Define arrays here to re-use memory
+        delta_wn = np.zeros_like(wavenumbers, dtype=float)
+        scratch = np.zeros_like(wavenumbers, dtype=float)
+        mask_leq = np.zeros_like(wavenumbers, dtype=bool)
+        mask_geq = np.zeros_like(wavenumbers, dtype=bool)
+        mask = np.zeros_like(wavenumbers, dtype=bool)
+        wide_mask_leq = np.zeros_like(wavenumbers, dtype=bool)
+        wide_mask_geq = np.zeros_like(wavenumbers, dtype=bool)
+        wide_mask = np.zeros_like(wavenumbers, dtype=bool)
+        k_total = np.zeros_like(wavenumbers, dtype=float)
+        spectrum= np.zeros_like(wavenumbers, dtype=float) # Final output array
+
+        with SimpleProgressTracker("Computing line contributions. ", (len(nu)-1), display_interval_n=n_line_progress, output_target=_lgr) as line_contrib_prog:
+            for nu_val, strength_val, alpha_d_val, gamma_l_val in zip(nu,strength,alpha_d,gamma_l):
+                
+                line_contrib_prog.display()
+                
+                scratch.fill(0.0)
+                
+                np.subtract(wavenumbers, nu_val, out=delta_wn)
+                
+                np.less_equal(delta_wn, line_calculation_wavenumber_window, out=mask_leq)
+                np.greater_equal(delta_wn, -line_calculation_wavenumber_window, out=mask_geq)
+                np.logical_and(mask_leq, mask_geq, out=mask)
+                
+                np.less_equal(delta_wn, line_calculation_wavenumber_window, out=wide_mask_leq)
+                np.greater_equal(delta_wn, -line_calculation_wavenumber_window, out=wide_mask_geq)
+                np.logical_and(wide_mask_leq, wide_mask_geq, out=wide_mask)
+                wide_mask[:] = False
+
+                cls.calculate_monochromatic_line_absorption(
+                    delta_wn,
+                    mask, 
+                    wide_mask,
+                    strength_val,
+                    alpha_d_val,
+                    gamma_l_val,
+                    lineshape_fn,
+                    line_calculation_wavenumber_window,
+                    out=scratch
+                )
+                
+                k_total = np.add(k_total, scratch, out=k_total)
+                
+                # Add in continuum absorption here if required
+                if not CONT_CALC_MSG_ONCE_FLAG:
+                    _lgr.debug('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
+                    CONT_CALC_MSG_ONCE_FLAG = True
+                
+                # Ensure abs coeff are not less than zero
+                k_total[k_total<0] = 0
+
+                # put into absorption coefficient dictionary, multiply by 1E20 factor here
+                spectrum[wav_sort_idxs] = k_total*1E20
+            
+        #The units of the spectrum are "per wavenumber" (i.e., (cm-1)-1). Change to "per wavelength" (um-1) if required 
+        if wave_unit == ans.enums.WaveUnit.Wavelength_um:
+            spectrum = spectrum / (waves)**2. / 1.0e-4
+
+        return spectrum
+    
     def calculate_monochromatic_absorption(
             self,
             waves : np.ndarray, # 1D array with shape [NWAVE]
@@ -659,9 +747,6 @@ class LineData_0:
         
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
-        CONT_CALC_MSG_ONCE_FLAG = False
-        n_line_progress = 1000
-        
         # Convert waves to wavenumber (cm^{-1})
         #in_waves = np.array(waves)
         waves = np.array(WavePoint(waves, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value)
@@ -693,70 +778,18 @@ class LineData_0:
                 iso_abu = np.array([isotopic_abundances[RadtranGasDescriptor(*x)] for x in self.line_data.RT_GAS_DESC])
                 strength *= iso_abu
 
-        # Define arrays here to re-use memory
-        delta_wn = np.zeros_like(waves, dtype=float)
-        scratch = np.zeros_like(waves, dtype=float)
-        mask_leq = np.zeros_like(waves, dtype=bool)
-        mask_geq = np.zeros_like(waves, dtype=bool)
-        mask = np.zeros_like(waves, dtype=bool)
-        wide_mask_leq = np.zeros_like(waves, dtype=bool)
-        wide_mask_geq = np.zeros_like(waves, dtype=bool)
-        wide_mask = np.zeros_like(waves, dtype=bool)
-        k_total = np.zeros_like(waves, dtype=float)
-        abs_coeffs= np.zeros_like(waves, dtype=float) # Final output array
-        
-        line_idxs_to_include = np.flatnonzero((waves[0] <= self.line_data.NU) & (self.line_data.NU <= waves[-1]))
-        n_lines = line_idxs_to_include.size
-        _lgr.debug(f'{n_lines=}')
-        
-        with SimpleProgressTracker("Computing line contributions. ", n_lines, display_interval_n=n_line_progress, output_target=_lgr) as line_contrib_prog:
-            #for _j, line_idx in enumerate(range(idx_min, idx_max)):
-            for _j, line_idx in enumerate(line_idxs_to_include):
+        linestrength_mask = strength >= line_strength_cutoff
 
-                if strength[line_idx] < line_strength_cutoff:
-                    continue
-                
-                line_contrib_prog.display()
-                
-                scratch.fill(0.0)
-                
-                np.subtract(waves, self.line_data.NU[line_idx], out=delta_wn)
-                
-                np.less_equal(delta_wn, line_calculation_wavenumber_window, out=mask_leq)
-                np.greater_equal(delta_wn, -line_calculation_wavenumber_window, out=mask_geq)
-                np.logical_and(mask_leq, mask_geq, out=mask)
-                
-                np.less_equal(delta_wn, 10*line_calculation_wavenumber_window, out=wide_mask_leq)
-                np.greater_equal(delta_wn, -10*line_calculation_wavenumber_window, out=wide_mask_geq)
-                np.logical_and(wide_mask_leq, wide_mask_geq, out=wide_mask)
-
-                self.calculate_monochromatic_line_absorption(
-                    delta_wn,
-                    mask, 
-                    wide_mask,
-                    strength[line_idx],
-                    alpha_d[line_idx],
-                    gamma_l[line_idx],
-                    lineshape_fn,
-                    line_calculation_wavenumber_window,
-                    out=scratch
-                )
-                
-                k_total = np.add(k_total, scratch, out=k_total)
-                
-                # Add in continuum absorption here if required
-                if not CONT_CALC_MSG_ONCE_FLAG:
-                    _lgr.debug('NOTE: Continuum absorbtion is handled in the lineshape calculation for now, if required may want to separate it for efficiency')
-                    CONT_CALC_MSG_ONCE_FLAG = True
-                
-                
-                # Ensure abs coeff are not less than zero
-                k_total[k_total<0] = 0
-
-                # put into absorption coefficient dictionary, multiply by 1E20 factor here
-                abs_coeffs[wav_sort_idxs] = k_total*1E20
-            
-        return abs_coeffs
+        return self.calculate_monochromatic_spectrum(
+            self.line_data.NU[linestrength_mask],
+            strength[linestrength_mask],
+            alpha_d[linestrength_mask],
+            gamma_l[linestrength_mask],
+            waves,
+            wave_unit,
+            lineshape_fn,
+            line_calculation_wavenumber_window,
+        )
     
     
     def calculate_absorption_at_temp_pressure_profile(

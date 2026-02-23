@@ -1,7 +1,7 @@
-import pytest  
-import archnemesis as ans
+import os
+#import pytest
 import numpy as np
-import sys,os
+import archnemesis as ans
 
 def test_lbl_calculation():  
     '''
@@ -25,10 +25,11 @@ def test_lbl_calculation():
     Spectroscopy.read_tables()
 
     #Calculating cross sections with LineData class
-    LineData = ans.LineData_1(
+    LineData = ans.LineData_0(
         ID=5,
         ISO=1,
-        LINE_DATABASE="./CO_1_ambient_AIR.h5"  #HITRAN24
+        LINE_DATABASE="./CO_1_ambient_AIR.h5",  #HITRAN24
+        PARTITION_FUNCTION_DATABASE="./CO_1_ambient_AIR.h5"
         )
 
     LineData.fetch_partition_function()

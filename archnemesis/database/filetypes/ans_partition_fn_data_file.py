@@ -372,7 +372,7 @@ class AnsPartitionFunctionDataFile:
 			
 			if 'partition_function' not in f:
 				raise KeyError(f'HDF5 file "{f.file.filename}" does not have a "partition_function" group')
-			pf_grp = self.get_pf_grp(f)
+			pf_grp = f['partition_function']
 			
 			if mol_name not in pf_grp:
 				match on_missing_mol:
