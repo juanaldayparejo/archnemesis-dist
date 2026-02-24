@@ -390,7 +390,7 @@ class LineData_0:
                 gamma_amb,
                 n_amb,
                 delta_amb,
-            ) = ans_line_data_file.get_line_data(
+            ) = ans_line_data_file.get_data(
                 gas_desc.gas_name, 
                 local_iso_id=gas_desc.iso_id, 
                 ambient_gas=self.ambient_gas,
@@ -473,7 +473,7 @@ class LineData_0:
         self.partition_data_dict : dict[RadtranGasDescriptor, Callable[[float|np.ndarray],float|np.ndarray]] = dict()
         
         for gas_desc in self.gas_isotopes.as_radtran_gasses():
-            self.partition_data_dict[gas_desc] = ans_pf_file.get_partition_function_data(gas_desc.gas_name, gas_desc.iso_id)
+            self.partition_data_dict[gas_desc] = ans_pf_file.get_data(gas_desc.gas_name, gas_desc.iso_id)
         _lgr.info(f'Retrieved partition function data from database {self.PARTITION_FUNCTION_DATABASE}')
 
     

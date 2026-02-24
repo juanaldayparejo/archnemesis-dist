@@ -1,8 +1,6 @@
 
-import os
 from pathlib import Path
-from typing import Callable, Literal
-import textwrap 
+from typing import Callable, Literal, Any
 
 import numpy as np
 import h5py
@@ -10,12 +8,11 @@ import h5py
 from archnemesis.helpers import h5py_helper
 from archnemesis.helpers.h5py_helper import VirtualSourceInfo
 
-from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
 from archnemesis.database.data_holders.line_data_holder import LineDataHolder
 
 from archnemesis.enums import AmbientGas
 
-
+from archnemesis.database.filetypes.ans_base import AnsDatabaseFile
 from archnemesis.database.data_layouts.line_data_record_layout import LineDataRecordLayout
 from archnemesis.database.data_layouts.line_broadener_record_layout import LineBroadenerRecordLayout
 from archnemesis.database.data_layout_writers.line_broadener_table_writer import LineBroadenerTableWriter
@@ -30,12 +27,17 @@ _lgr.setLevel(logging.INFO)
 
 
 
-class AnsLineDataFile:
+class AnsLineDataFile(AnsDatabaseFile):
+	target_group_name = 'line_data'
+	data_grp_attrs : dict[str, Any] = {
+		'description' : "Contains nested tables of line data for each molecule/isotopologue. Some or all entries may be VIRTUAL sources which reference one or more datasets in '/sources/X/line_data'."
+	}
+
 	def __init__(
 			self, 
 			path : None | Path = None,
 	):
-		self.path = path
+		super().__init__(path)
 		self.default_broadening_values = {
 			'gamma_amb' : 1.0,
 			'n_amb' : 0.0,
@@ -43,53 +45,7 @@ class AnsLineDataFile:
 		}
 
 
-	def repack(self):
-		"""
-		HDF5 does not reduce size when deleting datasets without using `h5repack` utility, however
-		`h5py` does not have this capability so we just copy everything to a new file.
-		"""
-		try:
-			temp_file = self.path.with_stem('~'+self.path.stem)
-			
-			with h5py.File(self.path, 'r') as f:
-				with h5py.File(temp_file, 'a') as g:
-					for v in f.values():
-						f.copy(v, g)
-			
-			os.replace(temp_file, self.path)
-		finally:
-			if temp_file.exists():
-				os.remove(temp_file)
-
-	def dump(self):
-		class HDF5Printer:
-			def __init__(self, mode : Literal['indent', 'full_paths'] = 'indent'):
-				self.mode = mode
-				self.indent_1 = ' |  '
-				self.indent_2 = ' |- '
-				self.indent_3 = '    '
-			
-			def __call__(self, name_tail : str, item : h5py.Group | h5py.Dataset):
-				if self.mode == 'indent':
-					level = name_tail.count('/')
-					name_last = name_tail.rsplit('/', 1)[-1]
-					item_type = 'Group' if isinstance(item, h5py.Group) else f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), (self.indent_1*(level+1)+self.indent_3))}\n{self.indent_1*(level+1)}'
-					print(f'{self.indent_1*level}{self.indent_2}{name_last} : {item_type}')
-				
-				elif self.mode == 'full_paths':
-					item_type = 'Group' if isinstance(item, h5py.Group) else f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), " "*(len(name_tail)+6))}'
-					print(f'{name_tail} : {item_type}')
-				
-				else:
-					raise ValueError(f'Unknown mode {self.mode=}')
-		
-		with h5py.File(self.path, 'r') as f:
-			print(f'HDF5 File "{f.file.filename}" elements of group "{f.name}"')
-			f.visititems(HDF5Printer())
-		
-		return
-
-	def validate_line_data_group(self, g : h5py.Group):
+	def _validate_data_group(self, g : h5py.Group):
 		class EachChildDatasetHasSameShapeVisitor:
 			def __init__(self):
 				self.test_shape = None
@@ -119,72 +75,9 @@ class AnsLineDataFile:
 		_lgr.info(f'Validation for "{g.name}" in "{g.file.filename}" succeeded')
 		
 
-	def get_sources(
-		self,
-		s_grp : h5py.Group, # /sources group
-	) -> list[VirtualSourceInfo,...]:
-	
-		sources = []
-		target_group_name = 'line_data'
-		
-		for x_item_name, x_item in s_grp.items():
-		
-			if isinstance(x_item, h5py.Group): # handle case where '/sources/X' entry is a group, and therefore should have a 'target_group_name' sub-group inside it.
-				if target_group_name not in x_item.keys():
-					print(f"WARNING : Source group '{x_item.name}' in '{x_item.file.filename}' should have a '{target_group_name}' sub-group. This one has entries {tuple(x_item.keys())}, therefore not using as a source for '/{target_group_name}'.")
-					continue
-				
-				sxpf_item = x_item[target_group_name]
-				if isinstance(sxpf_item, h5py.Dataset):
-					external_file = '.'
-					external_group = target_group_name
-					if len(sxpf_item.shape) == 0:
-						# dataset is a scalar, so we only have the filename
-						external_file = sxpf_item.asstr()[tuple()]
-					elif len(sxpf_item.shape) == 1 and sxpf_item.shape[0] == 2: #  dataset is a pair, so we have the filename and the group
-						external_file, external_group = (str(x) for x in sxpf_item.astype('T')[:])
-					else:
-						raise ValueError(f'Dataset "{sxpf_item.name}" in "{sxpf_item.file.filename}" should either be a scalar string, or a string array of shape (2,), but has dtype={x_item.dtype} shape={x_item.shape}')
-					
-					sources.append(VirtualSourceInfo(sxpf_item.name, external_file, external_group))
-				else:
-					sources.append(VirtualSourceInfo(x_item.name, '.', x_item.name+f'/{target_group_name}'))
-			
-			else:
-				raise ValueError(f'Expected h5py.Group for entries of "{s_grp.name}" in "{s_grp.file}", but entry "{x_item_name}" has type {type(x_item)}.')
-			
-		return sources
-
-
-	def update_from_sources(self):
-		
-		with h5py.File(self.path, 'a') as f:
-
-			ld_grp = h5py_helper.ensure_grp(f, 
-				'line_data', 
-				attrs = dict(
-					description = "Contains nested tables of line data for each molecule/isotopologue. Some or all entries may be VIRTUAL sources which reference one or more datasets in '/sources/X/line_data'.",
-				)
-			)
-
-			s_grp = h5py_helper.ensure_grp(f,
-				'sources',
-				attrs = dict(
-					description = "Contains nested tables of line data for molecule/isotopologues from a specified sources. Entries ('/sources/X' would be the entry for source 'X') are either groups, or datasets. A group entry must have a '/sources/X/line_data' sub-group that has the same format as '/line_data'. A dataset entry must contain a filename (either relative or absolute) or a {filename,group} pair that identifies a group (if no group is specified, the group '/line_data' is assumed) within an external HDF5 file. The external group must have the same format as the '/line_data' group of this file",
-				)
-			)
-			
-			sources = self.get_sources(s_grp)
-					
-			self.update_virtual_datasets(ld_grp, sources)
-		
-			#self.create_combined_isotope_groups(ld_grp)
-			self.validate_line_data_group(ld_grp)
-
-
-	def update_virtual_datasets(
+	def _update_virtual_datasets(
 			self,
-			ld_grp : h5py.Group,
+			d_grp : h5py.Group,
 			sources : list[VirtualSourceInfo,...],
 	):
 		"""
@@ -196,24 +89,24 @@ class AnsLineDataFile:
 		v_dset_dest_info_map = dict()
 		v_iso_dset_sources = dict()
 
-		for src_name, x_file_name, xld_grp_path in sources:
-			#print(f'DEBUG : {x_file_name=} {xld_grp_path=} {ld_grp.file=} {ld_grp.file.filename=}')
+		for src_name, x_file_name, xd_grp_path in sources:
+			#print(f'DEBUG : {x_file_name=} {xd_grp_path=} {d_grp.file=} {d_grp.file.filename=}')
 			x_file_hdl = None
 			
 			try:
-				x_file_hdl = ld_grp if x_file_name == '.' else h5py.File(Path(ld_grp.file.filename).parent / x_file_name)
+				x_file_hdl = d_grp if x_file_name == '.' else h5py.File(Path(d_grp.file.filename).parent / x_file_name)
 				
-				if xld_grp_path not in x_file_hdl:
-					raise KeyError(f'No group "{xld_grp_path}" in file "{x_file_hdl.file}".')
+				if xd_grp_path not in x_file_hdl:
+					raise KeyError(f'No group "{xd_grp_path}" in file "{x_file_hdl.file}".')
 				
-				xld_grp = x_file_hdl[xld_grp_path]
+				xd_grp = x_file_hdl[xd_grp_path]
 				
-				self.validate_line_data_group(xld_grp)
+				self._validate_data_group(xd_grp)
 				
 				# Loop over molecule and isotopologues
-				for xmol_grp_name in xld_grp.keys():
+				for xmol_grp_name in xd_grp.keys():
 					#print(f'DEBUG : AnsLineDataFile.update_virtual_datasets(...) {xmol_grp_name=}')
-					xmol_grp = xld_grp[xmol_grp_name]
+					xmol_grp = xd_grp[xmol_grp_name]
 					
 					assert isinstance(xmol_grp, h5py.Group), f'Expected "molecule_name" group at "{xmol_grp.name}" in file "{xmol_grp.file}".'
 					
@@ -270,7 +163,7 @@ class AnsLineDataFile:
 			except Exception as e:
 				raise e
 			finally:
-				if x_file_hdl is not None and x_file_hdl.file != ld_grp.file:
+				if x_file_hdl is not None and x_file_hdl.file != d_grp.file:
 					x_file_hdl.close()
 		
 		
@@ -278,12 +171,12 @@ class AnsLineDataFile:
 		
 			for v_iso_dset_dest_path, v_iso_dset_source_list in v_iso_dset_sources[v_iso_dest_path].items():
 				#print(f'DEBUG : {v_iso_dset_dest_path=}')
-				if v_iso_dset_dest_path in ld_grp:
-					if not ld_grp[v_iso_dset_dest_path].is_virtual:
-						print(f'WARNING : Non-virtual dataset at "{v_iso_dset_dest_path}" in file "{ld_grp.file}", but there are sources that provide data for this dataset. Skipping as we only want to update virtual datasets.')
+				if v_iso_dset_dest_path in d_grp:
+					if not d_grp[v_iso_dset_dest_path].is_virtual:
+						print(f'WARNING : Non-virtual dataset at "{v_iso_dset_dest_path}" in file "{d_grp.file}", but there are sources that provide data for this dataset. Skipping as we only want to update virtual datasets.')
 						continue
 					else:
-						del ld_grp[v_iso_dset_dest_path]
+						del d_grp[v_iso_dset_dest_path]
 				
 				v_dset_dest_end_offset, v_dset_dest_dtype, v_dset_dest_default = v_dset_dest_info_map[v_iso_dset_dest_path]
 				
@@ -313,126 +206,60 @@ class AnsLineDataFile:
 					)
 					layout[dest_slices] = vsource[src_slices]
 					
-				ld_grp.create_virtual_dataset(v_iso_dset_dest_path, layout, fillvalue=v_dset_dest_default)
+				d_grp.create_virtual_dataset(v_iso_dset_dest_path, layout, fillvalue=v_dset_dest_default)
 
 
-	def get_sources_grp(self, root_grp : h5py.Group):
-		return h5py_helper.ensure_grp(root_grp, 'sources', attrs={'description':'Data for this file split by the source it came from'})
-	
-	def get_mols_grp(self, x_grp : h5py.Group):
-		return h5py_helper.ensure_grp(x_grp, 'molecules', attrs={'description':'Association between RADTRAN molecule ID numbers and molecule names'})
-	
-	def get_isos_grp(self, x_grp : h5py.Group):
-		return h5py_helper.ensure_grp(x_grp, 'isotopologues', attrs={'description':'RADTRAN ID and names of isotopologues'})
-
-	def get_line_data_grp(self, x_grp : h5py.Group):
-		return h5py_helper.ensure_grp(x_grp, 'line_data',attrs={'description':'Contains nested tables of line data for each molecule/isotopologue.'})
-
-	def add_source_link(
+	def _add_data(
 			self,
-			source_name : str,
-			fpath : Path, # Path to file
-			gpath : None | str = None, # Path to group within source.
+			d_grp : h5py.Group,
+			ldh : LineDataHolder,
 	):
-		rel_fpath = str(Path(fpath).relative_to(self.path.parent))
-	
-		with h5py.File(self.path,'a') as f:
-			s_grp = self.get_sources_grp(f)
-			xs_grp = h5py_helper.ensure_grp(s_grp, source_name)
-			
-			if gpath is None:
-				h5py_helper.ensure_dataset(xs_grp, 'line_data', shape=tuple(), data=rel_fpath, dtype='T')
-			else:
-				h5py_helper.ensure_dataset(xs_grp, 'line_data', shape=(2,), data=(rel_fpath, gpath), dtype='T')
-		self.update_from_sources()
+
+		mol_mask = np.ones_like(ldh.mol_id, dtype=bool)
+		iso_mask = np.ones_like(ldh.mol_id, dtype=bool)
 		
-	def add_source_data(
-			self,
-			ldh : LineDataHolder
-	):
-		with h5py.File(self.path,'a') as f:
-
-			s_grp = self.get_sources_grp(f)
-
-			x_grp = h5py_helper.ensure_grp(s_grp, ldh.name, attrs=dict(description=ldh.description))
-
-			molecules_grp = self.get_mols_grp(x_grp)
+		for rt_gas_desc in ldh.rt_gas_descs:
+			mol_mask[...] = ldh.mol_id == rt_gas_desc.gas_id
+			iso_mask[...] = mol_mask & (ldh.local_iso_id == rt_gas_desc.iso_id)
 			
-			molecule_ids = np.array(sorted(list(set([rt_gas_desc.gas_id for rt_gas_desc in ldh.rt_gas_descs]))), dtype=int)
-			molecule_names = np.array([RadtranGasDescriptor(id,0).gas_name for id in molecule_ids], dtype='T')
+			mol_grp = h5py_helper.ensure_grp(d_grp, rt_gas_desc.gas_name)
+			iso_grp = h5py_helper.ensure_grp(mol_grp, f'{rt_gas_desc.iso_id}')
 			
-			h5py_helper.ensure_dataset(molecules_grp, 'mol_id', data=molecule_ids, maxshape=(None,))
-			h5py_helper.ensure_dataset(molecules_grp, 'mol_name', data=molecule_names, maxshape=(None,))
+			line_data_table = LineDataTableWriter(
+				ldh.mol_id[iso_mask],
+				ldh.local_iso_id[iso_mask],
+				ldh.nu[iso_mask],
+				ldh.sw[iso_mask],
+				ldh.a[iso_mask],
+				ldh.elower[iso_mask],
+				ldh.gamma_self[iso_mask],
+				ldh.n_self[iso_mask],
+			)
 			
-			isotopologues_grp = self.get_isos_grp(x_grp)
+			line_data_table.to_hdf5(iso_grp)
 			
-			h5py_helper.ensure_dataset(isotopologues_grp, 'mol_id', data=np.array([rt_gas_desc.gas_id for rt_gas_desc in ldh.rt_gas_descs], dtype=int), maxshape=(None,))
-			h5py_helper.ensure_dataset(isotopologues_grp, 'iso_id', data=np.array([rt_gas_desc.iso_id for rt_gas_desc in ldh.rt_gas_descs], dtype=int), maxshape=(None,))
-			h5py_helper.ensure_dataset(isotopologues_grp, 'global_iso_id', data=np.array([rt_gas_desc.global_iso_id for rt_gas_desc in ldh.rt_gas_descs], dtype=int), maxshape=(None,))
-			h5py_helper.ensure_dataset(isotopologues_grp, 'iso_name', data=np.array([rt_gas_desc.isotope_name for rt_gas_desc in ldh.rt_gas_descs], dtype='T'), maxshape=(None,))
+			b_grp = h5py_helper.ensure_grp(iso_grp, 'broadeners', attrs={'description':'Foreign broadening values for the isotope'})
+			if ldh.broadeners is not None:
+				for line_broadener_holder in ldh.broadeners:
 			
-			
-			d_grp = self.get_line_data_grp(x_grp)
-			
-			mol_mask = np.ones_like(ldh.mol_id, dtype=bool)
-			iso_mask = np.ones_like(ldh.mol_id, dtype=bool)
-			
-			for rt_gas_desc in ldh.rt_gas_descs:
-				mol_mask[...] = ldh.mol_id == rt_gas_desc.gas_id
-				iso_mask[...] = mol_mask & (ldh.local_iso_id == rt_gas_desc.iso_id)
-				
-				mol_grp = h5py_helper.ensure_grp(d_grp, rt_gas_desc.gas_name)
-				iso_grp = h5py_helper.ensure_grp(mol_grp, f'{rt_gas_desc.iso_id}')
-				
-				line_data_table = LineDataTableWriter(
-					ldh.mol_id[iso_mask],
-					ldh.local_iso_id[iso_mask],
-					ldh.nu[iso_mask],
-					ldh.sw[iso_mask],
-					ldh.a[iso_mask],
-					ldh.elower[iso_mask],
-					ldh.gamma_self[iso_mask],
-					ldh.n_self[iso_mask],
-				)
-				
-				line_data_table.to_hdf5(iso_grp)
-				
-				b_grp = h5py_helper.ensure_grp(iso_grp, 'broadeners', attrs={'description':'Foreign broadening values for the isotope'})
-				if ldh.broadeners is not None:
-					for line_broadener_holder in ldh.broadeners:
-				
-						line_broadener_table = LineBroadenerTableWriter(
-							line_broadener_holder.gamma_amb[iso_mask],
-							line_broadener_holder.n_amb[iso_mask],
-							line_broadener_holder.delta_amb[iso_mask],
-						)
-						
-						amb_grp = h5py_helper.ensure_grp(b_grp, line_broadener_holder.name)
-						line_broadener_table.to_hdf5(amb_grp)
+					line_broadener_table = LineBroadenerTableWriter(
+						line_broadener_holder.gamma_amb[iso_mask],
+						line_broadener_holder.n_amb[iso_mask],
+						line_broadener_holder.delta_amb[iso_mask],
+					)
 					
-				
-				
-		
-		self.update_from_sources()
-
-	
-
-	def remove_source(self, name):
-		with h5py.File(self.path,'a') as f:
-			s_grp = h5py_helper.ensure_grp(f, 'sources')
-			
-			if name in s_grp:
-				del s_grp[name]
-		
-		self.repack()
+					amb_grp = h5py_helper.ensure_grp(b_grp, line_broadener_holder.name)
+					line_broadener_table.to_hdf5(amb_grp)
+		return
 
 
 
-	def get_line_data(
+	def get_data(
 			self, 
 			mol_name : str, 
 			local_iso_id : int,
 			ambient_gas : AmbientGas = AmbientGas.AIR,
+			*,
 			iso_keys = (
 				'mol_id',
 				'local_iso_id',
@@ -459,23 +286,23 @@ class AnsLineDataFile:
 			+ [np.zeros((0,), dtype=LineBroadenerRecordLayout.type(k)) for k in broad_keys]
 		)
 	
-		with h5py.File(self.path, 'r') as f:
+		with self.open('r'):
 		
 			mask = None
 			
-			if 'line_data' not in f:
-				raise KeyError(f'HDF5 file "{f.file.filename}" does not have a "line_data" group')
-			d_grp = f['line_data']
+			if 'line_data' not in self._file_hdl:
+				raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data" group')
+			d_grp = self._get_data_grp(self._file_hdl)
 			
 			if mol_name not in d_grp:
 				match on_missing_mol:
 					case 'ignore':
 						return null_data
 					case 'warn':
-						_lgr.warning(f'HDF5 file "{f.file.filename}" does not have a "line_data/{mol_name}" group, returning NULL DATA')
+						_lgr.warning(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}" group, returning NULL DATA')
 						return null_data
 					case _:
-						raise KeyError(f'HDF5 file "{f.file.filename}" does not have a "line_data/{mol_name}" group')
+						raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}" group')
 			mol_grp = d_grp[mol_name]
 			
 			if str(local_iso_id) not in mol_grp:
@@ -483,10 +310,10 @@ class AnsLineDataFile:
 					case 'ignore':
 						return null_data
 					case 'warn':
-						_lgr.warning(f'HDF5 file "{f.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}" group, returning NULL DATA')
+						_lgr.warning(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}" group, returning NULL DATA')
 						return null_data
 					case _:
-						raise KeyError(f'HDF5 file "{f.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}" group')
+						raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}" group')
 			iso_grp = mol_grp[str(local_iso_id)]
 			
 			
@@ -494,7 +321,7 @@ class AnsLineDataFile:
 				dsets = [iso_grp[key] for key in iso_keys]
 			except Exception as e:
 				not_present_keys = tuple(k for k in iso_keys if k not in iso_grp.keys())
-				raise KeyError(f'HDF5 file "{f.file.filename}" does not have any of the keys {not_present_keys} in group "line_data/{mol_name}/{local_iso_id}') from e
+				raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have any of the keys {not_present_keys} in group "line_data/{mol_name}/{local_iso_id}') from e
 			
 			
 			if 'broadeners' not in iso_grp:
@@ -502,10 +329,10 @@ class AnsLineDataFile:
 					case 'ignore':
 						return null_data
 					case 'warn':
-						_lgr.warning(f'HDF5 file "{f.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}/broadeners" group, returning NULL DATA')
+						_lgr.warning(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}/broadeners" group, returning NULL DATA')
 						return null_data
 					case _:
-						raise KeyError(f'HDF5 file "{f.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}/broadeners" group')
+						raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}/broadeners" group')
 			b_grp = iso_grp['broadeners']
 			
 			if ambient_gas.name not in b_grp:
@@ -513,17 +340,17 @@ class AnsLineDataFile:
 					case 'ignore':
 						return null_data
 					case 'warn':
-						_lgr.warning(f'HDF5 file "{f.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}/broadeners/{ambient_gas.name}" group, returning NULL DATA')
+						_lgr.warning(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}/broadeners/{ambient_gas.name}" group, returning NULL DATA')
 						return null_data
 					case _:
-						raise KeyError(f'HDF5 file "{f.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}/broadeners/{ambient_gas.name}" group')
+						raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}/broadeners/{ambient_gas.name}" group')
 			amb_grp = b_grp[ambient_gas.name]
 			
 			try:
 				dsets += [amb_grp[key] for key in broad_keys]
 			except Exception as e:
 				not_present_keys = tuple(k for k in broad_keys if k not in amb_grp.keys())
-				raise KeyError(f'HDF5 file "{f.file.filename}" does not have any of the keys {not_present_keys} in group "line_data/{mol_name}/{local_iso_id}/broadeners/{str(ambient_gas)}') from e
+				raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have any of the keys {not_present_keys} in group "line_data/{mol_name}/{local_iso_id}/broadeners/{str(ambient_gas)}') from e
 			
 			
 			if wavelength_mask_fn is not None:

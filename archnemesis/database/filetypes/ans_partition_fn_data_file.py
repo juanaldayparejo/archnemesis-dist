@@ -1,8 +1,7 @@
-import os
+
 from pathlib import Path
 import dataclasses as dc
-from typing import Type, Literal#, NamedTuple, Self, Annotated, Callable, Any, Iterable
-import textwrap
+from typing import Type, Literal, Any#, NamedTuple, Self, Annotated, Callable, Any, Iterable
 
 
 import h5py
@@ -10,6 +9,8 @@ import h5py
 
 from archnemesis.helpers import h5py_helper
 from archnemesis.helpers.h5py_helper import VirtualSourceInfo
+
+from archnemesis.database.filetypes.ans_base import AnsDatabaseFile
 from archnemesis.database.datatypes.pf_data.polynomial_pf_data import PolynomialPFData
 from archnemesis.database.datatypes.pf_data.tabulated_pf_data import TabulatedPFData
 from archnemesis.database.datatypes.pf_list import PFList
@@ -23,63 +24,22 @@ _lgr.setLevel(logging.INFO)
 
 
 
-class AnsPartitionFunctionDataFile:
+class AnsPartitionFunctionDataFile(AnsDatabaseFile):
+	target_group_name = 'partition_function'
+	data_grp_attrs : dict[str, Any] = {
+		'description' : 'Contains data that classifies the partition function for molecule/isotopologues'
+	}
+
 	pf_data_types : tuple[Type,...] = (TabulatedPFData, PolynomialPFData)
 
 	def __init__(
 			self,
 			path : Path,
 	):
-		self.path = path
-
-	def repack(self):
-		"""
-		HDF5 does not reduce size when deleting datasets without using `h5repack` utility, however
-		`h5py` does not have this capability so we just copy everything to a new file.
-		"""
-		try:
-			temp_file = self.path.with_stem('~'+self.path.stem)
-			
-			with h5py.File(self.path, 'r') as f:
-				with h5py.File(temp_file, 'a') as g:
-					for v in f.values():
-						f.copy(v, g)
-			
-			os.replace(temp_file, self.path)
-		finally:
-			if temp_file.exists():
-				os.remove(temp_file)
+		super().__init__(path)
 
 
-	def dump(self):
-		class HDF5Printer:
-			def __init__(self, mode : Literal['indent', 'full_paths'] = 'indent'):
-				self.mode = mode
-				self.indent_1 = ' |  '
-				self.indent_2 = ' |- '
-				self.indent_3 = '    '
-			
-			def __call__(self, name_tail : str, item : h5py.Group | h5py.Dataset):
-				if self.mode == 'indent':
-					level = name_tail.count('/')
-					name_last = name_tail.rsplit('/', 1)[-1]
-					item_type = 'Group' if isinstance(item, h5py.Group) else f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), (self.indent_1*(level+1)+self.indent_3))}\n{self.indent_1*(level+1)}'
-					print(f'{self.indent_1*level}{self.indent_2}{name_last} : {item_type}')
-				
-				elif self.mode == 'full_paths':
-					item_type = 'Group' if isinstance(item, h5py.Group) else f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), " "*(len(name_tail)+6))}'
-					print(f'{name_tail} : {item_type}')
-				
-				else:
-					raise ValueError(f'Unknown mode {self.mode=}')
-		
-		with h5py.File(self.path, 'r') as f:
-			print(f'HDF5 File "{f.file.filename}" elements of group "{f.name}"')
-			f.visititems(HDF5Printer())
-		
-		return
-
-	def validate_partition_function_group(self, g : h5py.Group):
+	def _validate_data_group(self, d_grp : h5py.Group):
 		
 		class EachImmediateChildGroupIsLikeAPFDataInstanceVisitor:
 			def __init__(self):
@@ -135,76 +95,23 @@ class AnsPartitionFunctionDataFile:
 					return
 				
 		
-		for mol_grp_name, mol_grp in g.items():
+		for mol_grp_name, mol_grp in d_grp.items():
 			if isinstance(mol_grp, h5py.Dataset):
-				raise TypeError(f'Item "{mol_grp.name}" in "{g.file.filename}" is a dataset. Expected that all direct children of group "{g.name}" are groups not datasets.')
+				raise TypeError(f'Item "{mol_grp.name}" in "{d_grp.file.filename}" is a dataset. Expected that all direct children of group "{d_grp.name}" are groups not datasets.')
 			
 			for iso_grp_name, iso_grp in mol_grp.items():
 				if isinstance(iso_grp, h5py.Dataset):
-					raise TypeError(f'Item "{iso_grp.name}" in "{g.file.filename}" is a dataset. Expected that all direct children of "molecule_group" group "{mol_grp.name}" are groups not datasets.')
+					raise TypeError(f'Item "{iso_grp.name}" in "{d_grp.file.filename}" is a dataset. Expected that all direct children of "molecule_group" group "{mol_grp.name}" are groups not datasets.')
 				
 				iso_grp.visititems(EachImmediateChildGroupIsLikeAPFDataInstanceVisitor())
 		
-		_lgr.info(f'Validation for "{g.name}" in "{g.file.filename}" succeeded')
+		_lgr.info(f'Validation for "{d_grp.name}" in "{d_grp.file.filename}" succeeded')
 
 
-	def update_from_sources(self):
-		"""
-		Look through the "/sources" group and update the molecule/isotope groups in "/partition_function" with virtual
-		datasets that reference data defined in "/sources" group.
-		"""
-		with h5py.File(self.path, 'a') as f:
-
-			pf_grp = self.get_pf_grp(f)
-
-			s_grp = self.get_sources_grp(f)
-			
-			sources = self.get_sources(s_grp)
-			_lgr.debug(f'{sources=}')
-					
-			self.update_virtual_datasets(pf_grp, sources)
-			self.validate_partition_function_group(pf_grp)
-
-	def get_sources(
-		self,
-		s_grp : h5py.Group, # /sources group
-	) -> list[VirtualSourceInfo,...]:
 	
-		sources = []
-		target_group_name = 'partition_function'
-		
-		for x_item_name, x_item in s_grp.items():
-		
-			if isinstance(x_item, h5py.Group): # handle case where '/sources/X' entry is a group, and therefore should have a 'target_group_name' sub-group inside it.
-				if target_group_name not in x_item.keys():
-					print(f"WARNING : Source group '{x_item.name}' in '{x_item.file.filename}' should have a '{target_group_name}' sub-group. This one has entries {tuple(x_item.keys())}, therefore not using as a source for '/{target_group_name}'.")
-					continue
-				
-				sxpf_item = x_item[target_group_name]
-				if isinstance(sxpf_item, h5py.Dataset):
-					external_file = '.'
-					external_group = target_group_name
-					if len(sxpf_item.shape) == 0:
-						# dataset is a scalar, so we only have the filename
-						external_file = sxpf_item.asstr()[tuple()]
-					elif len(sxpf_item.shape) == 1 and sxpf_item.shape[0] == 2: #  dataset is a pair, so we have the filename and the group
-						external_file, external_group = (str(x) for x in sxpf_item.astype('T')[:])
-					else:
-						raise ValueError(f'Dataset "{sxpf_item.name}" in "{sxpf_item.file.filename}" should either be a scalar string, or a string array of shape (2,), but has dtype={x_item.dtype} shape={x_item.shape}')
-					
-					sources.append(VirtualSourceInfo(sxpf_item.name, external_file, external_group))
-				else:
-					sources.append(VirtualSourceInfo(x_item.name, '.', x_item.name+f'/{target_group_name}'))
-			
-			else:
-				raise ValueError(f'Expected h5py.Group for entries of "{s_grp.name}" in "{s_grp.file}", but entry "{x_item_name}" has type {type(x_item)}.')
-			
-		return sources
-
-
-	def update_virtual_datasets(
+	def _update_virtual_datasets(
 			self,
-			pf_grp : h5py.Group, #"/partition_function" group to update
+			d_grp : h5py.Group, #"/partition_function" group to update
 			sources : list[VirtualSourceInfo,...],
 	):
 		"""
@@ -222,7 +129,7 @@ class AnsPartitionFunctionDataFile:
 			x_grp = None
 			
 			try:
-				x_grp = pf_grp.file if s_file == '.' else h5py.File(Path(pf_grp.file.filename).parent / s_file)
+				x_grp = d_grp.file if s_file == '.' else h5py.File(Path(d_grp.file.filename).parent / s_file)
 			
 				xpf_grp = x_grp[s_pf_path]
 				for mol_grp_name, mol_grp in xpf_grp.items():
@@ -253,8 +160,7 @@ class AnsPartitionFunctionDataFile:
 					x_grp.file.close()
 			
 			for (mol_grp_name, iso_grp_name), pf_data_src_grp_list in iso_pf_source_map.items():
-				_lgr.debug(f'{mol_grp_name=} {iso_grp_name=}')
-				mol_grp = h5py_helper.ensure_grp(pf_grp, mol_grp_name)
+				mol_grp = h5py_helper.ensure_grp(d_grp, mol_grp_name)
 				iso_grp = h5py_helper.ensure_grp(mol_grp, iso_grp_name)
 				
 				# delete all existing virtual pf_data_ groups
@@ -293,72 +199,36 @@ class AnsPartitionFunctionDataFile:
 						pf_data_grp.create_virtual_dataset(pf_dset_path.rsplit('/',1)[1], layout, fillvalue=None)
 	
 	
-	def get_sources_grp(self, root_grp : h5py.Group):
-		return h5py_helper.ensure_grp(root_grp, 'sources', attrs={'description':'Data for this file split by the source it came from'})
-	
-	def get_mols_grp(self, x_grp : h5py.Group):
-		return h5py_helper.ensure_grp(x_grp, 'molecules', attrs={'description':'Association between RADTRAN molecule ID numbers and molecule names'})
-	
-	def get_isos_grp(self, x_grp : h5py.Group):
-		return h5py_helper.ensure_grp(x_grp, 'isotopologues', attrs={'description':'RADTRAN ID and names of isotopologues'})
-	
-	def get_pf_grp(self, x_grp : h5py.Group):
-		return h5py_helper.ensure_grp(x_grp, 'partition_function',attrs={'description':'Contains data that classifies the partition function for molecule/isotopologues'})
-	
-	def add_source_link(
+	def _add_data(
 			self,
-			source_name : str,
-			fpath : Path, # Path to file
-			gpath : None | str = None, # Path to group within source.
-	):
-		rel_fpath = str(Path(fpath).relative_to(self.path.parent))
-		
-		with h5py.File(self.path,'a') as f:
-			s_grp = self.get_sources_grp(f)
-			xs_grp = h5py_helper.ensure_grp(s_grp, source_name)
-			
-			if gpath is None:
-				h5py_helper.ensure_dataset(xs_grp, 'partition_function', shape=tuple(), data=rel_fpath, dtype='T')
-			else:
-				h5py_helper.ensure_dataset(xs_grp, 'partition_function', shape=(2,), data=(rel_fpath, gpath), dtype='T')
-		self.update_from_sources()
-	
-	def add_source_data(
-			self,
+			d_grp : h5py.Group,
 			pfdh : PartitionFunctionDataHolder
 	):
-		"""
-		Set sub-group in "/sources" group with data specified in `pfdh`
-		"""
-		with h5py.File(self.path, 'a') as f:
-			s_grp = self.get_sources_grp(f)
-			x_grp = h5py_helper.ensure_grp(s_grp, pfdh.name, attrs=dict(description=pfdh.description))
-			pf_grp = self.get_pf_grp(x_grp)
+		for rt_gas_desc, pf_data_list in pfdh.items():
+			_lgr.debug(f'{rt_gas_desc=} {pf_data_list=}')
 			
-			for rt_gas_desc, pf_data_list in pfdh.items():
+			mol_grp = h5py_helper.ensure_grp(d_grp, rt_gas_desc.gas_name)
+			iso_grp = h5py_helper.ensure_grp(mol_grp, f'{rt_gas_desc.iso_id}')
+			
+			for pf_data_idx, pf_data in enumerate(pf_data_list):
+				pf_data_grp = h5py_helper.ensure_grp(iso_grp, f'pf_data_{pf_data_idx:04d}', attrs={'description' : 'An instance of partition function data for this isotopologue'})
 				
-				mol_grp = h5py_helper.ensure_grp(pf_grp, rt_gas_desc.gas_name)
-				iso_grp = h5py_helper.ensure_grp(mol_grp, f'{rt_gas_desc.iso_id}')
-				
-				for pf_data_idx, pf_data in enumerate(pf_data_list):
-					pf_data_grp = h5py_helper.ensure_grp(iso_grp, f'pf_data_{pf_data_idx:04d}', attrs={'description' : 'An instance of partition function data for this isotopologue'})
-					
-					pf_type = pf_data.__class__.__name__
-					if isinstance(pf_data, self.pf_data_types):
-						for field in dc.fields(pf_data):
-							if field.name.startswith('_'):
-								continue
-							h5py_helper.ensure_dataset(pf_data_grp, field.name, data=getattr(pf_data, field.name))
-					else:
-						raise TypeError(f'`pfdh.data` must be an instance of one of the following types {tuple(typ for typ in self.pf_data_types)}, not {type(pf_data)}.')
-				
-					h5py_helper.ensure_dataset(pf_data_grp, 'partition_function_type', shape=tuple(), data=pf_type, dtype='T', attrs={'description' : "Describes how the partition function is specified"})
+				pf_type = pf_data.__class__.__name__
+				if isinstance(pf_data, self.pf_data_types):
+					for field in dc.fields(pf_data):
+						if field.name.startswith('_'):
+							continue
+						h5py_helper.ensure_dataset(pf_data_grp, field.name, data=getattr(pf_data, field.name))
+				else:
+					raise TypeError(f'`pfdh.data` must be an instance of one of the following types {tuple(typ for typ in self.pf_data_types)}, not {type(pf_data)}.')
+			
+				h5py_helper.ensure_dataset(pf_data_grp, 'partition_function_type', shape=tuple(), data=pf_type, dtype='T', attrs={'description' : "Describes how the partition function is specified"})
 		
-		self.update_from_sources()
+		return
 	
 	
 	
-	def get_partition_function_data(
+	def get_data(
 			self,
 			mol_name : str, 
 			local_iso_id : int,
@@ -368,21 +238,21 @@ class AnsPartitionFunctionDataFile:
 		#print(f'DEBUG : AnsPartitionFunctionDataFile.get_partition_function_data(...) {mol_name=} {local_iso_id=} {on_missing_mol=} {on_missing_iso=}')
 		null_data = None
 		
-		with h5py.File(self.path, 'r') as f:
+		with self.open('r'):
 			
-			if 'partition_function' not in f:
-				raise KeyError(f'HDF5 file "{f.file.filename}" does not have a "partition_function" group')
-			pf_grp = f['partition_function']
+			if 'partition_function' not in self._file_hdl:
+				raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "partition_function" group')
+			pf_grp = self._get_data_grp(self._file_hdl)
 			
 			if mol_name not in pf_grp:
 				match on_missing_mol:
 					case 'ignore':
 						return null_data
 					case 'warn':
-						_lgr.warning(f'HDF5 file "{f.file.filename}" does not have a "partition_function/{mol_name}" group, returning NULL DATA')
+						_lgr.warning(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "partition_function/{mol_name}" group, returning NULL DATA')
 						return null_data
 					case _:
-						raise KeyError(f'HDF5 file "{f.file.filename}" does not have a "partition_function/{mol_name}" group')
+						raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "partition_function/{mol_name}" group')
 			mol_grp = pf_grp[mol_name]
 			
 			if str(local_iso_id) not in mol_grp:
@@ -390,10 +260,10 @@ class AnsPartitionFunctionDataFile:
 					case 'ignore':
 						return null_data
 					case 'warn':
-						_lgr.warning(f'HDF5 file "{f.file.filename}" does not have a "partition_function/{mol_name}/{local_iso_id}" group, returning NULL DATA')
+						_lgr.warning(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "partition_function/{mol_name}/{local_iso_id}" group, returning NULL DATA')
 						return null_data
 					case _:
-						raise KeyError(f'HDF5 file "{f.file.filename}" does not have a "partition_function/{mol_name}/{local_iso_id}" group')
+						raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "partition_function/{mol_name}/{local_iso_id}" group')
 			iso_grp = mol_grp[str(local_iso_id)]
 			
 			pf_list = PFList()

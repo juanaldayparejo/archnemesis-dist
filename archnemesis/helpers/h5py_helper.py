@@ -2,6 +2,7 @@
 
 import h5py
 from typing import Callable, Any, Literal, NamedTuple#, Type
+import textwrap
 
 import numpy as np
 
@@ -14,6 +15,39 @@ class VirtualSourceInfo(NamedTuple):
     src_name : str
     src_file : str
     src_grp : str
+
+
+class HDF5Printer:
+    def __init__(self, mode : Literal['indent', 'full_paths'] = 'indent'):
+        self.mode = mode
+        self.indent_1 = ' |  '
+        self.indent_2 = ' |- '
+        self.indent_3 = '    '
+
+    def __call__(self, name_tail : str, item : h5py.Group | h5py.Dataset):
+        if self.mode == 'indent':
+            level = name_tail.count('/')
+            name_last = name_tail.rsplit('/', 1)[-1]
+            item_type = 'Group' if isinstance(item, h5py.Group) else f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), (self.indent_1*(level+1)+self.indent_3))}\n{self.indent_1*(level+1)}'
+            print(f'{self.indent_1*level}{self.indent_2}{name_last} : {item_type}')
+        
+        elif self.mode == 'full_paths':
+            item_type = 'Group' if isinstance(item, h5py.Group) else f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), " "*(len(name_tail)+6))}'
+            print(f'{name_tail} : {item_type}')
+        
+        else:
+            raise ValueError(f'Unknown mode {self.mode=}')
+
+class HDF5GetNonVirtualDatasets:
+    def __init__(self):
+        self.non_virtual_dataset_list = []
+
+    def __call__(self, name_tail : str, item : h5py.Group | h5py.Dataset):
+        if isinstance(item, h5py.Group): # Don't care about groups
+            return
+        
+        if not item.is_virtual:
+            self.non_virtual_dataset_list.append(item.name)
 
 def ensure_grp(
         grp : h5py.Group, 
