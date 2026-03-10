@@ -29,6 +29,30 @@ class FormatHitran160(AsciiFixedWidthFormat):
     gp                                 : float                          = 7
     gpp                                : float                          = 7
 
+    @classmethod
+    def get_record_from_str(cls, s : str):
+        # Custom reader is always faster than relying on the generic one.
+        return cls._record_type(
+            int(s[:2]),
+            int(s[2:3]),
+            float(s[3:15]),
+            float(s[15:25]),
+            float(s[25:35]),
+            float(s[35:40]),
+            float(s[40:45]),
+            float(s[45:55]),
+            float(s[55:59]),
+            float(s[59:67]),
+            s[67:82],
+            s[82:97],
+            s[97:112],
+            s[112:127],
+            tuple(map(int, s[127:133])),
+            tuple(map(int, (s[133:135],s[135:137],s[137:139],s[139:141],s[141:143],s[143:145]))),
+            s[145:146],
+            float(s[146:153]),
+            float(s[153:160])
+        )
 
 class FormatHitran100(AsciiFixedWidthFormat):
     """
