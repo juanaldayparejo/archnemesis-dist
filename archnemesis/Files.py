@@ -181,8 +181,15 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #Initialise Scatter class and read file
     ###############################################################
 
-    Scatter = Scatter_0()
-    Scatter.read_hdf5(runname)
+    with h5py.File(runname+'.h5','r') as f:
+        #Checking if CIA exists
+        e = "/Scatter" in f
+
+    if e:
+        Scatter = Scatter_0()
+        Scatter.read_hdf5(runname)
+    else:
+        Scatter = None
 
     #Initialise CIA class and read files (.cia)  - NOT FROM HDF5 YET
     ##############################################################
