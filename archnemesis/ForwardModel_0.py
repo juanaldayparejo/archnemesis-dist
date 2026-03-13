@@ -295,6 +295,9 @@ class ForwardModel_0:
                 elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
                     spect_table_type_str = 'line-by-line-table'
                     spect_legacy_filename = f'{self.runname}.lls'
+                elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+                    spect_table_type_str = 'line-by-line-runtime'
+                    spect_legacy_filename = None
                 else:
                     raise RuntimeError(f'Unknown SpectralCalculationMode: {self.Spectroscopy.ILBL}.')
                 #spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
@@ -558,11 +561,15 @@ class ForwardModel_0:
                 elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
                     SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
 
+                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME: #LBL-runtime calculations
+                    SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
+
                 SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
                 
                 #Normalising measurement to a given wavelength if required
                 if self.Measurement.IFORM == SpectraUnit.Normalised_radiance:
                     SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
+
 
         #Applying any changes to the computed spectra required by the state vector
         dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX))
@@ -747,7 +754,9 @@ class ForwardModel_0:
                     SPECONV1,dSPECONV1 = self.Measurement.convg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
                 elif self.Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+                    SPECONV1,dSPECONV1 = self.Measurement.lblconvg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
 
+                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME: #LBL-runtime calculations
                     SPECONV1,dSPECONV1 = self.Measurement.lblconvg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
 
             SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
@@ -3788,6 +3797,41 @@ class ForwardModel_0:
                 #Combining the gaseous opacity in each self.LayerX
                 TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
 
+            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME:    #Online calculation of the line-by-line opacity
+                
+                self_frac = np.mean((self.LayerX.PP.T / self.LayerX.PRESS),axis=1) #(NGAS) average volume mixing ratio of each gas
+                self_fracx = np.zeros(self.SpectroscopyX.NGAS)
+                for i in range(self.SpectroscopyX.NGAS):
+                    igas = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
+                    self_fracx[i] = self_frac[igas]
+
+                #Converting IDs into list
+                self.SpectroscopyX.ID = np.atleast_1d(self.SpectroscopyX.ID).astype(int).tolist()
+                self.SpectroscopyX.ISO = np.atleast_1d(self.SpectroscopyX.ISO).astype(int).tolist()
+
+                #Calculating the absorption cross sections
+                if return_grad:
+                    k,dkdT = self.SpectroscopyX.calc_klblg_online(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,self_frac=self_fracx,wave=None,add_pressure_shift=True)
+                else:
+                    k = self.SpectroscopyX.calc_klbl_online(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,self_frac=self_fracx,wave=None,add_pressure_shift=True)
+
+                #Calculating the optical depths
+                for i in range(self.SpectroscopyX.NGAS):
+                    IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
+
+                    #Calculating vertical column density in each self.LayerX
+                    VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-24   #m-2
+
+                    #Calculating vertical opacity for each gas in each self.LayerX
+                    TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
+                    
+                    if return_grad:
+                        dTAUGAS[:,0,IGAS,:] = k[:,:,i] * 1.0e-24  #dTAUGAS/dAMOUNT (m2)
+                        dTAUGAS[:,0,self.AtmosphereX.NVMR,:] = dTAUGAS[:,0,self.AtmosphereX.NVMR,:] + dkdT[:,:,i] * VLOSDENS #dTAUGAS/dT
+
+                #Combining the gaseous opacity in each self.LayerX
+                TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
+
             elif self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:    #K-table
                 #Calculating the k-coefficients for each gas in each self.LayerX
                 if return_grad:
@@ -4445,7 +4489,7 @@ class ForwardModel_0:
 
         #Now integrate over g-ordinates
         SPECOUT = np.tensordot(SPECOUT, self.SpectroscopyX.DELG, axes=([1],[0])) #NWAVE,NPATH
-        
+
         if return_grad:
             dSPECOUT = np.nan_to_num(np.tensordot(dSPECOUT, self.SpectroscopyX.DELG, axes=([1],[0]))) #(WAVE,NGAS+2+NDUST,NLAYIN,NPATH)
             dTSURF = np.tensordot(dTSURF, self.SpectroscopyX.DELG, axes=([1],[0])) #NWAVE,NPATH

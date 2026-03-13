@@ -96,6 +96,8 @@ class Spectroscopy_0:
                 (12 - DOPPLER) Doppler profile
         @param VREL: real,
             If ILBL=1, then VREL indicates the spectral window to use around each line for the line-by-line calculation (cm-1)
+        @param SELF_FRAC: 1D array,
+            If ILBL=1, then SELF_FRAC indicates the fraction of self-broadening to use for each gas (between 0 and 1, where 0 is completely foreign-broadened and 1 is completely self-broadened)
         @param NWAVE: int,
             Number of wavelengths included in the K-tables or LBL-tables
         @param WAVE: 1D array,
@@ -150,6 +152,7 @@ class Spectroscopy_0:
         self.ISO = None       #(NGAS)
         self._locations = path_redirect.PathRedirectList() #(NGAS)
         self.IPROC = None     #(NGAS)
+        self.SELF_FRAC = None #(NGAS)
         self.NWAVE = None     
         self.WAVE = None      #(NWAVE)
         self.NP = None
@@ -261,6 +264,22 @@ class Spectroscopy_0:
                     f'IPROC[{i}] must be an integer'
                 assert isinstance(self.IPROC[i], SpectroscopicLineProfile), \
                     f'IPROC[{i}] must be SpectroscopicLineProfile enum'
+
+            assert self.ID is not None , \
+                'ID must be defined when ILBL=1'
+            assert len(self.ID) == self.NGAS , \
+                'ID must have size (NGAS)'
+
+            assert self.ISO is not None , \
+                'ISO must be defined when ILBL=1'
+            assert len(self.ISO) == self.NGAS , \
+                'ISO must have size (NGAS)'
+
+            assert self.WAVE is not None, \
+                'WAVE must be defined when ILBL=1'
+            
+            assert self.ISPACE is not None, \
+                'ISPACE must be defined when ILBL=1'
 
     ######################################################################################################
     def summary_info(self):
@@ -466,14 +485,44 @@ class Spectroscopy_0:
                 dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
             elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
                 dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
+            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+                dset.attrs['type'] = 'Line-by-line calculation during runtime'
             else:
                 raise ValueError('error :: ILBL must be 0 or 2')
 
             if self.NGAS>0:
-                if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
+
+                if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME)):
                     dt = h5py.special_dtype(vlen=str)
                     dset = h5py_helper.store_data(grp, 'LOCATION', self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
                     dset.attrs['title'] = "Location of the pre-tabulated tables"
+
+                if self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+
+                    dset = h5py_helper.store_data(grp, 'ID', self.ID)
+                    dset.attrs['title'] = "ID of the gaseous species"
+
+                    dset = h5py_helper.store_data(grp, 'ISO', self.ISO)
+                    dset.attrs['title'] = "Isotope ID of the gaseous species"
+
+                    dset = h5py_helper.store_data(grp, 'IPROC', self.IPROC)
+                    dset.attrs['title'] = "Line profile to use for each gas"
+                    dset.attrs['description'] = "0: VOIGT; 1: SUBLORENTZ_CO2_BROADENING; 2: VANVLECK_WEISSKOPF; 4: LORENTZ; 12: DOPPLER"
+
+                    dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
+                    dset.attrs['title'] = "Spectral units"
+                    if self.ISPACE==WaveUnit.Wavenumber_cm:
+                        dset.attrs['units'] = 'Wavenumber / cm-1'
+                    elif self.ISPACE==WaveUnit.Wavelength_um:
+                        dset.attrs['units'] = 'Wavelength / um'
+
+                    dset = h5py_helper.store_data(grp, 'WAVE', self.WAVE)
+                    if self.ISPACE==0:
+                        dset.attrs['title'] = "Wavenumber array"
+                        dset.attrs['units'] = 'cm-1'
+                    elif self.ISPACE==0:
+                        dset.attrs['title'] = "Wavelength array"
+                        dset.attrs['units'] = 'um'        
 
     ######################################################################################################
     def read_hdf5(self,runname,inside_telluric=False):
@@ -509,8 +558,19 @@ class Spectroscopy_0:
                         LOCATION[igas] = LOCATION1[igas].decode('ascii')
                     self.LOCATION = LOCATION
                     
-                    #Reading the header information
-                    self.read_header()
+                    if self.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+                        self.ID = np.array(f.get(name+'/ID'))
+                        self.ISO = np.array(f.get(name+'/ISO'))
+                        self.IPROC = np.array(f.get(name+'/IPROC'))
+                        self.ISPACE = h5py_helper.retrieve_data(f, name+'/ISPACE', lambda x:  WaveUnit(np.int32(x)))
+                        self.WAVE = h5py_helper.retrieve_data(f, name+'/WAVE', np.array)
+                        self.NWAVE = len(self.WAVE)
+                        self.NG = 1
+                        self.G_ORD = np.array([0.])
+                        self.DELG = np.array([1.0])
+                    else:
+                        #Reading the header information
+                        self.read_header()
                     
     ######################################################################################################
     def read_lls(self, runname):
@@ -840,9 +900,12 @@ class Spectroscopy_0:
         self.NWAVE = len(wave1)
         self.WAVE = wave1
 
+        if self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+            #In this case we do not read any tables, as the line-by-line calculation will be done during runtime
+            return
+
         if self.ONLINE==False:
             #Tables must be read and stored on memory
-
             if self.ILBL==SpectralCalculationMode.K_TABLES: #K-tables
 
                 kstore = np.zeros([self.NWAVE,self.NG,self.NP,self.NT,self.NGAS])
@@ -1250,6 +1313,124 @@ class Spectroscopy_0:
             
         return kgood
 
+    ######################################################################################################
+    def calc_klblg_online(self,npoints,press,temp,self_frac=1.0,wave=None,add_pressure_shift=True):
+        """
+        Calculate the absorption coefficient at a given pressure and temperature
+        from the LineData class
+
+        Input parameters
+        -------------------
+        @param npoints: int
+            Number of p-T points at which to calculate the cross sections
+        @param press: 1D array
+            Pressure levels (atm)
+        @param temp: 1D array
+            Temperature levels (K)
+
+        Optional parameters
+        ---------------------
+        @param wavemin: real
+            Minimum wavenumber (cm-1) or wavelength (um)
+        @param wavemax: real
+            Maximum wavenumber (cm-1) or wavelength (um)
+        @param self_frac: real
+            Fraction of the line broadening that is due to self-broadening (as opposed to broadening by the ambient gas)
+        @param add_pressure_shift: bool
+            Whether to include pressure shift in the line positions (NEMESIS does not include it)
+
+
+        Outputs
+        ---------
+
+        K(NWAVE,NPOINTS,NGAS) :: Absorption cross sections of each gas in each p-T point
+        dKdT(NWAVE,NPOINTS,NGAS) :: Rate of change of the absorption cross section with temperature for each gas in each p-T point
+
+        """
+
+        #Defining the wavelengths at which to calculate the cross sections
+        if wave is None:
+            wave = self.WAVE
+            nwave = self.NWAVE
+        else:
+            wave = np.array(wave)
+            nwave = len(wave)
+
+        #Checking that self_frac has the correct format and values
+        self_frac_array = False
+        if isinstance(self_frac, (int, float)):
+            if not (0.0 <= self_frac <= 1.0):
+                raise ValueError(f"self_frac float must be between 0 and 1. Got: {self_frac}")
+        else:
+            # Convert to numpy array for easy size checking
+            self_frac = np.asarray(self_frac)
+            if self_frac.size != self.NGAS:
+                raise ValueError(
+                    f"self_frac array size ({self_frac.size}) does not match "
+                    f"the number of gases ({self.NGAS})."
+                )
+            self_frac_array = True
+
+        #Calculating the line-by-line cross sections for each gas and each p-T point
+        k = np.zeros((nwave, npoints, self.NGAS))
+        dkdt = np.zeros((nwave, npoints, self.NGAS))
+        for igas in range(self.NGAS):
+
+            if self_frac_array:
+                self_frac_gas = self_frac[igas]
+            else:
+                self_frac_gas = self_frac
+
+            _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections...')
+
+            linedata = ans.LineData_1(
+                self.ID[igas], #ID of the gas
+                self.ISO[igas], #Isotope ID of the gas
+                LINE_DATABASE=self.LOCATION[igas] # Different database location
+            )
+
+            if self.IPROC[igas]==SpectroscopicLineProfile.VOIGT:
+                lineshape = ans.Data.lineshapes.voigt
+            elif self.IPROC[igas]==SpectroscopicLineProfile.DOPPLER:
+                lineshape = ans.Data.lineshapes.doppler
+            elif self.IPROC[igas]==SpectroscopicLineProfile.LORENTZ:
+                lineshape = ans.Data.lineshapes.lorentz
+            else:
+                raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
+
+            # Download partition function tables for the gas isotopes
+            linedata.fetch_partition_function()
+
+            for ipoint in range(npoints):
+
+                p_l = press[ipoint]
+                t_l = temp[ipoint]
+
+                k[:,ipoint,igas] = linedata.calculate_monochromatic_absorption(
+                            waves=wave,             # wavenumbers or wavelengths
+                            temp=t_l,               # kelvin
+                            press=p_l,              # Atmospheres
+                            amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
+                            wave_unit=self.ISPACE,  # unit of `waves` argument
+                            lineshape_fn=lineshape, # lineshape function to use
+                            line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                            add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                )
+
+                k1 = linedata.calculate_monochromatic_absorption(
+                            waves=wave,             # wavenumbers or wavelengths
+                            temp=t_l+5.,               # kelvin
+                            press=p_l,              # Atmospheres
+                            amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
+                            wave_unit=self.ISPACE,  # unit of `waves` argument
+                            lineshape_fn=lineshape, # lineshape function to use
+                            line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                            add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                )
+
+                dkdt[:,ipoint,igas] = (k1-k[:,ipoint,igas])/5.
+
+        return k, dkdt
 
     ######################################################################################################
     def calc_klbl_online(self,npoints,press,temp,self_frac=1.0,wave=None,add_pressure_shift=True):
@@ -1285,6 +1466,7 @@ class Spectroscopy_0:
 
         """
 
+        #Defining the wavelengths at which to calculate the cross sections
         if wave is None:
             wave = self.WAVE
             nwave = self.NWAVE
@@ -1292,8 +1474,29 @@ class Spectroscopy_0:
             wave = np.array(wave)
             nwave = len(wave)
 
+        #Checking that self_frac has the correct format and values
+        self_frac_array = False
+        if isinstance(self_frac, (int, float)):
+            if not (0.0 <= self_frac <= 1.0):
+                raise ValueError(f"self_frac float must be between 0 and 1. Got: {self_frac}")
+        else:
+            # Convert to numpy array for easy size checking
+            self_frac = np.asarray(self_frac)
+            if self_frac.size != self.NGAS:
+                raise ValueError(
+                    f"self_frac array size ({self_frac.size}) does not match "
+                    f"the number of gases ({self.NGAS})."
+                )
+            self_frac_array = True
+
+        #Calculating the line-by-line cross sections for each gas and each p-T point
         k = np.zeros((nwave, npoints, self.NGAS))
         for igas in range(self.NGAS):
+
+            if self_frac_array:
+                self_frac_gas = self_frac[igas]
+            else:
+                self_frac_gas = self_frac
 
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections...')
 
@@ -1321,10 +1524,10 @@ class Spectroscopy_0:
                 t_l = temp[ipoint]
 
                 k[:,ipoint,igas] = linedata.calculate_monochromatic_absorption(
-                            waves=wave,        # wavenumbers in cm^{-1}
+                            waves=wave,             # wavenumbers or wavelengths
                             temp=t_l,               # kelvin
                             press=p_l,              # Atmospheres
-                            amb_frac=1.-self_frac,  # fraction of broadening due to ambient gas
+                            amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
                             wave_unit=self.ISPACE,  # unit of `waves` argument
                             lineshape_fn=lineshape, # lineshape function to use
                             line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
