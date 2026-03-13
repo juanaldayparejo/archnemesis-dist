@@ -2421,8 +2421,11 @@ def calc_ktable(outname,                       #Name of the output .lta file
                 database,                      #Database
                 Measurement=None,              #Measurement class to read the ILS (NFIL,VFIL,AFIL parameters) 
                 add_pressure_shift=True,       #Flag to include pressure shift in the waveumbers
+                n_cores=1                      #Number of cores to use in the calculations (if >1, parallel processes are used)
 ):
 
+    from joblib import Parallel, delayed
+    import copy
 
     #Initialising spectroscopy class
     Spectroscopy  = ans.Spectroscopy_0()
@@ -2480,17 +2483,46 @@ def calc_ktable(outname,                       #Name of the output .lta file
     else:
         raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
 
-    #Selecting the spectral range needed for the calculations
+    #Looping through the pressure and temperature levels to calculate the k-coefficients
+    if n_cores == 1:
+        k_coefficients = np.zeros((Spectroscopy.NWAVE, Spectroscopy.NG, Spectroscopy.NP, Spectroscopy.NT))
+        for iwave in range(Spectroscopy.NWAVE):
+            k_coefficients[iwave,:,:,:] = calc_ktable_bin(iwave,Spectroscopy,linedata,self_frac,ispace,lineshape,vrel,add_pressure_shift,Measurement)
+    elif n_cores > 1:
+        #Call parallel processes
+        results = Parallel(n_jobs=n_cores, prefer="threads")(
+            delayed(calc_ktable_bin)(
+                iwave, Spectroscopy, copy.deepcopy(linedata), self_frac,
+                ispace, lineshape, vrel, add_pressure_shift, Measurement
+            )
+            for iwave in range(Spectroscopy.NWAVE)
+        )
+        k_coefficients = np.stack(results, axis=0)  #(NWAVE,NG,NP,NT)
+
+    Spectroscopy.K = k_coefficients[:,:,:,:,np.newaxis]
+
     if Measurement is not None:
-        assert np.allclose(Measurement.VCONV[0:Measurement.NCONV[0],0], Spectroscopy.WAVE, rtol=0.5)
-        vbinmin = Spectroscopy.WAVE.min() - (Measurement.VFIL[0:Measurement.NFIL[0],0]-Measurement.VCONV[0,0]).max()
-        vbinmax = Spectroscopy.WAVE.max() + (Measurement.VFIL[0:Measurement.NFIL[-1],-1]-Measurement.VCONV[-1,0]).max()
+        fwhm = Measurement.FWHM
     else:
-        vbinmin = Spectroscopy.WAVE.min() - delwave / 2.
-        vbinmax = Spectroscopy.WAVE.max() + delwave / 2.
+        fwhm = 0.0
 
+    #Writing the look-up table
+    write_ktable(outname,gasID,isoID,Spectroscopy.G_ORD,Spectroscopy.DELG,Spectroscopy.PRESS,Spectroscopy.TEMP,Spectroscopy.NWAVE,Spectroscopy.WAVE.min(),delwave,fwhm,k_coefficients)
+
+
+
+def calc_ktable_bin(iwave,Spectroscopy,linedata,self_frac,ispace,lineshape,vrel,add_pressure_shift,Measurement):
+
+    #Calculating the required spectral range for the line-by-line calculations in the bin. If a Measurement class is provided, the spectral range is defined by the convolution of the instrument lineshape with the bin width. If not, the spectral range is defined as the bin width (delwave).
+    if Measurement is not None:
+        vbinmin = Spectroscopy.WAVE[iwave] - (Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0]).max()
+        vbinmax = Spectroscopy.WAVE[iwave] + (Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0]).max()
+    else:
+        vbinmin = Spectroscopy.WAVE[iwave] - delwave / 2.
+        vbinmax = Spectroscopy.WAVE[iwave] + delwave / 2.
+
+    #Downloading the line data for the required spectral range
     _lgr.info(f'Selecting lines in the spectral range {vbinmin:.2f} - {vbinmax:.2f} for the calculations')
-
     linedata.fetch_linedata(
         vmin = vbinmin, 
         vmax = vbinmax, 
@@ -2500,8 +2532,12 @@ def calc_ktable(outname,                       #Name of the output .lta file
     # Download partition function tables for the gas isotopes
     linedata.fetch_partition_function()
 
-    #Looping through the pressure and temperature levels to calculate the k-coefficients
-    k_coefficients = np.zeros((Spectroscopy.NWAVE, Spectroscopy.NG, Spectroscopy.NP, Spectroscopy.NT))
+    #Checking that there are lines in the spectral range. If not, the k-coefficients will be set to zero and a warning will be issued.
+    k_coefficients = np.zeros((Spectroscopy.NG, Spectroscopy.NP, Spectroscopy.NT))
+    if len(linedata.line_data.NU) == 0:
+        return k_coefficients
+
+    #Calculating the k-coefficients for the given bin
     for ip in range(Spectroscopy.NP):
 
         for it in range(Spectroscopy.NT):
@@ -2527,6 +2563,7 @@ def calc_ktable(outname,                       #Name of the output .lta file
             ncalc = int((vbinmax-vbinmin)/delv_calc)
             wavecalc = np.linspace(vbinmin,vbinmax,ncalc)
 
+            _lgr.info(f'Central wavelength of the bin = {Spectroscopy.WAVE[iwave]}')
             _lgr.info(f'Number of absorption lines in the range = {len(linedata.line_data.NU)}')
             _lgr.info(f'Number of spectral points in the range = {ncalc} - delta_wave = {delv_calc}')    
             _lgr.info(f'Calculating line-by-line absorption coefficients')        
@@ -2545,45 +2582,26 @@ def calc_ktable(outname,                       #Name of the output .lta file
 
 
             #Calculating fo each wavelength bin
-            _lgr.info(f'Calculating the cumulative distributions and k-coefficients for each bin')
-            for iwave in range(Spectroscopy.NWAVE):
+            _lgr.info(f'Calculating the cumulative distributions and k-coefficients')
 
-                #Calculating the bin size
-                if Measurement is not None:
-                    vbinminx = Spectroscopy.WAVE[iwave] - (Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0]).max()
-                    vbinmaxx = Spectroscopy.WAVE[iwave] + (Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0]).max()
-                else:
-                    vbinminx = Spectroscopy.WAVE[iwave] - delwave / 2.
-                    vbinmaxx = Spectroscopy.WAVE[iwave] + delwave / 2.
+            #Sorting the absorption coefficients in the bin
+            mask = (wavecalc >= vbinmin) & (wavecalc <= vbinmax)
+            idx = np.argsort(kabs[mask])
+            wavesel = wavecalc[mask]
+            k_sorted = kabs[mask][idx]
 
-                #Sorting the absorption coefficients in the bin
-                mask = (wavecalc >= vbinminx) & (wavecalc <= vbinmaxx)
-                idx = np.argsort(kabs[mask])
-                wavesel = wavecalc[mask]
-                k_sorted = kabs[mask][idx]
+            #Considering the instrument lineshape if needed
+            if Measurement is not None:
+                delta_wave = wavesel[idx] - Spectroscopy.WAVE[iwave]
+                ils_sorted = np.interp(delta_wave,Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0],Measurement.AFIL[0:Measurement.NFIL[iwave],iwave])
+            else:
+                ils_sorted = np.ones_like(wavesel)
 
-                #Considering the instrument lineshape if needed
-                if Measurement is not None:
-                    delta_wave = wavesel[idx] - Spectroscopy.WAVE[iwave]
-                    ils_sorted = np.interp(delta_wave,Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0],Measurement.AFIL[0:Measurement.NFIL[iwave],iwave])
-                else:
-                    ils_sorted = np.ones_like(wavesel)
+            #Calculating the cumulative distribution function of the absorption coefficients in the bin
+            delvarray = np.zeros_like(k_sorted) + (wavecalc[1]-wavecalc[0])
+            g_sorted = np.cumsum(ils_sorted * delvarray) / np.sum(ils_sorted * delvarray)
 
-                #Calculating the cumulative distribution function of the absorption coefficients in the bin
-                delvarray = np.zeros_like(k_sorted) + (wavecalc[1]-wavecalc[0])
-                g_sorted = np.cumsum(ils_sorted * delvarray) / np.sum(ils_sorted * delvarray)
+            #Interpolate to get the k-coefficients at the g-ordinates
+            k_coefficients[:,ip,it] = np.interp(Spectroscopy.G_ORD, g_sorted, k_sorted)
 
-                #Interpolate to get the k-coefficients at the g-ordinates
-                k_coefficients[iwave,:,ip,it] = np.interp(Spectroscopy.G_ORD, g_sorted, k_sorted)
-
-
-    Spectroscopy.K = k_coefficients[:,:,:,:,np.newaxis]
-
-    if Measurement is not None:
-        fwhm = Measurement.FWHM
-    else:
-        fwhm = 0.0
-
-    #Writing the look-up table
-    write_ktable(outname,gasID,isoID,Spectroscopy.G_ORD,Spectroscopy.DELG,Spectroscopy.PRESS,Spectroscopy.TEMP,Spectroscopy.NWAVE,Spectroscopy.WAVE.min(),delwave,fwhm,k_coefficients)
-
+    return k_coefficients
