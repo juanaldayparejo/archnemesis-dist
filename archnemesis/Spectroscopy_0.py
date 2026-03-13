@@ -2518,6 +2518,7 @@ def calc_ktable_bin(iwave,Spectroscopy,linedata,self_frac,ispace,lineshape,vrel,
         vbinmin = Spectroscopy.WAVE[iwave] - (Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0]).max()
         vbinmax = Spectroscopy.WAVE[iwave] + (Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0]).max()
     else:
+        delwave = Spectroscopy.WAVE[1] - Spectroscopy.WAVE[0]
         vbinmin = Spectroscopy.WAVE[iwave] - delwave / 2.
         vbinmax = Spectroscopy.WAVE[iwave] + delwave / 2.
 
