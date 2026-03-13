@@ -251,7 +251,6 @@ class ForwardModel_0:
         self.adjust_hydrostat=adjust_hydrostat
         self.NCores = NCores
 
-        
         #Check that the Spectroscopy class exists (as it defines the calculation wavelengths)
         if self.Spectroscopy is None:
             
@@ -259,6 +258,9 @@ class ForwardModel_0:
 
             self.Spectroscopy = ans.Spectroscopy_0()
             self.Spectroscopy.ILBL=SpectralCalculationMode.LINE_BY_LINE_TABLES
+            self.Spectroscopy.NG=1
+            self.Spectroscopy.G_ORD = np.array([0.])
+            self.Spectroscopy.DELG = np.array([1.0])
             self.Spectroscopy.NGAS=0
         
         if((self.Spectroscopy.NGAS == 0)):
@@ -342,15 +344,14 @@ class ForwardModel_0:
         self.AtmosphereX = deepcopy(Atmosphere)
         self.SurfaceX = deepcopy(Surface)
         self.MeasurementX = deepcopy(Measurement)
-        self.ScatterX = deepcopy(Scatter)
-        self.SpectroscopyX = deepcopy(Spectroscopy)
+        self.ScatterX = deepcopy(self.Scatter)
+        self.SpectroscopyX = deepcopy(self.Spectroscopy)
         self.CIAX = deepcopy(CIA)
         self.StellarX = deepcopy(Stellar)
         self.LayerX = deepcopy(Layer)
         self.TelluricX = deepcopy(Telluric)
         self.EmissionsX = deepcopy(Emissions)
         self.PathX = None
-
 
     ###############################################################################################
     ###############################################################################################
@@ -368,7 +369,8 @@ class ForwardModel_0:
             
         #Reading tables in the required wavelength range
         self.SpectroscopyX = deepcopy(self.Spectroscopy)
-        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+        if self.SpectroscopyX.NGAS>0:
+            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
         self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
 
@@ -459,10 +461,11 @@ class ForwardModel_0:
             #Calculating new wave array            
             self.Measurement.build_ils(IGEOM=IGEOM)
             wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=IGEOM)
-                
+
             #Reading tables in the required wavelength range
             self.SpectroscopyX = deepcopy(self.Spectroscopy)
-            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            if self.SpectroscopyX.NGAS>0:
+                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
             #Initialise array for averaging spectra (if required by NAV>1)
             SPEC = np.zeros(self.SpectroscopyX.NWAVE)
@@ -629,7 +632,8 @@ class ForwardModel_0:
                 
             #Reading tables in the required wavelength range
             self.SpectroscopyX = deepcopy(self.Spectroscopy)
-            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            if self.SpectroscopyX.NGAS>0:
+                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
             #Initialise array for averaging spectra (if required by NAV>1)
             SPEC = np.zeros(self.SpectroscopyX.NWAVE)
@@ -822,7 +826,8 @@ class ForwardModel_0:
                 wavecalc_min,wavecalc_max = self.MeasurementX.calc_wave_range(apply_doppler=True,IGEOM=None)
 
                 #Reading tables in the required wavelength range
-                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                if self.SpectroscopyX.NGAS>0:
+                    self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
                 #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
                 self.adjust_hydrostat = False
@@ -892,7 +897,8 @@ class ForwardModel_0:
             wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
                 
             #Reading tables in the required wavelength range
-            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            if self.SpectroscopyX.NGAS>0:
+                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
             #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
             self.adjust_hydrostat = False
@@ -1032,7 +1038,8 @@ class ForwardModel_0:
                 wavecalc_min,wavecalc_max = self.MeasurementX.calc_wave_range(apply_doppler=True,IGEOM=None)
                     
                 #Reading tables in the required wavelength range
-                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                if self.SpectroscopyX.NGAS>0:
+                    self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
                 #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
                 self.adjust_hydrostat = False
@@ -1133,7 +1140,8 @@ class ForwardModel_0:
             wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
                 
             #Reading tables in the required wavelength range
-            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            if self.SpectroscopyX.NGAS>0:
+                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
             #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
             self.adjust_hydrostat = False
@@ -1265,7 +1273,8 @@ class ForwardModel_0:
         wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
             
         #Reading tables in the required wavelength range
-        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+        if self.SpectroscopyX.NGAS>0:
+            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
         #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
         self.adjust_hydrostat = False
@@ -1393,7 +1402,8 @@ class ForwardModel_0:
         wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
             
         #Reading tables in the required wavelength range
-        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+        if self.SpectroscopyX.NGAS>0:
+            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
         #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
         self.adjust_hydrostat = False
@@ -1533,7 +1543,8 @@ class ForwardModel_0:
         wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
             
         #Reading tables in the required wavelength range
-        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+        if self.SpectroscopyX.NGAS>0:
+            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
         #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
         self.adjust_hydrostat = True
@@ -1617,7 +1628,8 @@ class ForwardModel_0:
                 
             #Reading tables in the required wavelength range
             self.SpectroscopyX = deepcopy(self.Spectroscopy)
-            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            if self.SpectroscopyX.NGAS>0:
+                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
             #Call process_IAV to calculate FM at each emission ray
             results = Parallel(n_jobs=n_jobs)(
@@ -1729,7 +1741,8 @@ class ForwardModel_0:
                 
             #Reading tables in the required wavelength range
             self.SpectroscopyX = deepcopy(self.Spectroscopy)
-            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            if self.SpectroscopyX.NGAS>0:
+                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
             #Call process_IAV to calculate FM at each emission ray
             results = Parallel(n_jobs=n_jobs)(
@@ -1850,7 +1863,8 @@ class ForwardModel_0:
         wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=None)
             
         #Reading tables in the required wavelength range
-        self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+        if self.SpectroscopyX.NGAS>0:
+            self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
         #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
         self.adjust_hydrostat = True
@@ -3737,70 +3751,84 @@ class ForwardModel_0:
 
     ###############################################################################################
     def calculate_gaseous_line_opacity(self, return_grad=False):
+                
+        if self.SpectroscopyX.NGAS>0:
         
-        TAUGAS = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.LayerX.NLAY,self.SpectroscopyX.NGAS])  #Vertical opacity of each gas in each self.LayerX
-        _lgr.debug(f'{TAUGAS.shape=}')
-        if return_grad:
-            dTAUGAS = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST,self.LayerX.NLAY])
-        else:
-            dTAUGAS = None
-        
-        if self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
+            TAUGAS = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.LayerX.NLAY,self.SpectroscopyX.NGAS])  #Vertical opacity of each gas in each self.LayerX
+            
+            if return_grad:
+                dTAUGAS = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST,self.LayerX.NLAY])
+            else:
+                dTAUGAS = None
+
+            _lgr.debug(f'{TAUGAS.shape=}')
 
             
-            #Calculating the cross sections for each gas in each self.LayerX
-            if return_grad:
-                k,dkdT = self.SpectroscopyX.calc_klblg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP)
-            else:
-                k = self.SpectroscopyX.calc_klbl(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE)
+            if self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
 
-            for i in range(self.SpectroscopyX.NGAS):
-                IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-
-                #Calculating vertical column density in each self.LayerX
-                VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-24   #m-2
-
-                #Calculating vertical opacity for each gas in each self.LayerX
-                TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
-                
+                #Calculating the cross sections for each gas in each self.LayerX
                 if return_grad:
-                    dTAUGAS[:,0,IGAS,:] = k[:,:,i] * 1.0e-24  #dTAUGAS/dAMOUNT (m2)
-                    dTAUGAS[:,0,self.AtmosphereX.NVMR,:] = dTAUGAS[:,0,self.AtmosphereX.NVMR,:] + dkdT[:,:,i] * VLOSDENS #dTAUGAS/dT
+                    k,dkdT = self.SpectroscopyX.calc_klblg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP)
+                else:
+                    k = self.SpectroscopyX.calc_klbl(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE)
 
-            #Combining the gaseous opacity in each self.LayerX
-            TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
-
-        elif self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:    #K-table
-            #Calculating the k-coefficients for each gas in each self.LayerX
-            if return_grad:
-                k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP) # (NWAVE,NG,NLAY,NGAS)
-            else:
-                k_gas = self.SpectroscopyX.calc_k(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE) # (NWAVE,NG,NLAY,NGAS) 
-
-            f_gas = np.zeros([self.SpectroscopyX.NGAS,self.LayerX.NLAY])
-            #utotl = np.zeros(self.LayerX.NLAY)
-            for i in range(self.SpectroscopyX.NGAS):
-                IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-                f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * 1.0e-24  #Vertical column density of the radiatively active gases in cm-2
-
-            #Combining the k-distributions of the different gases in each self.LayerX, as well as their gradients
-            if return_grad:
-                k_layer,dk_layer = k_overlapg(self.SpectroscopyX.DELG,k_gas,dkgasdT,f_gas)
-                
-                #Calculating the gradients of each self.LayerX and for each gas
                 for i in range(self.SpectroscopyX.NGAS):
                     IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-                    dTAUGAS[:,:,IGAS,:] = dk_layer[:,:,:,i] * 1.0e-4 * 1.0e-20  #dTAU/dAMOUNT (m2)
 
-                dTAUGAS[:,:,self.AtmosphereX.NVMR,:] = dk_layer[:,:,:,self.SpectroscopyX.NGAS] #dTAU/dT
+                    #Calculating vertical column density in each self.LayerX
+                    VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-24   #m-2
+
+                    #Calculating vertical opacity for each gas in each self.LayerX
+                    TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
+                    
+                    if return_grad:
+                        dTAUGAS[:,0,IGAS,:] = k[:,:,i] * 1.0e-24  #dTAUGAS/dAMOUNT (m2)
+                        dTAUGAS[:,0,self.AtmosphereX.NVMR,:] = dTAUGAS[:,0,self.AtmosphereX.NVMR,:] + dkdT[:,:,i] * VLOSDENS #dTAUGAS/dT
+
+                #Combining the gaseous opacity in each self.LayerX
+                TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
+
+            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:    #K-table
+                #Calculating the k-coefficients for each gas in each self.LayerX
+                if return_grad:
+                    k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP) # (NWAVE,NG,NLAY,NGAS)
+                else:
+                    k_gas = self.SpectroscopyX.calc_k(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE) # (NWAVE,NG,NLAY,NGAS) 
+
+                f_gas = np.zeros([self.SpectroscopyX.NGAS,self.LayerX.NLAY])
+                #utotl = np.zeros(self.LayerX.NLAY)
+                for i in range(self.SpectroscopyX.NGAS):
+                    IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
+                    f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * 1.0e-24  #Vertical column density of the radiatively active gases in cm-2
+
+                #Combining the k-distributions of the different gases in each self.LayerX, as well as their gradients
+                if return_grad:
+                    k_layer,dk_layer = k_overlapg(self.SpectroscopyX.DELG,k_gas,dkgasdT,f_gas)
+                    
+                    #Calculating the gradients of each self.LayerX and for each gas
+                    for i in range(self.SpectroscopyX.NGAS):
+                        IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
+                        dTAUGAS[:,:,IGAS,:] = dk_layer[:,:,:,i] * 1.0e-4 * 1.0e-20  #dTAU/dAMOUNT (m2)
+
+                    dTAUGAS[:,:,self.AtmosphereX.NVMR,:] = dk_layer[:,:,:,self.SpectroscopyX.NGAS] #dTAU/dT
+                else:
+                    k_layer = k_overlap(self.SpectroscopyX.DELG,k_gas,f_gas)
+                    
+                #Calculating the opacity of each self.LayerX
+                TAUGAS = k_layer #(NWAVE,NG,NLAY)
             else:
-                k_layer = k_overlap(self.SpectroscopyX.DELG,k_gas,f_gas)
-                
-            #Calculating the opacity of each self.LayerX
-            TAUGAS = k_layer #(NWAVE,NG,NLAY)
+                raise NotImplementedError(f'ILBL must be either {SpectralCalculationMode(0)} or {SpectralCalculationMode(2)}')
+            
         else:
-            raise NotImplementedError(f'ILBL must be either {SpectralCalculationMode(0)} or {SpectralCalculationMode(2)}')
-        
+
+            TAUGAS = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.LayerX.NLAY])  #Vertical opacity of each gas in each self.LayerX
+            
+            if return_grad:
+                dTAUGAS = np.zeros([self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST,self.LayerX.NLAY])
+            else:
+                dTAUGAS = None
+
+
         return TAUGAS, dTAUGAS
 
     def calculate_vertical_cia_opacity(self, return_grad=False):
@@ -4090,9 +4118,11 @@ class ForwardModel_0:
                     raise ValueError("error :: ISPACE must be the same in Emissions and Measurement")
             
                 f_emit = scipy.interpolate.interp1d(self.EmissionsX.WAVE,EMITOT_LAYINC,axis=0,bounds_error=False,fill_value=0.0)
-                f_demit = scipy.interpolate.interp1d(self.EmissionsX.WAVE,dEMITOT_LAYINC,axis=0,bounds_error=False,fill_value=0.0)
                 EMITOT_LAYINC = f_emit(self.SpectroscopyX.WAVE)
-                dEMITOT_LAYINC = f_demit(self.SpectroscopyX.WAVE)
+
+                if return_grad:
+                    f_demit = scipy.interpolate.interp1d(self.EmissionsX.WAVE,dEMITOT_LAYINC,axis=0,bounds_error=False,fill_value=0.0)
+                    dEMITOT_LAYINC = f_demit(self.SpectroscopyX.WAVE)
 
         #Interpolating the emissivity of the self.SurfaceX to the calculation wavelengths
         if self.SurfaceX.TSURF>0.0:
