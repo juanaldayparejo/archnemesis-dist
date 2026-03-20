@@ -4680,11 +4680,11 @@ class ForwardModel_0:
             #dktdF = (kthi - ktlo) * dfhldF + (ktlophi - ktloplo) * dfhhdF
                         
             #Cheking that interpolation can be performed to the calculation wavenumbers
+            sum1 = np.zeros(NWAVEC)  #Temporary array to store the contribution from all CIA pairs
             if( (CIA.WAVEN.min()<=WAVEN.min()) & (CIA.WAVEN.max()>=WAVEN.max()) ):
                 
                 inwave1 = np.where( (WAVEN>=CIA.WAVEN.min()) & (WAVEN<=CIA.WAVEN.max()) )[0]
                 
-                sum1 = np.zeros(NWAVEC)  #Temporary array to store the contribution from all CIA pairs
                 for ipair in range(CIA.NPAIR):
                     
                     #Getting the indices of the two gases in the CIA pair
@@ -4736,28 +4736,28 @@ class ForwardModel_0:
                             dtau_cia_layer[:,ilay,igas2] = dtau_cia_layer[:,ilay,igas2] + q[ilay,igas1] * k_cia[:]
                             dtau_cia_layer[:,ilay,Atmosphere.NVMR-2] = dtau_cia_layer[:,ilay,Atmosphere.NVMR-2] + dkdT_cia[:] * q[ilay,igas1] * q[ilay,igas2]
                             
+            #Look up CO2-CO2 CIA coefficients (external)
+            if ico2!=-1:
+                k_co2 = co2cia(WAVEN)
+                sum1[:] = sum1[:] + k_co2[:] * q[ilay,ico2] * q[ilay,ico2]
+                dtau_cia_layer[:,ilay,ico2] = dtau_cia_layer[:,ilay,ico2] + 2.*q[ilay,ico2]*k_co2[:]
 
-                #Look up CO2-CO2 CIA coefficients (external)
-                if ico2!=-1:
-                    k_co2 = co2cia(WAVEN)
-                    sum1[:] = sum1[:] + k_co2[:] * q[ilay,ico2] * q[ilay,ico2]
-                    dtau_cia_layer[:,ilay,ico2] = dtau_cia_layer[:,ilay,ico2] + 2.*q[ilay,ico2]*k_co2[:]
+            #Look up N2-N2 NIR CIA coefficients (external)
+            if in2!=-1:
+                k_n2n2 = n2n2cia(WAVEN)
+                sum1[:] = sum1[:] + k_n2n2[:] * q[ilay,in2] * q[ilay,in2]
+                dtau_cia_layer[:,ilay,in2] = dtau_cia_layer[:,ilay,in2] + 2.*q[ilay,in2]*k_n2n2[:]
 
-                #Look up N2-N2 NIR CIA coefficients (external)
-                if in2!=-1:
-                    k_n2n2 = n2n2cia(WAVEN)
-                    sum1[:] = sum1[:] + k_n2n2[:] * q[ilay,in2] * q[ilay,in2]
-                    dtau_cia_layer[:,ilay,in2] = dtau_cia_layer[:,ilay,in2] + 2.*q[ilay,in2]*k_n2n2[:]
+            #Look up N2-H2 NIR CIA coefficients (external)
+            if((in2!=-1) & (ih2!=-1)):
+                k_n2h2 = n2h2cia(WAVEN)
+                sum1[:] = sum1[:] + k_n2h2[:] * q[ilay,in2] * q[ilay,ih2]
+                dtau_cia_layer[:,ilay,ih2] = dtau_cia_layer[:,ilay,ih2] + q[ilay,in2] * k_n2h2[:]
+                dtau_cia_layer[:,ilay,in2] = dtau_cia_layer[:,ilay,in2] + q[ilay,ih2] * k_n2h2[:]
 
-                #Look up N2-H2 NIR CIA coefficients (external)
-                if((in2!=-1) & (ih2!=-1)):
-                    k_n2h2 = n2h2cia(WAVEN)
-                    sum1[:] = sum1[:] + k_n2h2[:] * q[ilay,in2] * q[ilay,ih2]
-                    dtau_cia_layer[:,ilay,ih2] = dtau_cia_layer[:,ilay,ih2] + q[ilay,in2] * k_n2h2[:]
-                    dtau_cia_layer[:,ilay,in2] = dtau_cia_layer[:,ilay,in2] + q[ilay,ih2] * k_n2h2[:]
+            tau_cia_layer[:,ilay] = sum1[:] * XFAC[ilay]
+            dtau_cia_layer[:,ilay,:] = dtau_cia_layer[:,ilay,:] * XFAC[ilay]
 
-                tau_cia_layer[:,ilay] = sum1[:] * XFAC[ilay]
-                dtau_cia_layer[:,ilay,:] = dtau_cia_layer[:,ilay,:] * XFAC[ilay]
                 
         if ISPACE==WaveUnit.Wavelength_um:
             tau_cia_layer[:,:] = tau_cia_layer[isort,:]
