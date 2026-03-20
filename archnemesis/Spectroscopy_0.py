@@ -93,6 +93,7 @@ class Spectroscopy_0:
                 (1 - SUBLORENTZ_CO2_BROADENING) Assume Sub-Lorentzian line broadening (CO2) 
                 (2 - VANVLECK_WEISSKOPF) VanVleck-Weisskopf lineshape (far-IR) 
                 (4 - LORENTZ) Lorentz profile
+                (7 - SUBLORENTZ_CO2_BROADENING_VENUS) CO2 sub
                 (12 - DOPPLER) Doppler profile
         @param VREL: real,
             If ILBL=1, then VREL indicates the spectral window to use around each line for the line-by-line calculation (cm-1)
@@ -901,6 +902,9 @@ class Spectroscopy_0:
         self.WAVE = wave1
 
         if self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+            self.NG = 1
+            self.G_ORD = np.array([0.])
+            self.DELG = np.array([1.0])
             #In this case we do not read any tables, as the line-by-line calculation will be done during runtime
             return
 
@@ -1512,6 +1516,8 @@ class Spectroscopy_0:
                 lineshape = ans.Data.lineshapes.doppler
             elif self.IPROC[igas]==SpectroscopicLineProfile.LORENTZ:
                 lineshape = ans.Data.lineshapes.lorentz
+            elif self.IPROC[igas]==SpectroscopicLineProfile.SUBLORENTZ_CO2_BROADENING_VENUS:
+                lineshape = ans.Data.lineshapes.co2_sublorentz_tonkov96
             else:
                 raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
 
@@ -2683,6 +2689,8 @@ def calc_ktable(outname,                       #Name of the output .lta file
         lineshape = ans.Data.lineshapes.doppler
     elif Spectroscopy.IPROC[0]==SpectroscopicLineProfile.LORENTZ:
         lineshape = ans.Data.lineshapes.lorentz
+    elif Spectroscopy.IPROC[0]==SpectroscopicLineProfile.SUBLORENTZ_CO2_BROADENING_VENUS:
+        lineshape = ans.Data.lineshapes.co2_sublorentz_tonkov96
     else:
         raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
 
