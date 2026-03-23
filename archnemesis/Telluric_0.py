@@ -391,6 +391,7 @@ class Telluric_0:
         Atmosphere_CIRC.read_ref()
         
         self.Atmosphere = Atmosphere_CIRC
+        self.Atmosphere.NDUST = 0
     
     ##################################################################################
     
@@ -403,7 +404,7 @@ class Telluric_0:
         from archnemesis import k_overlap
         
         #Adding zero dust in case it does not exist
-        self.Atmosphere.NDUST = 1
+        self.Atmosphere.NDUST = 0
         self.Atmosphere.edit_DUST(np.zeros((self.Atmosphere.NP,self.Atmosphere.NDUST)))
         
         #Calculating the Layering of the atmosphere
@@ -431,7 +432,7 @@ class Telluric_0:
         Measurement.IFORM = SpectraUnit.Radiance
         
         #Calculating the path
-        FM = ForwardModel_0()
+        FM = ForwardModel_0(Spectroscopy=self.Spectroscopy,Atmosphere=self.Atmosphere)
         FM.calc_path(Atmosphere=self.Atmosphere,Scatter=Scatter,Layer=Layer,Measurement=Measurement)
     
         #Calculating the line-of-sight column density for each gas
@@ -461,6 +462,35 @@ class Telluric_0:
             TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
             #Removing necessary data to save memory
             del k
+
+        elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:  #Line-by-line
+
+            self_frac = np.mean((Layer.PP.T / Layer.PRESS),axis=1) #(NGAS) average volume mixing ratio of each gas
+            self_fracx = np.zeros(self.Spectroscopy.NGAS)
+            for i in range(self.Spectroscopy.NGAS):
+                igas = self.Atmosphere.locate_gas(self.Spectroscopy.ID[i],self.Spectroscopy.ISO[i])
+                self_fracx[i] = self_frac[igas]
+
+            #Converting IDs into list
+            self.Spectroscopy.ID = np.atleast_1d(self.Spectroscopy.ID).astype(int).tolist()
+            self.Spectroscopy.ISO = np.atleast_1d(self.Spectroscopy.ISO).astype(int).tolist()
+
+            #Calculating the absorption cross sections
+            k = self.Spectroscopy.calc_klbl_online(len(tlay),play/101325.,tlay,self_frac=self_fracx,wave=None,add_pressure_shift=True)
+
+            #Calculating the optical depths
+            TAUGAS = np.zeros((self.Spectroscopy.NWAVE,self.Spectroscopy.NG,len(tlay),self.Spectroscopy.NGAS))  #Vertical opacity of each gas in each layer
+            for i in range(self.Spectroscopy.NGAS):
+                IGAS = self.Atmosphere.locate_gas(self.Spectroscopy.ID[i],self.Spectroscopy.ISO[i])
+
+                #Calculating vertical column density in each self.LayerX
+                VLOSDENS = Layer.AMOUNT[:,IGAS].T * 1.0e-24   #m-2
+
+                #Calculating vertical opacity for each gas in each self.LayerX
+                TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
+                
+            #Combining the gaseous opacity in each self.LayerX
+            TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
 
         elif self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:    #K-table
             
