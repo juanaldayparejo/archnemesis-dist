@@ -3208,23 +3208,22 @@ class Model47(PreRTModelBase):
 
 class Model49(PreRTModelBase):
     """
-        In this model, the atmospheric parameters are modelled as continuous profiles
-        in linear space. This parameterisation allows the retrieval of negative VMRs.
+        In this model, the profile is scaled using a single factor with 
+        respect to a reference profile.
     """
     id : int = 49
 
 
     @classmethod
-    def calculate(cls, atm,ipar,xprof,MakePlot=False):
-
+    def calculate(cls, atm, ipar, scale, scale_gas, scale_iso):
         """
-            FUNCTION NAME : model0()
+            FUNCTION NAME : Model49.calculate()
 
             DESCRIPTION :
 
-                Function defining the model parameterisation 49 in NEMESIS.
-                In this model, the atmospheric parameters are modelled as continuous profiles
-                in linear space. This parameterisation allows the retrieval of negative VMRs.
+                Function defining the model parameterisation 51 (49 in NEMESIS).
+                In this model, the profile is scaled using a single factor with 
+                respect to a reference profile.
 
             INPUTS :
 
@@ -3237,67 +3236,36 @@ class Model49(PreRTModelBase):
                         (NVMR+NDUST) :: Para-H2
                         (NVMR+NDUST+1) :: Fractional cloud coverage
 
-                xprof(npro) :: Scaling factor at each altitude level
-
-            OPTIONAL INPUTS:
-
-                MakePlot :: If True, a summary plot is generated
+                scale :: Scaling factor
+                scale_gas :: Reference gas
+                scale_iso :: Reference isotope
 
             OUTPUTS :
 
                 atm :: Updated atmospheric class
-                xmap(npro,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
+                xmap(1,ngas+2+ncont,npro) :: Matrix of relating derivatives to 
                                                  elements in state vector
 
             CALLING SEQUENCE:
 
-                atm,xmap = model50(atm,ipar,xprof)
+                atm,xmap = Model49.calculate(atm,ipar,scf)
 
-            MODIFICATION HISTORY : Juan Alday (08/06/2022)
+            MODIFICATION HISTORY : Juan Alday (29/03/2021)
 
         """
-
-        npro = len(xprof)
-        if npro!=atm.NP:
-            raise ValueError('error in model 49 :: Number of levels in atmosphere and scaling factor profile does not match')
-
         npar = atm.NVMR+2+atm.NDUST
-        xmap = np.zeros((npro,npar,npro))
 
+        iref_vmr = np.where((atm.ID == scale_gas)&(atm.ISO == scale_iso))[0][0]
         x1 = np.zeros(atm.NP)
         xref = np.zeros(atm.NP)
-        if ipar<atm.NVMR:  #Gas VMR
-            jvmr = ipar
-            xref[:] = atm.VMR[:,jvmr]
-            x1[:] = xprof
-            vmr = np.zeros((atm.NP,atm.NVMR))
-            vmr[:,:] = atm.VMR
-            vmr[:,jvmr] = x1[:]
-            atm.edit_VMR(vmr)
-        elif ipar==atm.NVMR: #Temperature
-            xref = atm.T
-            x1 = xprof
-            atm.edit_T(x1)
-        elif ipar>atm.NVMR:
-            jtmp = ipar - (atm.NVMR+1)
-            if jtmp<atm.NDUST: #Dust in m-3
-                xref[:] = atm.DUST[:,jtmp]
-                x1[:] = xprof
-                dust = np.zeros((atm.NP,atm.NDUST))
-                dust[:,:] = atm.DUST
-                dust[:,jtmp] = x1
-                atm.edit_DUST(dust)
-            elif jtmp==atm.NDUST:
-                xref[:] = atm.PARAH2
-                x1[:] = xprof
-                atm.PARAH2 = x1
-            elif jtmp==atm.NDUST+1:
-                xref[:] = atm.FRAC
-                x1[:] = xprof
-                atm.FRAC = x1
 
-        for j in range(npro):
-            xmap[j,ipar,j] = 1.
+        xref[:] = atm.VMR[:,iref_vmr]
+        x1[:] = xref * scale
+        atm.VMR[:,ipar] = x1
+
+        xmap = np.zeros([1,npar,atm.NP])
+
+        xmap[0,ipar,:] = xref[:]
 
         return atm,xmap
 
@@ -3322,48 +3290,28 @@ class Model49(PreRTModelBase):
             sxminfac : float,
         ) -> Self:
         ix_0 = ix
-        #********* continuous profile in linear scale ************************
-        s = f.readline().split()
-        f1 = open(s[0],'r')
-        tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
-        nlevel = int(tmp[0])
-        if nlevel != npro:
-            raise ValueError('profiles must be listed on same grid as .prf')
-        clen = float(tmp[1])
-        pref = np.zeros([nlevel])
-        ref = np.zeros([nlevel])
-        eref = np.zeros([nlevel])
-        for j in range(nlevel):
-            tmp = np.fromfile(f1,sep=' ',count=3,dtype='float')
-            pref[j] = float(tmp[0])
-            ref[j] = float(tmp[1])
-            eref[j] = float(tmp[2])
-        f1.close()
+        #********* multiple of different profile ************************
+        prof = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='int') # Use "!" as comment character in *.apr files
+        profgas = prof[0]
+        profiso = prof[1]
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
+        scale = tmp[0]
+        escale = tmp[1]
 
-        #inum[ix:ix+nlevel] = 1
-        x0[ix:ix+nlevel] = ref[:]
-        for j in range(nlevel):
-            sx[ix+j,ix+j] = eref[j]**2.
+        varparam[1] = profgas
+        varparam[2] = profiso
+        x0[ix] = np.log(scale)
+        lx[ix] = 1
+        err = escale/scale
+        sx[ix,ix] = err**2.
 
-        #Calculating correlation between levels in continuous profile
-        for j in range(nlevel):
-            for k in range(nlevel):
-                if pref[j] < 0.0:
-                    raise ValueError('Error in read_apr_nemesis().  A priori file must be on pressure grid')
-
-                delp = np.log(pref[k])-np.log(pref[j])
-                arg = abs(delp/clen)
-                xfac = np.exp(-arg)
-                if xfac >= sxminfac:
-                    sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
-                    sx[ix+k,ix+j] = sx[ix+j,ix+k]
-
-        ix = ix + nlevel
+        ix = ix + 1
 
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
         assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
 
         return cls(ix_0, ix-ix_0, model_classification[1])
+
 
     @classmethod
     def from_bookmark(
@@ -3378,13 +3326,14 @@ class Model49(PreRTModelBase):
             nlocations : int,
         ) -> Self:
         ix_0 = ix
-        #********* continuous profile in linear scale ************************
-        ix = ix + npro
+        #********* multiple of different profile ************************
+        ix = ix + 1
 
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
         assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
 
         return cls(ix_0, ix-ix_0, model_classification[1])
+
 
     def calculate_from_subprofretg(
             self,
@@ -3394,12 +3343,11 @@ class Model49(PreRTModelBase):
             ivar : int,
             xmap : np.ndarray,
         ) -> None:
-        #Model 50. Continuous profile in linear scale
-        #***************************************************************
-
-        xprof = np.zeros(forward_model.Variables.NXVAR[ivar])
-        xprof[:] = forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]]
-        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,xprof)
+        #Model 51. Scaling of a reference profile
+        #***************************************************************                
+        scale = np.exp(forward_model.Variables.XN[ix])
+        scale_gas, scale_iso = forward_model.Variables.VARPARAM[ivar,1:3]
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,scale,scale_gas,scale_iso)
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
@@ -3608,22 +3556,23 @@ class Model50(PreRTModelBase):
 
 class Model51(PreRTModelBase):
     """
-        In this model, the profile is scaled using a single factor with 
-        respect to a reference profile.
+        In this model, the atmospheric parameters are modelled as continuous profiles
+        in linear space. This parameterisation allows the retrieval of negative VMRs.
     """
     id : int = 51
 
 
     @classmethod
-    def calculate(cls, atm, ipar, scale, scale_gas, scale_iso):
+    def calculate(cls, atm,ipar,xprof,MakePlot=False):
+
         """
-            FUNCTION NAME : model51()
+            FUNCTION NAME : Model51.calculate()
 
             DESCRIPTION :
 
-                Function defining the model parameterisation 51 (49 in NEMESIS).
-                In this model, the profile is scaled using a single factor with 
-                respect to a reference profile.
+                Function defining the model parameterisation 49 in NEMESIS.
+                In this model, the atmospheric parameters are modelled as continuous profiles
+                in linear space. This parameterisation allows the retrieval of negative VMRs.
 
             INPUTS :
 
@@ -3636,36 +3585,67 @@ class Model51(PreRTModelBase):
                         (NVMR+NDUST) :: Para-H2
                         (NVMR+NDUST+1) :: Fractional cloud coverage
 
-                scale :: Scaling factor
-                scale_gas :: Reference gas
-                scale_iso :: Reference isotope
+                xprof(npro) :: Scaling factor at each altitude level
+
+            OPTIONAL INPUTS:
+
+                MakePlot :: If True, a summary plot is generated
 
             OUTPUTS :
 
                 atm :: Updated atmospheric class
-                xmap(1,ngas+2+ncont,npro) :: Matrix of relating derivatives to 
+                xmap(npro,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
                                                  elements in state vector
 
             CALLING SEQUENCE:
 
-                atm,xmap = model2(atm,ipar,scf)
+                atm,xmap = Model51.calculate(atm,ipar,xprof)
 
-            MODIFICATION HISTORY : Juan Alday (29/03/2021)
+            MODIFICATION HISTORY : Juan Alday (08/06/2022)
 
         """
-        npar = atm.NVMR+2+atm.NDUST
 
-        iref_vmr = np.where((atm.ID == scale_gas)&(atm.ISO == scale_iso))[0][0]
+        npro = len(xprof)
+        if npro!=atm.NP:
+            raise ValueError('error in model 49 :: Number of levels in atmosphere and scaling factor profile does not match')
+
+        npar = atm.NVMR+2+atm.NDUST
+        xmap = np.zeros((npro,npar,npro))
+
         x1 = np.zeros(atm.NP)
         xref = np.zeros(atm.NP)
+        if ipar<atm.NVMR:  #Gas VMR
+            jvmr = ipar
+            xref[:] = atm.VMR[:,jvmr]
+            x1[:] = xprof
+            vmr = np.zeros((atm.NP,atm.NVMR))
+            vmr[:,:] = atm.VMR
+            vmr[:,jvmr] = x1[:]
+            atm.edit_VMR(vmr)
+        elif ipar==atm.NVMR: #Temperature
+            xref = atm.T
+            x1 = xprof
+            atm.edit_T(x1)
+        elif ipar>atm.NVMR:
+            jtmp = ipar - (atm.NVMR+1)
+            if jtmp<atm.NDUST: #Dust in m-3
+                xref[:] = atm.DUST[:,jtmp]
+                x1[:] = xprof
+                dust = np.zeros((atm.NP,atm.NDUST))
+                dust[:,:] = atm.DUST
+                dust[:,jtmp] = x1
+                atm.edit_DUST(dust)
+            elif jtmp==atm.NDUST:
+                xref[:] = atm.PARAH2
+                x1[:] = xprof
+                atm.PARAH2 = x1
+            elif jtmp==atm.NDUST+1:
+                xref[:] = atm.FRAC
+                x1[:] = xprof
+                atm.FRAC = x1
 
-        xref[:] = atm.VMR[:,iref_vmr]
-        x1[:] = xref * scale
-        atm.VMR[:,ipar] = x1
-
-        xmap = np.zeros([1,npar,atm.NP])
-
-        xmap[0,ipar,:] = xref[:]
+        for j in range(npro):
+            xmap[j,ipar,j] = 1.
 
         return atm,xmap
 
@@ -3690,28 +3670,48 @@ class Model51(PreRTModelBase):
             sxminfac : float,
         ) -> Self:
         ix_0 = ix
-        #********* multiple of different profile ************************
-        prof = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='int') # Use "!" as comment character in *.apr files
-        profgas = prof[0]
-        profiso = prof[1]
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
-        scale = tmp[0]
-        escale = tmp[1]
+        #********* continuous profile in linear scale ************************
+        s = f.readline().split()
+        f1 = open(s[0],'r')
+        tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
+        nlevel = int(tmp[0])
+        if nlevel != npro:
+            raise ValueError('profiles must be listed on same grid as .prf')
+        clen = float(tmp[1])
+        pref = np.zeros([nlevel])
+        ref = np.zeros([nlevel])
+        eref = np.zeros([nlevel])
+        for j in range(nlevel):
+            tmp = np.fromfile(f1,sep=' ',count=3,dtype='float')
+            pref[j] = float(tmp[0])
+            ref[j] = float(tmp[1])
+            eref[j] = float(tmp[2])
+        f1.close()
 
-        varparam[1] = profgas
-        varparam[2] = profiso
-        x0[ix] = np.log(scale)
-        lx[ix] = 1
-        err = escale/scale
-        sx[ix,ix] = err**2.
+        #inum[ix:ix+nlevel] = 1
+        x0[ix:ix+nlevel] = ref[:]
+        for j in range(nlevel):
+            sx[ix+j,ix+j] = eref[j]**2.
 
-        ix = ix + 1
+        #Calculating correlation between levels in continuous profile
+        for j in range(nlevel):
+            for k in range(nlevel):
+                if pref[j] < 0.0:
+                    raise ValueError('Error in read_apr_nemesis().  A priori file must be on pressure grid')
+
+                delp = np.log(pref[k])-np.log(pref[j])
+                arg = abs(delp/clen)
+                xfac = np.exp(-arg)
+                if xfac >= sxminfac:
+                    sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
+                    sx[ix+k,ix+j] = sx[ix+j,ix+k]
+
+        ix = ix + nlevel
 
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
         assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
 
         return cls(ix_0, ix-ix_0, model_classification[1])
-
 
     @classmethod
     def from_bookmark(
@@ -3726,14 +3726,13 @@ class Model51(PreRTModelBase):
             nlocations : int,
         ) -> Self:
         ix_0 = ix
-        #********* multiple of different profile ************************
-        ix = ix + 1
+        #********* continuous profile in linear scale ************************
+        ix = ix + npro
 
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
         assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
 
         return cls(ix_0, ix-ix_0, model_classification[1])
-
 
     def calculate_from_subprofretg(
             self,
@@ -3743,14 +3742,16 @@ class Model51(PreRTModelBase):
             ivar : int,
             xmap : np.ndarray,
         ) -> None:
-        #Model 51. Scaling of a reference profile
-        #***************************************************************                
-        scale = np.exp(forward_model.Variables.XN[ix])
-        scale_gas, scale_iso = forward_model.Variables.VARPARAM[ivar,1:3]
-        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,scale,scale_gas,scale_iso)
+        #Model 50. Continuous profile in linear scale
+        #***************************************************************
+
+        xprof = np.zeros(forward_model.Variables.NXVAR[ivar])
+        xprof[:] = forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]]
+        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,xprof)
         xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP] = xmap1[:,:,:]
 
         ix = ix + forward_model.Variables.NXVAR[ivar]
+
 
 
 class Model62(PreRTModelBase):
@@ -6130,12 +6131,14 @@ class Model444(PreRTModelBase):
         ) -> Self:
         ix_0 = ix
         #******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
-        haze_waves = []
+        _lgr.warn(f"{cls.__name__}.from_bookmark(...) only sets model parameters that have been stored in `varident`, `varparam`. Therefore it cannot set `haze_params['WAVE']` at the moment as those values are in an external file whose name is not stored in those locations. Use with caution.")
+        
+        #haze_waves = []
         for j in range(2):
             ix = ix + 1
 
         nwave = varparam[0] - 2
-        clen = varparam[1]
+        #clen = varparam[1]
         vref = varparam[2]
         nreal_ref = varparam[3]
         v_od_norm = varparam[4]
@@ -6411,9 +6414,11 @@ class Model446(PreRTModelBase):
         #the parameter in the state vector is the particle size
 
         #The look-up table must have the format specified in Models/Models.py (model446)
-        aerosol_id = varparam[0]
-        wavenorm = varparam[1]
-        xwave = varparam[2]
+        
+        _lgr.warn(f"{cls.__name__}.from_bookmark(...) only sets model parameters that have been stored in `varident`, `varparam`, and the state vector. Therefore it cannot return the original value for `fnamex` at the moment. Use with caution.")
+        #aerosol_id = varparam[0]
+        #wavenorm = varparam[1]
+        #xwave = varparam[2]
 
         fnamex = ""   #This needs to be fixed!
 
@@ -7178,7 +7183,7 @@ class Model887(PreRTModelBase):
         ix_0 = ix
         #******** Cloud x-section spectrum
         nwv = varparam[0]
-        icloud = varparam[1]
+        #icloud = varparam[1]
         ix = ix + nwv
 
         return cls(ix_0, ix-ix_0)
