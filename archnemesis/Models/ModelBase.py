@@ -647,7 +647,7 @@ class ModelBase(abc.ABC):
             #   Number of locations defined for the atmosphere component
         ) -> Self:
         """
-            Initialises the model when it is loaded from a bookmark. 
+            Constructs the model when it is loaded from a bookmark. 
             
             The state vector, `varident`, `varparms`, etc. should all have been loaded from the bookmark by 
             this point, therefore this does not need to set any state vector information.
