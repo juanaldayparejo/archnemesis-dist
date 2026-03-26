@@ -3217,7 +3217,7 @@ class Model49(PreRTModelBase):
     @classmethod
     def calculate(cls, atm, ipar, scale, scale_gas, scale_iso):
         """
-            FUNCTION NAME : model51()
+            FUNCTION NAME : Model49.calculate()
 
             DESCRIPTION :
 
@@ -3248,7 +3248,7 @@ class Model49(PreRTModelBase):
 
             CALLING SEQUENCE:
 
-                atm,xmap = model2(atm,ipar,scf)
+                atm,xmap = Model49.calculate(atm,ipar,scf)
 
             MODIFICATION HISTORY : Juan Alday (29/03/2021)
 
@@ -3566,7 +3566,7 @@ class Model51(PreRTModelBase):
     def calculate(cls, atm,ipar,xprof,MakePlot=False):
 
         """
-            FUNCTION NAME : model0()
+            FUNCTION NAME : Model51.calculate()
 
             DESCRIPTION :
 
@@ -3599,7 +3599,7 @@ class Model51(PreRTModelBase):
 
             CALLING SEQUENCE:
 
-                atm,xmap = model50(atm,ipar,xprof)
+                atm,xmap = Model51.calculate(atm,ipar,xprof)
 
             MODIFICATION HISTORY : Juan Alday (08/06/2022)
 
