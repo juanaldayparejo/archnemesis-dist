@@ -1,7 +1,9 @@
 
 
-from typing import get_args, Type, Self, Any, Iterator
+from typing import get_origin, get_args, Type, Self, Any, Iterator
 from collections import namedtuple
+
+import numpy as np
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -253,6 +255,19 @@ class AsciiFixedWidthFormat(metaclass = FixedWidthFormatMeta):
         Returns the type of each record attribute
         """
         return cls._types
+    
+    @classmethod
+    def get_format_dtypes(cls) -> tuple[Type,...]:
+        """
+        Returns the type of each record attribute as a dtype
+        """
+        type_list = []
+        for typ in cls._types:
+            if get_origin(typ) is tuple:
+                type_list.append([(f'f{i}', t, (1,)) for i,t in enumerate(get_args(typ))])
+            else:
+                type_list.append(typ)
+        return tuple(type_list)
 
     @classmethod
     def get_format_attrs(cls) -> tuple[str,...]:
@@ -299,3 +314,68 @@ class AsciiFixedWidthFormat(metaclass = FixedWidthFormatMeta):
         _lgr.info(f'Completed reading {i} records using "{cls.__name__}" from "{fpath}"')
 
         return records
+    
+    @classmethod
+    def read_records_into_arrays(
+            cls, 
+            fpath : str, 
+            fixed_width=True, 
+            array_chunk_size = 100000, 
+            progress_interval = 100000, 
+            defaults : dict[str,Any]=dict(), 
+            return_attrs : None | tuple[str] = None,
+            error_if_missing_default : tuple[str] = tuple(),
+            n_max : int = -1
+    ) -> np.ndarray:
+        if return_attrs is None:
+            return_attrs = cls._attrs
+        
+        assert all(x in cls._attrs for x in return_attrs), f"All return attrs must be attributes of {cls.__name__}"
+        
+        
+        next_chunk_idx = array_chunk_size
+
+        arrays = [np.zeros((array_chunk_size,), dtype=type) for name, type in zip(cls.get_format_attrs(), cls.get_format_dtypes())]
+        i = 0
+
+        _lgr.info(f'Starting to read records using "{cls.__name__}" from "{fpath}"')
+        with open(fpath, 'r') as f:
+            while (n_max < 0) or (i < n_max):
+                a = (f.readline()[:cls._record_length]) if not fixed_width else (f.read(cls._record_length))
+                
+                if len(a) == 0:
+                    break
+                
+                if a.strip().startswith('#'):
+                    continue
+                
+                if a.isspace():
+                    continue
+                
+                if i == next_chunk_idx:
+                    for j in range(len(arrays)):
+                        arr = arrays[j]
+                        arrays[j] = np.concatenate((arr,np.zeros((array_chunk_size,), dtype=arr.dtype)))
+                    next_chunk_idx += array_chunk_size
+                
+                record = cls.get_record_from_str(a)
+                
+                for j, arr in enumerate(arrays):
+                    if record[j] is not None:
+                        arr[i] = record[j]
+                    elif (default:= defaults.get(cls._attrs[j], None)) is not None:
+                        arr[i] = default
+                    else:
+                        if cls._attrs[j] in error_if_missing_default:
+                            raise ValueError(f'Cannot get attribute "{cls._attrs[j]}" from string "{a}"')
+                    
+                
+                if ((i % progress_interval) == 0):
+                    _lgr.info(f'read record {i} ...')
+                i += 1
+        _lgr.info(f'Completed reading {i} records using "{cls.__name__}" from "{fpath}"')
+
+        for j in range(len(arrays)):
+            arrays[j] = arrays[j][:i]
+        
+        return tuple(arrays[cls._attrs.index(x)] for x in return_attrs)
