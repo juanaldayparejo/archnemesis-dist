@@ -25,7 +25,7 @@ hapi.VARIABLES['ON_ERROR_404_CHOICES'] = ('IGNORE', 'WARN', 'ERROR') # Possible 
 #hapi.VARIABLES['ON_ERROR_404'] = 'IGNORE'  # Ignore on 404 errors rather than raising exceptions.
 hapi.VARIABLES['ON_ERROR_404'] = 'WARN'  # Warn on 404 errors rather than raising exceptions.
 #hapi.VARIABLES['ON_ERROR_404'] = 'ERROR' # Raise exceptions on 404 errors rather than warning.
-
+global GLOBAL_line_n_skip_char
 
 # "position" dictionary for table was not being constructed correctly, leading to
 # database corruption when `hapi.db_commit()` was called
@@ -36,6 +36,8 @@ def storage2cache_MONKEYPATCH(TableName,cast=True,ext=None,nlines=None,pos=None)
     nlines: number of line in the block; if None, read all line at once 
     pos: file position to seek
     """
+    global GLOBAL_line_n_skip_char
+    
     #print 'storage2cache:'
     #print('TableName',TableName)
     if nlines is not None:
@@ -112,6 +114,7 @@ def storage2cache_MONKEYPATCH(TableName,cast=True,ext=None,nlines=None,pos=None)
         types = {'d':int, 'f':float, 'e':float, 's':str}
         converters = []
         end = 0
+        
         for qnt, fmt in zip(quantities, formats):
             # pre-defined positions are needed to skip the existing parameters in headers (new feature)
             if 'position' in header:
@@ -129,6 +132,14 @@ def storage2cache_MONKEYPATCH(TableName,cast=True,ext=None,nlines=None,pos=None)
             end = start + size
             def cfunc(line, dtype=dtype, start=start, end=end, qnt=qnt):
                 # return dtype(line[start:end]) # this will fail on the float number with D exponent (Fortran notation)
+                global GLOBAL_line_n_skip_char # horrible hack to shift line one character to left so rest of line reading works properly
+                
+                if (qnt in ('gamma_self', 'n_air')) and (line[start:start+3]=='-0.'):
+                    print(f'{line=}')
+                    print(f'{dtype=} {start=} {end=} {qnt=}')
+                    line = line[:start] + line[start+1:]
+                    GLOBAL_line_n_skip_char += 1 # horrible hack to shift line one character to left so rest of line reading works properly
+                
                 if dtype in (float,int): # assign NaN if value is hashtagged
                     if line[start:end].strip()=='#':
                         return np.nan
@@ -144,6 +155,8 @@ def storage2cache_MONKEYPATCH(TableName,cast=True,ext=None,nlines=None,pos=None)
                             if res:
                                 return dtype(res.group(1)+'E-'+res.group(2))
                             else:
+                                print(f'{line=}')
+                                print(f'{dtype=} {start=} {end=} {qnt=}')
                                 raise Exception('PARSE ERROR: unknown format of the par value (%s)'%line[start:end])
                 elif dtype==int and qnt=='local_iso_id':
                     if line[start:end]=='0': return 10
@@ -167,7 +180,13 @@ def storage2cache_MONKEYPATCH(TableName,cast=True,ext=None,nlines=None,pos=None)
             if line=='': # end of file is represented by an empty string
                 flag_EOF = True
                 break 
-            data_matrix.append([cvt(line) for cvt in converters])
+            
+            GLOBAL_line_n_skip_char = 0
+            __dm_row = []
+            for cvt in converters:
+                __dm_row.append(cvt(line[GLOBAL_line_n_skip_char:]))
+                
+            data_matrix.append(__dm_row)
             line_count += 1
         data_columns = zip(*data_matrix)
         for qnt, col in zip(quantities, data_columns):
