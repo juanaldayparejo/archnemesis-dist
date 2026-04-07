@@ -1,14 +1,14 @@
 
-import sys
+#import sys
 from pathlib import Path
-import dataclasses as dc
-from typing import NamedTuple, Annotated
+#import dataclasses as dc
+#from typing import NamedTuple, Annotated
 
 import hapi
-import archnemesis as ans
+#import archnemesis as ans
 import numpy as np
 import h5py
-from archnemesis.helpers import h5py_helper
+#from archnemesis.helpers import h5py_helper
 from hitran24_isotopes import ISO, hitran_to_radtran, get_isotope_abundances
 
 from archnemesis.enums import AmbientGas
