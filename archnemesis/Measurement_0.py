@@ -2011,8 +2011,11 @@ class Measurement_0:
                 k = vwave                
                 numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi *  a * k)                    
                 denominator = (1 - 4 * a**2 * k**2) * (2* np.pi * a * k) 
-                f1 = numerator / denominator
-                f1[k == 0] = a * 1.08                   
+
+                if a != 0.0:
+                    f1 = numerator / denominator
+                else:
+                    f1 = a * 1.08                   
 
             # Normalize kernel area to 1
             ils_sum = ils.sum()
@@ -2057,6 +2060,8 @@ class Measurement_0:
                 dv = self.FWHM
             elif self.ISHAPE==InstrumentLineshape.Gaussian:
                 dv = 3.* 0.5 * self.FWHM / np.sqrt(np.log(2.0))
+            elif self.ISHAPE==InstrumentLineshape.Hamming:
+                dv = self.FWHM
             else:
                 dv = 3.*self.FWHM
 
@@ -3316,7 +3321,7 @@ class Measurement_0:
 #################################################################################################################
 
 ###############################################################################################
-@jit(nopython=True)
+# @jit(nopython=True)
 def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
 
     """
@@ -3375,8 +3380,8 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
             v1 = vcen - 3.*sig
             v2 = vcen + 3.*sig
         elif ishape==InstrumentLineshape.Hamming:
-            v1 = vcen - yfwhm
-            v2 = vcen - yfwhm
+            v1 = vcen - 1.1*yfwhm
+            v2 = vcen - 1.1*yfwhm
         else:
             v1 = vcen - nfw*yfwhm
             v2 = vcen + nfw*yfwhm
@@ -3401,8 +3406,9 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
             elif ishape==InstrumentLineshape.Hamming:
                 a = 0.907/yfwhm
                 k = vwave[inwave[i]] - vcen
-                numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sinc(2 * a * k)                
-                denominator = (1 - 4 * a**2 * k**2) 
+                numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi *  a * k)
+                
+                denominator = (1 - 4 * a**2 * k**2) * (2* np.pi * a * k)
 
                 if k != 0.0:
                     f1 = numerator/denominator
@@ -3411,10 +3417,14 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
             else:
                 pass
 
+            if f1==0:
+                print("HELP!!!!!!!!!")
+            elif f1 < 0:
+                print("STOPPPPPPPP")
+
             if f1>0.0:
                 yout[j] = yout[j] + f1*y[inwave[i]]
                 ynor[j] = ynor[j] + f1
-
         yout[j] = yout[j]/ynor[j]
 
     return yout
@@ -3509,8 +3519,8 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
                     elif ishape==InstrumentLineshape.Hamming:
                         a = 0.907/yfwhm
                         k = vwave[inwave[i]] - vcen
-                        numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sinc(2 * a * k)                
-                        denominator = (1 - 4 * a**2 * k**2) 
+                        numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi * a * k)                
+                        denominator = (1 - 4 * a**2 * k**2)  * (2* np.pi * a * k)
 
                         if k != 0.0:
                             f1 = numerator/denominator
@@ -3755,8 +3765,8 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
                 elif ishape==InstrumentLineshape.Hamming:
                     a = 0.907/yfwhm
                     k = vwave[inwave[i]] - vcen
-                    numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sinc(2 * a * k)                
-                    denominator = (1 - 4 * a**2 * k**2) 
+                    numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi * a * k)                
+                    denominator = (1 - 4 * a**2 * k**2)  * (2* np.pi * a * k)
 
                     if k != 0.0:
                         f1 = numerator/denominator
@@ -3868,8 +3878,8 @@ def lblconvg(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
                 elif ishape==InstrumentLineshape.Hamming:
                     a = 0.907/yfwhm
                     k = vwave[inwave[i]] - vcen
-                    numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sinc(2 * a * k)                
-                    denominator = (1 - 4 * a**2 * k**2) 
+                    numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi *  a * k)                
+                    denominator = (1 - 4 * a**2 * k**2)  * (2* np.pi * a * k)
 
                     if k != 0.0:
                         f1 = numerator/denominator
