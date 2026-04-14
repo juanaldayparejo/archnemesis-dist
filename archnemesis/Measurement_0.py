@@ -1988,6 +1988,8 @@ class Measurement_0:
                 dv = self.FWHM
             elif self.ISHAPE==InstrumentLineshape.Gaussian: #Gaussian
                 dv = 3.* 0.5 * self.FWHM / np.sqrt(np.log(2.0))
+            elif self.ISHAPE==InstrumentLineshape.Hamming: 
+                dv = self.FWHM
             else: 
                 raise ValueError('error in build_ils :: ishape not included yet in function')
                 
@@ -2004,7 +2006,17 @@ class Measurement_0:
             elif self.ISHAPE==InstrumentLineshape.Gaussian: #Gaussian
                 sig = 0.5 * self.FWHM / np.sqrt(np.log(2.0))
                 ils[:] = np.exp(-((vwave)/sig)**2)
-                
+            elif self.ISHAPE==InstrumentLineshape.Hamming:
+                a = 0.907/self.FWHM
+                k = vwave                
+                numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi *  a * k)                    
+                denominator = (1 - 4 * a**2 * k**2) * (2* np.pi * a * k) 
+
+                if a != 0.0:
+                    f1 = numerator / denominator
+                else:
+                    f1 = a * 1.08                   
+
             # Normalize kernel area to 1
             ils_sum = ils.sum()
             if ils_sum > 0:
@@ -2048,6 +2060,8 @@ class Measurement_0:
                 dv = self.FWHM
             elif self.ISHAPE==InstrumentLineshape.Gaussian:
                 dv = 3.* 0.5 * self.FWHM / np.sqrt(np.log(2.0))
+            elif self.ISHAPE==InstrumentLineshape.Hamming:
+                dv = self.FWHM
             else:
                 dv = 3.*self.FWHM
 
@@ -3307,7 +3321,7 @@ class Measurement_0:
 #################################################################################################################
 
 ###############################################################################################
-@jit(nopython=True)
+# @jit(nopython=True)
 def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
 
     """
@@ -3365,6 +3379,9 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
             sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
             v1 = vcen - 3.*sig
             v2 = vcen + 3.*sig
+        elif ishape==InstrumentLineshape.Hamming:
+            v1 = vcen - 1.1*yfwhm
+            v2 = vcen - 1.1*yfwhm
         else:
             v1 = vcen - nfw*yfwhm
             v2 = vcen + nfw*yfwhm
@@ -3386,13 +3403,28 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
             elif ishape==InstrumentLineshape.Gaussian:
                 #Gaussian instrument shape
                 f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
+            elif ishape==InstrumentLineshape.Hamming:
+                a = 0.907/yfwhm
+                k = vwave[inwave[i]] - vcen
+                numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi *  a * k)
+                
+                denominator = (1 - 4 * a**2 * k**2) * (2* np.pi * a * k)
+
+                if k != 0.0:
+                    f1 = numerator/denominator
+                else:
+                    f1 = a * 1.08
             else:
                 pass
+
+            if f1==0:
+                print("HELP!!!!!!!!!")
+            elif f1 < 0:
+                print("STOPPPPPPPP")
 
             if f1>0.0:
                 yout[j] = yout[j] + f1*y[inwave[i]]
                 ynor[j] = ynor[j] + f1
-
         yout[j] = yout[j]/ynor[j]
 
     return yout
@@ -3461,6 +3493,9 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
                     sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
                     v1 = vcen - 3.*sig
                     v2 = vcen + 3.*sig
+                elif ishape==InstrumentLineshape.Hamming:
+                    v1 = vcen - yfwhm
+                    v2 = vcen - yfwhm
                 else:
                     v1 = vcen - nfw*yfwhm
                     v2 = vcen + nfw*yfwhm
@@ -3481,7 +3516,16 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
                     elif ishape==InstrumentLineshape.Gaussian:
                         #Gaussian instrument shape
                         f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
+                    elif ishape==InstrumentLineshape.Hamming:
+                        a = 0.907/yfwhm
+                        k = vwave[inwave[i]] - vcen
+                        numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi * a * k)                
+                        denominator = (1 - 4 * a**2 * k**2)  * (2* np.pi * a * k)
 
+                        if k != 0.0:
+                            f1 = numerator/denominator
+                        else:
+                            f1 = a * 1.08
                     if f1>0.0:
                         yout[j,:] = yout[j,:] + f1*y[inwave[i],:]
                         ynor[j,:] = ynor[j,:] + f1
@@ -3695,6 +3739,9 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
                 sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
                 v1 = vcen - 3.*sig
                 v2 = vcen + 3.*sig
+            elif ishape==InstrumentLineshape.Hamming:
+                v1 = vcen - yfwhm
+                v2 = vcen - yfwhm
             else:
                 v1 = vcen - nfw*yfwhm
                 v2 = vcen + nfw*yfwhm
@@ -3715,6 +3762,16 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
                 elif ishape==InstrumentLineshape.Gaussian:
                     #Gaussian instrument shape
                     f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
+                elif ishape==InstrumentLineshape.Hamming:
+                    a = 0.907/yfwhm
+                    k = vwave[inwave[i]] - vcen
+                    numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi * a * k)                
+                    denominator = (1 - 4 * a**2 * k**2)  * (2* np.pi * a * k)
+
+                    if k != 0.0:
+                        f1 = numerator/denominator
+                    else:
+                        f1 = a * 1.08
 
                 if f1>0.0:
                     yout[j,:] = yout[j,:] + f1*y[inwave[i],:]
@@ -3795,6 +3852,9 @@ def lblconvg(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
                 sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
                 v1 = vcen - 3.*sig
                 v2 = vcen + 3.*sig
+            elif ishape==InstrumentLineshape.Hamming:
+                v1 = vcen - yfwhm
+                v2 = vcen + yfwhm
             else:
                 v1 = vcen - nfw*yfwhm
                 v2 = vcen + nfw*yfwhm
@@ -3815,6 +3875,16 @@ def lblconvg(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
                 elif ishape==InstrumentLineshape.Gaussian:
                     #Gaussian instrument shape
                     f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
+                elif ishape==InstrumentLineshape.Hamming:
+                    a = 0.907/yfwhm
+                    k = vwave[inwave[i]] - vcen
+                    numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi *  a * k)                
+                    denominator = (1 - 4 * a**2 * k**2)  * (2* np.pi * a * k)
+
+                    if k != 0.0:
+                        f1 = numerator/denominator
+                    else:
+                        f1 = a * 1.08                   
 
                 if f1>0.0:
                     yout[j] = yout[j] + f1*y[inwave[i]]
