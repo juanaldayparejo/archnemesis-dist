@@ -1,5 +1,6 @@
 
 #import sys
+import os
 from pathlib import Path
 #import dataclasses as dc
 #from typing import NamedTuple, Annotated
@@ -30,10 +31,10 @@ linedata_file = Path(__file__).parent / 'hitran24.h5'
 
 source_linedata_file = Path(__file__).parent / 'hitran24_test_copy.h5'
 
-LINE_DATA_FROM_HITRAN = False
+LINE_DATA_FROM_HITRAN = True
 
 if LINE_DATA_FROM_HITRAN:
-	datadir = str(Path(__file__).parent / 'HITRAN24/')
+	datadir = str(Path(os.path.expanduser("~/Downloads/hitran24")) / 'HITRAN24/')
 	table_name = 'hitran24'
 
 	#Initialise the database
@@ -233,7 +234,7 @@ pfdh = PartitionFunctionDataHolder(
 """
 
 hitran_pf_data_file = AnsPartitionFunctionDataFile(linedata_file.with_stem('hitran24_pf'))
-hitran_pf_data_file.set_source(pfdh)
+hitran_pf_data_file.add_source_data(pfdh.name, pfdh, pfdh.description)
 
 
 # Line data
@@ -260,7 +261,7 @@ hitran_line_data_holder = LineDataHolder(
 
 
 hitran_line_data_file = AnsLineDataFile(linedata_file)
-hitran_line_data_file.set_source(hitran_line_data_holder)
+hitran_line_data_file.add_source_data(hitran_line_data_holder.name, hitran_line_data_holder, hitran_line_data_holder.description)
 
 
 
