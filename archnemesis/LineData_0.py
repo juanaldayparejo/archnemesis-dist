@@ -523,10 +523,16 @@ class LineData_0:
         
         tratio = tref/temp
 
+        #lws = (
+        #    (tratio**self.line_data.N_AMB) * self.line_data.GAMMA_AMB * amb_frac 
+        #         + (tratio**self.line_data.N_SELF) * self.line_data.GAMMA_SELF *  (1-amb_frac)
+        #) * press
+
         lws = (
-            (tratio**self.line_data.N_AMB) 
-            * ( self.line_data.GAMMA_AMB * amb_frac + self.line_data.GAMMA_SELF * (1-amb_frac) )
+            (tratio**self.line_data.N_AMB) * ( self.line_data.GAMMA_AMB * amb_frac 
+                 +  self.line_data.GAMMA_SELF *  (1-amb_frac) )
         ) * press
+
         
         _lgr.debug(lws)
         return lws
