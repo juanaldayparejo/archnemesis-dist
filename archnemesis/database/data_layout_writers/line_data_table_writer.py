@@ -1,35 +1,27 @@
 
 
-from typing import Literal
 
 import numpy as np
 import h5py
 
 from archnemesis.helpers import h5py_helper
 from archnemesis.database.data_layouts.record_layout import RecordLayout
-from archnemesis.database.data_layouts.table_layout import TableLayout
 from archnemesis.database.data_layouts.line_data_record_layout import LineDataRecordLayout
 
+from .base import BaseTableWriter
 
 
 
 
-
-class LineDataTableWriter(TableLayout):
+class LineDataTableWriter(BaseTableWriter):
 	record_format : type[RecordLayout] = LineDataRecordLayout
 	
-	def to_hdf5(self, grp : h5py.Group, extend : None | Literal['stack'] | int = None):
-		for i, name in enumerate(self.__slots__):
-			#print(f'LineDataTableFormat.to_hdf5(...) {grp=} {i=} {name=} {len(getattr(self, name))=}')
-			h5py_helper.ensure_dataset(
-				grp, 
-				name, 
-				attrs=self.record_format.metadata(name).as_dict(),
-				extend = extend,
-				data=getattr(self, name), dtype=self.record_format.type(name), maxshape=(None,)
-			)
-	
-	def update_hdf5(self, grp : h5py.Group, wave_attr : str = 'nu', min_wave_delta_frac = 1E-4):
+	def update_hdf5(
+			self, 
+			grp : h5py.Group, # Group to update the line data into, should probably be something line "/line_data/<mol>/<iso>"
+			wave_attr : str = 'nu', # Attribute that contains the wavenumber of the spectral line
+			min_wave_delta_frac = 1E-4 # Minimum fractional difference in wavenumber that spectral lines must have to be considered different lines
+	):
 	
 		dsets = {}
 		for i, name in enumerate(self.__slots__):

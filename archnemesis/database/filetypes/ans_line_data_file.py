@@ -211,9 +211,12 @@ class AnsLineDataFile(AnsDatabaseFile):
 
 	def _add_data(
 			self,
-			d_grp : h5py.Group,
+			d_grp : h5py.Group, # Usually "/line_data" or "/sources/X/line_data"
 			ldh : LineDataHolder,
 	):
+		"""
+		Add data from `ldh` into `d_grp`
+		"""
 
 		mol_mask = np.ones_like(ldh.mol_id, dtype=bool)
 		iso_mask = np.ones_like(ldh.mol_id, dtype=bool)

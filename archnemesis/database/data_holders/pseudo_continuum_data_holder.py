@@ -4,43 +4,38 @@ from typing import Iterable
 
 import numpy as np
 
-from archnemesis.database.data_holders.line_broadener_holder import LineBroadenerHolder
+from archnemesis.database.data_holders.pseudo_continuum_broadener_part import PseudoContinuumBroadenerPart
 from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
 
 @dc.dataclass
-class LineDataHolder:
+class PseudoContinuumDataHolder:
 	# source information
 	name : str        # Name of source, will result in a "/sources/X" group
 	description : str # Description of source, will be the "description" attribute of the "/sources/X" group
 	
-	# spectral line data
+	# Temperature this continuum data was calculated at
+	t_cont : float
+	
+	# pseudo-continuum data. 
 	mol_id : np.ndarray
 	local_iso_id : np.ndarray
-	nu : np.ndarray
-	sw : np.ndarray
-	a : np.ndarray
-	elower : np.ndarray
+	wn_bin_center : np.ndarray
+	wn_bin_width : np.ndarray
+	line_strength_sum : np.ndarray
+	line_strength_weighted_mean_lower_energy_state : np.ndarray
 	
 	# self broadening
-	gamma_self : None | np.ndarray = None
-	n_self : None | np.ndarray = None
+	line_strength_weighted_gamma_self : np.ndarray
+	line_strength_weighted_n_self : np.ndarray
 	
 	# foreign broadening
-	broadeners : Iterable[LineBroadenerHolder] = tuple()
+	broadeners : Iterable[PseudoContinuumBroadenerPart] = tuple()
 	
 	# Temperature information, used to define at what temperature range this continuum data is valid
 	t_min : float = 0
 	t_max : float = np.inf
 	
 	_rt_gas_descs : None | tuple = None
-	
-	def __post_init__(self):
-		if self.gamma_self is None:
-			self.gamma_self = np.ones_like(self.nu, dtype=float)
-		
-		if self.n_self is None:
-			self.n_self = np.zeros_like(self.nu, dtype=float)
-		return
 	
 	@property
 	def rt_gas_descs(self):
