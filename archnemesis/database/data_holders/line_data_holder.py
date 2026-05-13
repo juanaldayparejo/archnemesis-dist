@@ -28,9 +28,9 @@ class LineDataHolder:
 	# foreign broadening
 	broadeners : Iterable[LineBroadenerHolder] = tuple()
 	
-	# Temperature information, used to define at what temperature range this continuum data is valid
-	t_min : float = 0
-	t_max : float = np.inf
+	# Line data set creation parameters
+	s_min : float = 0 # Minimum line strength included in this set of lines
+	t_ref : float = 296 # Reference temperature at which data was calculated, Kelvin
 	
 	_rt_gas_descs : None | tuple = None
 	

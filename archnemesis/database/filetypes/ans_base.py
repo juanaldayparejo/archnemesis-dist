@@ -3,7 +3,7 @@
 
 import os
 from pathlib import Path
-from typing import Literal, Any
+from typing import Literal, Any, Callable
 from contextlib import contextmanager
 
 import h5py
@@ -345,6 +345,34 @@ class AnsDatabaseFile:
 		
 		self._update_from_sources()
 	
+	def _get_virtual_dataset_target_info(
+			self,
+			target_file_path_str : str, # Path (as a string) that `x_grp` resides in. Can be relative to the eventual destination HDF5 file, use '.' to denote the destination HDF5 file
+			x_grp : h5py.Group, # Group we want to recreate as virtual datasets in the destination file.
+			item_include_callable : Callable[[h5py.Group | h5py.Dataset], bool] = lambda x: True, # This callable is passed the HDF5 item path (e.g. "/<group_name_1>/<group_name_2>/<dataset_name>"), if it returns `True` the group or dataset will be included in the result.
+	) -> VirtualGroupTarget:
+		"""
+		Get all the information required to create a virtual group that links to all of the datasets in `x_grp`.
+		"""
+		x_grp_src_info = VirtualGroupTarget([], dict(), dict(x_grp.attrs))
+		for obj_name, obj in x_grp.items():
+			#print(f'{obj_name=}')
+			#print(f'{item_include_callable(obj)=}')
+			if item_include_callable(obj):
+				#print('INCLUDED')
+				if isinstance(obj, h5py.Dataset):
+					#print('DATASET')
+					x_grp_src_info.vdset_targets.append(VirtualDsetTarget(target_file_path_str, obj.name, obj.shape, obj.dtype))
+				else: # Must be an h5py.Group
+					#print('GROUP')
+					x_grp_src_info.vsub_grps[obj_name] = self._get_virtual_dataset_target_info(target_file_path_str, obj)
+			#else:
+			#	print('SKIPPED')
+		
+		return x_grp_src_info
+		
+		
+	
 	def _create_virtual_datasets_from(
 			self,
 			v_grp, # group that will contain the virtual datasets
@@ -352,6 +380,11 @@ class AnsDatabaseFile:
 			v_sub_grp_dict : dict[str, VirtualGroupTarget] = dict(),
 			v_grp_attrs : dict[str,Any] = dict(),
 	):
+		#print(f'{v_grp=}')
+		#print(f'{v_dset_info=}')
+		#print(f'{v_sub_grp_dict=}')
+		#print(f'{v_grp_attrs=}')
+		
 		for k,v in v_grp_attrs.items():
 			v_grp.attrs[k] = v
 		

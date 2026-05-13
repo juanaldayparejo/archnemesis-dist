@@ -1,0 +1,21 @@
+
+
+from typing import NamedTuple
+
+import numpy as np
+
+
+class LineSetData(NamedTuple):
+	s_min        : float
+	t_ref        : float
+	mol_id       : np.ndarray # [N_lines]
+	local_iso_id : np.ndarray # [N_lines]
+	nu           : np.ndarray # [N_lines]
+	sw           : np.ndarray # [N_lines]
+	a            : np.ndarray # [N_lines]
+	elower       : np.ndarray # [N_lines]
+	gamma_self   : np.ndarray # [N_lines]
+	n_self       : np.ndarray # [N_lines]
+	gamma_amb    : np.ndarray # [N_lines, N_broadeners]
+	n_amb        : np.ndarray # [N_lines, N_broadeners]
+	delta_amb    : np.ndarray # [N_lines, N_broadeners]

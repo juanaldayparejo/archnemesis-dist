@@ -13,8 +13,9 @@ class PseudoContinuumDataHolder:
 	name : str        # Name of source, will result in a "/sources/X" group
 	description : str # Description of source, will be the "description" attribute of the "/sources/X" group
 	
-	# Temperature this continuum data was calculated at
-	t_cont : float
+	# Pseudo-continuum creation parameters
+	t_cont : float # Temperature this continuum data was calculated at, Kelvin
+	s_max : float  # Maximum line strength included in pseudo-continuum, 'cm^{-1}/(molec.cm^{-2})'
 	
 	# pseudo-continuum data. 
 	mol_id : np.ndarray
@@ -30,10 +31,6 @@ class PseudoContinuumDataHolder:
 	
 	# foreign broadening
 	broadeners : Iterable[PseudoContinuumBroadenerPart] = tuple()
-	
-	# Temperature information, used to define at what temperature range this continuum data is valid
-	t_min : float = 0
-	t_max : float = np.inf
 	
 	_rt_gas_descs : None | tuple = None
 	

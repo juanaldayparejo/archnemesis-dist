@@ -1,6 +1,6 @@
 from pathlib import Path
 #import dataclasses as dc
-from typing import Any, Literal, Callable#, Type, Literal#, NamedTuple, Self, Annotated, Callable, Any, Iterable
+from typing import Any, Literal, Callable, Generator#, Type, Literal#, NamedTuple, Self, Annotated, Callable, Any, Iterable
 
 
 import numpy as np
@@ -10,12 +10,12 @@ from archnemesis.enums import AmbientGas
 
 
 from archnemesis.helpers import h5py_helper
-from archnemesis.helpers.h5py_helper import VirtualSourceInfo, VirtualDsetTarget, VirtualGroupTarget
+from archnemesis.helpers.h5py_helper import VirtualSourceInfo#, VirtualDsetTarget, VirtualGroupTarget
 
 from archnemesis.database.filetypes.ans_base import AnsDatabaseFile
 from archnemesis.database.data_holders.pseudo_continuum_data_holder import PseudoContinuumDataHolder
 
-#from archnemesis.database.data_layouts.pseudo_continuum_record_layout import PseudoContinuumDataRecordLayout, PseudoContinuumBroadenerRecordLayout
+from archnemesis.database.data_layouts.pseudo_continuum_record_layout import PseudoContinuumDataRecordLayout, PseudoContinuumBroadenerRecordLayout
 from archnemesis.database.data_layout_writers.pseudo_continuum_table_writer import PseudoContinuumDataTableWriter, PseudoContinuumBroadenerTableWriter
 
 from archnemesis.database.datatypes.pseudo_continuum_data import PseudoContinuumData
@@ -47,6 +47,15 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 	def get_leaf_grp_name(self, n : int) -> str:
 		return self.leaf_group_prefix + self.leaf_group_idx_fmt.format(n)
 	
+	def get_increasing_leaf_grp_name_in_grp_iterable(self, grp : h5py.Group) -> Generator[int, str, h5py.Group | h5py.Dataset]:
+		i = 0
+		while True:
+			leaf_grp_name = self.get_leaf_grp_name(i)
+			if leaf_grp_name in grp:
+				yield i, leaf_grp_name, grp[leaf_grp_name]
+			else:
+				return
+			i+=1
 	
 	def _update_virtual_datasets(
 			self,
@@ -75,46 +84,31 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 				target_grp = x_grp[s_path]
 				for mol_grp_name, mol_grp in target_grp.items():
 					for iso_grp_name, iso_grp in mol_grp.items():
-						
+						print(f'{mol_grp_name=} {iso_grp_name=}')
 						
 						iso_grp_src_list = []
 						for leaf_grp_name, leaf_grp in iso_grp.items():
-							if not leaf_grp_name.startswith(self.leaf_group_prefix) or not isinstance(leaf_grp, h5py.Group):
-								continue # is not a leaf group
-							
-							leaf_grp_src_info = VirtualGroupTarget([], dict(), leaf_grp.attrs)
-							
-							for dset_name, dset in leaf_grp.items():
-								#print(f'{dset.name=}')
-								
-								if dset_name == 'broadeners':
-									leaf_grp_src_info[1]['broadeners'] = VirtualGroupTarget([],dict(), dset.attrs)
-									b_grp = dset
-									for broad_name, broad_grp in b_grp.items():
-										if not isinstance(broad_grp, h5py.Group):
-											continue
-										leaf_grp_src_info.vsub_grps['broadeners'].vsub_grps[broad_name] = VirtualGroupTarget([],dict(),broad_grp.attrs)
-										
-										for broad_dset_name, broad_dset in broad_grp.items():
-											if not isinstance(broad_dset, h5py.Dataset):
-												continue
-											leaf_grp_src_info.vsub_grps['broadeners'].vsub_grps[broad_name].vdset_targets.append(
-												VirtualDsetTarget(s_file, broad_dset.name, broad_dset.shape, broad_dset.dtype),
-											)
-											
-								elif not isinstance(dset, h5py.Dataset):
-									continue # is not a dataset or a group we want to include
-								else:
-									leaf_grp_src_info.vdset_targets.append(
-										VirtualDsetTarget(s_file, dset.name, dset.shape, dset.dtype)
+							print(f'{leaf_grp_name=}')
+							if leaf_grp_name.startswith(self.leaf_group_prefix) and isinstance(leaf_grp, h5py.Group):
+								iso_grp_src_list.append(
+									(
+										self._get_pseudo_continuum_parameters(leaf_grp.attrs),
+										self._get_virtual_dataset_target_info(
+											s_file, 
+											leaf_grp,
+											item_include_callable = lambda item : (
+												(isinstance(item, h5py.Group) and ('/broadeners' in item.name))
+												or (
+													isinstance(item, h5py.Dataset)
+													and (
+														(item.name.rsplit('/',1)[1] in PseudoContinuumDataRecordLayout.attrs())
+														or (item.name.rsplit('/',1)[1] in PseudoContinuumBroadenerRecordLayout.attrs())
+													)
+												)
+											),
+										),
 									)
-							
-							iso_grp_src_list.append(
-								(
-									self._get_leaf_group_order_attrs(leaf_grp.attrs), # value to order leaf group by
-									leaf_grp_src_info,
 								)
-							)
 						
 						source_map[(mol_grp_name, iso_grp_name)] = iso_grp_src_list
 								
@@ -152,14 +146,14 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 				
 				# add sources
 				idx = 0
-				for leaf_grp_src_order_val, leaf_dset_src_info in sorted_iso_grp_src_list:
-					print(f'Adding source {leaf_grp_src_order_val=}')
+				for leaf_grp_src_pc_parameters, leaf_grp_src_info in sorted_iso_grp_src_list:
+					print(f'Adding source {leaf_grp_src_pc_parameters=}')
 					vleaf_grp_name = self.get_leaf_grp_name(idx)
 					if vleaf_grp_name in iso_grp:
 						# if `vleaf_grp_name` is in `iso_grp` at this point, it is because it is a non-virtual group
 						# therefore compare it with `leaf_grp_src_order_val` to see if we should be before or after 
 						# the concrete group
-						if leaf_grp_src_order_val < self._get_leaf_group_order_attrs(iso_grp[vleaf_grp_name].attrs):
+						if leaf_grp_src_pc_parameters < self._get_pseudo_continuum_parameters(iso_grp[vleaf_grp_name].attrs):
 							new_leaf_grp_name = self.get_leaf_grp_name(idx+1)
 							iso_grp.move(vleaf_grp_name, new_leaf_grp_name)
 						else:
@@ -187,10 +181,11 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		for mol_grp_name, mol_grp in d_grp.items():
 			for iso_grp_name, iso_grp in mol_grp.items():
 			
-				last_leaf_grp_order_vals = (0,0)
-				for leaf_grp_name, leaf_grp in iso_grp.items():
-					leaf_grp_order_vals = self._get_leaf_group_order_attrs(leaf_grp.attrs)
-					assert last_leaf_grp_order_vals <= leaf_grp_order_vals, f"Group {leaf_grp.name} was not ordered correctly by increasing minimum temperature then increasing minimum wavenumber"
+				last_leaf_grp_pc_params = (0,0)
+				for i, leaf_grp_name, leaf_grp in self.get_increasing_leaf_grp_name_in_grp_iterable(iso_grp):
+					
+					leaf_grp_pc_params = self._get_pseudo_continuum_parameters(leaf_grp.attrs)
+					assert last_leaf_grp_pc_params <= leaf_grp_pc_params, f"Group {leaf_grp.name} was not ordered correctly. Require ({last_leaf_grp_pc_params=}) <= ({leaf_grp_pc_params})"
 					
 					wn_bin_center_shape = leaf_grp['wn_bin_center'].shape
 					for obj_name, obj in leaf_grp.items():
@@ -205,28 +200,143 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 									if isinstance(b_dset, h5py.Dataset):
 										assert len(b_dset.shape) == len(wn_bin_center_shape), f"All datasets of {leaf_grp.name} must have the same number of dimensions, but {b_dset.name} does not."
 										assert all(x==y for x,y in zip(b_dset.shape, wn_bin_center_shape)), f"All datasets of {leaf_grp.name} must have the same shape, but {b_dset.name} does not."
-	
-	def _get_leaf_group_attrs(self, data_holder, iso_mask) -> dict[str,Any]:
-		
-		wn_iso_bin_center = data_holder.wn_bin_center[iso_mask]
-		wn_iso_bin_width = data_holder.wn_bin_width[iso_mask]
-		
-		wn_iso_min_idx = np.argmin(wn_iso_bin_center)
-		wn_iso_max_idx = np.argmax(wn_iso_bin_center)
+					
+	def _get_leaf_group_attrs(
+			self, 
+			data_holder, 
+	) -> dict[str,Any]:
 		
 		return {
-			't_min': data_holder.t_min, # Minumum temperature this data is valid for
-			't_max': data_holder.t_max, # Maximum temperature this data is valid for
 			't_cont': data_holder.t_cont, # Temperature at which pseudo-continuum values were computed
 			't_unit' : 'Kelvin',
-			'wn_min' : wn_iso_bin_center[wn_iso_min_idx] - 0.5*wn_iso_bin_width[wn_iso_min_idx], # Miminum wavenumber this data is valid for
-			'wn_max' : wn_iso_bin_center[wn_iso_max_idx] - 0.5*wn_iso_bin_width[wn_iso_max_idx], # Maximum wavenumber this data is valid for
-			'wn_unit' : 'cm^{-1}',
+			's_max' : data_holder.s_max, # Maximum line strength included in pseudo-continuum
 			**self.data_grp_attrs
 		}
 	
-	def _get_leaf_group_order_attrs(self, leaf_grp_attrs)->tuple[float,float]:
-		return leaf_grp_attrs['t_min'], leaf_grp_attrs['wn_min']
+	def _get_pseudo_continuum_parameters(
+			self, 
+			grp_attrs
+	)->tuple[float,float]:
+		"""
+		Leaf groups are ordered first by maximum line strength included in continuum, then by temperature the continuum was calculated at
+		
+		## RETURNS ##
+			grp_pc_parameters : tuple[float,float] - `s_max` and `t_cont` that were used when creating the pseudo-continuum datasets.
+		"""
+		return (grp_attrs['s_max'], grp_attrs['t_cont'])
+	
+	def _are_pseudo_continuum_parameters_compatible(
+		self,
+		leaf_grp_pc_parameters,
+		test_grp_pc_parameters
+	) -> bool:
+		"""
+		A pseudo-continuum is worked out at a specific temperature `t_cont`,
+		and made with all the lines that have a strength lower than a maximum value
+		`s_max`. When looking up which pseudo-continuum dataset to use we should
+		always try and match `s_max` exactly as otherwise we will either double-count
+		or miss out some lines. The best `t_cont` to use is the lowest one that
+		is greater than the target temperature.
+		
+		## RETURNS ##
+			pc_parameters_are_compatible : bool - `True` if the continuum parameters can be used together, `False` otherwise.
+		"""
+		
+		return (leaf_grp_pc_parameters[0] == test_grp_pc_parameters[0]) and (leaf_grp_pc_parameters[1] <= test_grp_pc_parameters[1])
+	
+	
+	def _get_target_leaf_group(
+			self,
+			p_grp : h5py.Group, # "Parent" group that contains leaf groups
+			data_holder : PseudoContinuumDataHolder,
+	) -> h5py.Group:
+		"""
+		Each "/pseudo_continuum/<mol>/<iso>" group contains
+		a number of "pc_data_XXXX" groups (where XXXX is a numerical ordering)
+		the "pc_data_XXXX".
+		
+		A pseudo-continuum is worked out at a specific temperature `t_cont`,
+		and made with all the lines that have a strength lower than a maximum value
+		`s_max`. When looking up which pseudo-continuum dataset to use we should
+		always try and match `s_max` exactly as otherwise we will either double-count
+		or miss out some lines. The best `t_cont` to use is the lowest one that
+		is greater than the target temperature.
+		
+		Therefore, should order by `s_max` then by `t_cont`
+		
+		When adding data, we must rename other groups to ensure the added
+		group has the correct name.
+		"""
+		
+		leaf_grp_attrs = self._get_leaf_group_attrs(data_holder)
+		leaf_grp_pc_parameters = self._get_pseudo_continuum_parameters(leaf_grp_attrs)
+		
+		# work out where this group should go
+		leaf_grp_overwrite = False
+		leaf_grp_idx = -1
+		i=0
+		test_pc_grp_name = self.get_leaf_grp_name(i)
+		while test_pc_grp_name in p_grp:
+			test_grp_attrs = p_grp[test_pc_grp_name].attrs
+			test_grp_pc_parameters = self._get_pseudo_continuum_parameters(test_grp_attrs)
+			if (leaf_grp_idx < 0) and (leaf_grp_pc_parameters <= test_grp_pc_parameters): # NOTE: `test_grp_pc_parameters` should always be ordered such that the first one `leaf_grp_pc_parameters` is less than is where this data should be inserted.
+				# leaf_grp should be inserted before the current test grp so use the current index
+				# don't exit, we want to find the largest index
+				leaf_grp_idx = i
+				"""
+				print(f'{(leaf_grp_pc_parameters == test_grp_pc_parameters)=}')
+				print(f'{all(k in leaf_grp_attrs for k in test_grp_attrs)=}')
+				print(f'{all(k in test_grp_attrs for k in leaf_grp_attrs)=}')
+				print(f'{all(leaf_grp_attrs[k] == v for k,v in test_grp_attrs.items())=}')
+				print(f'{np.all(p_grp[test_pc_grp_name]['wn_bin_center'].ndim == data_holder.wn_bin_center.ndim)=}')
+				print(f'{all(x==y for x,y in zip(p_grp[test_pc_grp_name]['wn_bin_center'].shape, data_holder.wn_bin_center.shape))=}')
+				print(f'{np.all(p_grp[test_pc_grp_name]['wn_bin_center'] == data_holder.wn_bin_center)=}')
+				print(f'{np.all(p_grp[test_pc_grp_name]['wn_bin_width'] == data_holder.wn_bin_width)=}')
+				"""
+				
+				if ( # Do some tests to see if we should overwrite this group instead
+					(leaf_grp_pc_parameters == test_grp_pc_parameters)
+					and all(k in leaf_grp_attrs for k in test_grp_attrs)
+					and all(k in test_grp_attrs for k in leaf_grp_attrs)
+					and all(leaf_grp_attrs[k] == v for k,v in test_grp_attrs.items())
+					and np.all(p_grp[test_pc_grp_name]['wn_bin_center'].ndim == data_holder.wn_bin_center.ndim)
+					and all(x==y for x,y in zip(p_grp[test_pc_grp_name]['wn_bin_center'].shape, data_holder.wn_bin_center.shape))
+					and np.all(p_grp[test_pc_grp_name]['wn_bin_center'] == data_holder.wn_bin_center)
+					and np.all(p_grp[test_pc_grp_name]['wn_bin_width'] == data_holder.wn_bin_width)
+				):
+					_lgr.warn(f'Will overwrite {p_grp[test_pc_grp_name].name} with new data as the attributes and bins are identical between old data and new data.')
+					leaf_grp_overwrite = True
+			
+			i += 1
+			test_pc_grp_name = self.get_leaf_grp_name(i)
+		
+		n_grps = i
+		if leaf_grp_idx < 0: # if we are here, the leaf group should be added to the end
+			leaf_grp_idx = n_grps
+		leaf_grp_name = self.get_leaf_grp_name(leaf_grp_idx)
+		
+		if leaf_grp_overwrite:
+			if leaf_grp_name in p_grp:
+				del p_grp[leaf_grp_name]
+		else:
+			i = n_grps - 1
+			
+			# shift along all groups with larger indices, work backwards from maximum index (should be `i` at this point)
+			while leaf_grp_idx <= i:
+				old_pc_grp_name = self.get_leaf_grp_name(i)
+				new_pc_grp_name = self.get_leaf_grp_name(i+1)
+				p_grp.move(old_pc_grp_name, new_pc_grp_name)
+				i-=1
+		
+		# At this point there should be a "gap" in the leaf groups with the correct name
+		# so put our leaf group there.
+		
+		leaf_grp = h5py_helper.ensure_grp(
+			p_grp, 
+			leaf_grp_name, 
+			attrs = leaf_grp_attrs
+		)
+		return leaf_grp
 	
 	def _add_data(
 			self, 
@@ -246,74 +356,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			mol_grp = h5py_helper.ensure_grp(d_grp, rt_gas_desc.gas_name)
 			iso_grp = h5py_helper.ensure_grp(mol_grp, f'{rt_gas_desc.iso_id}')
 			
-			# NOTE ############################################################
-			#
-			# Each "/pseudo_continuum/<mol>/<iso>" group contains
-			# a number of "pc_data_XXXX" groups (where XXXX is a numerical ordering)
-			# the "pc_data_XXXX" groups are ordered by lowest valid temperature (`t_min`)
-			# then by minimum wavenumber (`wn_min`).
-			#
-			# When adding data, we must rename other groups to ensure the added
-			# group has the correct name.
-			#
-			###################################################################
-			
-			leaf_grp_attrs = self._get_leaf_group_attrs(data_holder, iso_mask)
-			leaf_grp_order_info = self._get_leaf_group_order_attrs(leaf_grp_attrs)
-			
-			# work out where this group should go
-			leaf_grp_overwrite = False
-			leaf_grp_idx = -1
-			i=0
-			test_pc_grp_name = self.get_leaf_grp_name(i)
-			while test_pc_grp_name in iso_grp:
-				test_grp_attrs = iso_grp[test_pc_grp_name].attrs
-				test_grp_order_info = self._get_leaf_group_order_attrs(test_grp_attrs)
-				if (leaf_grp_idx < 0) and (leaf_grp_order_info >= test_grp_order_info):
-					# leaf_grp should be inserted before the current test grp so use the current index
-					# don't exit, we want to find the largest index
-					leaf_grp_idx = i
-					
-					if ( # Do some tests to see if we should overwrite this group
-						all(k in leaf_grp_attrs for k in test_grp_attrs)
-						and all(k in test_grp_attrs for k in leaf_grp_attrs)
-						and all(leaf_grp_attrs[k] == v for k,v in test_grp_attrs.items())
-						and np.all(iso_grp[test_pc_grp_name]['wn_bin_center'].ndim == data_holder.wn_bin_center.ndim)
-						and all(x==y for x,y in zip(iso_grp[test_pc_grp_name]['wn_bin_center'].shape, data_holder.wn_bin_center.shape))
-						and np.all(iso_grp[test_pc_grp_name]['wn_bin_center'] == data_holder.wn_bin_center)
-						and np.all(iso_grp[test_pc_grp_name]['wn_bin_width'] == data_holder.wn_bin_width)
-					):
-						_lgr.warn(f'Will overwrite {iso_grp[test_pc_grp_name].name} with new data as the attributes and bins are identical between old data and new data.')
-						leaf_grp_overwrite = True
-				
-				i += 1
-				test_pc_grp_name = self.get_leaf_grp_name(i)
-			
-			if leaf_grp_idx < 0:
-				leaf_grp_idx = 0
-			leaf_grp_name = self.get_leaf_grp_name(leaf_grp_idx)
-			
-			if leaf_grp_overwrite:
-				if leaf_grp_name in iso_grp:
-					del iso_grp[leaf_grp_name]
-			else:
-				i-=1
-				
-				# shift along all groups with larger indices, work backwards from maximum index (should be `i` at this point)
-				while leaf_grp_idx <= i:
-					old_pc_grp_name = self.get_leaf_grp_name(i)
-					new_pc_grp_name = self.get_leaf_grp_name(i+1)
-					iso_grp.move(old_pc_grp_name, new_pc_grp_name)
-					i-=1
-			
-			# At this point there should be a "gap" in the leaf groups with the correct name
-			# so put our leaf group there.
-			
-			leaf_grp = h5py_helper.ensure_grp(
-				iso_grp, 
-				leaf_grp_name, 
-				attrs = leaf_grp_attrs
-			)
+			leaf_grp = self._get_target_leaf_group(iso_grp, data_holder)
 			
 			data_table = PseudoContinuumDataTableWriter(
 				data_holder.mol_id[iso_mask],
@@ -370,7 +413,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 				case _:
 					raise KeyError(f'HDF5 file "{x_grp.file.filename}" does not have a "{x_grp.name}/broadeners" group')
 	
-	def _get_broadener_grp(
+	def _get_single_broadener_grp(
 			self,
 			x_grp, # group to search within, often ".../mol/iso/pc_data_XXXX/broadeners"
 			ambient_gas_name : str,
@@ -392,6 +435,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			mol_name : str, 
 			local_iso_id : int,
 			temperature : float,
+			s_max : float,
 			ambient_gasses : AmbientGas | tuple[AmbientGas] = AmbientGas.AIR,
 			wn_mask_fn : None | Callable[[np.ndarray], np.ndarray] = None,
 			wn_bin_upper_edge_eta : float = 1E-9,
@@ -405,7 +449,8 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		## ARGUMNETS ##
 			mol_name - Name of molecule
 			local_iso_id - ID of isotope (RADTRAN ISO ID) in context of parent molecule
-			temperature - Temperature to get data for (Kelvin)
+			temperature - Temperature to get data for (Kelvin), want to select the pseudo-continuum where `min(t_cont - temperature) and (temperature < t_cont)`. 
+			s_max - Maximum line strength included in pesudo-continuum. Should match exactly with line data otherwise will miss or double-count lines.
 			ambient_gasses - Tuple of ambient gasses to get broadening data for
 			wn_mask_fn - Callable that selects desired wavenumbers (cm^{-1})
 			wn_bin_upper_edge_eta -  When testing bin inclusion via `wn_mask_fn`, add this value to the upper edge of a bin to model "less-than" behaviour.
@@ -423,71 +468,71 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		
 		n_ambient_gasses = len(ambient_gasses)
 		
-		iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_mol, on_missing_iso)
-		if iso_grp is None:
-			return self._get_null_data(n_ambient_gasses)
-		
-		result = None
-		
-		# Get leaf groups in `iso_grp`
-		# groups are ordered by their lowest applicable temperature, then lowest applicable wavenumber
-		i = 0
-		leaf_grp_name = self.get_leaf_grp_name(i) 
-		while leaf_grp_name in iso_grp:
-			leaf_grp = iso_grp[leaf_grp_name]
+		with self.open('r'):
+			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_mol, on_missing_iso)
+			if iso_grp is None:
+				return self._get_null_data(n_ambient_gasses)
 			
-			# Move on to next group if lower bounds are wrong
-			if temperature < leaf_grp.attrs['t_min'] or leaf_grp.attrs['t_max'] < temperature:
-				pass
-			else:
+			result = None
+			
+			# Get leaf groups in `iso_grp`
+			# groups are ordered by the temperature the continuum was calculated at `t_cont`, then the maximum line strength present in the continuum `s_max`
+			i = 0
+			leaf_grp_name = self.get_leaf_grp_name(i) 
+			while leaf_grp_name in iso_grp:
+				leaf_grp = iso_grp[leaf_grp_name]
+				leaf_grp_pc_parameters = self._get_pseudo_continuum_parameters(leaf_grp.attrs)
+				# Move on to next group if lower bounds are wrong
 				
-				wn_bin_center = leaf_grp['wn_bin_center']
-				wn_bin_width = leaf_grp['wn_bin_width']
-				wn_bin_lower_edge = wn_bin_center - 0.5*wn_bin_width
-				wn_bin_upper_edge = wn_bin_center + 0.5*wn_bin_width + wn_bin_upper_edge_eta
-				
-				# If any part of a bin is selected by `wn_mask_fn` then return that entire bin
-				wn_mask = wn_mask_fn(wn_bin_lower_edge) | wn_mask_fn(wn_bin_center) | wn_mask_fn(wn_bin_upper_edge)
-				n_bins = np.count_nonzero(wn_mask)
-				
-				if n_bins != 0:
-					result = PseudoContinuumData(
-						leaf_grp['t_cont'],
-						leaf_grp['wn_bin_center'][wn_mask],
-						leaf_grp['wn_bin_width'][wn_mask],
-						leaf_grp['line_strength_sum'][wn_mask],
-						leaf_grp['line_strength_weighted_mean_lower_energy_state'][wn_mask],
-						leaf_grp['line_strength_weighted_gamma_self'][wn_mask],
-						leaf_grp['line_strength_weighted_n_self'][wn_mask],
-						np.empty((n_bins, n_ambient_gasses), dtype=float),
-						np.empty((n_bins, n_ambient_gasses), dtype=float),
-					)
-
-					b_grp = self._get_broadeners_grp(leaf_grp, on_missing_broadener)
-					if b_grp is None:
-						result.line_strength_weighted_gamma_amb.fill(result.line_strength_weighted_gamma_self)
-						result.line_strength_weighted_n_amb.fill(result.line_strength_weighted_n_self)
-						break
+				if self._are_pseudo_continuum_parameters_compatible( # NOTE: as `leaf_grp_pc_parameters` should be ordered we can just use the first compatible `leaf_grp`
+					leaf_grp_pc_parameters,
+					(s_max, temperature)
+				):
+					wn_bin_center = leaf_grp['wn_bin_center']
+					wn_bin_width = leaf_grp['wn_bin_width']
+					wn_bin_lower_edge = wn_bin_center - 0.5*wn_bin_width
+					wn_bin_upper_edge = wn_bin_center + 0.5*wn_bin_width + wn_bin_upper_edge_eta
 					
-					for i, ambient_gas in enumerate(ambient_gasses):
-						bg_grp = self._get_broadener_grp(b_grp, ambient_gas.name, on_missing_broadener)
-						if bg_grp is None:
+					# If any part of a bin is selected by `wn_mask_fn` then return that entire bin
+					wn_mask = wn_mask_fn(wn_bin_lower_edge) | wn_mask_fn(wn_bin_center) | wn_mask_fn(wn_bin_upper_edge)
+					n_bins = np.count_nonzero(wn_mask)
+					
+					if n_bins != 0:
+						result = PseudoContinuumData(
+							leaf_grp['t_cont'],
+							leaf_grp['wn_bin_center'][wn_mask],
+							leaf_grp['wn_bin_width'][wn_mask],
+							leaf_grp['line_strength_sum'][wn_mask],
+							leaf_grp['line_strength_weighted_mean_lower_energy_state'][wn_mask],
+							leaf_grp['line_strength_weighted_gamma_self'][wn_mask],
+							leaf_grp['line_strength_weighted_n_self'][wn_mask],
+							np.empty((n_bins, n_ambient_gasses), dtype=float),
+							np.empty((n_bins, n_ambient_gasses), dtype=float),
+						)
+
+						b_grp = self._get_broadeners_grp(leaf_grp, on_missing_broadener)
+						if b_grp is None:
 							result.line_strength_weighted_gamma_amb.fill(result.line_strength_weighted_gamma_self)
 							result.line_strength_weighted_n_amb.fill(result.line_strength_weighted_n_self)
 							break
-						result.line_strength_weighted_gamma_amb[:,i] = bg_grp['line_strength_weighted_gamma_amb'][wn_mask]
-						result.line_strength_weighted_n_amb[:,i] = bg_grp['line_strength_weighted_n_amb'][wn_mask]
-
+						
+						for i, ambient_gas in enumerate(ambient_gasses):
+							bg_grp = self._get_single_broadener_grp(b_grp, ambient_gas.name, on_missing_broadener)
+							if bg_grp is None:
+								result.line_strength_weighted_gamma_amb[:,i].fill(result.line_strength_weighted_gamma_self)
+								result.line_strength_weighted_n_amb[:,i].fill(result.line_strength_weighted_n_self)
+							else:
+								result.line_strength_weighted_gamma_amb[:,i] = bg_grp['line_strength_weighted_gamma_amb'][wn_mask]
+								result.line_strength_weighted_n_amb[:,i] = bg_grp['line_strength_weighted_n_amb'][wn_mask]
+					else:
+						_lgr.warn(f'No wavenumbers selected by {wn_mask_fn}, will return empty data. ')
 					break # exit loop as soon as we find a compatible group
-				else:
-					_lgr.warn(f'No wavenumbers selected by {wn_mask_fn}, continuing to search other pseudo-continuum (pc) data groups. If no data selected from any pc data group, will return empty data. ')
+				i+=1
 			
-			i+=1
-		
-		if result is None:
-			return self._get_null_data(n_ambient_gasses)
-		else:
-			return result
+			if result is None:
+				return self._get_null_data(n_ambient_gasses)
+			else:
+				return result
 			
 				
 			

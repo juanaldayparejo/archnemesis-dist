@@ -43,8 +43,12 @@ from archnemesis.database.datatypes.wave_range import WaveRange
 from archnemesis.database.datatypes.gas_isotopes import GasIsotopes
 from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
 
+from archnemesis.database.datatypes.line_set_data import LineSetData
+from archnemesis.database.datatypes.pseudo_continuum_data import PseudoContinuumData
+
 from archnemesis.database.filetypes.ans_line_data_file import AnsLineDataFile
 from archnemesis.database.filetypes.ans_partition_fn_data_file import AnsPartitionFunctionDataFile
+from archnemesis.database.filetypes.ans_pseudo_continuum_file import AnsPseudoContinuumFile
 
 
 # Logging
@@ -93,6 +97,7 @@ class LineData_0:
             ambient_gas=ans.enums.AmbientGas.AIR,
             LINE_DATABASE : None | str = None,
             PARTITION_FUNCTION_DATABASE : None | str = None,
+            CONTINUUM_DATABASE : None | str = None,
     ):
         """
         Class to store line data for a specific gas and isotope.
@@ -181,8 +186,12 @@ class LineData_0:
         self.ISO = ISO
         self.LINE_DATABASE = LINE_DATABASE
         self.PARTITION_FUNCTION_DATABASE = PARTITION_FUNCTION_DATABASE
+        self.CONTINUUM_DATABASE = CONTINUUM_DATABASE
         
+        self.t_ref : float = 296.0
+        self.s_min : float = 0.0
         self.line_data = None
+        self.continuum_data = None
         self.partition_data_dict = None
         self._total_line_data_wave_lims = np.array([np.inf, -np.inf], dtype=float) # limits on fetched wavelengths of line data
         
@@ -208,7 +217,6 @@ class LineData_0:
     @ambient_gas.setter
     def ambient_gas(self, value : int | ans.enums.AmbientGas):
         self._ambient_gas = ans.enums.AmbientGas(value)
-    
 
     @property
     def gas_isotopes(self) -> GasIsotopes:
@@ -312,6 +320,8 @@ class LineData_0:
             self, 
             vmin : float, 
             vmax : float, 
+            s_min : float = -1,
+            temperature : float = 0,
             wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
             refresh : bool = False,
     ) -> None:
@@ -344,7 +354,7 @@ class LineData_0:
         vmin, vmax = wave_range.values()
         
         # Only get the wavelengths we don't already have
-        already_contain_wave_range = ((self._total_line_data_wave_lims[0] < vmin) and (vmax < self.total_line_data_wave_lims[1]))
+        already_contain_wave_range = ((self._total_line_data_wave_lims[0] <= vmin) and (vmax <= self.total_line_data_wave_lims[1]))
             
         
         if already_contain_wave_range and self.is_line_data_ready() and not refresh:
@@ -359,6 +369,7 @@ class LineData_0:
         
         # get line database file
         ans_line_data_file = AnsLineDataFile(self.LINE_DATABASE)
+        ans_pseudo_continuum_file = None if self.CONTINUUM_DATABASE is None else AnsPseudoContinuumFile(self.CONTINUUM_DATABASE)
         
         mol_id_list = []
         local_iso_id_list = []
@@ -366,61 +377,67 @@ class LineData_0:
         sw_list = []
         a_list = []
         elower_list = []
+        t_ref_list = []
         gamma_self_list = []
         n_self_list = []
         gamma_amb_list = []
         n_amb_list = []
         delta_amb_list = []
+        
+        continuum_list : list[PseudoContinuumData] = []
 
         # NOTE: abundances are accounted for in `self.calculate_monochromatic_absorption(...)`
         #scale_strength_by_abundance = self.ISO == 0
             
 
         for gas_desc in self.gas_isotopes.as_radtran_gasses():
+            print(f'{gas_desc=} {vmin=} {vmax=}')
         
-            (
-                mol_id,
-                local_iso_id,
-                nu,
-                sw,
-                a,
-                elower,
-                gamma_self,
-                n_self,
-                gamma_amb,
-                n_amb,
-                delta_amb,
-            ) = ans_line_data_file.get_data(
-                gas_desc.gas_name, 
-                local_iso_id=gas_desc.iso_id, 
-                ambient_gas=self.ambient_gas,
-                wavelength_mask_fn=lambda nu: ((vmin < nu) & (nu <= vmax))
+            line_set_data : LineSetData = ans_line_data_file.get_data(
+                mol_name = gas_desc.gas_name, 
+                local_iso_id = gas_desc.iso_id, 
+                ambient_gasses = (self.ambient_gas,),
+                wn_mask_fn = lambda nu: ((vmin < nu) & (nu <= vmax))
             )
             
-            mol_id_list.append(mol_id)
-            local_iso_id_list.append(local_iso_id)
-            nu_list.append(nu)
-            sw_list.append(sw) #sw_list.append((sw*gas_desc.abundance) if scale_strength_by_abundance else sw) # NOTE: abundances are accounted for in `self.calculate_monochromatic_absorption(...)`
-            a_list.append(a)
-            elower_list.append(elower)
-            gamma_self_list.append(gamma_self)
-            n_self_list.append(n_self)
-            gamma_amb_list.append(gamma_amb)
-            n_amb_list.append(n_amb)
-            delta_amb_list.append(delta_amb)
-
+            mol_id_list.append(line_set_data.mol_id)
+            local_iso_id_list.append(line_set_data.local_iso_id)
+            nu_list.append(line_set_data.nu)
+            sw_list.append(line_set_data.sw) #sw_list.append((sw*gas_desc.abundance) if scale_strength_by_abundance else sw) # NOTE: abundances are accounted for in `self.calculate_monochromatic_absorption(...)`
+            a_list.append(line_set_data.a)
+            elower_list.append(line_set_data.elower)
+            t_ref_list.append(np.ones_like(line_set_data.nu)*line_set_data.t_ref)
+            gamma_self_list.append(line_set_data.gamma_self)
+            n_self_list.append(line_set_data.n_self)
+            gamma_amb_list.append(line_set_data.gamma_amb)
+            n_amb_list.append(line_set_data.n_amb)
+            delta_amb_list.append(line_set_data.delta_amb)
+            
+            if line_set_data.s_min > 0:
+                # we should have corresponding continuum data to go with the line set
+                continuum_list.append(
+                    ans_pseudo_continuum_file.get_data(
+                        mol_name = gas_desc.gas_name,
+                        local_iso_id = gas_desc.iso_id,
+                        temperature = line_set_data.t_ref,
+                        s_max = line_set_data.s_min,
+                        ambient_gasses = (self.ambient_gas,),
+                        wn_mask_fn = lambda nu: ((vmin < nu) & (nu <= vmax)),
+                    )
+                )
 
         dtype = [
             ('RT_GAS_DESC', int, (2,)),
             ('NU', float),
             ('SW', float),
             ('A', float),
-            ('GAMMA_AMB', float),
-            ('N_AMB', float),
-            ('DELTA_AMB', float),
+            ('ELOWER', float),
+            ('T_REF', float),
             ('GAMMA_SELF', float),
             ('N_SELF', float),
-            ('ELOWER', float),
+            ('GAMMA_AMB', float, (line_set_data.gamma_amb.shape[1],)),
+            ('N_AMB', float, (line_set_data.n_amb.shape[1],)),
+            ('DELTA_AMB', float, (line_set_data.delta_amb.shape[1],)),
         ]
         
         self.line_data = np.rec.fromarrays(
@@ -429,15 +446,17 @@ class LineData_0:
                 np.concatenate(nu_list),
                 np.concatenate(sw_list),
                 np.concatenate(a_list),
+                np.concatenate(elower_list),
+                np.concatenate(gamma_self_list),
+                np.concatenate(n_self_list),
                 np.concatenate(gamma_amb_list),
                 np.concatenate(n_amb_list),
                 np.concatenate(delta_amb_list),
-                np.concatenate(gamma_self_list),
-                np.concatenate(n_self_list),
-                np.concatenate(elower_list),
             ),
             dtype=dtype
         )
+        
+        self.continuum_data = None if len(continuum_list) == 0 else continuum_list
 
 
     ###########################################################################################################################
@@ -513,7 +532,7 @@ class LineData_0:
             self, 
             press: float, 
             temp: float,
-            amb_frac: float, # fraction of ambient gas
+            amb_frac: np.ndarray, # fraction of ambient gas
             tref : float = 296,
     ) -> np.ndarray[['N_LINES_OF_GAS'], float]:
         """
@@ -523,9 +542,12 @@ class LineData_0:
         
         tratio = tref/temp
 
-        lws = (
-            (tratio**self.line_data.N_AMB) 
-            * ( self.line_data.GAMMA_AMB * amb_frac + self.line_data.GAMMA_SELF * (1-amb_frac) )
+        lws = np.sum(
+            (
+                (tratio**self.line_data.N_AMB) 
+                * ( self.line_data.GAMMA_AMB * amb_frac + self.line_data.GAMMA_SELF[:,None] * (1-amb_frac) )
+            ),
+            axis=1
         ) * press
         
         _lgr.debug(lws)
@@ -646,7 +668,7 @@ class LineData_0:
     ) -> np.ndarray:
         """
         Calculates the combined spectrum from many absorption lines considering their relative broadening.
-        This function differs from calculate_monochromatic_spectrum() because that one is intended to be used for
+        This function differs from calculate_monochromatic_absorption() because that one is intended to be used for
         the calculation of absorption coefficients. In this one, we explicitly provide the "line strengths" and the
         broadening parameters, so that it can be used for other types of spectra, not necessarily absorption
         (e.g., emission profiles or g-factors)
@@ -728,7 +750,7 @@ class LineData_0:
             waves : np.ndarray, # 1D array with shape [NWAVE]
             temp : float, # kelvin
             press : float, # Atmospheres
-            amb_frac : float = 1, # fraction of broadening due to ambient gas
+            amb_frac : float | np.ndarray = 1.0, # fraction of broadening due to ambient gas
             wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,  # unit of `waves` argument
             lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # lineshape function to use
             line_calculation_wavenumber_window: float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
@@ -747,6 +769,10 @@ class LineData_0:
         
         For details see "applications" section (at bottom) of https://hitran.org/docs/definitions-and-units/
         """
+        
+        if not isinstance(amb_frac, np.ndarray):
+            amb_frac = np.array([amb_frac], dtype=float)
+        
         # Convert waves to wavenumber (cm^{-1})
         #in_waves = np.array(waves)
         waves = np.array(WavePoint(waves, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value)
@@ -762,6 +788,9 @@ class LineData_0:
             vmax = waves[-1]+line_calculation_wavenumber_window, 
             wave_unit = ans.enums.WaveUnit.Wavenumber_cm
         )
+        
+        if self.continuum_data is not None:
+            raise NotImplementedError('Continuum calculation is not implemented yet')
 
         #Applying default abundances if not specified
         strength = self.calculate_line_strength(temp, tref)

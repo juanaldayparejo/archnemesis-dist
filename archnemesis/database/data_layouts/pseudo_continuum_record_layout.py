@@ -9,12 +9,15 @@ from archnemesis.database.data_layouts.structured_qualifiers import IDNumber, Qu
 from archnemesis.database.data_layouts.record_layout import RecordLayout
 
 
-# NOTE: A pseudo-continuum is always defined in terms of an applicable temperature range and
-#       a temperature (t_cont) at which the continuum was calculated (usually the same as the
-#       highest applicable temperature.
+# NOTE: A pseudo-continuum is always defined in terms of:
+#         * An applicable temperature range
+#         * A temperature `t_cont` at which the continuum was initially calculated (usually
+#           the same as the highest applicable temperature.
+#         * A line strength ceiling `s_max` above which a line is not included in the
+#           pseudo-continuum and should be handled as a discrete line.
 #
-# NOTE: The temperature data is held "above" the record level (as all records in a table share
-#       the same temperature data).
+# NOTE: The definition data is held "above" the record level (as all records in a table share
+#       the same definition data).
 
 class PseudoContinuumDataRecordLayout(RecordLayout):
 	mol_id                                         : Annotated[int,   IDNumber(
