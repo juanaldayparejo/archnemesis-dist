@@ -3,7 +3,7 @@
 
 import os
 from pathlib import Path
-from typing import Literal, Any, Callable
+from typing import Literal, Any, Callable, Generator
 from contextlib import contextmanager
 
 import h5py
@@ -46,6 +46,9 @@ class AnsDatabaseFile:
 	data_grp_attrs : dict[str,Any] = dict()
 	target_group_name : str | None = None
 	
+	leaf_grp_prefix : str = ''
+	leaf_grp_format : str = ''
+	
 	def __init__(
 			self, 
 			path : None | Path = None,
@@ -54,6 +57,20 @@ class AnsDatabaseFile:
 		
 		self._file_hdl : None | h5py.File = None
 		
+	@classmethod
+	def get_leaf_grp_name(cls, n : int) -> str:
+		return cls.leaf_group_prefix + cls.leaf_group_idx_fmt.format(n)
+	
+	@classmethod
+	def get_increasing_leaf_grp_name_in_grp_iterable(cls, grp : h5py.Group) -> Generator[int, str, h5py.Group | h5py.Dataset]:
+		i = 0
+		while True:
+			leaf_grp_name = cls.get_leaf_grp_name(i)
+			if leaf_grp_name in grp:
+				yield i, leaf_grp_name, grp[leaf_grp_name]
+			else:
+				return
+			i+=1
 	
 	@contextmanager
 	def open(
@@ -362,7 +379,7 @@ class AnsDatabaseFile:
 				#print('INCLUDED')
 				if isinstance(obj, h5py.Dataset):
 					#print('DATASET')
-					x_grp_src_info.vdset_targets.append(VirtualDsetTarget(target_file_path_str, obj.name, obj.shape, obj.dtype))
+					x_grp_src_info.vdset_targets.append(VirtualDsetTarget(target_file_path_str, obj.name, obj.shape, obj.dtype, dict(obj.attrs)))
 				else: # Must be an h5py.Group
 					#print('GROUP')
 					x_grp_src_info.vsub_grps[obj_name] = self._get_virtual_dataset_target_info(target_file_path_str, obj)
@@ -401,7 +418,9 @@ class AnsDatabaseFile:
 			)
 			layout[...] = vsource[...]
 			
-			v_grp.create_virtual_dataset(vdt.path.rsplit('/',1)[1], layout, fillvalue=None)
+			v_dset_new = v_grp.create_virtual_dataset(vdt.path.rsplit('/',1)[1], layout, fillvalue=None)
+			for k,v in vdt.attrs.items():
+				v_dset_new.attrs[k] = v
 		
 		for v_sub_grp_name, (v_sub_grp_dset_info, v_sub_sub_grp_dict, v_sub_grp_attrs) in v_sub_grp_dict.items():
 			self._create_virtual_datasets_from(

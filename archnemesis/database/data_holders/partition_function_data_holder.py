@@ -18,7 +18,7 @@ class PartitionFunctionDataHolder:
 	# temperature domain.
 	# Will define the "/sources/X/partition_function/<mol_name>/<iso_id>/pf_data_0000"
 	# groups that hold data for each of the `PFData` instances in the list.
-	data : dict[RadtranGasDescriptor, list[PFData,...]] = dc.field(default_factory=dict) 
+	data : dict[RadtranGasDescriptor, list[PFData,...]] = dc.field(default_factory=dict)
 	
 	def add(self, mol_id, local_iso_id, pf_data : PFData):
 		self.data.setdefault(RadtranGasDescriptor(mol_id, local_iso_id), []).append(pf_data)

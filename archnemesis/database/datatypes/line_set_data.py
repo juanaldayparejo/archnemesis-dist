@@ -6,8 +6,10 @@ import numpy as np
 
 
 class LineSetData(NamedTuple):
-	s_min        : float
-	t_ref        : float
+	s_min        : float # Minimum strength of line included in the line set
+	t_ref        : float # Reference temperature line set properties were calculated at
+	p_ref        : float # Reference pressure line set properties were calculated at
+	
 	mol_id       : np.ndarray # [N_lines]
 	local_iso_id : np.ndarray # [N_lines]
 	nu           : np.ndarray # [N_lines]

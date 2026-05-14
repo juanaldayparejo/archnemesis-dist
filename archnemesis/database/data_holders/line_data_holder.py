@@ -30,7 +30,11 @@ class LineDataHolder:
 	
 	# Line data set creation parameters
 	s_min : float = 0 # Minimum line strength included in this set of lines
-	t_ref : float = 296 # Reference temperature at which data was calculated, Kelvin
+	s_unit : str = 'cm^{-1}/(molec.cm^{-2})'
+	t_ref : float = 296 # Reference temperature at which data was calculated
+	t_unit : str = 'Kelvin' # Unit of reference temperature
+	p_ref : float = 1 # Reference pressure
+	p_unit : str = 'atm' # Unit of reference pressure
 	
 	_rt_gas_descs : None | tuple = None
 	

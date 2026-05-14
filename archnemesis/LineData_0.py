@@ -378,6 +378,7 @@ class LineData_0:
         a_list = []
         elower_list = []
         t_ref_list = []
+        p_ref_list = []
         gamma_self_list = []
         n_self_list = []
         gamma_amb_list = []
@@ -397,6 +398,7 @@ class LineData_0:
                 mol_name = gas_desc.gas_name, 
                 local_iso_id = gas_desc.iso_id, 
                 ambient_gasses = (self.ambient_gas,),
+                temperature = temperature,
                 wn_mask_fn = lambda nu: ((vmin < nu) & (nu <= vmax))
             )
             
@@ -407,6 +409,7 @@ class LineData_0:
             a_list.append(line_set_data.a)
             elower_list.append(line_set_data.elower)
             t_ref_list.append(np.ones_like(line_set_data.nu)*line_set_data.t_ref)
+            p_ref_list.append(np.ones_like(line_set_data.nu)*line_set_data.p_ref)
             gamma_self_list.append(line_set_data.gamma_self)
             n_self_list.append(line_set_data.n_self)
             gamma_amb_list.append(line_set_data.gamma_amb)
@@ -433,6 +436,7 @@ class LineData_0:
             ('A', float),
             ('ELOWER', float),
             ('T_REF', float),
+            ('P_REF', float),
             ('GAMMA_SELF', float),
             ('N_SELF', float),
             ('GAMMA_AMB', float, (line_set_data.gamma_amb.shape[1],)),
@@ -447,6 +451,8 @@ class LineData_0:
                 np.concatenate(sw_list),
                 np.concatenate(a_list),
                 np.concatenate(elower_list),
+                np.concatenate(t_ref_list),
+                np.concatenate(p_ref_list),
                 np.concatenate(gamma_self_list),
                 np.concatenate(n_self_list),
                 np.concatenate(gamma_amb_list),

@@ -32,6 +32,12 @@ class PseudoContinuumDataHolder:
 	# foreign broadening
 	broadeners : Iterable[PseudoContinuumBroadenerPart] = tuple()
 	
+	# Pseudo-continuum creation parameters with defaults
+	s_unit : str = 'cm^{-1}/(molec.cm^{-2})'
+	t_unit : str = 'Kelvin' # Unit of reference temperature
+	p_ref : float = 1 # Reference pressure
+	p_unit : str = 'atm' # Unit of reference pressure
+	
 	_rt_gas_descs : None | tuple = None
 	
 	@property

@@ -1,6 +1,6 @@
 
 from pathlib import Path
-from typing import Callable, Literal, Any, Generator
+from typing import Callable, Literal, Any
 
 import numpy as np
 import h5py
@@ -47,19 +47,6 @@ class AnsLineDataFile(AnsDatabaseFile):
 			'n_amb' : 0.0,
 			'delta_amb' : 0.0,
 		}
-
-	def get_leaf_grp_name(self, n : int) -> str:
-		return self.leaf_group_prefix + self.leaf_group_idx_fmt.format(n)
-	
-	def get_increasing_leaf_grp_name_in_grp_iterable(self, grp : h5py.Group) -> Generator[int, str, h5py.Group | h5py.Dataset]:
-		i = 0
-		while True:
-			leaf_grp_name = self.get_leaf_grp_name(i)
-			if leaf_grp_name in grp:
-				yield i, leaf_grp_name, grp[leaf_grp_name]
-			else:
-				return
-			i+=1
 
 	def _validate_data_group(self, g : h5py.Group):
 		class EachChildDatasetHasSameShapeVisitor:
@@ -209,8 +196,11 @@ class AnsLineDataFile(AnsDatabaseFile):
 		
 		return {
 			't_ref': data_holder.t_ref, # Temperature at which pseudo-continuum values were computed
-			't_unit' : 'Kelvin',
+			't_unit' : data_holder.t_unit,
 			's_min' : data_holder.s_min, # Maximum line strength included in pseudo-continuum
+			's_unit' : data_holder.s_unit,
+			'p_ref' : data_holder.p_ref,
+			'p_unit' : data_holder.p_unit,
 			**self.data_grp_attrs
 		}
 
@@ -224,7 +214,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 		## RETURNS ##
 			grp_line_set_parameters : tuple[float,float] - `s_min` and `t_ref` that were used when creating this line set
 		"""
-		return (grp_attrs['s_min'], grp_attrs['t_ref'])
+		return (grp_attrs['s_min'], grp_attrs['t_ref'], grp_attrs['p_ref'])
 	
 	def _are_line_set_parameters_compatible(
 		self,
@@ -243,8 +233,11 @@ class AnsLineDataFile(AnsDatabaseFile):
 		## RETURNS ##
 			parameters_are_compatible : bool - `True` if the continuum parameters can be used together, `False` otherwise.
 		"""
-		if leaf_grp_parameters[0] < 0:
-			return True # Special case where `s_min` < 0, whatever data we have is good enough
+		if leaf_grp_parameters[0] < 0: # Special cases when `s_min` < 0
+			if leaf_grp_parameters[1] == 0:
+				return True # Special case where `s_min` < 0, and `t_cont` == 0. Whatever data we have is good enough
+			else:
+				return (leaf_grp_parameters[1] <= test_grp_parameters[1]) # Special case where `s_min` < 0, and `t_cont` != 0. Choose whichever temperature is best
 		
 		if leaf_grp_parameters[0] == 0:
 			return test_grp_parameters[0] == 0 # special case where `s_min` == 0, don't need to account for `t_ref`
@@ -379,6 +372,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 			self,
 			s_min : float,
 			t_ref : float,
+			p_ref : float,
 			n_broadeners : int
 	):
 		line_fields_to_populate = tuple(x for x in LineSetData._fields if x in LineDataRecordLayout.attrs())
@@ -386,6 +380,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 		return LineSetData(
 			s_min,
 			t_ref,
+			p_ref,
 			*(np.empty((0,), dtype=LineDataRecordLayout.type(x)) for x in line_fields_to_populate),
 			*(np.empty((0,n_broadeners), dtype=LineBroadenerRecordLayout.type(x)) for x in broadener_felds_to_populate),
 		)
@@ -463,7 +458,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 		with self.open('r'):
 			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_mol, on_missing_iso)
 			if iso_grp is None:
-				return self._get_null_data(n_ambient_gasses)
+				return self._get_null_data(s_min,temperature,1,n_ambient_gasses)
 			
 			result = None
 		
@@ -482,9 +477,12 @@ class AnsLineDataFile(AnsDatabaseFile):
 					#print(f'{mol_name=} {local_iso_id=} {n_lines=}')
 					if n_lines > 0:
 						#print(f'{leaf_grp_parameters=}')
+						#print(f'{line_fields_to_populate=}')
+						#print(f'{broadener_felds_to_populate=}')
 						result = LineSetData(
 							leaf_grp_parameters[0],
 							leaf_grp_parameters[1],
+							leaf_grp_parameters[2],
 							*(leaf_grp[x][mask] for x in line_fields_to_populate),
 							*(np.empty((n_lines, n_ambient_gasses), dtype=LineBroadenerRecordLayout.type(x)) for x in broadener_felds_to_populate)
 						)
@@ -507,7 +505,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 						_lgr.warn(f'Compatible group "{leaf_grp.name}" found, but no lines selected by {wn_mask_fn=}. Therefore will return empty data.')
 			
 			if result is None:
-				return self._get_null_data(s_min, temperature, n_ambient_gasses)
+				return self._get_null_data(s_min, temperature, 1, n_ambient_gasses)
 			else:
 				return result
 			

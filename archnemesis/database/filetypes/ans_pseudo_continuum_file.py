@@ -1,6 +1,6 @@
 from pathlib import Path
 #import dataclasses as dc
-from typing import Any, Literal, Callable, Generator#, Type, Literal#, NamedTuple, Self, Annotated, Callable, Any, Iterable
+from typing import Any, Literal, Callable#, Type, Literal#, NamedTuple, Self, Annotated, Callable, Any, Iterable
 
 
 import numpy as np
@@ -43,19 +43,6 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			path : Path,
 	):
 		super().__init__(path)
-	
-	def get_leaf_grp_name(self, n : int) -> str:
-		return self.leaf_group_prefix + self.leaf_group_idx_fmt.format(n)
-	
-	def get_increasing_leaf_grp_name_in_grp_iterable(self, grp : h5py.Group) -> Generator[int, str, h5py.Group | h5py.Dataset]:
-		i = 0
-		while True:
-			leaf_grp_name = self.get_leaf_grp_name(i)
-			if leaf_grp_name in grp:
-				yield i, leaf_grp_name, grp[leaf_grp_name]
-			else:
-				return
-			i+=1
 	
 	def _update_virtual_datasets(
 			self,
@@ -208,8 +195,11 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		
 		return {
 			't_cont': data_holder.t_cont, # Temperature at which pseudo-continuum values were computed
-			't_unit' : 'Kelvin',
+			't_unit' : data_holder.t_unit,
 			's_max' : data_holder.s_max, # Maximum line strength included in pseudo-continuum
+			's_unit' : data_holder.s_unit,
+			'p_ref' : data_holder.p_ref,
+			'p_unit' : data_holder.p_unit,
 			**self.data_grp_attrs
 		}
 	
@@ -223,7 +213,8 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		## RETURNS ##
 			grp_pc_parameters : tuple[float,float] - `s_max` and `t_cont` that were used when creating the pseudo-continuum datasets.
 		"""
-		return (grp_attrs['s_max'], grp_attrs['t_cont'])
+		# TODO: Account for different units
+		return (grp_attrs['s_max'], grp_attrs['t_cont'], grp_attrs['p_ref'])
 	
 	def _are_pseudo_continuum_parameters_compatible(
 		self,
@@ -385,9 +376,17 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 					broadener_table.to_hdf5(amb_grp)
 	
 	
-	def _get_null_data(self, n_ambient_gasses : int):
+	def _get_null_data(
+			self,
+			s_max : float,
+			t_cont : float,
+			p_ref : float,
+			n_ambient_gasses : int
+	) -> PseudoContinuumData:
 		return PseudoContinuumData(
-			1,
+			s_max,
+			t_cont,
+			p_ref,
 			np.zeros((0,),dtype=float),
 			np.zeros((0,),dtype=float),
 			np.zeros((0,),dtype=float),
@@ -471,25 +470,27 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		with self.open('r'):
 			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_mol, on_missing_iso)
 			if iso_grp is None:
-				return self._get_null_data(n_ambient_gasses)
+				return self._get_null_data(s_max, temperature, 1, n_ambient_gasses)
 			
 			result = None
 			
 			# Get leaf groups in `iso_grp`
 			# groups are ordered by the temperature the continuum was calculated at `t_cont`, then the maximum line strength present in the continuum `s_max`
-			i = 0
-			leaf_grp_name = self.get_leaf_grp_name(i) 
-			while leaf_grp_name in iso_grp:
+			#i = 0
+			#leaf_grp_name = self.get_leaf_grp_name(i) 
+			#while leaf_grp_name in iso_grp:
+			for j, leaf_grp_name, leaf_grp in self.get_increasing_leaf_grp_name_in_grp_iterable(iso_grp):
 				leaf_grp = iso_grp[leaf_grp_name]
 				leaf_grp_pc_parameters = self._get_pseudo_continuum_parameters(leaf_grp.attrs)
 				# Move on to next group if lower bounds are wrong
-				
+				print(f'TESTING: {(s_max, temperature)=} {leaf_grp_pc_parameters=}')
 				if self._are_pseudo_continuum_parameters_compatible( # NOTE: as `leaf_grp_pc_parameters` should be ordered we can just use the first compatible `leaf_grp`
+					(s_max, temperature),
 					leaf_grp_pc_parameters,
-					(s_max, temperature)
 				):
-					wn_bin_center = leaf_grp['wn_bin_center']
-					wn_bin_width = leaf_grp['wn_bin_width']
+					_lgr.info(f'Found compatible data for {s_max=} {temperature=}. Chosen group has {leaf_grp_pc_parameters=}')
+					wn_bin_center = leaf_grp['wn_bin_center'][tuple()]
+					wn_bin_width = leaf_grp['wn_bin_width'][tuple()]
 					wn_bin_lower_edge = wn_bin_center - 0.5*wn_bin_width
 					wn_bin_upper_edge = wn_bin_center + 0.5*wn_bin_width + wn_bin_upper_edge_eta
 					
@@ -499,7 +500,9 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 					
 					if n_bins != 0:
 						result = PseudoContinuumData(
-							leaf_grp['t_cont'],
+							leaf_grp_pc_parameters[0],
+							leaf_grp_pc_parameters[1],
+							leaf_grp_pc_parameters[2],
 							leaf_grp['wn_bin_center'][wn_mask],
 							leaf_grp['wn_bin_width'][wn_mask],
 							leaf_grp['line_strength_sum'][wn_mask],
@@ -512,25 +515,25 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 
 						b_grp = self._get_broadeners_grp(leaf_grp, on_missing_broadener)
 						if b_grp is None:
-							result.line_strength_weighted_gamma_amb.fill(result.line_strength_weighted_gamma_self)
-							result.line_strength_weighted_n_amb.fill(result.line_strength_weighted_n_self)
+							for i, ambient_gas in enumerate(ambient_gasses):
+								result.line_strength_weighted_gamma_amb[:,i] = result.line_strength_weighted_gamma_self
+								result.line_strength_weighted_n_amb[:,i] = result.line_strength_weighted_n_self
 							break
 						
 						for i, ambient_gas in enumerate(ambient_gasses):
 							bg_grp = self._get_single_broadener_grp(b_grp, ambient_gas.name, on_missing_broadener)
 							if bg_grp is None:
-								result.line_strength_weighted_gamma_amb[:,i].fill(result.line_strength_weighted_gamma_self)
-								result.line_strength_weighted_n_amb[:,i].fill(result.line_strength_weighted_n_self)
+								result.line_strength_weighted_gamma_amb[:,i] = result.line_strength_weighted_gamma_self
+								result.line_strength_weighted_n_amb[:,i] = result.line_strength_weighted_n_self
 							else:
 								result.line_strength_weighted_gamma_amb[:,i] = bg_grp['line_strength_weighted_gamma_amb'][wn_mask]
 								result.line_strength_weighted_n_amb[:,i] = bg_grp['line_strength_weighted_n_amb'][wn_mask]
 					else:
 						_lgr.warn(f'No wavenumbers selected by {wn_mask_fn}, will return empty data. ')
 					break # exit loop as soon as we find a compatible group
-				i+=1
 			
 			if result is None:
-				return self._get_null_data(n_ambient_gasses)
+				return self._get_null_data(s_max, temperature, 1, n_ambient_gasses)
 			else:
 				return result
 			

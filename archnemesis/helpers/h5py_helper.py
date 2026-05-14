@@ -18,9 +18,10 @@ class VirtualSourceInfo(NamedTuple):
 
 class VirtualDsetTarget(NamedTuple):
     file : str # path to file within filesystem
-    path : str # Full path to dataset within file
+    path : str # Full path to dataset within HDF5 file
     shape : tuple[int,...] # numpy shape
     dtype : np.dtype # numpy dtype
+    attrs : dict[str,Any] = dict() # Dataset attributes
 
 class VirtualGroupTarget(NamedTuple):
     vdset_targets : list[VirtualDsetTarget]
