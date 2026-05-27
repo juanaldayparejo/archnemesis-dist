@@ -1,6 +1,6 @@
 from pathlib import Path
 #import dataclasses as dc
-from typing import Any, Literal, Callable#, Type, Literal#, NamedTuple, Self, Annotated, Callable, Any, Iterable
+from typing import Any, Literal#, Type, Literal#, NamedTuple, Self, Annotated, Callable, Any, Iterable
 
 
 import numpy as np
@@ -380,13 +380,15 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			self,
 			s_max : float,
 			t_cont : float,
-			p_ref : float,
+			p_cont : float,
+			requested_wn_range : tuple[float,float],
 			n_ambient_gasses : int
 	) -> PseudoContinuumData:
 		return PseudoContinuumData(
 			s_max,
 			t_cont,
-			p_ref,
+			p_cont,
+			requested_wn_range,
 			np.zeros((0,),dtype=float),
 			np.zeros((0,),dtype=float),
 			np.zeros((0,),dtype=float),
@@ -436,7 +438,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			temperature : float,
 			s_max : float,
 			ambient_gasses : AmbientGas | tuple[AmbientGas] = AmbientGas.AIR,
-			wn_mask_fn : None | Callable[[np.ndarray], np.ndarray] = None,
+			requested_wn_range : tuple[float,float] = (0, np.inf),
 			wn_bin_upper_edge_eta : float = 1E-9,
 			on_missing_mol : Literal['ignore', 'warn', 'error'] = 'error',
 			on_missing_iso : Literal['ignore', 'warn', 'error'] = 'warn',
@@ -470,7 +472,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		with self.open('r'):
 			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_mol, on_missing_iso)
 			if iso_grp is None:
-				return self._get_null_data(s_max, temperature, 1, n_ambient_gasses)
+				return self._get_null_data(s_max, temperature, 1, requested_wn_range, n_ambient_gasses)
 			
 			result = None
 			
@@ -495,6 +497,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 					wn_bin_upper_edge = wn_bin_center + 0.5*wn_bin_width + wn_bin_upper_edge_eta
 					
 					# If any part of a bin is selected by `wn_mask_fn` then return that entire bin
+					wn_mask_fn = lambda x: (requested_wn_range[0] <= x) & (x <= requested_wn_range[0])
 					wn_mask = wn_mask_fn(wn_bin_lower_edge) | wn_mask_fn(wn_bin_center) | wn_mask_fn(wn_bin_upper_edge)
 					n_bins = np.count_nonzero(wn_mask)
 					
@@ -503,6 +506,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 							leaf_grp_pc_parameters[0],
 							leaf_grp_pc_parameters[1],
 							leaf_grp_pc_parameters[2],
+							requested_wn_range,
 							leaf_grp['wn_bin_center'][wn_mask],
 							leaf_grp['wn_bin_width'][wn_mask],
 							leaf_grp['line_strength_sum'][wn_mask],
@@ -533,7 +537,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 					break # exit loop as soon as we find a compatible group
 			
 			if result is None:
-				return self._get_null_data(s_max, temperature, 1, n_ambient_gasses)
+				return self._get_null_data(s_max, temperature, 1, requested_wn_range, n_ambient_gasses)
 			else:
 				return result
 			

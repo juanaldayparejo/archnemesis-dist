@@ -9,6 +9,7 @@ class LineSetData(NamedTuple):
 	s_min        : float # Minimum strength of line included in the line set
 	t_ref        : float # Reference temperature line set properties were calculated at
 	p_ref        : float # Reference pressure line set properties were calculated at
+	req_wn_range : tuple[float,float] # Range of wavenumbers requested (can be less than `min(nu)` or more than `max(nu)`)
 	
 	mol_id       : np.ndarray # [N_lines]
 	local_iso_id : np.ndarray # [N_lines]

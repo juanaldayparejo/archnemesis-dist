@@ -1,6 +1,6 @@
 
 from pathlib import Path
-from typing import Callable, Literal, Any
+from typing import Literal, Any
 
 import numpy as np
 import h5py
@@ -373,6 +373,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 			s_min : float,
 			t_ref : float,
 			p_ref : float,
+			requested_wn_range : tuple[float,float],
 			n_broadeners : int
 	):
 		line_fields_to_populate = tuple(x for x in LineSetData._fields if x in LineDataRecordLayout.attrs())
@@ -381,6 +382,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 			s_min,
 			t_ref,
 			p_ref,
+			requested_wn_range,
 			*(np.empty((0,), dtype=LineDataRecordLayout.type(x)) for x in line_fields_to_populate),
 			*(np.empty((0,n_broadeners), dtype=LineBroadenerRecordLayout.type(x)) for x in broadener_felds_to_populate),
 		)
@@ -439,7 +441,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 				'n_amb',
 				'delta_amb',
 			),
-			wn_mask_fn : None | Callable[[np.ndarray], np.ndarray] = None,
+			requested_wn_range : tuple[float,float] = (0, np.inf),
 			on_missing_mol : Literal['ignore', 'warn', 'error'] = 'error',
 			on_missing_iso : Literal['ignore', 'warn', 'error'] = 'warn',
 			on_missing_broadener : Literal['ignore', 'warn', 'error'] = 'error',
@@ -458,7 +460,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 		with self.open('r'):
 			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_mol, on_missing_iso)
 			if iso_grp is None:
-				return self._get_null_data(s_min,temperature,1,n_ambient_gasses)
+				return self._get_null_data(s_min,temperature,1,requested_wn_range,n_ambient_gasses)
 			
 			result = None
 		
@@ -472,7 +474,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 					target_line_set_params,
 					leaf_grp_parameters
 				):
-					mask = wn_mask_fn(leaf_grp['nu'])
+					mask = (requested_wn_range[0] <= leaf_grp['nu'][tuple()]) & (leaf_grp['nu'][tuple()] <= requested_wn_range[1])
 					n_lines = np.count_nonzero(mask)
 					#print(f'{mol_name=} {local_iso_id=} {n_lines=}')
 					if n_lines > 0:
@@ -483,6 +485,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 							leaf_grp_parameters[0],
 							leaf_grp_parameters[1],
 							leaf_grp_parameters[2],
+							requested_wn_range,
 							*(leaf_grp[x][mask] for x in line_fields_to_populate),
 							*(np.empty((n_lines, n_ambient_gasses), dtype=LineBroadenerRecordLayout.type(x)) for x in broadener_felds_to_populate)
 						)
@@ -502,10 +505,10 @@ class AnsLineDataFile(AnsDatabaseFile):
 								for name in broadener_felds_to_populate:
 									getattr(result, name)[:,i] = bg_grp[name][mask]
 					else:
-						_lgr.warn(f'Compatible group "{leaf_grp.name}" found, but no lines selected by {wn_mask_fn=}. Therefore will return empty data.')
+						_lgr.warn(f'Compatible group "{leaf_grp.name}" found, but no lines selected by {requested_wn_range=}. Therefore will return empty data.')
 			
 			if result is None:
-				return self._get_null_data(s_min, temperature, 1, n_ambient_gasses)
+				return self._get_null_data(s_min, temperature, 1, requested_wn_range, n_ambient_gasses)
 			else:
 				return result
 			

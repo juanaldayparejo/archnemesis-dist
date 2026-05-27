@@ -23,6 +23,7 @@
 ## Imports
 # Standard library
 from typing import Any, Callable, TYPE_CHECKING
+from contextlib import contextmanager
 # Third party
 import numpy as np
 import matplotlib.pyplot as plt
@@ -45,6 +46,7 @@ from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
 
 from archnemesis.database.datatypes.line_set_data import LineSetData
 from archnemesis.database.datatypes.pseudo_continuum_data import PseudoContinuumData
+from archnemesis.database.datatypes.pf_list import PFList
 
 from archnemesis.database.filetypes.ans_line_data_file import AnsLineDataFile
 from archnemesis.database.filetypes.ans_partition_fn_data_file import AnsPartitionFunctionDataFile
@@ -85,8 +87,1105 @@ if TYPE_CHECKING:
     N_LINES_OF_GAS = 'Number of lines for a gas isotopologue'
     N_TEMPS_OF_GAS = 'Number of temperature points for a gas isotopologue'
 
+import dataclasses as dc
+from typing import Self#, NamedTuple
+
+from numba import njit, prange
+
+INVALID_MOLECULE_ID = -1
+INVALID_ISOTOPOLOGUE_ID = -1
+
+def mol_id_and_iso_id_to_arrays(
+        mol_id : int | tuple[int,...] | np.ndarray,
+        iso_id : int | tuple[int,...] | tuple[tuple[int,...]] | np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    if isinstance(mol_id, int):
+        mol_id = np.array([mol_id], dtype=int)
+    elif not isinstance(mol_id, np.ndarray):
+        mol_id = np.array(mol_id, dtype=int)
+    
+    n_mols = len(mol_id)
+    
+    if isinstance(iso_id, int):
+        iso_id = np.array([iso_id], dtype=int)
+    elif not isinstance(iso_id, np.ndarray):
+        _max_isos_for_mol = 0
+        _iso_id_temp = [[]]*n_mols
+        for i, x in enumerate(iso_id):
+            if isinstance(x, int):
+                n = 1
+                _iso_id_temp[i].append(x)
+            else:
+                n = len(iso_id)
+                _iso_id_temp[i].extend(x)
+                
+            if (n > _max_isos_for_mol):
+                _max_isos_for_mol = n
+        
+        iso_id = np.ones((n_mols,_max_isos_for_mol), dtype=int) * INVALID_ISOTOPOLOGUE_ID
+        for i, x in enumerate(_iso_id_temp):
+            for j, y in enumerate(x):
+                iso_id[i,j] = y
+    
+    return mol_id, iso_id
+    
+def get_container_for_iso_id_array(
+        iso_id : np.ndarray,
+) -> list | tuple[list,...]:
+    return tuple([None]*np.count_nonzero(x != INVALID_ISOTOPOLOGUE_ID) for x in iso_id) if iso_id.shape[0] > 1 else ([None]*np.count_nonzero(iso_id[0] != INVALID_ISOTOPOLOGUE_ID))
+
+def wn_range_is_within(
+        wn_range,
+        wn_range_reference
+) -> bool:
+    return (wn_range_reference[0] <= wn_range[0]) and (wn_range[1] <= wn_range_reference[1])
+
+@njit(parallel=False)
+def stimulated_emission(
+    temperature : float,
+    nu : np.ndarray, # [N] wavenumber
+    out : np.ndarray, # [N] stimulated emission factor
+):
+    for i in prange(nu.shape[0]):
+        out[i] = 1 - np.exp(-Data.constants.c2_cgs * nu[i] / temperature)
+
+@njit(parallel=False)
+def boltzmann_factor(
+    temperature : float,
+    t_ref : float,
+    e_lower : np.ndarray, #[N]
+    out : np.ndarray, #[N]
+):
+    boltz_const_factor = Data.constants.c2_cgs * (temperature - t_ref)/(temperature*t_ref)
+    for i in prange(e_lower.shape[0]):
+        out[i] = np.exp(boltz_const_factor*e_lower[i])
+
+@njit(parallel=False)
+def doppler_width(
+        temperature : float, 
+        molecular_mass : float,
+        nu : np.ndarray, #[N] wavenumber
+        out : np.ndarray, #[N] doppler width
+):
+    doppler_width_const_cgs = (1.0 / Data.constants.c_light_cgs) * np.sqrt(2 * np.log(2) * Data.constants.N_avogadro * Data.constants.k_boltzmann_cgs)
+    
+    for i in prange(nu.shape[0]):
+        out[i] = doppler_width_const_cgs * nu[i] * np.sqrt( temperature / molecular_mass)
+
+@njit(parallel=False)
+def lorentz_width(
+        t_ratio : float,
+        p_ratio : float,
+        mol_mix_frac : np.ndarray, #[M] fraction of mixture that consists of each molecule. Should sum to 1.0
+        broadening_params : np.ndarray, #[M,N] M = N_mol * 3, note: N_mol = 1 + number of ambient molecules (self counts as 1), M is arranged (gamma, n, delta) for each molecule
+        out : np.ndarray, #[N]
+):
+    for i in prange(broadening_params.shape[0]):
+        n_combined = 0
+        gamma_combined = 0
+        for j in prange(mol_mix_frac.shape[0]):
+            n_combined += broadening_params[3*j+1,i] * mol_mix_frac[j]
+            gamma_combined += broadening_params[3*j,i] * mol_mix_frac[j]
+        out[i] = (t_ratio**n_combined) * gamma_combined * p_ratio
+
+@njit(parallel=False)
+def line_strength(
+        temperature : float,
+        t_ref : float,
+        q_ratio : float,
+        
+        nu : np.ndarray, #[N]
+        sw : np.ndarray, #[N]
+        e_lower : np.ndarray, #[N]
+        stimulated_emission_at_t_ref : np.ndarray, #[N]
+        
+        out : np.ndarray, #[N]
+):
+    boltz_const_factor = Data.constants.c2_cgs * (temperature - t_ref)/(temperature*t_ref)
+    for i in prange(nu.shape[0]):
+        out[i] = (
+            sw[i]
+            * ((1 - np.exp(-Data.constants.c2_cgs * nu[i] / temperature)) / stimulated_emission_at_t_ref[i]) # stimulated_emission
+            * np.exp(boltz_const_factor*e_lower[i]) # boltzmann pop
+            * q_ratio
+        )
+
+@dc.dataclass(slots=True)
+class CachePriorityDataHolder:
+    n_max      : int                  = 10
+    identities : list[tuple[Any,...]] = dc.field(default_factory=list)
+    values     : list[Any]            = dc.field(default_factory=list)
+    
+    def __contains__(self, identity : tuple[Any,...]) -> bool:
+        return identity in self.identities
+    
+    def get(self, identity : tuple[Any,...], default : None | Any = None) -> Any:
+        """
+        Retrieve the value associated with `identity` if present else return `default`. 
+        If present, move `identity` to the front of the data holder.
+        """
+        try:
+            idx = self.identities.index(identity)
+        except ValueError:
+            return default
+        
+        # Move the requested value to the front of the list
+        self.identities.pop(idx)
+        result = self.values.pop(idx)
+        self.identities.insert(0, identity)
+        self.values.insert(0, result)
+        
+        return result
+    
+    def set(self, identity : tuple[Any,...], value : Any) -> Any:
+        """
+        Add `value` to the front of the data holder and associate it with `identity`. If `identity`
+        is already present, overwrite `value` and move to front of data holder.
+        """
+        try:
+            idx = self.identities.index(identity)
+        except ValueError:
+            pass
+        else:
+            # if no error `idx` is valid so use it
+            self.identities.pop(idx)
+            self.values.pop(idx)
+        self.identities.insert(0, identity)
+        self.values.insert(0, value)
+        
+        while len(self.identities) > self.n_max:
+            self.identities.pop()
+            self.values.pop
+        
+        return value
+
+class Cache:
+    def __init__(self, n_max_per_bucket : int = 10):
+        self._n_max_per_bucket = n_max_per_bucket
+        self._buckets = dict()
+    
+    def get(self, bucket : str, identity : tuple[Any,...], default : None | Any = None) -> Any:
+        return self._buckets.setdefault(bucket, CachePriorityDataHolder(self._n_max_per_bucket)).get(identity, default=default)
+        
+    def set(self, bucket : str, identity : tuple[Any,...], value : Any) -> Any:
+        return self._buckets.setdefault(bucket, CachePriorityDataHolder(self._n_max_per_bucket)).set(identity, value)
+        
+_MODULE_CACHE : Cache = Cache()
+
+
+
+@dc.dataclass(slots=True)
+class LineSetSpecData:
+    s_min : float
+    t_ref : float
+    p_ref : float
+    rt_gas_desc : RadtranGasDescriptor
+    broadening_molecule_ids : tuple[int,...]
+    req_wn_range : tuple[float,float]
+    
+    # private attrs
+    _molecular_mass : float
+    _data : np.ndarray
+    _result_cache : Cache = dc.field(default_factory=lambda : Cache())
+    
+    @classmethod
+    def create_from(
+            cls, 
+            mol_id : int, 
+            iso_id : int, 
+            ambient_gasses : tuple[ans.enums.AmbientGas,...],
+            single_iso_line_set_data : LineSetData,
+    ) -> Self:
+        print(f'{single_iso_line_set_data.nu=}')
+        
+        rt_gas_desc = RadtranGasDescriptor(mol_id, iso_id)
+        
+        instance = cls(
+            single_iso_line_set_data.s_min,
+            single_iso_line_set_data.t_ref,
+            single_iso_line_set_data.p_ref,
+            rt_gas_desc,
+            (-1, *(int(x) for x in ambient_gasses)),
+            single_iso_line_set_data.req_wn_range,
+            _molecular_mass = rt_gas_desc.molecular_mass,
+            _data = None
+        )
+        
+        instance._set_data_from_line_set_data(single_iso_line_set_data)
+    
+        return instance
+    
+    def _set_data_from_line_set_data(self, line_set_data : LineSetData):
+        n = line_set_data.nu.shape[0]
+        m = (
+            3   # (nu, sw, elower)
+            + 1 # (stimulated_emission_at_t_ref,)
+            + 1 # (a,)
+            + 3 # (gamma_self, n_self, delta_self)
+            + line_set_data.gamma_amb.shape[1]*3 # (gamma_amb, n_amb, delta_amb) for m ambient gasses
+        )
+        
+        if self._data is None or self._data.shape != (m,n):
+            self._data = np.empty((m,n), dtype=float)
+        self.NU[...] = line_set_data.nu
+        self.SW[...] = line_set_data.sw
+        self.A[...] = line_set_data.a
+        self.ELOWER[...] = line_set_data.elower
+        stimulated_emission(self.t_ref, self.NU, out=self.STIMULATED_EMISSION_REF)
+        self.SELF_BROADENING_PARAMS[...] = np.stack(
+            [
+                line_set_data.gamma_self, 
+                line_set_data.n_self, 
+                np.zeros_like(line_set_data.n_self), #single_iso_line_set_data.delta_self
+            ],
+            axis=0,
+        )
+        self.FOREIGN_BROADENING_PARAMS[...] = np.stack(
+            [
+                *(line_set_data.gamma_amb.T), 
+                *(line_set_data.n_amb.T), 
+                *(line_set_data.delta_amb.T)
+            ], 
+            axis=0,
+        )
+        
+    
+    @property
+    def identity(self):
+        return (self.s_min, self.t_ref, self.p_ref, self.rt_gas_desc.gas_id, self.rt_gas_desc.iso_id, *self.broadening_molecule_ids)
+    
+    @property
+    def n_lines(self):
+        return self._data.shape[1]
+    
+    @property
+    def NU(self):
+        return self._data[0]
+    
+    @property
+    def SW(self):
+        return self._data[1]
+    
+    @property
+    def ELOWER(self):
+        return self._data[2]
+    
+    @property
+    def STIMULATED_EMISSION_REF(self):
+        return self._data[3]
+    
+    @property
+    def A(self):
+        return self._data[4]
+    
+    @property
+    def SELF_BROADENING_PARAMS(self):
+        """
+        gamma_self, n_self, delta_self
+        """
+        return self._data[5:8]
+    
+    @property
+    def FOREIGN_BROADENING_PARAMS(self):
+        """
+        (gamma_amb, n_amb, delta_amb) for each ambient gas
+        """
+        return self._data[8:]
+    
+    def get_line_strength(
+        self,
+        t_calc,
+        partition_function : Callable[[float,], float], # Accepts a temperature, returns a partition function value for that temperature for one isotopologue
+        wn_calc_range : None | tuple[float,float] = None,
+        use_cache = True
+    ):
+        result = None
+        
+        if use_cache:
+            result_bucket = 'get_line_strength'
+            result_identity = (wn_calc_range, t_calc,)
+            result = self._result_cache.get(result_bucket, result_identity, None)
+        
+        if result is None:
+            result = np.empty((self._data.shape[1],))
+            q_ratio = partition_function(self.t_ref) / partition_function(t_calc)
+            
+            if wn_calc_range is not None:
+                wn_mask = wn_calc_range[0] <= self.NU & self.NU <= wn_calc_range[1]
+                data = self._data[:4,wn_mask]
+            else:
+                data = self._data[:4]
+            
+            line_strength(
+                t_calc,
+                self.t_ref,
+                q_ratio,
+                *data,
+                out = result
+            )
+            
+            if use_cache:
+                self._result_cache.set(result_bucket, result_identity, result)
+        
+        return result
+    
+    def get_doppler_width(
+        self,
+        t_calc,
+        wn_calc_range : None | tuple[float,float] = None,
+        use_cache = True
+    ):
+        result = None
+        
+        if use_cache:
+            result_bucket = 'get_doppler_width'
+            result_identity = ( wn_calc_range, t_calc,)
+            result = self._result_cache.get(result_bucket, result_identity, None)
+        
+        if result is None:
+            result = np.empty((self._data.shape[1],))
+            
+            if wn_calc_range is not None:
+                wn_mask = wn_calc_range[0] <= self.NU & self.NU <= wn_calc_range[1]
+                NU = self.NU[wn_mask]
+            else:
+                NU = self.NU
+            
+            doppler_width(
+                t_calc,
+                self._molecular_mass,
+                NU,
+                out = result
+            )
+            
+            if use_cache:
+                self._result_cache.set(result_bucket, result_identity, result)
+        
+        return result
+    
+    def get_lorentz_width(
+        self,
+        t_calc,
+        p_calc,
+        mol_mix_frac : np.ndarray,
+        wn_calc_range : None | tuple[float,float] = None,
+        use_cache = True
+    ):
+        result = None
+        
+        if use_cache:
+            result_bucket = 'get_lorentz_width'
+            result_identity = ( wn_calc_range, t_calc, p_calc, *mol_mix_frac)
+            result = self._result_cache.get(result_bucket, result_identity, None)
+        
+        if result is None:
+            result = np.empty((self._data.shape[1],))
+            
+            if wn_calc_range is not None:
+                wn_mask = wn_calc_range[0] <= self.NU & self.NU <= wn_calc_range[1]
+                data = self._data[5:,wn_mask]
+            else:
+                data = self._data[5:]
+            
+            lorentz_width(
+                self.t_ref / t_calc,
+                p_calc / self.p_ref,
+                mol_mix_frac,
+                data,
+                out = result,
+            )
+            
+            if use_cache:
+                self._result_cache.set(result_bucket,result_identity, result)
+        
+        return result
+
+@dc.dataclass
+class PseudoContSpecData:
+    s_min : float
+    t_cont : float
+    p_cont : float
+    rt_gas_desc : RadtranGasDescriptor
+    broadening_molecule_ids : tuple[int,...]
+    req_wn_range : tuple[float,float]
+    
+    # private attrs
+    _molecular_mass : float
+    _data : np.ndarray
+    _result_cache : Cache = dc.field(default_factory=lambda : Cache())
+
+    @classmethod
+    def create_from(
+            cls, 
+            mol_id : int, 
+            iso_id : int, 
+            ambient_gasses : tuple[ans.enums.AmbientGas,...],
+            single_iso_pseudo_continuum_data : PseudoContinuumData,
+    ) -> Self:
+
+        rt_gas_desc = RadtranGasDescriptor(mol_id, iso_id)
+        
+        instance = cls(
+            single_iso_pseudo_continuum_data.s_max,
+            single_iso_pseudo_continuum_data.t_cont,
+            single_iso_pseudo_continuum_data.p_cont,
+            rt_gas_desc,
+            (-1, *(int(x) for x in ambient_gasses)),
+            single_iso_pseudo_continuum_data.req_wn_range,
+            _molecular_mass = rt_gas_desc.molecular_mass,
+            _data = None
+        )
+        
+        instance._set_data_from_pseudo_continuum_data(single_iso_pseudo_continuum_data)
+        
+        return instance
+    
+    def _set_data_from_pseudo_continuum_data(self, pseudo_continuum_data : PseudoContinuumData):
+        n = pseudo_continuum_data.wn_bin_center.shape[0]
+        m = (
+            2   # (wn_bin_center, wn_bin_width,)
+            + 2 # (line_strength_sum, lsw_mean_lower_state_energy,)
+            + 2 # (lsw_gamma_self, lsw_n_self,)
+            + pseudo_continuum_data.line_strength_weighted_gamma_amb.shape[1]*2 # (lsw_gamma_amb, lsw_n_amb) for x ambient gasses
+        )
+        if self._data is None or self._data.shape != (m,n):
+            self._data = np.empty((m,n), dtype=float)
+        
+        self.WN_BIN_CENTER[...] = pseudo_continuum_data.wn_bin_center
+        self.WN_BIN_WIDTH[...] = pseudo_continuum_data.wn_bin_width
+        self.LINE_STRENGTH_SUM[...] = pseudo_continuum_data.line_strength_sum
+        self.LSW_MEAN_LOWER_STATE_ENERGY[...] = pseudo_continuum_data.line_strength_weighted_mean_lower_energy_state
+        self.SELF_BROADENING_LSW_PARAMS[...] = np.stack(
+            [
+                pseudo_continuum_data.line_strength_weighted_gamma_self,
+                pseudo_continuum_data.line_strength_weighted_n_self
+            ],
+            axis=0
+        )
+        self.FOREIGN_BROADENING_LSW_PARAMS[...] = np.stack(
+            [
+                *(pseudo_continuum_data.line_strength_weighted_gamma_amb.T),
+                *(pseudo_continuum_data.line_strength_weighted_n_amb.T)
+            ],
+            axis=0
+        )
+    
+    @property
+    def WN_BIN_CENTER(self):
+        return self._data[0]
+    
+    @property
+    def WN_BIN_WIDTH(self):
+        return self._data[1]
+    
+    @property
+    def LINE_STRENGTH_SUM(self):
+        return self._data[2]
+    
+    @property
+    def LSW_MEAN_LOWER_STATE_ENERGY(self):
+        return self._data[3]
+    
+    @property
+    def SELF_BROADENING_LSW_PARAMS(self):
+        return self._data[4:6]
+    
+    @property
+    def FOREIGN_BROADENING_LSW_PARAMS(self):
+        return self._data[6:]
+    
+
+
+
+
+@dc.dataclass(slots=True)
+class AnsDatabase:
+    """
+    Handles getting data out of archNEMESIS spectral line database HDF5 files.
+    """
+    LINE_DATABASE : str
+    PARTITION_FUNCTION_DATABASE : str
+    CONTINUUM_DATABASE : str | None = None
+    cache : Cache = _MODULE_CACHE
+    
+    # private attrs
+    _ans_line_data_file : AnsLineDataFile = None
+    _ans_partition_fn_file : AnsPartitionFunctionDataFile = None
+    _ans_pseudo_continuum_file : AnsPseudoContinuumFile = None
+    
+    
+    def __post_init__(self):
+        if self.LINE_DATABASE is None:
+            raise RuntimeError('LineData_0 instance must have a LINE_DATABASE')
+        if self.PARTITION_FUNCTION_DATABASE is None:
+            raise RuntimeError('LineData_0 instance must have a PARTITION_FUNCTION_DATABASE')
+            
+        self._ans_line_data_file = AnsLineDataFile(self.LINE_DATABASE)
+        self._ans_partition_fn_file = AnsPartitionFunctionDataFile(self.PARTITION_FUNCTION_DATABASE)
+        self._ans_pseudo_continuum_file = None if self.CONTINUUM_DATABASE is None else AnsPseudoContinuumFile(self.CONTINUUM_DATABASE)
+    
+    
+    def fetch_partition_fn(
+            self,
+            mol_id : int | tuple[int,...] | np.ndarray,
+            iso_id : int | tuple[int,...] | tuple[tuple[int,...]] | np.ndarray,
+            out : None | list | tuple[list,...] = None,
+            refresh : bool = False,
+    ) -> tuple[list[PFList],...] | list[PFList] | Self:
+        """
+        Fetches partition function for a single isotopologue, a set of isotopologues, or a set of molecules and isotopologues.
+        
+        ## ARGUMENTS ##
+            out - If not `None` will place the result into this tuple-of-lists-like-object (by index of supplied `mol_id` and `iso_id`)
+                  and return `self`. If not `None` will return a newly created tuple-of-lists that contains the requested data.
+        """
+        #print('AnsDatabase::fetch_partition_fn(...)')
+        #print(f'{mol_id=}')
+        #print(f'{iso_id=}')
+        #print(f'{out=}')
+        #print(f'{refresh=}')
+        
+        mol_id, iso_id = mol_id_and_iso_id_to_arrays(mol_id, iso_id)
+            
+        if out is None:
+            result = get_container_for_iso_id_array(iso_id)
+        else:
+            result = out
+        
+        if isinstance(result, tuple):
+            for i, a_mol_id in enumerate(mol_id):
+                j = 0
+                for a_iso_id in iso_id[i]:
+                    if a_iso_id != INVALID_ISOTOPOLOGUE_ID:
+                        result[i][j] = self._single_iso_fetch_partition_fn(a_mol_id, a_iso_id, refresh=refresh)
+                        j += 1
+        else:
+            j = 0
+            for a_iso_id in iso_id[0]:
+                if a_iso_id != INVALID_ISOTOPOLOGUE_ID:
+                    result[j] = self._single_iso_fetch_partition_fn(mol_id[0], a_iso_id, refresh=refresh)
+                    j += 1
+        
+        if out is None:
+            return result
+        else:
+            return self
+        
+    
+    def _single_iso_fetch_partition_fn(
+            self,
+            mol_id : int,
+            iso_id : int,
+            refresh : bool = False,
+    ) -> PFList:
+        pf_cache_bucket = self.PARTITION_FUNCTION_DATABASE
+        pf_cache_identity = (mol_id, iso_id)
+        
+        pf_instance = self.cache.get(pf_cache_bucket, pf_cache_identity, None)
+        #print(f'{pf_instance=}')
+        if refresh or pf_instance is None:
+            #print('Must get data')
+            pf_instance = self._ans_partition_fn_file.get_data(RadtranGasDescriptor(mol_id,iso_id).gas_name, iso_id)
+            self.cache.set(pf_cache_bucket, pf_cache_identity, pf_instance)
+        return pf_instance
+    
+    
+    def fetch_line_data(
+            self,
+            mol_id : int | tuple[int,...] | np.ndarray,
+            iso_id : int | tuple[int,...] | tuple[tuple[int,...]] | np.ndarray,
+            wn_min : float, # Always wavenumber (cm^{-1})
+            wn_max : float, # Always wavenumber (cm^{-1})
+            s_min : float = -1,
+            temperature : float = 0,
+            ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
+            out : None | list | tuple[list,...] = None,
+            refresh : bool = False,
+    ) -> tuple[list[tuple[tuple[int, int], LineSetData, None | PseudoContinuumData]],...] | list[tuple[tuple[int,int], LineSetData, None | PseudoContinuumData]] | Self:
+        """
+        Fetches line data for a single isotopologue, a set of isotopologues, or a set of molecules and isotopologues.
+        
+        ## ARGUMENTS ##
+            out - If not `None` will place the result into this tuple-of-lists-like-object (by index of supplied `mol_id` and `iso_id`)
+                  and return `self`. If not `None` will return a newly created tuple-of-lists that contains the requested data.
+        """
+        mol_id, iso_id = mol_id_and_iso_id_to_arrays(mol_id, iso_id)
+            
+        if out is None:
+            result = get_container_for_iso_id_array(iso_id)
+        else:
+            result = out
+        
+        #print(f'{type(result)=}')
+        if isinstance(result, tuple):
+            #print(f'{len(result)=} {len(result[0])=}')
+            for i, a_mol_id in enumerate(mol_id):
+                j = 0
+                for a_iso_id in iso_id[i]:
+                    if a_iso_id != INVALID_ISOTOPOLOGUE_ID:
+                        result[i][j] = (
+                            (a_mol_id, a_iso_id), 
+                            *self._single_iso_fetch_line_data(
+                                a_mol_id, 
+                                a_iso_id, 
+                                wn_min, 
+                                wn_max, 
+                                s_min=s_min, 
+                                temperature=temperature, 
+                                ambient_gasses=ambient_gasses, 
+                                refresh=refresh
+                            )
+                        )
+                        j += 1
+        else:
+            #print(f'{len(result)=}')
+            j = 0
+            for a_iso_id in iso_id[0]:
+                if a_iso_id != INVALID_ISOTOPOLOGUE_ID:
+                    result[j] = (
+                            (mol_id[0], a_iso_id),
+                            *self._single_iso_fetch_line_data(
+                                mol_id[0], 
+                                a_iso_id, 
+                                wn_min, 
+                                wn_max, 
+                                s_min=s_min, 
+                                temperature=temperature, 
+                                ambient_gasses=ambient_gasses, 
+                                refresh=refresh
+                            )
+                        )
+                    j += 1
+        
+        if out is None:
+            return result
+        else:
+            return self
+    
+    
+    def _single_iso_fetch_line_data(
+            self,
+            mol_id : int,
+            iso_id : int,
+            wn_min : float, # Always wavenumber (cm^{-1})
+            wn_max : float, # Always wavenumber (cm^{-1})
+            s_min : float = -1, # 
+            temperature : float = 0, # Kelvin
+            ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
+            refresh : bool = False,
+    ) -> tuple[LineSetData, None | PseudoContinuumData]:
+
+        # build data group
+        ld_cache_bucket = self.LINE_DATABASE
+        ld_cache_identity = (mol_id, iso_id, s_min, temperature, *ambient_gasses)
+        
+        ld_instance = self.cache.get(ld_cache_bucket, ld_cache_identity, None)
+        if refresh or ld_instance is None or not wn_range_is_within((wn_min, wn_max), ld_instance.req_wn_range):
+            ld_instance = self._ans_line_data_file.get_data(
+                mol_name = RadtranGasDescriptor(mol_id, iso_id).gas_name, 
+                local_iso_id = iso_id, 
+                ambient_gasses = ambient_gasses,
+                temperature = temperature,
+                requested_wn_range = (wn_min, wn_max),
+            )
+            self.cache.set(ld_cache_bucket, ld_cache_identity, ld_instance)
+    
+        if self._ans_pseudo_continuum_file is None:
+            pc_instance = None
+        else:
+            pc_cache_bucket = self.CONTINUUM_DATABASE
+            pc_cache_identity = (mol_id, iso_id, ld_instance.s_min, ld_instance.t_ref, *ambient_gasses)
+        
+            pc_instance = self.cache.get(pc_cache_bucket, pc_cache_identity, None)
+            if refresh or pc_instance is None or not wn_range_is_within((wn_min, wn_max), pc_instance.req_wn_range):
+                pc_instance = self._ans_pseudo_continuum_file.get_data(
+                        mol_name = RadtranGasDescriptor(mol_id, iso_id).gas_name,
+                        local_iso_id = iso_id,
+                        temperature = ld_instance.t_ref,
+                        s_max = ld_instance.s_min,
+                        ambient_gasses = ambient_gasses,
+                        requested_wn_range = (wn_min, wn_max),
+                    )
+                self.cache.set(pc_cache_bucket, pc_cache_identity, pc_instance)
+        
+        return ld_instance, pc_instance
+    
+    def fetch(
+            self,
+            mol_id : int | tuple[int,...] | np.ndarray,
+            iso_id : int | tuple[int,...] | tuple[tuple[int,...]] | np.ndarray,
+            wn_min : float, # Always wavenumber (cm^{-1})
+            wn_max : float, # Always wavenumber (cm^{-1})
+            s_min : float = -1,
+            temperature : float = 0,
+            ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
+            out : None | list | tuple[list,...] = None,
+            refresh : bool = False,
+    ) -> tuple[list[tuple[tuple[int,int], LineSetData, None | PseudoContinuumData, PFList]],...] | list[tuple[tuple[int,int], LineSetData, None | PseudoContinuumData, PFList]] | Self:
+        mol_id, iso_id = mol_id_and_iso_id_to_arrays(mol_id, iso_id)
+    
+        if out is None:
+            result = get_container_for_iso_id_array(iso_id)
+        else:
+            result = out
+    
+        if isinstance(result, tuple):
+            for i, a_mol_id in enumerate(mol_id):
+                j = 0
+                for a_iso_id in iso_id[i]:
+                    if a_iso_id != INVALID_ISOTOPOLOGUE_ID:
+                        result[i][j] = (
+                            (a_mol_id, a_iso_id),
+                            *self._single_iso_fetch_line_data(
+                                a_mol_id, 
+                                a_iso_id, 
+                                wn_min, 
+                                wn_max, 
+                                s_min=s_min, 
+                                temperature=temperature, 
+                                ambient_gasses=ambient_gasses, 
+                                refresh=refresh
+                            ),
+                            self._single_iso_fetch_partition_fn(
+                                a_mol_id,
+                                a_iso_id,
+                                refresh,
+                            )
+                        )
+                        j += 1
+        else:
+            j = 0
+            for a_iso_id in iso_id[i]:
+                if a_iso_id != INVALID_ISOTOPOLOGUE_ID:
+                    result[j] = (
+                        (mol_id[0], a_iso_id),
+                        *self._single_iso_fetch_line_data(
+                            mol_id[0], 
+                            a_iso_id, 
+                            wn_min, 
+                            wn_max, 
+                            s_min=s_min, 
+                            temperature=temperature, 
+                            ambient_gasses=ambient_gasses, 
+                            refresh=refresh
+                        ),
+                        self._single_iso_fetch_partition_fn(
+                            a_mol_id,
+                            a_iso_id,
+                            refresh,
+                        )
+                    )
+                    j += 1
+        if out is None:
+            return result
+        else:
+            return self
+    
+    
+    def single_iso_fetch(
+            self,
+            mol_id : int,
+            iso_id : int,
+            wn_min : float, # Always wavenumber (cm^{-1})
+            wn_max : float, # Always wavenumber (cm^{-1})
+            s_min : float = -1,
+            temperature : float = 0,
+            ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
+            refresh : bool = False,
+    ) -> tuple[LineSetData, None | PseudoContinuumData, PFList]:
+        ld_instance, pc_instance = self._single_iso_fetch_linedata(
+            mol_id,
+            iso_id,
+            wn_min,
+            wn_max,
+            s_min,
+            temperature,
+            ambient_gasses,
+            refresh
+        )
+        pf_instance = self._single_iso_fetch_partition_fn(
+            mol_id,
+            iso_id,
+            refresh,
+        )
+        
+        return ld_instance, pc_instance, pf_instance
+
+
+@dc.dataclass(slots=True)
+class LineDataParams:
+    ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,)
+    wn_min : float = 0
+    wn_max : float = 0
+    s_min : float = -1
+    temperature : float = 0
+    pressure : float = 0
+
+    
 
 class LineData_0:
+    def __init__(
+            self,
+            ID : int,
+            ISO : int = 0,
+            ambient_gasses : ans.enums.AmbientGas | tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
+            LINE_DATABASE : None | str = None,
+            PARTITION_FUNCTION_DATABASE : None | str = None,
+            CONTINUUM_DATABASE : None | str = None,
+            cache : None | Cache = _MODULE_CACHE,
+    ):
+        if LINE_DATABASE is None:
+            raise RuntimeError('LineData_0 instance must have a LINE_DATABASE')
+        if PARTITION_FUNCTION_DATABASE is None:
+            raise RuntimeError('LineData_0 instance must have a PARTITION_FUNCTION_DATABASE')
+        
+        
+        # Private attrs
+        self._ID : int = INVALID_MOLECULE_ID
+        self._ISO = None
+        self._ans_database : AnsDatabase = AnsDatabase(LINE_DATABASE, PARTITION_FUNCTION_DATABASE, CONTINUUM_DATABASE)
+        self._rt_gas_descs : None | tuple[RadtranGasDescriptor,...] = None 
+        self._n_isos : None | int = None
+        self._mol_ids : None | np.ndarray = None
+        self._iso_ids : None | np.ndarray = None
+        self._mol_id_tpl : None | tuple[int,...] = None
+        self._iso_id_tpl : None | tuple[tuple[int,...],...] = None
+        self._params : LineDataParams = LineDataParams(ambient_gasses=(ambient_gasses,) if isinstance(ambient_gasses, ans.enums.AmbientGas) else ambient_gasses)
+        self._params_fetched_lines_last = False
+        self._params_fetched_partition_last = False
+        
+        # Public attrs from args
+        self.ID = ID
+        self.ISO = ISO
+        self.cache = cache
+        
+        # Public attrs
+        self.partition_fn_data : list[PFList]             = [None]*self.n_isos
+        self.line_data         : list[LineSetSpecData]    = [None]*self.n_isos
+        self.continuum_data    : list[PseudoContSpecData] = [None]*self.n_isos
+    
+    
+    @property
+    def ID(self) -> int:
+        return self._ID
+    
+    @ID.setter
+    def ID(self, value : int):
+        if value != self._ID:
+            self._ID = value
+            self._rt_gas_descs = None
+            self._mol_ids = None
+            self._iso_ids = None
+            self._mol_id_tpl = None
+            self._iso_id_tpl = None
+            self._n_isos = None
+    
+    @property
+    def ISO(self) -> int | tuple[int,...]:
+        return self._ISO
+    
+    @ISO.setter
+    def ISO(self, value : int | tuple[int,...]):
+        if value != self._ISO:
+            self._ISO = value
+            self._rt_gas_descs = None
+            self._iso_ids = None
+            self._iso_id_tpl = None
+            self._n_isos = None
+    
+    @property
+    def n_isos(self):
+        if self._n_isos is None:
+            self._n_isos = len(self.rt_gas_descs)
+        return self._n_isos
+    
+    @property
+    def rt_gas_descs(self):
+        if self._rt_gas_descs is None:
+            self._rt_gas_descs = tuple(GasIsotopes(self.ID, self.ISO).as_radtran_gasses())
+        return self._rt_gas_descs
+    
+    @property
+    def mol_ids(self):
+        if self._mol_ids is None:
+            unique_mol_ids = []
+            for x in self.rt_gas_descs:
+                if x.gas_id not in unique_mol_ids:
+                    unique_mol_ids.append(x.gas_id)
+            self._mol_ids = np.array(unique_mol_ids, dtype=int)
+        return self._mol_ids
+    
+    @property
+    def iso_ids(self):
+        if self._iso_ids is None:
+            # get max number of iso ids for a mol id
+            max_iso_id_slots = 0
+            for mol_id in self.mol_ids:
+                n = len(tuple(filter(lambda x: x.gas_id == mol_id, self.rt_gas_descs)))
+                if n > max_iso_id_slots:
+                    max_iso_id_slots = n
+            
+            self._iso_ids = np.ones((self.mol_ids.size, max_iso_id_slots), dtype=int) * INVALID_ISOTOPOLOGUE_ID
+            for i, mol_id in enumerate(self.mol_ids):
+                for j, rt_gas_desc in enumerate(filter(lambda x: x.gas_id == mol_id, self.rt_gas_descs)):
+                    self._iso_ids[i,j] = rt_gas_desc.iso_id
+                
+        return self._iso_ids
+    
+    @property
+    def mol_id_tpl(self):
+        if self._mol_id_tpl is None:
+            self._mol_id_tpl = (self.ID,)
+        return self._mol_id_tpl
+    
+    @property
+    def iso_id_tpl(self):
+        if self._iso_id_tpl is None:
+            self._iso_id_tpl = tuple(tuple(x.iso_id for x in self.rt_gas_descs if x.gas_id == mol_id) for mol_id in self.mol_id_tpl)
+        return self._iso_id_tpl
+    
+    def _set_params_direct(self, **kwargs):
+        for k,v in kwargs.items():
+            if v is not None and getattr(self._params, k) != v:
+                setattr(self._params, k, v)
+                self._params_fetched_lines_last = False
+                self._params_fetched_partition_last = False
+    
+    def set_params(
+            self,
+            vmin : None | float = None,
+            vmax : None | float = None,
+            s_min : None | float = None,
+            temperature : None | float = None, # Kelvin
+            pressure : None | float = None, # Atmospheres
+            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
+    ) -> Self:
+        if vmin is not None:
+            vmin = WavePoint(vmin, wave_unit).as_unit(ans.enums.WaveUnit.Wavenumber_cm).value
+        
+        if vmax is not None:
+            vmax = WavePoint(vmax, wave_unit).as_unit(ans.enums.WaveUnit.Wavenumber_cm).value
+            
+        self._set_params_direct(
+            wn_min = vmin, 
+            wn_max = vmax, 
+            s_min = s_min, 
+            temperature = temperature, 
+            pressure = pressure
+        )
+        
+        return self
+    
+    def get_params(self) -> LineDataParams:
+        return LineDataParams(**vars(self._params)) # return a copy not the original object
+    
+    @contextmanager
+    def param_context(
+            self,
+            vmin : None | float = None,
+            vmax : None | float = None,
+            s_min : None | float = None,
+            temperature : None | float = None, # Kelvin
+            pressure : None | float = None, # Atmospheres
+            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
+    ) -> Self:
+        prev_params = self.get_params()
+        
+        self.set_params(vmin, vmax, s_min, temperature, pressure, wave_unit)
+        
+        yield self
+        
+        self._set_params_direct(**vars(prev_params))
+        
+        return
+
+    def fetch_partition_fn(
+            self,
+            refresh : bool = False,
+    ):
+        print('LineData_0::fetch_partition_fn()')
+        if self._params_fetched_partition_last and not refresh:
+            return
+        
+        print('Actually getting the partition function')
+        self.partition_fn_data = self._ans_database.fetch_partition_fn(self.mol_ids, self.iso_ids, refresh=refresh)
+        print(f'{self.partition_fn_data=}')
+        self._params_fetched_partition_last = True
+
+    def fetch_linedata(
+            self, 
+            refresh : bool = False,
+    ) -> None:
+    
+        if self._params_fetched_lines_last and not refresh:
+            return
+    
+        print(f'{self._params=}')
+        print(f'{self.mol_ids=}')
+        print(f'{self.iso_ids=}')
+
+        retrieved_from_cache = False # Flag
+        
+        if self.cache is not None:
+            # build data group
+            ld_pc_cache_bucket = ('line_and_continuum_data_pairs',id(self._ans_database))
+            ld_pc_cache_identity = (self.mol_id_tpl, self.iso_id_tpl, self._params.s_min, self._params.temperature, *self._params.ambient_gasses)
+            
+            ld_pc_pairs = self.cache.get(ld_pc_cache_bucket, ld_pc_cache_identity, None)
+            if refresh or ld_pc_pairs is None or not all(wn_range_is_within((self._params.wn_min, self._params.wn_max), ld_pc_pair[0].req_wn_range) for ld_pc_pair in ld_pc_pairs):
+                if ld_pc_pairs is not None:
+                    for ld_pc_pair in ld_pc_pairs:
+                        self._params.wn_min = self._params.wn_min if self._params.wn_min <= ld_pc_pair[0].req_wn_range[0] else ld_pc_pair[0].req_wn_range[0]
+                        self._params.wn_max = self._params.wn_max if self._params.wn_max >= ld_pc_pair[0].req_wn_range[1] else ld_pc_pair[0].req_wn_range[1]
+            else:
+                retrieved_from_cache = True
+
+
+        if not retrieved_from_cache:
+            self.line_data         : list[LineSetSpecData]    = [None]*self.n_isos
+            self.continuum_data    : list[PseudoContSpecData] = [None]*self.n_isos
+            
+            id_line_cont_triplet = get_container_for_iso_id_array(self.iso_ids)
+            self._ans_database.fetch_line_data(
+                self.mol_ids,
+                self.iso_ids,
+                self._params.wn_min,
+                self._params.wn_max,
+                self._params.s_min,
+                self._params.temperature,
+                self._params.ambient_gasses,
+                out = id_line_cont_triplet
+            )
+            
+            print(f'{type(id_line_cont_triplet)=} {len(id_line_cont_triplet)=}')
+            print(f'{type(id_line_cont_triplet[0])=} {len(id_line_cont_triplet[0])=}')
+            print(f'{type(id_line_cont_triplet[0][0])=} {len(id_line_cont_triplet[0][0])=}')
+            
+            for i, ((mol_id, iso_id), line_data, cont_data) in enumerate(id_line_cont_triplet):
+                self.line_data[i] = LineSetSpecData.create_from(mol_id, iso_id, self._params.ambient_gasses, line_data)
+                self.continuum_data[i] = None if cont_data is None else PseudoContSpecData.create_from(mol_id, iso_id, self._params.ambient_gasses, cont_data)
+        
+        if self.cache is not None:
+            # Store result in cache
+            self.cache.set(ld_pc_cache_bucket, ld_pc_cache_identity, (self.line_data, self.continuum_data))
+        
+        # Remember that we used these parameters to fetch the last lot of linedata
+        self._params_fetched_lines_last = True
+        
+        return
+
+    def calculate_line_strength(
+            self,
+            wn_calc_range : None | tuple[float,float] = None,
+    ) -> tuple[np.ndarray,...]:
+        if not self._params_fetched_lines_last:
+            self.fetch_linedata()
+        if not self._params_fetched_partition_last:
+            self.fetch_partition_fn()
+        
+        return tuple(self.line_data[i].get_line_strength(self._params.temperature, self.partition_fn_data[i], wn_calc_range) for i in range(len(self.line_data)))
+
+class LineData_0_OLD:
     """
     Clear class for storing line data.
     """
@@ -401,6 +1500,14 @@ class LineData_0:
                 temperature = temperature,
                 wn_mask_fn = lambda nu: ((vmin < nu) & (nu <= vmax))
             )
+            
+            line_set_spec_data = LineSetSpecData.create_from(
+                gas_desc.gas_id, 
+                gas_desc.iso_id, 
+                (self.ambient_gas,),
+                line_set_data
+            )
+            print(f'{line_set_spec_data=}')
             
             mol_id_list.append(line_set_data.mol_id)
             local_iso_id_list.append(line_set_data.local_iso_id)
