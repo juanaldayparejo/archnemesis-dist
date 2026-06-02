@@ -87,6 +87,10 @@ class Spectroscopy_0:
             Isotope ID for each gas, default 0 for all isotopes in terrestrial relative abundance
         @param LOCATION: 1D array,
             List of strings indicating where the .lta or .kta tables are stored for each of the gases
+            If ILBL = 1 it means we are calculating the cross sections at runtime. In that case, LOCATION indicates
+            the location of the line list files to use for each gas.
+        @param LOCATION_PF: 1D array,
+            List of strings indicating where the partition function files are stored for each of the gases (only needed if ILBL=1)
         @param IPROC: 1D array,
             If ILBL=1, then IPROC indicates the line profile to use for each gas:
                 (0 - VOIGT) Voigt profile
@@ -152,6 +156,7 @@ class Spectroscopy_0:
         self.ID: None | np.ndarray = None  # Array of Gas enum values (NGAS)
         self.ISO = None       #(NGAS)
         self._locations = path_redirect.PathRedirectList() #(NGAS)
+        self._locations_pf = path_redirect.PathRedirectList() #(NGAS)
         self.IPROC = None     #(NGAS)
         self.SELF_FRAC = None #(NGAS)
         self.NWAVE = None     
@@ -172,6 +177,7 @@ class Spectroscopy_0:
         self._ispace = None
         self._iproc = None
         self._locations_initialised = False
+        self._locations_pf_initialised = False
         
         # set property values
         self.ILBL = ILBL
@@ -182,8 +188,14 @@ class Spectroscopy_0:
         # NOTE: paths are stored as strings so we should be able to use `str.startswith(...)` to match them up.
         if not self._locations_initialised:
             return None
-        
         return self._locations
+
+    @property
+    def LOCATION_PF(self) -> list[str]:
+        # NOTE: paths are stored as strings so we should be able to use `str.startswith(...)` to match them up.
+        if not self._locations_pf_initialised:
+            return None
+        return self._locations_pf
 
 
     @LOCATION.setter
@@ -193,6 +205,14 @@ class Spectroscopy_0:
         else:
             self._locations._raw_paths = [x for x in value]
             self._locations_initialised = True
+
+    @LOCATION_PF.setter
+    def LOCATION_PF(self, value) -> None:
+        if value is None:
+            self._locations_pf_initialised = False
+        else:
+            self._locations_pf._raw_paths = [x for x in value]
+            self._locations_pf_initialised = True
 
 
     @property
@@ -255,6 +275,9 @@ class Spectroscopy_0:
                 'LOCATION must have size (NGAS)'
 
         if self.ILBL == 1:
+
+            assert len(self.LOCATION_PF) == self.NGAS , \
+                'LOCATION_PF must have size (NGAS)'
 
             assert self.IPROC is not None , \
                 'IPROC must be set when ILBL=1'
@@ -493,7 +516,7 @@ class Spectroscopy_0:
 
             if self.NGAS>0:
 
-                if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME)):
+                if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
                     dt = h5py.special_dtype(vlen=str)
                     dset = h5py_helper.store_data(grp, 'LOCATION', self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
                     dset.attrs['title'] = "Location of the pre-tabulated tables"
@@ -505,6 +528,14 @@ class Spectroscopy_0:
 
                     dset = h5py_helper.store_data(grp, 'ISO', self.ISO)
                     dset.attrs['title'] = "Isotope ID of the gaseous species"
+
+                    dt = h5py.special_dtype(vlen=str)
+                    dset = h5py_helper.store_data(grp, 'LOCATION', self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
+                    dset.attrs['title'] = "Location of the pre-tabulated tables"
+
+                    dt = h5py.special_dtype(vlen=str)
+                    dset = h5py_helper.store_data(grp, 'LOCATION_PF', self._locations_pf._raw_paths,dtype=dt) # do not save the redirected paths.
+                    dset.attrs['title'] = "Location of the partition function database files"
 
                     dset = h5py_helper.store_data(grp, 'IPROC', self.IPROC)
                     dset.attrs['title'] = "Line profile to use for each gas"
@@ -560,6 +591,11 @@ class Spectroscopy_0:
                     self.LOCATION = LOCATION
                     
                     if self.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+                        LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION_PF', default=tuple())
+                        LOCATION_PF = ['']*self.NGAS
+                        for igas in range(self.NGAS):
+                            LOCATION_PF[igas] = LOCATION1[igas].decode('ascii')
+                        self.LOCATION_PF = LOCATION_PF
                         self.ID = np.array(f.get(name+'/ID'))
                         self.ISO = np.array(f.get(name+'/ISO'))
                         self.IPROC = np.array(f.get(name+'/IPROC'))
@@ -1387,10 +1423,11 @@ class Spectroscopy_0:
 
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections...')
 
-            linedata = ans.LineData_1(
+            linedata = ans.LineData_0(
                 self.ID[igas], #ID of the gas
                 self.ISO[igas], #Isotope ID of the gas
-                LINE_DATABASE=self.LOCATION[igas] # Different database location
+                LINE_DATABASE=self.LOCATION[igas], # Different database location
+                PARTITION_FUNCTION_DATABASE=self.LOCATION_PF[igas], # Different partition function database location
             )
 
             if self.IPROC[igas]==SpectroscopicLineProfile.VOIGT:
@@ -1401,9 +1438,6 @@ class Spectroscopy_0:
                 lineshape = ans.Data.lineshapes.lorentz
             else:
                 raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
-
-            # Download partition function tables for the gas isotopes
-            linedata.fetch_partition_function()
 
             for ipoint in range(npoints):
 
@@ -1504,10 +1538,14 @@ class Spectroscopy_0:
 
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections...')
 
-            linedata = ans.LineData_1(
+            print(self.LOCATION[igas])
+            print(self.LOCATION_PF[igas])
+
+            linedata = ans.LineData_0(
                 self.ID[igas], #ID of the gas
                 self.ISO[igas], #Isotope ID of the gas
-                LINE_DATABASE=self.LOCATION[igas] # Different database location
+                LINE_DATABASE=self.LOCATION[igas], # Different database location
+                PARTITION_FUNCTION_DATABASE=self.LOCATION_PF[igas], # Different partition function database location
             )
 
             if self.IPROC[igas]==SpectroscopicLineProfile.VOIGT:
@@ -1520,9 +1558,6 @@ class Spectroscopy_0:
                 lineshape = ans.Data.lineshapes.co2_sublorentz_tonkov96
             else:
                 raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
-
-            # Download partition function tables for the gas isotopes
-            linedata.fetch_partition_function()
 
             for ipoint in range(npoints):
 
@@ -2628,6 +2663,7 @@ def calc_ktable(outname,                       #Name of the output .lta file
                 vrel,                          #Wavenumber window 
                 self_frac,                     #Self-broadening fraction
                 database,                      #Database
+                database_pf,                   #Partition function database
                 Measurement=None,              #Measurement class to read the ILS (NFIL,VFIL,AFIL parameters) 
                 add_pressure_shift=True,       #Flag to include pressure shift in the waveumbers
                 n_cores=1                      #Number of cores to use in the calculations (if >1, parallel processes are used)
@@ -2642,6 +2678,7 @@ def calc_ktable(outname,                       #Name of the output .lta file
     Spectroscopy.ID = [gasID]
     Spectroscopy.ISO = [isoID]
     Spectroscopy.LOCATION = [database]
+    Spectroscopy.LOCATION_PF = [database_pf]
 
     #Calculating the pressure grid
     presslevels = np.linspace( np.log(p0) , np.log(pn), npress )
@@ -2676,10 +2713,11 @@ def calc_ktable(outname,                       #Name of the output .lta file
     ############################################################################
 
     #Initialising the LineData class
-    linedata = ans.LineData_1(
+    linedata = ans.LineData_0(
         gasID, #ID of the gas
         isoID, #Isotope ID of the gas
-        LINE_DATABASE=database # Different database location
+        LINE_DATABASE=database, # Different database location
+        PARTITION_FUNCTION_DATABASE=database_pf # Different partition function database location
     )
 
     #Defining the lineshape function to use in the line-by-line calculations
