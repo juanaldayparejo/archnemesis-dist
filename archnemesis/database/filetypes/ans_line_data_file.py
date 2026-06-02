@@ -390,6 +390,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 				'gpp',
 			),
 			wavelength_mask_fn : None | Callable[[np.ndarray], np.ndarray] = None,
+			on_missing_mol : Literal['ignore', 'warn', 'error'] = 'error',
 			on_missing_iso : Literal['ignore', 'warn', 'error'] = 'warn',
 	) -> tuple[np.ndarray,...]:
 	
