@@ -28,6 +28,17 @@ class LineDataHolder:
 	# foreign broadening
 	broadeners : Iterable[LineBroadenerHolder] = tuple()
 	
+	#spectral line information
+	global_upper_quanta : None | np.ndarray = None
+	global_lower_quanta : None | np.ndarray = None
+	local_upper_quanta : None | np.ndarray = None
+	local_lower_quanta : None | np.ndarray = None
+	ierr : None | np.ndarray = None
+	iref : None | np.ndarray = None
+	line_mixing_flag : None | np.ndarray = None
+	gp : None | np.ndarray = None
+	gpp : None | np.ndarray = None
+
 	_rt_gas_descs : None | tuple = None
 	
 	def __post_init__(self):
@@ -36,6 +47,34 @@ class LineDataHolder:
 		
 		if self.n_self is None:
 			self.n_self = np.zeros_like(self.nu, dtype=float)
+
+		if self.global_upper_quanta is None:
+			self.global_upper_quanta = np.full(self.nu.shape,"",dtype=object)
+
+		if self.global_lower_quanta is None:
+			self.global_lower_quanta = np.full(self.nu.shape,"",dtype=object)
+
+		if self.local_upper_quanta is None:
+			self.local_upper_quanta = np.full(self.nu.shape,"",dtype=object)
+
+		if self.local_lower_quanta is None:
+			self.local_lower_quanta = np.full(self.nu.shape,"",dtype=object)
+
+		if self.ierr is None:
+			self.ierr = np.zeros_like(self.nu, dtype=object)
+
+		if self.iref is None:
+			self.iref = np.zeros_like(self.nu, dtype=object)
+
+		if self.line_mixing_flag is None:
+			self.line_mixing_flag = np.zeros_like(self.nu, dtype=object)
+
+		if self.gp is None:
+			self.gp = np.zeros_like(self.nu, dtype=float)
+
+		if self.gpp is None:
+			self.gpp = np.zeros_like(self.nu, dtype=float)
+
 		return
 	
 	@property

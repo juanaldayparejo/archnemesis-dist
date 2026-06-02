@@ -153,6 +153,25 @@ class LineData_0:
                 ELOWER : np.ndarray[['N_LINES_OF_GAS'],float] 
                     Lower state energy (cm^{-1})
         
+        @attribute line_info : None | dict
+            An object (normally a numpy record array) that contains additional information about the lines. 
+            This is only filled if `include_extra_info` is True when calling `fetch_linedata()`.
+            
+            If not `None` will have the following attributes:
+
+                GLOBAL_UPPER_QUANTA : np.ndarray[['N_LINES_OF_GAS'], object]
+                    Global upper state quanta numbers (object because they can be of different lengths for different lines)
+                GLOBAL_LOWER_QUANTA : np.ndarray[['N_LINES_OF_GAS'], object]
+                    Global lower state quanta numbers (object because they can be of different lengths for different lines)
+                LOCAL_UPPER_QUANTA : np.ndarray[['N_LINES_OF_GAS'], object]
+                    Local upper state quanta numbers (object because they can be of different lengths for different lines)
+                LOCAL_LOWER_QUANTA : np.ndarray[['N_LINES_OF_GAS'], object]
+                    Local lower state quanta numbers (object because they can be of different lengths for different lines)
+                GP : np.ndarray[['N_LINES_OF_GAS'], float]
+                    Upper state degeneracy
+                GPP : np.ndarray[['N_LINES_OF_GAS'], float]
+                    Lower state degeneracy
+
         @attribute partition_data : None | dict[GasDescriptor, archnemsis.database.protocols.PartitionFunctionDataProtocol]
             An object (normally a numpy record array) that implements the `archnemsis.database.protocols.PartitionFunctionDataProtocol`
             protocol. If `None` the data has not been retrieved from the database yet.
@@ -184,6 +203,7 @@ class LineData_0:
         
         self.line_data = None
         self.partition_data_dict = None
+        self.line_info = None
         self._total_line_data_wave_lims = np.array([np.inf, -np.inf], dtype=float) # limits on fetched wavelengths of line data
         
         assert isinstance(self.ID, int), 'ID must be an integer (molecule id)'
@@ -294,6 +314,7 @@ class LineData_0:
             return False
         return True
 
+    '''
     def restrict_linedata(
         self,
         vmin : float,
@@ -307,6 +328,7 @@ class LineData_0:
         """
         self._total_line_data_wave_lims = np.array([np.inf, -np.inf], dtype=float)
         self.fetch_linedata(vmin, vmax, wave_unit, refresh=True)
+    '''
 
     def fetch_linedata(
             self, 
@@ -314,6 +336,7 @@ class LineData_0:
             vmax : float, 
             wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
             refresh : bool = False,
+            include_extra_info : bool = False,
     ) -> None:
         """
         Fetch the line data from the specified database. 
@@ -334,6 +357,9 @@ class LineData_0:
                 all previously fetched wavelength ranges, regardless of if 
                 (vmin, vmax) is wholly within the already loaded wavelength 
                 range.
+            include_extra_info : bool
+                If True, will also return the following additional information from 
+                the database and will store it in the `line_information` attribute:
         """
         
         
@@ -343,10 +369,10 @@ class LineData_0:
         wave_range = WaveRange(vmin, vmax, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm)
         vmin, vmax = wave_range.values()
         
+        """
         # Only get the wavelengths we don't already have
         already_contain_wave_range = ((self._total_line_data_wave_lims[0] < vmin) and (vmax < self.total_line_data_wave_lims[1]))
             
-        
         if already_contain_wave_range and self.is_line_data_ready() and not refresh:
             _lgr.debug(f'Line data already loaded. {already_contain_wave_range=} {self.is_line_data_ready()=} {refresh=}')
             return
@@ -356,6 +382,7 @@ class LineData_0:
         self._total_line_data_wave_lims[1] = max(self._total_line_data_wave_lims[1], vmax)
         
         vmin, vmax = self._total_line_data_wave_lims
+        """
         
         # get line database file
         ans_line_data_file = AnsLineDataFile(self.LINE_DATABASE)
@@ -372,10 +399,19 @@ class LineData_0:
         n_amb_list = []
         delta_amb_list = []
 
+        global_upper_quanta_list = []
+        global_lower_quanta_list = []
+        local_upper_quanta_list = []
+        local_lower_quanta_list = []
+        ierr_list = []
+        iref_list = []
+        line_mixing_flag_list = []
+        gp_list = []
+        gpp_list = []
+
         # NOTE: abundances are accounted for in `self.calculate_monochromatic_absorption(...)`
         #scale_strength_by_abundance = self.ISO == 0
             
-
         for gas_desc in self.gas_isotopes.as_radtran_gasses():
         
             (
@@ -409,6 +445,37 @@ class LineData_0:
             n_amb_list.append(n_amb)
             delta_amb_list.append(delta_amb)
 
+            if include_extra_info:
+
+                (
+                    mol_id,
+                    local_iso_id,
+                    nu,
+                    global_upper_quanta,
+                    global_lower_quanta,
+                    local_upper_quanta,
+                    local_lower_quanta,
+                    ierr,
+                    iref,
+                    line_mixing_flag,
+                    gp,
+                    gpp
+                ) = ans_line_data_file.get_info(
+                    gas_desc.gas_name, 
+                    local_iso_id=gas_desc.iso_id, 
+                    wavelength_mask_fn=lambda nu: ((vmin < nu) & (nu <= vmax))
+                )
+
+                global_upper_quanta_list.append(global_upper_quanta)
+                global_lower_quanta_list.append(global_lower_quanta)
+                local_upper_quanta_list.append(local_upper_quanta)
+                local_lower_quanta_list.append(local_lower_quanta)
+                ierr_list.append(ierr)
+                iref_list.append(iref)
+                line_mixing_flag_list.append(line_mixing_flag)
+                gp_list.append(gp)
+                gpp_list.append(gpp)
+
 
         dtype = [
             ('RT_GAS_DESC', int, (2,)),
@@ -439,6 +506,30 @@ class LineData_0:
             dtype=dtype
         )
 
+
+        if include_extra_info:
+
+            #Adding extra information if required
+            dtype_info = [
+                ('GLOBAL_UPPER_QUANTA', object),
+                ('GLOBAL_LOWER_QUANTA', object),
+                ('LOCAL_UPPER_QUANTA', object),
+                ('LOCAL_LOWER_QUANTA', object),
+                ('GP', float),
+                ('GPP', float),
+            ]
+
+            self.line_info = np.rec.fromarrays(
+                (
+                    np.array(np.concatenate(global_upper_quanta_list), dtype=object),
+                    np.array(np.concatenate(global_lower_quanta_list), dtype=object),
+                    np.array(np.concatenate(local_upper_quanta_list), dtype=object),
+                    np.array(np.concatenate(local_lower_quanta_list), dtype=object),
+                    np.concatenate(gp_list),
+                    np.concatenate(gpp_list),
+                ),
+                dtype=dtype_info
+            )
 
     ###########################################################################################################################
     
@@ -768,6 +859,9 @@ class LineData_0:
             vmax = waves[-1]+line_calculation_wavenumber_window, 
             wave_unit = ans.enums.WaveUnit.Wavenumber_cm
         )
+
+        #Download partition function data if not already downloaded
+        self.fetch_partition_function()
 
         #Applying default abundances if not specified
         strength = self.calculate_line_strength(temp, tref)

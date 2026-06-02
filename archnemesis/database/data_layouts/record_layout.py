@@ -1,6 +1,8 @@
 
 from typing import Annotated, get_origin, get_args, Type
 import itertools
+import numpy as np
+import h5py
 
 from archnemesis.database.data_layouts.structured_qualifiers import StructuredQualifier
 
@@ -59,9 +61,25 @@ class RecordLayoutMeta(type):
 	def metadata(cls, attr):
 		return cls._metadata[cls._fields.index(attr)]
 	
-	def type(cls, attr):
-		return cls._types[cls._fields.index(attr)]
+	#def type(cls, attr):
+	#	return cls._types[cls._fields.index(attr)]
 	
+	def type(cls, attr):
+
+		t = cls._types[cls._fields.index(attr)]
+
+		if isinstance(t, type):
+			if issubclass(t, str):
+				return h5py.string_dtype("utf-8")
+
+			if issubclass(t, int):
+				return np.int64
+
+			if issubclass(t, float):
+				return np.float64
+
+		return t
+
 	def attrs(cls):
 		return cls._fields
 	

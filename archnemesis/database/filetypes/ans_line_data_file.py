@@ -234,6 +234,15 @@ class AnsLineDataFile(AnsDatabaseFile):
 				ldh.elower[iso_mask],
 				ldh.gamma_self[iso_mask],
 				ldh.n_self[iso_mask],
+				ldh.global_upper_quanta[iso_mask],
+				ldh.global_lower_quanta[iso_mask],
+				ldh.local_upper_quanta[iso_mask],
+				ldh.local_lower_quanta[iso_mask],
+				ldh.ierr[iso_mask],
+				ldh.iref[iso_mask],
+				ldh.line_mixing_flag[iso_mask],
+				ldh.gp[iso_mask],
+				ldh.gpp[iso_mask],
 			)
 			
 			line_data_table.to_hdf5(iso_grp)
@@ -361,9 +370,79 @@ class AnsLineDataFile(AnsDatabaseFile):
 			else:
 				return tuple(dset[mask] for dset in dsets)
 			
-
-
-
+	def get_info(
+			self, 
+			mol_name : str, 
+			local_iso_id : int,
+			*,
+			iso_keys = (
+				'mol_id',
+				'local_iso_id',
+				'nu',
+				'global_upper_quanta',
+				'global_lower_quanta',
+				'local_upper_quanta',
+				'local_lower_quanta',
+				'ierr',
+				'iref',
+				'line_mixing_flag',
+				'gp',
+				'gpp',
+			),
+			wavelength_mask_fn : None | Callable[[np.ndarray], np.ndarray] = None,
+			on_missing_iso : Literal['ignore', 'warn', 'error'] = 'warn',
+	) -> tuple[np.ndarray,...]:
+	
+		null_data = tuple(
+			[np.zeros((0,), dtype=LineDataRecordLayout.type(k)) for k in iso_keys] 
+		)
+	
+		with self.open('r'):
+		
+			mask = None
+			
+			if 'line_data' not in self._file_hdl:
+				raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data" group')
+			d_grp = self._get_data_grp(self._file_hdl)
+			
+			if mol_name not in d_grp:
+				match on_missing_mol:
+					case 'ignore':
+						return null_data
+					case 'warn':
+						_lgr.warning(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}" group, returning NULL DATA')
+						return null_data
+					case _:
+						raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}" group')
+			mol_grp = d_grp[mol_name]
+			
+			if str(local_iso_id) not in mol_grp:
+				match on_missing_iso:
+					case 'ignore':
+						return null_data
+					case 'warn':
+						_lgr.warning(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}" group, returning NULL DATA')
+						return null_data
+					case _:
+						raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "line_data/{mol_name}/{local_iso_id}" group')
+			iso_grp = mol_grp[str(local_iso_id)]
+			
+			
+			try:
+				dsets = [iso_grp[key] for key in iso_keys]
+			except Exception as e:
+				not_present_keys = tuple(k for k in iso_keys if k not in iso_grp.keys())
+				raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have any of the keys {not_present_keys} in group "line_data/{mol_name}/{local_iso_id}') from e
+			
+			
+			if wavelength_mask_fn is not None:
+				mask = wavelength_mask_fn(dsets[iso_keys.index('nu')][tuple()]) # this works because we get the isotope datasets first
+		
+			if mask is None:
+				return tuple(dset[tuple()] for dset in dsets)
+			else:
+				return tuple(dset[mask] for dset in dsets)
+			
 
 
 

@@ -12,9 +12,6 @@ from archnemesis.database.data_layouts.line_data_record_layout import LineDataRe
 
 
 
-
-
-
 class LineDataTableWriter(TableLayout):
 	record_format : type[RecordLayout] = LineDataRecordLayout
 	
