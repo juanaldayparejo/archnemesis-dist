@@ -556,7 +556,7 @@ class LineData_0:
         """
         
         if self.is_partition_function_ready() and not refresh:
-            _lgr.info('Partition function data already loaded')
+            _lgr.debug('Partition function data already loaded')
             return
         
         
@@ -565,7 +565,7 @@ class LineData_0:
         
         for gas_desc in self.gas_isotopes.as_radtran_gasses():
             self.partition_data_dict[gas_desc] = ans_pf_file.get_data(gas_desc.gas_name, gas_desc.iso_id)
-        _lgr.info(f'Retrieved partition function data from database {self.PARTITION_FUNCTION_DATABASE}')
+        _lgr.debug(f'Retrieved partition function data from database {self.PARTITION_FUNCTION_DATABASE}')
 
     
     ###########################################################################################################################
@@ -628,6 +628,17 @@ class LineData_0:
         _lgr.debug(lws)
         return lws
     
+    def calculate_pressure_shift(
+            self, 
+            press: float, 
+    ) -> np.ndarray[['N_LINES_OF_GAS'], float]:
+        """
+        Calculate pressure-broadened width HWHM (half-width-half-maximum) of cauchy-lorentz distribution.
+        """
+        _lgr.debug(f'{press=}')
+        
+        return self.line_data.DELTA_AMB * press
+
     
     def calculate_partition_sums(self,T) -> np.ndarray[['N_LINES_OF_GAS'], float]:
         """
@@ -833,6 +844,7 @@ class LineData_0:
             line_strength_cutoff : float = 1E-32, # Strength below which a line is ignored.
             ensure_linedata_downloaded : bool = True,
             isotopic_abundances : None | dict[RadtranGasDescriptor, float] = None, # If not None, use these abundances for each isotopologue instead of the default terrestrial ones. 
+            add_pressure_shift : bool = True, # Whether to include pressure shift in the line center positions. For some applications may want to ignore this as it is a small effect and including it requires an additional lookup of the pressure shift coefficients.
     ) -> np.ndarray:
         """
         Calculate total absorption coefficient (cm^2) for wavenumbers (cm^{-1}) multiplied by a factor of 1E20. 
@@ -868,6 +880,10 @@ class LineData_0:
         alpha_d = self.calculate_doppler_width(temp)
         gamma_l = self.calculate_lorentz_width(press, temp, amb_frac, tref)
 
+        if add_pressure_shift:
+            delta_p = self.calculate_pressure_shift(press)
+        else:
+            delta_p = np.zeros_like(gamma_l)
 
         #Weighting line strengths with isotopic abundances if needed
         if self.ISO == 0:
@@ -881,7 +897,7 @@ class LineData_0:
         linestrength_mask = strength >= line_strength_cutoff
 
         return self.calculate_monochromatic_spectrum(
-            self.line_data.NU[linestrength_mask],
+            self.line_data.NU[linestrength_mask]+delta_p[linestrength_mask],
             strength[linestrength_mask],
             alpha_d[linestrength_mask],
             gamma_l[linestrength_mask],
@@ -936,7 +952,6 @@ class LineData_0:
                 for j, temp in enumerate(temp_points[i]):
                     pt_profile_progress.display()
                     
-                    #_lgr.info(f'Calculating absorption at temperature-pressure profile point ({i},{j}) of ({pressure_profile.size},{temp_points.shape[1]}). Progress: {i*2+j} / {temp_points.size} [{100.0*(i*2+j)/temp_points.size: 6.2f} %]')
                     abs_coeffs = self.calculate_monochromatic_absorption(
                         waves, 
                         temp, 
@@ -1059,7 +1074,7 @@ class LineData_0:
         line_data_dict = self.line_data_dict
         
         for i, (gas_desc, gas_linedata) in enumerate(line_data_dict.items()):
-            _lgr.info(f'{gas_desc=} {gas_linedata.shape=}')
+            _lgr.debug(f'{gas_desc=} {gas_linedata.shape=}')
             
             #if gas_linedata is None or gas_linedata.size == 0:
             #    continue
