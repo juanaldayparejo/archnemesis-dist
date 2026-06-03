@@ -461,6 +461,14 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			                         when applying `wn_mask_fn` to the upper edges, the last bin will only be correctly excluded if a small number,
 			                         `wn_bin_upper_edge_eta` is added to it.
 		"""
+		#print('AnsPseudoContinuumFile::get_data(...) ARGUMENTS')
+		#print(f'\t{mol_name=}')
+		#print(f'\t{local_iso_id=}')
+		#print(f'\t{temperature=}')
+		#print(f'\t{s_max=}')
+		#print(f'\t{ambient_gasses=}')
+		#print(f'\t{requested_wn_range=}')
+		#print(f'\t{wn_bin_upper_edge_eta=}')
 		
 		if ambient_gasses is None:
 			ambient_gasses = tuple()
@@ -497,7 +505,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 					wn_bin_upper_edge = wn_bin_center + 0.5*wn_bin_width + wn_bin_upper_edge_eta
 					
 					# If any part of a bin is selected by `wn_mask_fn` then return that entire bin
-					wn_mask_fn = lambda x: (requested_wn_range[0] <= x) & (x <= requested_wn_range[0])
+					wn_mask_fn = lambda x: (requested_wn_range[0] <= x) & (x <= requested_wn_range[1])
 					wn_mask = wn_mask_fn(wn_bin_lower_edge) | wn_mask_fn(wn_bin_center) | wn_mask_fn(wn_bin_upper_edge)
 					n_bins = np.count_nonzero(wn_mask)
 					

@@ -142,27 +142,27 @@ def wn_range_is_within(
 
 @njit(parallel=False)
 def stimulated_emission(
-    temperature : float,
+    t_calc : float,
     nu : np.ndarray, # [N] wavenumber
     out : np.ndarray, # [N] stimulated emission factor
 ):
     for i in prange(nu.shape[0]):
-        out[i] = 1 - np.exp(-Data.constants.c2_cgs * nu[i] / temperature)
+        out[i] = 1 - np.exp(-Data.constants.c2_cgs * nu[i] / t_calc)
 
 @njit(parallel=False)
 def boltzmann_factor(
-    temperature : float,
+    t_calc : float,
     t_ref : float,
     e_lower : np.ndarray, #[N]
     out : np.ndarray, #[N]
 ):
-    boltz_const_factor = Data.constants.c2_cgs * (temperature - t_ref)/(temperature*t_ref)
+    boltz_const_factor = Data.constants.c2_cgs * (t_calc - t_ref)/(t_calc*t_ref)
     for i in prange(e_lower.shape[0]):
         out[i] = np.exp(boltz_const_factor*e_lower[i])
 
 @njit(parallel=False)
 def doppler_width(
-        temperature : float, 
+        t_calc : float, 
         molecular_mass : float,
         nu : np.ndarray, #[N] wavenumber
         out : np.ndarray, #[N] doppler width
@@ -170,7 +170,7 @@ def doppler_width(
     doppler_width_const_cgs = (1.0 / Data.constants.c_light_cgs) * np.sqrt(2 * np.log(2) * Data.constants.N_avogadro * Data.constants.k_boltzmann_cgs)
     
     for i in prange(nu.shape[0]):
-        out[i] = doppler_width_const_cgs * nu[i] * np.sqrt( temperature / molecular_mass)
+        out[i] = doppler_width_const_cgs * nu[i] * np.sqrt( t_calc / molecular_mass)
 
 @njit(parallel=False)
 def lorentz_width(
@@ -180,7 +180,7 @@ def lorentz_width(
         broadening_params : np.ndarray, #[M,N] M = N_mol * 3, note: N_mol = 1 + number of ambient molecules (self counts as 1), M is arranged (gamma, n, delta) for each molecule
         out : np.ndarray, #[N]
 ):
-    for i in prange(broadening_params.shape[0]):
+    for i in prange(broadening_params.shape[1]):
         n_combined = 0
         gamma_combined = 0
         for j in prange(mol_mix_frac.shape[0]):
@@ -190,7 +190,7 @@ def lorentz_width(
 
 @njit(parallel=False)
 def line_strength(
-        temperature : float,
+        t_calc : float,
         t_ref : float,
         q_ratio : float,
         
@@ -201,14 +201,353 @@ def line_strength(
         
         out : np.ndarray, #[N]
 ):
-    boltz_const_factor = Data.constants.c2_cgs * (temperature - t_ref)/(temperature*t_ref)
+    boltz_const_factor = Data.constants.c2_cgs * (t_calc - t_ref)/(t_calc*t_ref)
     for i in prange(nu.shape[0]):
         out[i] = (
             sw[i]
-            * ((1 - np.exp(-Data.constants.c2_cgs * nu[i] / temperature)) / stimulated_emission_at_t_ref[i]) # stimulated_emission
+            * ((1 - np.exp(-Data.constants.c2_cgs * nu[i] / t_calc)) / stimulated_emission_at_t_ref[i]) # stimulated_emission
             * np.exp(boltz_const_factor*e_lower[i]) # boltzmann pop
             * q_ratio
         )
+
+@njit(parallel=False)
+def add_line_set_monochromatic_spectrum(
+        wn_grid : np.ndarray, #[N_waves] (cm^{-1}) must be in ascending order
+        lineshape_fn : Callable[[float,float,float], float],
+        nu : np.ndarray, #[N_lines] (cm^{-1}) ideally sorted into ascending order
+        strength : np.ndarray, #[N_lines]
+        alpha_d : np.ndarray, #[N_lines]
+        gamma_l : np.ndarray, #[N_lines]
+        factor : float, # Factor to apply to final result (e.g. 1E20 when creating k-tables, a factor to account for isotopic abundance, or a combination)
+        
+        out : np.ndarray, #[N_waves] should be all zeros, as result will be ADDED to this not overwritten
+        
+        s_min : float = 1E-32,
+        wn_calc_window : float = 25.0,
+        wn_approx_window : float = 75.0
+):
+    """
+    Calculates the combined spectrum from many absorption lines
+    """
+    wn_delta : float = 0.0
+    wn_calc_window_min :float = -1*wn_calc_window
+    wn_calc_window_max : float = wn_calc_window
+    wn_approx_window_min :float = -1*wn_approx_window
+    wn_approx_window_max : float = wn_approx_window
+    line_approx_const : float = 0.0
+    
+    for i in range(nu.shape[0]):
+        
+        if strength[i] < s_min:
+            continue
+            
+        line_approx_const = lineshape_fn(wn_calc_window_max, alpha_d[i], gamma_l[i])
+        
+        for j in range(wn_grid.shape[0]):
+            wn_delta = wn_grid[j] - nu[i]
+            
+            if wn_delta >= wn_approx_window_max:
+                    break
+            if wn_delta < wn_approx_window_min:
+                    continue
+            
+            if wn_calc_window_min <= wn_delta and wn_delta < wn_calc_window_max:
+                # Lineshape calculation
+                out[j] += factor * strength[i] * lineshape_fn(wn_delta, alpha_d[i], gamma_l[i])
+            else:
+                # 1/x**2 approximation
+                out[j] += factor * strength[i] * line_approx_const / (wn_delta * wn_delta)
+    
+    return
+
+@njit(parallel=False)
+def add_line_set_monochromatic_absorption(
+        wn_grid : np.ndarray, #[N_waves]
+        lineshape_fn : Callable[[float,float,float], float],
+        t_calc : float,
+        t_ref : float,
+        p_calc : float,
+        p_ref : float,
+        q_ratio : float,
+        isotopic_abundance : float,
+        isotopic_mass : float,
+        mol_mix_frac : np.ndarray, #[M] fraction of mixture that consists of each molecule. Should sum to 1.0
+        broadening_params : np.ndarray, #[M,N] M = N_mol * 3, note: N_mol = 1 + number of ambient molecules (self counts as 1), M is arranged (gamma, n, delta) for each molecule
+        nu : np.ndarray, #[N]
+        sw : np.ndarray, #[N]
+        e_lower : np.ndarray, #[N]
+        stimulated_emission_at_t_ref : np.ndarray, #[N]
+        
+        out : np.ndarray,
+        
+        store : np.ndarray | None = None, #[3,N]
+        
+        s_min : float = 1E-32,
+        wn_calc_window : float = 25.0, # (cm^{-1})
+        wn_approx_window : float = 75.0, # (cm^{-1})
+):
+    if store is None:
+        store = np.empty((3, nu.shape[0]), dtype=float)
+    
+    line_strength(
+        t_calc,
+        t_ref,
+        q_ratio,
+        nu,
+        sw,
+        e_lower,
+        stimulated_emission_at_t_ref,
+        out = store[0]
+    )
+    
+    doppler_width( # alpha_d
+        t_calc,
+        isotopic_mass,
+        nu,
+        out = store[1]
+    )
+    
+    lorentz_width( # gamma_l
+        t_ref / t_calc,
+        p_calc / p_ref,
+        mol_mix_frac,
+        broadening_params,
+        out = store[2]
+    )
+    
+    add_line_set_monochromatic_spectrum(
+        wn_grid,
+        lineshape_fn,
+        nu,
+        store[0],
+        store[1],
+        store[2],
+        factor = isotopic_abundance,
+        out = out,
+        s_min = s_min,
+        wn_calc_window = wn_calc_window,
+        wn_approx_window = wn_approx_window,
+    )
+    
+    return
+
+@njit(parallel=False)
+def add_pseudo_continuum_monochromatic_spectrum(
+        wn_grid : np.ndarray, #[N_waves] (cm^{-1}) must be in ascending order
+        lineshape_fn : Callable[[float,float,float], float],
+        wn_bin_centers : np.ndarray, #[N] (cm^{-1}) must be in ascending order
+        wn_bin_widths : np.ndarray, #[N] (cm^{-1}) in same order as `wn_bin_centers`
+        strength_sum : np.ndarray, #[N]
+        mean_alpha_d : np.ndarray, #[N]
+        mean_gamma_l : np.ndarray, #[N]
+        factor : float, # Factor to apply to final result (e.g. 1E20 when creating k-tables, a factor to account for isotopic abundance, or a combination)
+        
+        out : np.ndarray, #[N_waves] should be all zeros, as result will be ADDED to this not overwritten
+        
+        store_x : None | np.ndarray = None, #[N]
+        store_y : None | np.ndarray = None, #[2*n_neighbour_bins+1]
+        store_z : None | np.ndarray = None, #[2, N_waves]
+        
+        n_neighbour_bins : int = 3,
+        skip_nan_flag : bool = True,
+):
+
+    if store_x is None:
+        store_x = np.zeros((out.shape[0],), dtype=float)
+    else:
+        for i in range(store_x.shape[0]):
+            store_x[i] = 0.0
+    
+    if store_y is None:
+        store_y = np.zeros((2*n_neighbour_bins+1,), dtype=float)
+    
+    if store_z is None:
+        store_z = np.zeros((2, out.shape[0],), dtype=float)
+    else:
+        for j in range(store_z.shape[1]):
+            store_z[0,j] = 0.0
+            store_z[1,j] = 0.0
+    
+    # get the index of first and last bins in `wn_grid`
+    
+    first_wn_idx = -1
+    last_wn_idx = -1
+    for i in range(wn_bin_centers.shape[0]):
+        bin_min = wn_bin_centers[i] - wn_bin_widths[i] / 2.0
+        bin_max = wn_bin_centers[i] + wn_bin_widths[i] / 2.0
+        
+        if first_wn_idx == -1 and bin_min <= wn_grid[0]:
+            first_wn_idx = i
+        if last_wn_idx == -1 and bin_max > wn_grid[-1]:
+            last_wn_idx = i
+        
+        if first_wn_idx != -1 and last_wn_idx != -1:
+            break
+    
+    if first_wn_idx == -1:
+        first_wn_idx = wn_bin_centers.shape[0]
+    if last_wn_idx == -1:
+        last_wn_idx = wn_bin_centers.shape[0]
+    
+    
+    for i in range(first_wn_idx, last_wn_idx):
+    
+        lineshape_sum : float = 0.0
+        for delta_k in range(-n_neighbour_bins, n_neighbour_bins+1):
+            k = n_neighbour_bins + delta_k
+            ii = i + delta_k
+            
+            if 0 <= ii and ii < wn_bin_centers.shape[0]:
+                store_y[k] = lineshape_fn(
+                    wn_bin_centers[ii] - wn_bin_centers[i],
+                    mean_alpha_d[i],
+                    mean_gamma_l[i],
+                )
+                lineshape_sum += store_y[k]
+            else:
+                store_y[k] = 0
+        
+        for delta_k in range(-n_neighbour_bins, n_neighbour_bins+1):
+            k = n_neighbour_bins + delta_k
+            ii = i + delta_k
+        
+            if 0 <= ii and ii < wn_bin_centers.shape[0]:
+                store_x[ii] += strength_sum[i] * store_y[k] / lineshape_sum
+    
+    for i in range(wn_bin_centers.shape[0]):
+        store_x[i] /= wn_bin_widths[i]
+    
+    # Interpolate result to `wn_grid`
+    # NOTE: Here we are interpolating the pseudo-continuum into `wn_grid`. I am certain this can be more elegant
+    j_min = wn_bin_centers.shape[0]
+    j_max = 0
+    j_start = 0
+    for i in range(wn_bin_centers.shape[0]):
+        for j in range(j_start, out.shape[0]):
+            delta_wn_grid = (wn_grid[j] - wn_bin_centers[i]) / wn_bin_widths[i] # [-0.5, 0.5] if within bin width of bin center
+            
+            if delta_wn_grid < -0.5:
+                j_start = j
+                continue
+            elif delta_wn_grid >= 0.5:
+                break
+            
+            if j_min > j:
+                j_min = j
+            if j_max < j:
+                j_max = j
+            
+            n = 1.0 - np.abs(delta_wn_grid)
+            if delta_wn_grid < 0 and i > 0:
+                store_z[0,j] += (1-n) * factor * store_x[i-1]
+            elif delta_wn_grid > 0 and i < (wn_bin_centers.shape[0]-1):
+                store_z[0,j] += (1-n) * factor * store_x[i+1]
+            store_z[0,j] += n * factor * store_x[i]
+            
+            store_z[1,j] += 1.0
+            
+            
+    for j in range(j_min, j_max):
+        if store_z[1,j] == 0.0:
+            continue
+        out[j] += store_z[0,j] / store_z[1,j]
+        
+        
+        
+    return
+
+
+@njit(parallel=False)
+def add_pseudo_continuum_monochromatic_absorption(
+        wn_grid : np.ndarray, #[N_waves]
+        lineshape_fn : Callable[[float,float,float], float],
+        t_calc : float,
+        t_ref : float,
+        p_calc : float,
+        p_ref : float,
+        q_ratio : float,
+        isotopic_abundance : float,
+        isotopic_mass : float,
+        mol_mix_frac : np.ndarray, #[M] fraction of mixture that consists of each molecule. Should sum to 1.0
+        lsw_mean_broadening_params : np.ndarray, #[M,N] M = N_mol * 3, note: N_mol = 1 + number of ambient molecules (self counts as 1), M is arranged (gamma, n, delta) for each molecule
+        wn_bin_centers : np.ndarray, #[N]
+        wn_bin_widths : np.ndarray, #[N]
+        sw_sum : np.ndarray, #[N]
+        lsw_mean_e_lower : np.ndarray, #[N]
+        
+        out : np.ndarray, # Should all be zeros as result will be ADDED to this not overwritten
+        
+        store : np.ndarray | None = None, #[3,N]
+        store_x : None | np.ndarray = None, #[N]
+        store_y : None | np.ndarray = None, #[2*n_neighbour_bins+1]
+        store_z : None | np.ndarray = None, #[2, N_waves]
+        
+        n_neighbour_bins : int = 3,
+):
+    if store is None:
+        store = np.empty((3,wn_bin_centers.shape[0]), dtype=float)
+    if store_x is None:
+        store_x = np.zeros((wn_bin_centers.shape[0],), dtype=float)
+    if store_y is None:
+        store_y = np.zeros((2*n_neighbour_bins+1,), dtype=float)
+    if store_z is None:
+        store_z = np.zeros((2, out.shape[0],), dtype=float)
+    
+    stimulated_emission(
+        t_ref,
+        wn_bin_centers,
+        out = store[-1], # this is re-used later but should not matter
+    )
+    
+    line_strength(
+        t_calc,
+        t_ref,
+        q_ratio,
+        wn_bin_centers,
+        sw_sum,
+        lsw_mean_e_lower,
+        store[-1], # this is re-used later but should not matter
+        
+        out = store[0]
+    )
+    
+    doppler_width( # alpha_d
+        t_calc,
+        isotopic_mass,
+        wn_bin_centers,
+        out = store[1]
+    )
+    
+    lorentz_width(
+        t_ref / t_calc,
+        p_calc / p_ref,
+        mol_mix_frac,
+        lsw_mean_broadening_params,
+        
+        out = store[2]
+    )
+    
+    add_pseudo_continuum_monochromatic_spectrum(
+        wn_grid,
+        lineshape_fn,
+        wn_bin_centers,
+        wn_bin_widths,
+        store[0],
+        store[1],
+        store[2],
+        factor = isotopic_abundance,
+        
+        out = out,
+        
+        store_x = store_x,
+        store_y = store_y,
+        store_z = store_z,
+        
+        n_neighbour_bins = n_neighbour_bins
+    )
+    
+    return
+
 
 @dc.dataclass(slots=True)
 class CachePriorityDataHolder:
@@ -276,6 +615,9 @@ _MODULE_CACHE : Cache = Cache()
 
 @dc.dataclass(slots=True)
 class LineSetSpecData:
+    """
+    Line set spectral data for a sinlge isotopologue
+    """
     s_min : float
     t_ref : float
     p_ref : float
@@ -392,13 +734,63 @@ class LineSetSpecData:
         """
         return self._data[8:]
     
+    def add_monochromatic_absorption(
+        self,
+        wn_grid : np.ndarray, #[N_waves] (cm^{-1})
+        lineshape_fn : Callable[[float,float,float], float],
+        t_calc : float, # Kelvin
+        p_calc : float, # Atmospheres
+        partition_function : Callable[[float], float],
+        mol_mix_frac : np.ndarray, #[M] fraction of mixture that consists of each molecule. Should sum to 1.0
+        isotopic_abundance : float = 1.0,
+        
+        out : None | np.ndarray = None, #[N_waves]
+        store : None | np.ndarray = None, #[3,N_lines]
+        
+        s_min : float = 1E-32,
+        wn_calc_window : float = 25.0, # (cm^{-1})
+        wn_approx_window : float = 75.0, # (cm^{-1})
+        wn_calc_range : None | tuple[float,float] = None,
+        use_cache : bool = True,
+    ) -> np.ndarray:
+        if out is None:
+            out = np.zeros_like(wn_grid, dtype=float)
+        
+        q_ratio = partition_function(self.t_ref) / partition_function(t_calc)
+        
+        wn_mask = np.ones((self._data.shape[1],), dtype=bool) if wn_calc_range is None else ((wn_calc_range[0] <= self.NU) & (self.NU <= wn_calc_range[1]))
+        
+        add_line_set_monochromatic_absorption(
+            wn_grid,
+            lineshape_fn,
+            t_calc,
+            self.t_ref,
+            p_calc,
+            self.p_ref,
+            q_ratio,
+            isotopic_abundance,
+            self._molecular_mass,
+            mol_mix_frac,
+            self._data[5:, wn_mask],
+            *self._data[:4, wn_mask],
+            
+            out = out,
+            store = store,
+            
+            s_min = s_min,
+            wn_calc_window = wn_calc_window,
+            wn_approx_window = wn_approx_window,
+        )
+        
+        return out
+    
     def get_line_strength(
         self,
         t_calc,
         partition_function : Callable[[float,], float], # Accepts a temperature, returns a partition function value for that temperature for one isotopologue
         wn_calc_range : None | tuple[float,float] = None,
         use_cache = True
-    ):
+    ) -> np.ndarray:
         result = None
         
         if use_cache:
@@ -434,7 +826,7 @@ class LineSetSpecData:
         t_calc,
         wn_calc_range : None | tuple[float,float] = None,
         use_cache = True
-    ):
+    ) -> np.ndarray:
         result = None
         
         if use_cache:
@@ -470,7 +862,7 @@ class LineSetSpecData:
         mol_mix_frac : np.ndarray,
         wn_calc_range : None | tuple[float,float] = None,
         use_cache = True
-    ):
+    ) -> np.ndarray:
         result = None
         
         if use_cache:
@@ -510,8 +902,8 @@ class PseudoContSpecData:
     req_wn_range : tuple[float,float]
     
     # private attrs
-    _molecular_mass : float
-    _data : np.ndarray
+    _molecular_mass : float # mass of isotopologue (g)
+    _data : np.ndarray # [X, N_cont_bins]
     _result_cache : Cache = dc.field(default_factory=lambda : Cache())
 
     @classmethod
@@ -541,12 +933,13 @@ class PseudoContSpecData:
         return instance
     
     def _set_data_from_pseudo_continuum_data(self, pseudo_continuum_data : PseudoContinuumData):
+        print(f'{pseudo_continuum_data=}')
         n = pseudo_continuum_data.wn_bin_center.shape[0]
         m = (
             2   # (wn_bin_center, wn_bin_width,)
             + 2 # (line_strength_sum, lsw_mean_lower_state_energy,)
-            + 2 # (lsw_gamma_self, lsw_n_self,)
-            + pseudo_continuum_data.line_strength_weighted_gamma_amb.shape[1]*2 # (lsw_gamma_amb, lsw_n_amb) for x ambient gasses
+            + 3 # (lsw_gamma_self, lsw_n_self, lsw_delta_self)
+            + pseudo_continuum_data.line_strength_weighted_gamma_amb.shape[1]*3 # (lsw_gamma_amb, lsw_n_amb, lsw_delta_amb) for x ambient gasses
         )
         if self._data is None or self._data.shape != (m,n):
             self._data = np.empty((m,n), dtype=float)
@@ -558,14 +951,16 @@ class PseudoContSpecData:
         self.SELF_BROADENING_LSW_PARAMS[...] = np.stack(
             [
                 pseudo_continuum_data.line_strength_weighted_gamma_self,
-                pseudo_continuum_data.line_strength_weighted_n_self
+                pseudo_continuum_data.line_strength_weighted_n_self,
+                np.zeros_like(pseudo_continuum_data.line_strength_weighted_n_self),
             ],
             axis=0
         )
         self.FOREIGN_BROADENING_LSW_PARAMS[...] = np.stack(
             [
                 *(pseudo_continuum_data.line_strength_weighted_gamma_amb.T),
-                *(pseudo_continuum_data.line_strength_weighted_n_amb.T)
+                *(pseudo_continuum_data.line_strength_weighted_n_amb.T),
+                *(np.zeros_like(pseudo_continuum_data.line_strength_weighted_n_amb.T))
             ],
             axis=0
         )
@@ -588,14 +983,77 @@ class PseudoContSpecData:
     
     @property
     def SELF_BROADENING_LSW_PARAMS(self):
-        return self._data[4:6]
+        return self._data[4:7]
     
     @property
     def FOREIGN_BROADENING_LSW_PARAMS(self):
-        return self._data[6:]
+        return self._data[7:]
     
-
-
+    def add_monochromatic_absorption(
+        self,
+        wn_grid : np.ndarray, # [N_waves]
+        lineshape_fn : Callable[[float,float,float], float],
+        t_calc : float, # Kelvin
+        p_calc : float, # Atmospheres
+        partition_function : Callable[[float], float],
+        mol_mix_frac : np.ndarray, #[M] fraction of mixture that consists of each molecule. Should sum to 1.0
+        isotopic_abundance : float = 1.0, # abundance of the `self` isotopologue.
+        
+        out : None | np.ndarray = None, #[N_waves]
+        
+        store : None | np.ndarray = None, #[3,N_lines]
+        store_x : None | np.ndarray = None, #[N_pc_bins]
+        store_y : None | np.ndarray = None, #[2*n_neighbour_bins+1]
+        store_z : None | np.ndarray = None, #[2, N_waves]
+        
+        n_neighbour_bins : int = 3,
+        
+        wn_calc_range : None | tuple[float,float] = None,
+        use_cache : bool = True,
+    ) -> np.ndarray:
+        """
+        Adds monochromatic absorption from PseudoContinuum. Will calculate at `self.WN_BIN_CENTER` and interpolate to `wn_grid`
+        """
+        if out is None:
+            out = np.zeros_like(wn_grid, dtype=float)
+        if store is None:
+            store = np.empty((3,self.WN_BIN_WIDTH.shape[0]), dtype=float)
+        if store_x is None:
+            store_x = np.zeros((self.WN_BIN_WIDTH.shape[0],), dtype=float)
+        if store_y is None:
+            store_y = np.zeros((2*n_neighbour_bins+1,), dtype=float)
+        if store_z is None:
+            store_z = np.zeros((2, out.shape[0],), dtype=float)
+    
+        
+        q_ratio = partition_function(self.t_cont) / partition_function(t_calc)
+        
+        wn_mask = np.ones((self._data.shape[1],), dtype=bool) if wn_calc_range is None else ((wn_calc_range[0] <= self.WN_BIN_CENTER) & (self.WN_BIN_CENTER <= wn_calc_range[1]))
+        
+        add_pseudo_continuum_monochromatic_absorption(
+            wn_grid,
+            lineshape_fn,
+            t_calc,
+            self.t_cont,
+            p_calc,
+            self.p_cont,
+            q_ratio,
+            isotopic_abundance,
+            self._molecular_mass,
+            mol_mix_frac,
+            self._data[4:, wn_mask], # self and non-self broadening
+            *self._data[:4, wn_mask],
+            out = out,
+            
+            store = store,
+            store_x = store_x,
+            store_y = store_y,
+            store_z = store_z,
+            n_neighbour_bins = n_neighbour_bins
+        )
+        
+        return out
+    
 
 
 @dc.dataclass(slots=True)
@@ -806,6 +1264,7 @@ class AnsDatabase:
                         ambient_gasses = ambient_gasses,
                         requested_wn_range = (wn_min, wn_max),
                     )
+                print(f'{pc_instance=}')
                 self.cache.set(pc_cache_bucket, pc_cache_identity, pc_instance)
         
         return ld_instance, pc_instance
@@ -918,8 +1377,8 @@ class LineDataParams:
     wn_min : float = 0
     wn_max : float = 0
     s_min : float = -1
-    temperature : float = 0
-    pressure : float = 0
+    temp_requested : float = 0
+    press_requested : float = 0
 
     
 
@@ -945,6 +1404,7 @@ class LineData_0:
         self._ISO = None
         self._ans_database : AnsDatabase = AnsDatabase(LINE_DATABASE, PARTITION_FUNCTION_DATABASE, CONTINUUM_DATABASE)
         self._rt_gas_descs : None | tuple[RadtranGasDescriptor,...] = None 
+        self._default_iso_abundances : None | np.ndarray = None,
         self._n_isos : None | int = None
         self._mol_ids : None | np.ndarray = None
         self._iso_ids : None | np.ndarray = None
@@ -979,6 +1439,7 @@ class LineData_0:
             self._mol_id_tpl = None
             self._iso_id_tpl = None
             self._n_isos = None
+            self._default_iso_abundances = None
     
     @property
     def ISO(self) -> int | tuple[int,...]:
@@ -992,6 +1453,7 @@ class LineData_0:
             self._iso_ids = None
             self._iso_id_tpl = None
             self._n_isos = None
+            self._default_iso_abundances = None
     
     @property
     def n_isos(self):
@@ -1004,6 +1466,12 @@ class LineData_0:
         if self._rt_gas_descs is None:
             self._rt_gas_descs = tuple(GasIsotopes(self.ID, self.ISO).as_radtran_gasses())
         return self._rt_gas_descs
+    
+    @property
+    def default_iso_abundances(self):
+        if self._default_iso_abundances is None:
+            self._default_iso_abundances = np.array([x.abundance for x in self.rt_gas_descs], dtype=float)
+        return self._default_iso_abundances
     
     @property
     def mol_ids(self):
@@ -1056,8 +1524,8 @@ class LineData_0:
             vmin : None | float = None,
             vmax : None | float = None,
             s_min : None | float = None,
-            temperature : None | float = None, # Kelvin
-            pressure : None | float = None, # Atmospheres
+            temp_requested : None | float = None, # Kelvin
+            press_requested : None | float = None, # Atmospheres
             wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
     ) -> Self:
         if vmin is not None:
@@ -1070,8 +1538,8 @@ class LineData_0:
             wn_min = vmin, 
             wn_max = vmax, 
             s_min = s_min, 
-            temperature = temperature, 
-            pressure = pressure
+            temp_requested = temp_requested, 
+            press_requested = press_requested
         )
         
         return self
@@ -1085,13 +1553,13 @@ class LineData_0:
             vmin : None | float = None,
             vmax : None | float = None,
             s_min : None | float = None,
-            temperature : None | float = None, # Kelvin
-            pressure : None | float = None, # Atmospheres
+            temp_requested : None | float = None, # Kelvin
+            press_requested : None | float = None, # Atmospheres
             wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
     ) -> Self:
         prev_params = self.get_params()
         
-        self.set_params(vmin, vmax, s_min, temperature, pressure, wave_unit)
+        self.set_params(vmin, vmax, s_min, temp_requested, press_requested, wave_unit)
         
         yield self
         
@@ -1120,16 +1588,16 @@ class LineData_0:
         if self._params_fetched_lines_last and not refresh:
             return
     
-        print(f'{self._params=}')
-        print(f'{self.mol_ids=}')
-        print(f'{self.iso_ids=}')
+        #print(f'{self._params=}')
+        #print(f'{self.mol_ids=}')
+        #print(f'{self.iso_ids=}')
 
         retrieved_from_cache = False # Flag
         
         if self.cache is not None:
             # build data group
             ld_pc_cache_bucket = ('line_and_continuum_data_pairs',id(self._ans_database))
-            ld_pc_cache_identity = (self.mol_id_tpl, self.iso_id_tpl, self._params.s_min, self._params.temperature, *self._params.ambient_gasses)
+            ld_pc_cache_identity = (self.mol_id_tpl, self.iso_id_tpl, self._params.s_min, self._params.temp_requested, *self._params.ambient_gasses)
             
             ld_pc_pairs = self.cache.get(ld_pc_cache_bucket, ld_pc_cache_identity, None)
             if refresh or ld_pc_pairs is None or not all(wn_range_is_within((self._params.wn_min, self._params.wn_max), ld_pc_pair[0].req_wn_range) for ld_pc_pair in ld_pc_pairs):
@@ -1152,14 +1620,14 @@ class LineData_0:
                 self._params.wn_min,
                 self._params.wn_max,
                 self._params.s_min,
-                self._params.temperature,
+                self._params.temp_requested,
                 self._params.ambient_gasses,
                 out = id_line_cont_triplet
             )
             
-            print(f'{type(id_line_cont_triplet)=} {len(id_line_cont_triplet)=}')
-            print(f'{type(id_line_cont_triplet[0])=} {len(id_line_cont_triplet[0])=}')
-            print(f'{type(id_line_cont_triplet[0][0])=} {len(id_line_cont_triplet[0][0])=}')
+            #print(f'{type(id_line_cont_triplet)=} {len(id_line_cont_triplet)=}')
+            #print(f'{type(id_line_cont_triplet[0])=} {len(id_line_cont_triplet[0])=}')
+            #print(f'{type(id_line_cont_triplet[0][0])=} {len(id_line_cont_triplet[0][0])=}')
             
             for i, ((mol_id, iso_id), line_data, cont_data) in enumerate(id_line_cont_triplet):
                 self.line_data[i] = LineSetSpecData.create_from(mol_id, iso_id, self._params.ambient_gasses, line_data)
@@ -1176,6 +1644,7 @@ class LineData_0:
 
     def calculate_line_strength(
             self,
+            t_calc : float,
             wn_calc_range : None | tuple[float,float] = None,
     ) -> tuple[np.ndarray,...]:
         if not self._params_fetched_lines_last:
@@ -1183,7 +1652,328 @@ class LineData_0:
         if not self._params_fetched_partition_last:
             self.fetch_partition_fn()
         
-        return tuple(self.line_data[i].get_line_strength(self._params.temperature, self.partition_fn_data[i], wn_calc_range) for i in range(len(self.line_data)))
+        return tuple(self.line_data[i].get_line_strength(t_calc, self.partition_fn_data[i], wn_calc_range) for i in range(len(self.line_data)))
+
+    def add_monochromatic_absorption(
+            self,
+            wave_grid : np.ndarray,
+            
+            t_calc : float,
+            p_calc : float,
+            
+            out : None | np.ndarray = None, # if 2-dimensions, will assume the 1st dimension is 2 and will fill with (line_set absorption, continuum absorption), if 3 dimensional will assume 1st dimension is 2 (line set, contiuum) then 2nd dimension is per isotopologue
+            store : None | np.ndarray = None,
+            
+            amb_frac : float | np.ndarray = 0.5,
+            wave_calc_range : None | tuple[float,float] = None,
+            isotopic_abundance : None | float | np.ndarray = None,
+            lineshape_fn : Callable[[float,float,float], float] = Data.lineshapes.voigt,
+            s_min : float = 1E-32,
+            wn_calc_window : float = 25.0, # (cm^{-1})
+            wn_approx_window : float = 75.0, # (cm^{-1})
+            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm, # unit of `wave_grid` and `wave_calc_range`
+            
+            include_lines : bool = True,
+            include_continuum : bool = True,
+    ) -> np.ndarray:
+        
+        # Create default arrays
+        if out is None:
+            result = np.zeros_like(wave_grid, dtype=float)
+            out = result[...]
+        else:
+            result = out[...]
+        
+        if store is None:
+            store = np.empty((3, max(max(x.NU.shape[0] for x in self.line_data), max(x.WN_BIN_CENTER.shape[0] if x is not None else 0 for x in self.continuum_data))), dtype=float)
+        
+        
+        # Handle wave units
+        if wave_unit != ans.enums.WaveUnit.Wavenumber_cm:
+            wn_grid = WavePoint(wave_grid, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value
+        else:
+            wn_grid = wave_grid
+        
+        if wave_calc_range is None:
+            wn_calc_range = (np.min(wn_grid) - 2*wn_approx_window, np.max(wn_grid) + 2*wn_approx_window)
+        elif wave_unit != ans.enums.WaveUnit.Wavenumber_cm:
+            wn_calc_range = (WavePoint(wave_calc_range[0], wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value, WavePoint(wave_calc_range[1], wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value)
+        
+        # Ensure that `wn_grid` is ascending. Flip both `wn_grid` and `out` if `wn_grid` is decending.
+        if np.all(wn_grid[:-1] < wn_grid[1:]):
+            pass
+        elif np.all(wn_grid[:-1] > wn_grid[1:]):
+            out = out.flip(axis=-1)
+        else:
+            raise RuntimeError('`wave_grid` passed to LineData_0::monochromatic_absorption(...) must be either ascending or decending.')
+        
+        # create array that holds mixing fractions for self as well as ambient gasses
+        if isinstance(amb_frac, float):
+            mol_mix_frac = np.array([1-amb_frac, amb_frac], dtype=float)
+        else:
+            mol_mix_frac = np.array([1 - sum(amb_frac), *amb_frac], dtype=float)
+        
+        assert mol_mix_frac.shape[0] == len(self._params.ambient_gasses)+1, "LineData_0::add_monochromatic_absorption(...) `amb_frac` must have enough entries for each ambient gas"
+        
+        # Ensure isotopic abundances are arrays of correct length
+        if isotopic_abundance is None:
+            isotopic_abundance = self.default_iso_abundances
+        elif isinstance(isotopic_abundance, float):
+            assert self.n_isos == 1, "If provided, there must be an isotopic abundance for each isotopologue in the LineData_0 instance"
+            isotopic_abundance = np.array([isotopic_abundance], dtype=float)
+        else:
+            assert self.n_isos == isotopic_abundance.shape[0], "If provided, there must be an isotopic abundance for each isotopologue in the LineData_0 instance"
+        
+        if out.ndim >= 2:
+            out_line_set_abs = out[0]
+            out_continuum_abs = out[1]
+        else:
+            out_line_set_abs = out
+            out_continuum_abs = out
+        
+        # Loop over all line data and add monochromatic absorption to `out`
+        for i, (iso_line_data, iso_continuum_data) in enumerate(zip(self.line_data, self.continuum_data)):
+            print(f'{i=} {iso_line_data._data.shape=} {(iso_continuum_data._data.shape if iso_continuum_data is not None else "None")=}')
+            
+            if out.ndim < 3:
+                out_line_set_abs_i = out_line_set_abs
+                out_continuum_abs_i = out_continuum_abs
+            elif out.ndim == 3:
+                assert out.shape[2] == len(self.line_data), f'`out` must have 1, 2 or 3 dimensions ({out.ndim=}). If 1 dimension will add all absorption to same array. If 2 will split line absorption and continuum absorption. If 3 will split line absorption and continuum absorption, and split by isotopologue and therefore must have out.shape[1] == number of isotopoluges ({out.shape[1]=}) ({len(self.line_data)})'
+                out_line_set_abs_i = out_line_set_abs[i]
+                out_continuum_abs_i = out_continuum_abs[i]
+            else:
+                raise RuntimeError(f'`out` must have 1, 2 or 3 dimensions ({out.ndim=}). If 1 dimension will add all absorption to same array. If 2 will split line absorption and continuum absorption. If 3 will split line absorption and continuum absorption, and split by isotopologue.')
+            
+            if include_lines:
+                iso_line_data.add_monochromatic_absorption(
+                    wn_grid, #[N_waves]
+                    lineshape_fn,
+                    t_calc,
+                    p_calc,
+                    self.partition_fn_data[i],
+                    mol_mix_frac,
+                    isotopic_abundance[i],
+                    
+                    out = out_line_set_abs_i, #[N_waves]
+                    #store = store[:,:iso_line_data.n_lines], #[3,N_lines]
+                    store = store,
+                    
+                    s_min = s_min,
+                    wn_calc_window = wn_calc_window,
+                    wn_approx_window = wn_approx_window,
+                    wn_calc_range = wn_calc_range,
+                )
+            
+            if include_continuum and iso_continuum_data is not None:
+                print(f'{iso_continuum_data=}')
+                iso_continuum_data.add_monochromatic_absorption(
+                    wn_grid,
+                    lineshape_fn,
+                    t_calc,
+                    p_calc,
+                    self.partition_fn_data[i],
+                    mol_mix_frac,
+                    isotopic_abundance[i],
+                    
+                    out = out_continuum_abs_i, 
+                    
+                    store=store,
+                    store_z = np.zeros((2,wn_grid.shape[0],), dtype=float),
+                    n_neighbour_bins= 3,
+                    
+                    wn_calc_range = wn_calc_range,
+                )
+            else:
+                print('No continuum data')
+            
+        
+        return result # This should be a view of `out`
+
+
+
+    def plot_linedata(
+            self, 
+            logscale : bool = True, 
+            scatter_style_kw : dict[str,Any] = {},
+            line_style_kw : dict[str,Any] = {},
+            ax_style_kw : dict[str,Any] = {},
+            legend_style_kw : dict[str,Any] = {},
+    ) -> None:
+        """
+        Create diagnostic plots of the line data.
+        
+        ## ARGUMENTS ##
+        
+            smin : float = 1E-32
+                Minimum line strength to plot.
+                
+            logscale : bool = True
+                If True, the y-axis will be in logarithmic scale, else will be linear.
+            
+            scatter_style_kw : dict[str,Any] = {}
+                Dictionary to pass to scatter plots that will set style parameters (e.g. `s` for size, `edgecolor`, `linewidth`,...)
+                
+            ax_style_kw : dict[str,Any] = {},
+                Dictionary to pass to axes that will set style parameters (e.g. `facecolor`,...)
+                
+            legend_style_kw : dict[str,Any] = {},
+                Dictionary to pass to legend that will set style parameters (e.g. `fontsize`, `title_fontsize`, ...)
+        """
+        
+        if self.line_data is None:
+            raise RuntimeError(f'No line data ready in {self}')
+        
+        scatter_style_defaults = dict(
+            #s = 15,
+            #edgecolor='black',
+            #linewidth=-.2
+            s = 2,
+            marker='.',
+            edgecolor = 'none',
+            alpha=0.6,
+        )
+        scatter_style_defaults.update(scatter_style_kw)
+        
+        line_style_defaults = dict(
+            linewidth=1,
+        )
+        line_style_defaults.update(line_style_kw)
+        
+        ax_style_defaults = dict(
+            facecolor='#EEEEEE'
+        )
+        ax_style_defaults.update(ax_style_kw)
+        
+        legend_style_defaults = dict(
+            fontsize = 10,
+            title_fontsize=12
+        )
+        legend_style_defaults.update(legend_style_kw)
+        
+        f, ax_array = plt.subplots(
+            self.n_isos+1,1, 
+            figsize=(12,4*(self.n_isos+1)), 
+            gridspec_kw={'hspace':0.3},
+            squeeze=False
+        )
+        ax_array = ax_array.flatten()
+        
+        combined_ax = ax_array[0]
+        combined_ax.set_title('Line strength (scatter) and continuum strength (line) coloured by isotopologue')
+        
+        line_strengths_max = 0.0
+        line_strengths_min = np.inf
+        
+        for i, (iso_line_data, iso_continuum_data) in enumerate(zip(self.line_data, self.continuum_data)):
+
+            if iso_line_data.n_lines == 0:
+                ls_max = 0
+                ls_min = 0
+                no_data_str = ' [NO DATA]'
+            else:
+                ls_max = iso_line_data.SW.max()
+                ls_min = min(iso_line_data.SW.min(), iso_continuum_data.LINE_STRENGTH_SUM.min())
+                no_data_str = ''
+            line_strengths_max = ls_max if ls_max > line_strengths_max else line_strengths_max
+            line_strengths_min = ls_min if ls_min < line_strengths_min else line_strengths_min
+            
+            try:
+                gas_name_latex = ans.Data.gas_data.molecule_to_latex(iso_line_data.rt_gas_desc.isotope_name)
+            except KeyError:
+                gas_name_latex = r'\text{UNKNOWN GAS ISOTOPE}'
+            
+            # Combined plot, all isotopes on one figure, coloured by isotope
+            combined_ax.scatter(
+                iso_line_data.NU,
+                iso_line_data.SW,
+                label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}',
+                zorder = i,
+                **scatter_style_defaults
+            )
+            
+            # Plot twice so we can have contrasting colour, remember to set z_order
+            combined_ax.plot(
+                iso_continuum_data.WN_BIN_CENTER,
+                iso_continuum_data.LINE_STRENGTH_SUM,
+                linewidth = line_style_defaults['linewidth']*2,
+                color=ax_style_defaults['facecolor'],
+                zorder = self.n_isos + i,
+            )
+            combined_ax.plot(
+                iso_continuum_data.WN_BIN_CENTER,
+                iso_continuum_data.LINE_STRENGTH_SUM,
+                label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}',
+                zorder = 2*self.n_isos + i,
+                **line_style_defaults
+            )
+        
+        combined_ax.legend(
+            loc='upper left', 
+            bbox_to_anchor=(1.01, 1.05),  # Shift legend to the right
+            title='Isotope', 
+            **legend_style_defaults
+        )
+        
+        if logscale:
+            combined_ax.set_yscale('log')
+            combined_ax.set_ylim(line_strengths_min, line_strengths_max * 10)
+        
+        combined_ax.set_xlabel('Wavenumber (cm$^{-1}$)')
+        combined_ax.set_ylabel('Line strength (cm$^{-1}$ / (molec cm$^{-2}$))')
+        combined_ax.set(**ax_style_defaults)
+    
+        for i, (iso_line_data, iso_continuum_data) in enumerate(zip(self.line_data, self.continuum_data)):
+            ax = ax_array[i+1]
+            
+            try:
+                gas_name_latex = ans.Data.gas_data.molecule_to_latex(iso_line_data.rt_gas_desc.isotope_name)
+            except KeyError:
+                gas_name_latex = r'\text{UNKNOWN GAS ISOTOPE}'
+            
+            
+            if iso_line_data.n_lines == 0:
+                no_data_str = ' [NO DATA]'
+            else:
+                no_data_str = ''
+            
+            ax.set_title(f'Line data for ${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}')
+            
+            
+            # Plots for specific isotopes, coloured by lower energy state
+            
+            p1 = ax.scatter(
+                iso_line_data.NU,
+                iso_line_data.SW,
+                c = iso_line_data.ELOWER,
+                cmap = 'turbo',
+                vmin = 0,
+                **scatter_style_defaults
+            )
+            ax.plot(
+                iso_continuum_data.WN_BIN_CENTER,
+                iso_continuum_data.LINE_STRENGTH_SUM,
+                color='#EE22EE',
+                label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}',
+                **line_style_defaults
+            )
+            
+            # Create a colourbar axes on the right side of ax.
+            x_pad = 0.01
+            x0, y0, w, h = ax.get_position().bounds
+            x1 = x0+w+x_pad
+            cax = f.add_axes([x1,y0,0.25*(1-x1),h])
+            cbar = plt.colorbar(p1, cax=cax)
+            cbar.set_label('Lower state energy (cm$^{-1}$)')
+        
+            if logscale:
+                ax.set_yscale('log')
+                ax.set_ylim(line_strengths_min, line_strengths_max * 10)
+            ax.set_xlabel('Wavenumber (cm$^{-1}$)')
+            ax.set_ylabel('Line strength (cm$^{-1}$ / (molec cm$^{-2}$))')
+            ax.set(**ax_style_defaults)
+
+
 
 class LineData_0_OLD:
     """
@@ -1868,7 +2658,7 @@ class LineData_0_OLD:
             lineshape_fn : Callable[[np.ndarray, float, float], np.ndarray] = Data.lineshapes.voigt, # lineshape function to use
             line_calculation_wavenumber_window: float = 25.0, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
             tref : float = 296, # Reference temperature (Kelvin). TODO: This should be set by the database used
-            line_strength_cutoff : float = 1E-32, # Strength below which a line is ignored.
+            s_min : float = 1E-32, # Strength below which a line is ignored.
             ensure_linedata_downloaded : bool = True,
             isotopic_abundances : None | dict[RadtranGasDescriptor, float] = None, # If not None, use these abundances for each isotopologue instead of the default terrestrial ones. 
     ) -> np.ndarray:
@@ -1920,7 +2710,7 @@ class LineData_0_OLD:
                 iso_abu = np.array([isotopic_abundances[RadtranGasDescriptor(*x)] for x in self.line_data.RT_GAS_DESC])
                 strength *= iso_abu
 
-        linestrength_mask = strength >= line_strength_cutoff
+        linestrength_mask = strength >= s_min
 
         return self.calculate_monochromatic_spectrum(
             self.line_data.NU[linestrength_mask],
