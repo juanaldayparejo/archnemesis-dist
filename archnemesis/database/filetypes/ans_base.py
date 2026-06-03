@@ -240,11 +240,19 @@ class AnsDatabaseFile:
 			mol_name : str,
 			local_iso_id : int,
 			x_grp : h5py.Group, # group to search for ".../<target_group_name>/mol/iso", is often the root group or a "/sources/<source_name>/" group
-			on_missing_mol : Literal['ignore', 'warn', 'error'] = 'error',
+			on_missing_target : Literal['ignore', 'warn', 'error'] = 'warn',
+			on_missing_mol : Literal['ignore', 'warn', 'error'] = 'warn',
 			on_missing_iso : Literal['ignore', 'warn', 'error'] = 'warn',
 	) -> h5py.Group:
 		if self.target_group_name not in x_grp:
-			raise KeyError(f'HDF5 file "{x_grp.file.filename}" does not have a {self.target_group_name} group')
+			match on_missing_target:
+				case 'ignore':
+					return None
+				case 'warn':
+					_lgr.warning(f'HDF5 file "{x_grp.file.filename}" does not have a {self.target_group_name} group, returning NULL DATA')
+					return None
+				case _:
+					raise KeyError(f'HDF5 file "{x_grp.file.filename}" does not have a {self.target_group_name} group')
 		d_grp = self._get_data_grp(x_grp)
 		
 		if mol_name not in d_grp:

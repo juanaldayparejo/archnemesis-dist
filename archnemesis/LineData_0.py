@@ -1825,9 +1825,6 @@ class LineData_0:
             raise RuntimeError(f'No line data ready in {self}')
         
         scatter_style_defaults = dict(
-            #s = 15,
-            #edgecolor='black',
-            #linewidth=-.2
             s = 2,
             marker='.',
             edgecolor = 'none',
@@ -1873,7 +1870,9 @@ class LineData_0:
                 no_data_str = ' [NO DATA]'
             else:
                 ls_max = iso_line_data.SW.max()
-                ls_min = min(iso_line_data.SW.min(), iso_continuum_data.LINE_STRENGTH_SUM.min())
+                ls_min = iso_line_data.SW.min()
+                if iso_continuum_data is not None and iso_continuum_data.LINE_STRENGTH_SUM.size > 0:
+                    ls_min = iso_continuum_data.LINE_STRENGTH_SUM.min() if ls_min > iso_continuum_data.LINE_STRENGTH_SUM.min() else ls_min
                 no_data_str = ''
             line_strengths_max = ls_max if ls_max > line_strengths_max else line_strengths_max
             line_strengths_min = ls_min if ls_min < line_strengths_min else line_strengths_min

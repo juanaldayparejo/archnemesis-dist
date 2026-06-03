@@ -218,7 +218,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 	
 	def _are_pseudo_continuum_parameters_compatible(
 		self,
-		leaf_grp_pc_parameters,
+		target_grp_pc_parameters,
 		test_grp_pc_parameters
 	) -> bool:
 		"""
@@ -233,7 +233,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			pc_parameters_are_compatible : bool - `True` if the continuum parameters can be used together, `False` otherwise.
 		"""
 		
-		return (leaf_grp_pc_parameters[0] == test_grp_pc_parameters[0]) and (leaf_grp_pc_parameters[1] <= test_grp_pc_parameters[1])
+		return (target_grp_pc_parameters[0] == test_grp_pc_parameters[0]) and (target_grp_pc_parameters[1] <= test_grp_pc_parameters[1])
 	
 	
 	def _get_target_leaf_group(
@@ -440,7 +440,8 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			ambient_gasses : AmbientGas | tuple[AmbientGas] = AmbientGas.AIR,
 			requested_wn_range : tuple[float,float] = (0, np.inf),
 			wn_bin_upper_edge_eta : float = 1E-9,
-			on_missing_mol : Literal['ignore', 'warn', 'error'] = 'error',
+			on_missing_target : Literal['ignore', 'warn', 'error'] = 'warn',
+			on_missing_mol : Literal['ignore', 'warn', 'error'] = 'warn',
 			on_missing_iso : Literal['ignore', 'warn', 'error'] = 'warn',
 			on_missing_broadener : Literal['ignore', 'warn', 'error'] = 'error',
 	) -> PseudoContinuumData:
@@ -478,7 +479,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		n_ambient_gasses = len(ambient_gasses)
 		
 		with self.open('r'):
-			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_mol, on_missing_iso)
+			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_target, on_missing_mol, on_missing_iso)
 			if iso_grp is None:
 				return self._get_null_data(s_max, temperature, 1, requested_wn_range, n_ambient_gasses)
 			
@@ -489,13 +490,16 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			#i = 0
 			#leaf_grp_name = self.get_leaf_grp_name(i) 
 			#while leaf_grp_name in iso_grp:
+			target_grp_parameters = (s_max, temperature)
+			
 			for j, leaf_grp_name, leaf_grp in self.get_increasing_leaf_grp_name_in_grp_iterable(iso_grp):
 				leaf_grp = iso_grp[leaf_grp_name]
 				leaf_grp_pc_parameters = self._get_pseudo_continuum_parameters(leaf_grp.attrs)
 				# Move on to next group if lower bounds are wrong
-				print(f'TESTING: {(s_max, temperature)=} {leaf_grp_pc_parameters=}')
+				#print(f'TESTING: {(s_max, temperature)=} {leaf_grp_pc_parameters=}')
+				
 				if self._are_pseudo_continuum_parameters_compatible( # NOTE: as `leaf_grp_pc_parameters` should be ordered we can just use the first compatible `leaf_grp`
-					(s_max, temperature),
+					target_grp_parameters,
 					leaf_grp_pc_parameters,
 				):
 					_lgr.info(f'Found compatible data for {s_max=} {temperature=}. Chosen group has {leaf_grp_pc_parameters=}')
@@ -545,6 +549,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 					break # exit loop as soon as we find a compatible group
 			
 			if result is None:
+				_lgr.warn(f'No group found that is compatible with {target_grp_parameters=}, will return empty data. ')
 				return self._get_null_data(s_max, temperature, 1, requested_wn_range, n_ambient_gasses)
 			else:
 				return result

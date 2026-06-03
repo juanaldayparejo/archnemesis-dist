@@ -207,7 +207,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 	def _get_line_set_parameters(
 			self, 
 			grp_attrs
-	)->tuple[float,float]:
+	)->tuple[float,float,float]:
 		"""
 		Leaf groups are ordered first by minimum line strength included in in the set, then by reference temperature that the set data was calculated at
 		
@@ -216,33 +216,70 @@ class AnsLineDataFile(AnsDatabaseFile):
 		"""
 		return (grp_attrs['s_min'], grp_attrs['t_ref'], grp_attrs['p_ref'])
 	
-	def _are_line_set_parameters_compatible(
-		self,
-		leaf_grp_parameters,
-		test_grp_parameters
-	) -> bool:
+	def _select_best_line_set_for_parameters(
+			self,
+			target_s_min,
+			target_temp,
+			iso_grp
+	) -> tuple[str, h5py.Group , tuple[Any,...]]:
 		"""
 		A line set is worked out at a specific temperature `t_ref`,
 		and made with all the lines that have a strength higher than a minimum value
-		`s_min`. When looking up which line set dataset to use we should
+		`s_min`. 
+		
+		When looking up which line set dataset to use we should
 		always try and match `s_min` exactly as otherwise we will either double-count
-		or miss out some lines. The best `t_ref` to use is the lowest one that
-		is greater than the target temperature, but in the case where `s_min == 0`
-		any t_ref can be used.
+		or miss out some lines. 
+		
+		The best `t_ref` to use is the lowest one that
+		is greater than the target temperature, but if no temperature greater is available
+		fallback to closest temperature. 
+		
+		Special Cases:
+		`s_min == 0` - we can use any temperature as there is no minimum strength
+		`s_min < 0` - We don't care about minimum strength so find best matching temperature
 		
 		## RETURNS ##
-			parameters_are_compatible : bool - `True` if the continuum parameters can be used together, `False` otherwise.
+			best_grp_name : str
+			best_grp : h5py.Group
+			best_parameters : tuple[Any,...]
 		"""
-		if leaf_grp_parameters[0] < 0: # Special cases when `s_min` < 0
-			if leaf_grp_parameters[1] == 0:
-				return True # Special case where `s_min` < 0, and `t_cont` == 0. Whatever data we have is good enough
+		best_grp_name = ''
+		best_grp = None
+		best_parameters = None
+		mismatch_temp = np.inf
+		mismatch_s_min = np.inf
+		for i, leaf_grp_name, leaf_grp in self.get_increasing_leaf_grp_name_in_grp_iterable(iso_grp):
+			s_min, t_ref, p_ref = self._get_line_set_parameters(leaf_grp.attrs)
+			
+			if target_s_min <= 0:
+				delta_s_min = 0
 			else:
-				return (leaf_grp_parameters[1] <= test_grp_parameters[1]) # Special case where `s_min` < 0, and `t_cont` != 0. Choose whichever temperature is best
+				delta_s_min = target_s_min - s_min
+			
+			delta_temp = target_temp - t_ref
+			
+			#print(f'AnsLineDataFile :: {leaf_grp_name=} {s_min=} {t_ref=} {p_ref=} {delta_s_min=} {delta_temp=} {mismatch_s_min=} {mismatch_temp=}')
+			
+			if (
+				(delta_s_min <= mismatch_s_min)
+				and (
+					(np.abs(delta_temp) <= np.abs(mismatch_temp))
+					and (
+						(delta_temp <= 0)
+						or ((delta_temp > 0) and (mismatch_temp > 0))
+					)
+				)
+			):
+				mismatch_s_min = delta_s_min
+				mismatch_temp = delta_temp
+				best_grp_name = leaf_grp_name
+				best_grp = leaf_grp
+				best_parameters = (s_min, t_ref, p_ref)
 		
-		if leaf_grp_parameters[0] == 0:
-			return test_grp_parameters[0] == 0 # special case where `s_min` == 0, don't need to account for `t_ref`
-		
-		return (leaf_grp_parameters[0] == test_grp_parameters[0]) and (leaf_grp_parameters[1] <= test_grp_parameters[1])
+		return (best_grp_name, best_grp, best_parameters)
+				
+			
 
 	def _get_target_leaf_group(
 			self,
@@ -442,10 +479,12 @@ class AnsLineDataFile(AnsDatabaseFile):
 				'delta_amb',
 			),
 			requested_wn_range : tuple[float,float] = (0, np.inf),
-			on_missing_mol : Literal['ignore', 'warn', 'error'] = 'error',
+			on_missing_target : Literal['ignore', 'warn', 'error'] = 'warn',
+			on_missing_mol : Literal['ignore', 'warn', 'error'] = 'warn',
 			on_missing_iso : Literal['ignore', 'warn', 'error'] = 'warn',
 			on_missing_broadener : Literal['ignore', 'warn', 'error'] = 'error',
 	) -> LineSetData:
+		print('AnsLineDataFile::get_data(...)')
 	
 		if ambient_gasses is None:
 			ambient_gasses = tuple()
@@ -458,7 +497,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 		broadener_felds_to_populate = tuple(x for x in LineSetData._fields if x in LineBroadenerRecordLayout.attrs())
 		
 		with self.open('r'):
-			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_mol, on_missing_iso)
+			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_target, on_missing_mol, on_missing_iso)
 			if iso_grp is None:
 				return self._get_null_data(s_min,temperature,1,requested_wn_range,n_ambient_gasses)
 			
@@ -467,35 +506,35 @@ class AnsLineDataFile(AnsDatabaseFile):
 			mask = None
 			
 			target_line_set_params = (s_min, temperature)
+			print(f'AnsLineDataFile :: {target_line_set_params=}')
 			
-			for i, leaf_grp_name, leaf_grp in self.get_increasing_leaf_grp_name_in_grp_iterable(iso_grp):
-				leaf_grp_parameters = self._get_line_set_parameters(leaf_grp.attrs)
-				if self._are_line_set_parameters_compatible(
-					target_line_set_params,
-					leaf_grp_parameters
-				):
-					mask = (requested_wn_range[0] <= leaf_grp['nu'][tuple()]) & (leaf_grp['nu'][tuple()] <= requested_wn_range[1])
-					n_lines = np.count_nonzero(mask)
-					#print(f'{mol_name=} {local_iso_id=} {n_lines=}')
-					if n_lines > 0:
-						#print(f'{leaf_grp_parameters=}')
-						#print(f'{line_fields_to_populate=}')
-						#print(f'{broadener_felds_to_populate=}')
-						result = LineSetData(
-							leaf_grp_parameters[0],
-							leaf_grp_parameters[1],
-							leaf_grp_parameters[2],
-							requested_wn_range,
-							*(leaf_grp[x][mask] for x in line_fields_to_populate),
-							*(np.empty((n_lines, n_ambient_gasses), dtype=LineBroadenerRecordLayout.type(x)) for x in broadener_felds_to_populate)
-						)
-						
-						b_grp = self._get_broadeners_grp(leaf_grp, on_missing_broadener)
-						if b_grp is None:
-							for name in broadener_felds_to_populate:
-								getattr(result, name).fill(self.default_broadening_values[name])
-							break
-						
+			leaf_grp_name, leaf_grp, leaf_grp_parameters = self._select_best_line_set_for_parameters(
+				*target_line_set_params,
+				iso_grp = iso_grp
+			)
+			
+			if leaf_grp is not None:
+				mask = (requested_wn_range[0] <= leaf_grp['nu'][tuple()]) & (leaf_grp['nu'][tuple()] <= requested_wn_range[1])
+				n_lines = np.count_nonzero(mask)
+				#print(f'{mol_name=} {local_iso_id=} {n_lines=}')
+				if n_lines > 0:
+					#print(f'{leaf_grp_parameters=}')
+					#print(f'{line_fields_to_populate=}')
+					#print(f'{broadener_felds_to_populate=}')
+					result = LineSetData(
+						leaf_grp_parameters[0],
+						leaf_grp_parameters[1],
+						leaf_grp_parameters[2],
+						requested_wn_range,
+						*(leaf_grp[x][mask] for x in line_fields_to_populate),
+						*(np.empty((n_lines, n_ambient_gasses), dtype=LineBroadenerRecordLayout.type(x)) for x in broadener_felds_to_populate)
+					)
+					
+					b_grp = self._get_broadeners_grp(leaf_grp, on_missing_broadener)
+					if b_grp is None:
+						for name in broadener_felds_to_populate:
+							getattr(result, name).fill(self.default_broadening_values[name])
+					else:
 						for i, ambient_gas in enumerate(ambient_gasses):
 							bg_grp = self._get_single_broadener_grp(b_grp, ambient_gas.name, on_missing_broadener)
 							if bg_grp is None:
@@ -504,10 +543,11 @@ class AnsLineDataFile(AnsDatabaseFile):
 							else:
 								for name in broadener_felds_to_populate:
 									getattr(result, name)[:,i] = bg_grp[name][mask]
-					else:
-						_lgr.warn(f'Compatible group "{leaf_grp.name}" found, but no lines selected by {requested_wn_range=}. Therefore will return empty data.')
+				else:
+					_lgr.warn(f'Compatible group "{leaf_grp.name}" found, but no lines selected by {requested_wn_range=}. Therefore will return empty data.')
 			
 			if result is None:
+				_lgr.warn(f'No compatible group found for {target_line_set_params=}. Therefore will return empty data.')
 				return self._get_null_data(s_min, temperature, 1, requested_wn_range, n_ambient_gasses)
 			else:
 				return result
