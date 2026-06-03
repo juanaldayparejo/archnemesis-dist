@@ -36,6 +36,7 @@ LINE_DATA_FROM_HITRAN = True
 if LINE_DATA_FROM_HITRAN:
 	hitran_path = "/srv/workspace/data/nemesis/spectroscopy/linedata/hitran24/HITRAN24/"
 	table_name = 'hitran24'
+	table_pf_name = 'tips2025'
 	#hitran_path = "/srv/workspace/data/nemesis/spectroscopy/linedata/hitemp/co/hitemp19/"
 	#table_name = '05_HITEMP2019'
 	datadir = str(Path(hitran_path))
@@ -209,82 +210,6 @@ local_lower_quanta  = np.array(local_lower_quanta, dtype=object)
 ierr  = np.array(ierr, dtype=object)
 iref  = np.array(iref, dtype=object)
 line_mixing_flag  = np.array(line_mixing_flag, dtype=object)
-
-
-mol_list = []
-iso_list = []
-#temp_list = []
-#q_list = []
-
-xx = np.stack((mol_id_radtran, local_iso_id_radtran),axis=1)
-print(f'DEBUG : {xx.shape=}')
-
-yy = np.unique(xx, axis=0)
-print(f'DEBUG : {yy.shape=}')
-
-pf_data = []
-
-pfdh = PartitionFunctionDataHolder(
-	'HITRAN24',
-	'Data in this group is taken from the HITRAN24 database',
-)
-
-for mol_id_rt, iso_id_rt in yy:
-	gas_desc = RadtranGasDescriptor(mol_id_rt, iso_id_rt)
-	try:
-		ht_gas_desc = HitranGasDescriptor.from_radtran(gas_desc)
-	except KeyError:
-		continue
-	
-	try:
-		temp = hapi.TIPS_2021_ISOT_HASH[(ht_gas_desc.gas_id,ht_gas_desc.iso_id)]
-		q = hapi.TIPS_2021_ISOQ_HASH[(ht_gas_desc.gas_id,ht_gas_desc.iso_id)]
-	except KeyError:
-		continue
-	
-	#mol_list.append(np.full_like(temp, fill_value=mol_id_rt, dtype=int))
-	#iso_list.append(np.full_like(temp, fill_value=iso_id_rt, dtype=int))
-	mol_list.append(mol_id_rt)
-	iso_list.append(iso_id_rt)
-	
-	#temp_list.append(temp)
-	#q_list.append(q)
-	
-	
-	if False:
-		pfdh.add(
-			mol_id_rt,
-			iso_id_rt,
-			TabulatedPFData(
-				temp,
-				q
-			)
-		)
-	else:
-		pfdh.add(
-			mol_id_rt,
-			iso_id_rt,
-			PolynomialPFData(
-				*TabulatedPFData(
-					temp,
-					q
-				).as_poly()
-			)
-		)
-
-"""
-pfdh = PartitionFunctionDataHolder(
-	'HITRAN24',
-	'Data in this group is taken from the HITRAN24 database',
-	#np.array(mol_list, dtype=int),
-	#np.array(iso_list, dtype=int),
-	
-	tuple(pf_data)
-)
-"""
-
-hitran_pf_data_file = AnsPartitionFunctionDataFile(linedata_file.with_stem('hitran24_pf'))
-hitran_pf_data_file.add_source_data(pfdh.name, pfdh, pfdh.description)
 
 
 # Line data
