@@ -216,7 +216,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 		"""
 		return (grp_attrs['s_min'], grp_attrs['t_ref'], grp_attrs['p_ref'])
 	
-	def _select_best_line_set_for_parameters(
+	def _select_best_leaf_grp_for_parameters(
 			self,
 			target_s_min,
 			target_temp,
@@ -262,9 +262,15 @@ class AnsLineDataFile(AnsDatabaseFile):
 			#print(f'AnsLineDataFile :: {leaf_grp_name=} {s_min=} {t_ref=} {p_ref=} {delta_s_min=} {delta_temp=} {mismatch_s_min=} {mismatch_temp=}')
 			
 			if (
-				(delta_s_min <= mismatch_s_min)
+				(
+					(np.abs(delta_s_min) <= np.abs(mismatch_s_min)) # Want closest `s_min`, prefer `s_min` is less than `target_s_min`
+					and (
+						(delta_s_min >= 0)
+						or ((delta_s_min < 0) and (mismatch_s_min < 0))
+					)
+				)
 				and (
-					(np.abs(delta_temp) <= np.abs(mismatch_temp))
+					(np.abs(delta_temp) <= np.abs(mismatch_temp)) # Want closest `temp`, prefer `t_ref` is greater than `target_temp`
 					and (
 						(delta_temp <= 0)
 						or ((delta_temp > 0) and (mismatch_temp > 0))
@@ -508,7 +514,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 			target_line_set_params = (s_min, temperature)
 			print(f'AnsLineDataFile :: {target_line_set_params=}')
 			
-			leaf_grp_name, leaf_grp, leaf_grp_parameters = self._select_best_line_set_for_parameters(
+			leaf_grp_name, leaf_grp, leaf_grp_parameters = self._select_best_leaf_grp_for_parameters(
 				*target_line_set_params,
 				iso_grp = iso_grp
 			)

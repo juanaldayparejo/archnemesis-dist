@@ -216,24 +216,65 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		# TODO: Account for different units
 		return (grp_attrs['s_max'], grp_attrs['t_cont'], grp_attrs['p_ref'])
 	
-	def _are_pseudo_continuum_parameters_compatible(
-		self,
-		target_grp_pc_parameters,
-		test_grp_pc_parameters
-	) -> bool:
+	def _select_best_leaf_grp_for_parameters(
+			self,
+			target_s_max,
+			target_temp,
+			iso_grp
+	) -> tuple[str, h5py.Group , tuple[Any,...]]:
 		"""
 		A pseudo-continuum is worked out at a specific temperature `t_cont`,
 		and made with all the lines that have a strength lower than a maximum value
 		`s_max`. When looking up which pseudo-continuum dataset to use we should
-		always try and match `s_max` exactly as otherwise we will either double-count
-		or miss out some lines. The best `t_cont` to use is the lowest one that
-		is greater than the target temperature.
+		always try and match `s_max`, but if not possible we should use a lower `s_max`,
+		but never a higher `s_max` as we don't want to double-count lines. 
+		The best `t_cont` to use is the lowest one that is greater than the target temperature.
 		
 		## RETURNS ##
-			pc_parameters_are_compatible : bool - `True` if the continuum parameters can be used together, `False` otherwise.
+			leaf_grp_name : str
+			leaf_grp : h5py.Group
+			leaf_parameters : tuple[Any,...]
 		"""
 		
-		return (target_grp_pc_parameters[0] == test_grp_pc_parameters[0]) and (target_grp_pc_parameters[1] <= test_grp_pc_parameters[1])
+		best_grp_name = ''
+		best_grp = None
+		best_parameters = None
+		mismatch_temp = np.inf
+		mismatch_s_max = np.inf
+		for i, leaf_grp_name, leaf_grp in self.get_increasing_leaf_grp_name_in_grp_iterable(iso_grp):
+			s_max, t_ref, p_ref = self._get_pseudo_continuum_parameters(leaf_grp.attrs)
+			
+			if target_s_max <= 0:
+				delta_s_max = 0
+			else:
+				delta_s_max = target_s_max - s_max
+			
+			delta_temp = target_temp - t_ref
+			
+			#print(f'AnsPseudoContinuumFile :: {leaf_grp_name=} {s_max=} {t_ref=} {p_ref=} {delta_s_min=} {delta_temp=} {mismatch_s_max=} {mismatch_temp=}')
+			
+			if (
+				(
+					(np.abs(delta_s_max) <= np.abs(mismatch_s_max)) # Want closest `s_max`, must have `s_max` is less than `target_s_max`
+					and (
+						(delta_s_max >= 0)
+					)
+				)
+				and (
+					(np.abs(delta_temp) <= np.abs(mismatch_temp)) # Want closest `temp`, prefer `t_ref` is greater than `target_temp`
+					and (
+						(delta_temp <= 0)
+						or ((delta_temp > 0) and (mismatch_temp > 0))
+					)
+				)
+			):
+				mismatch_s_max = delta_s_max
+				mismatch_temp = delta_temp
+				best_grp_name = leaf_grp_name
+				best_grp = leaf_grp
+				best_parameters = (s_max, t_ref, p_ref)
+		
+		return (best_grp_name, best_grp, best_parameters)
 	
 	
 	def _get_target_leaf_group(
@@ -485,57 +526,47 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			
 			result = None
 			
-			# Get leaf groups in `iso_grp`
-			# groups are ordered by the temperature the continuum was calculated at `t_cont`, then the maximum line strength present in the continuum `s_max`
-			#i = 0
-			#leaf_grp_name = self.get_leaf_grp_name(i) 
-			#while leaf_grp_name in iso_grp:
 			target_grp_parameters = (s_max, temperature)
 			
-			for j, leaf_grp_name, leaf_grp in self.get_increasing_leaf_grp_name_in_grp_iterable(iso_grp):
-				leaf_grp = iso_grp[leaf_grp_name]
-				leaf_grp_pc_parameters = self._get_pseudo_continuum_parameters(leaf_grp.attrs)
-				# Move on to next group if lower bounds are wrong
-				#print(f'TESTING: {(s_max, temperature)=} {leaf_grp_pc_parameters=}')
+			leaf_grp_name, leaf_grp, leaf_grp_parameters = self._select_best_leaf_grp_for_parameters(
+				*target_grp_parameters,
+				iso_grp = iso_grp
+			)
+			
+			if leaf_grp is not None:
+				_lgr.info(f'Found compatible data for {s_max=} {temperature=}. Chosen group has {leaf_grp_parameters=}')
+				wn_bin_center = leaf_grp['wn_bin_center'][tuple()]
+				wn_bin_width = leaf_grp['wn_bin_width'][tuple()]
+				wn_bin_lower_edge = wn_bin_center - 0.5*wn_bin_width
+				wn_bin_upper_edge = wn_bin_center + 0.5*wn_bin_width + wn_bin_upper_edge_eta
 				
-				if self._are_pseudo_continuum_parameters_compatible( # NOTE: as `leaf_grp_pc_parameters` should be ordered we can just use the first compatible `leaf_grp`
-					target_grp_parameters,
-					leaf_grp_pc_parameters,
-				):
-					_lgr.info(f'Found compatible data for {s_max=} {temperature=}. Chosen group has {leaf_grp_pc_parameters=}')
-					wn_bin_center = leaf_grp['wn_bin_center'][tuple()]
-					wn_bin_width = leaf_grp['wn_bin_width'][tuple()]
-					wn_bin_lower_edge = wn_bin_center - 0.5*wn_bin_width
-					wn_bin_upper_edge = wn_bin_center + 0.5*wn_bin_width + wn_bin_upper_edge_eta
-					
-					# If any part of a bin is selected by `wn_mask_fn` then return that entire bin
-					wn_mask_fn = lambda x: (requested_wn_range[0] <= x) & (x <= requested_wn_range[1])
-					wn_mask = wn_mask_fn(wn_bin_lower_edge) | wn_mask_fn(wn_bin_center) | wn_mask_fn(wn_bin_upper_edge)
-					n_bins = np.count_nonzero(wn_mask)
-					
-					if n_bins != 0:
-						result = PseudoContinuumData(
-							leaf_grp_pc_parameters[0],
-							leaf_grp_pc_parameters[1],
-							leaf_grp_pc_parameters[2],
-							requested_wn_range,
-							leaf_grp['wn_bin_center'][wn_mask],
-							leaf_grp['wn_bin_width'][wn_mask],
-							leaf_grp['line_strength_sum'][wn_mask],
-							leaf_grp['line_strength_weighted_mean_lower_energy_state'][wn_mask],
-							leaf_grp['line_strength_weighted_gamma_self'][wn_mask],
-							leaf_grp['line_strength_weighted_n_self'][wn_mask],
-							np.empty((n_bins, n_ambient_gasses), dtype=float),
-							np.empty((n_bins, n_ambient_gasses), dtype=float),
-						)
+				# If any part of a bin is selected by `wn_mask_fn` then return that entire bin
+				wn_mask_fn = lambda x: (requested_wn_range[0] <= x) & (x <= requested_wn_range[1])
+				wn_mask = wn_mask_fn(wn_bin_lower_edge) | wn_mask_fn(wn_bin_center) | wn_mask_fn(wn_bin_upper_edge)
+				n_bins = np.count_nonzero(wn_mask)
+				
+				if n_bins != 0:
+					result = PseudoContinuumData(
+						leaf_grp_parameters[0],
+						leaf_grp_parameters[1],
+						leaf_grp_parameters[2],
+						requested_wn_range,
+						leaf_grp['wn_bin_center'][wn_mask],
+						leaf_grp['wn_bin_width'][wn_mask],
+						leaf_grp['line_strength_sum'][wn_mask],
+						leaf_grp['line_strength_weighted_mean_lower_energy_state'][wn_mask],
+						leaf_grp['line_strength_weighted_gamma_self'][wn_mask],
+						leaf_grp['line_strength_weighted_n_self'][wn_mask],
+						np.empty((n_bins, n_ambient_gasses), dtype=float),
+						np.empty((n_bins, n_ambient_gasses), dtype=float),
+					)
 
-						b_grp = self._get_broadeners_grp(leaf_grp, on_missing_broadener)
-						if b_grp is None:
-							for i, ambient_gas in enumerate(ambient_gasses):
-								result.line_strength_weighted_gamma_amb[:,i] = result.line_strength_weighted_gamma_self
-								result.line_strength_weighted_n_amb[:,i] = result.line_strength_weighted_n_self
-							break
-						
+					b_grp = self._get_broadeners_grp(leaf_grp, on_missing_broadener)
+					if b_grp is None:
+						for i, ambient_gas in enumerate(ambient_gasses):
+							result.line_strength_weighted_gamma_amb[:,i] = result.line_strength_weighted_gamma_self
+							result.line_strength_weighted_n_amb[:,i] = result.line_strength_weighted_n_self
+					else:
 						for i, ambient_gas in enumerate(ambient_gasses):
 							bg_grp = self._get_single_broadener_grp(b_grp, ambient_gas.name, on_missing_broadener)
 							if bg_grp is None:
@@ -544,9 +575,8 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 							else:
 								result.line_strength_weighted_gamma_amb[:,i] = bg_grp['line_strength_weighted_gamma_amb'][wn_mask]
 								result.line_strength_weighted_n_amb[:,i] = bg_grp['line_strength_weighted_n_amb'][wn_mask]
-					else:
-						_lgr.warn(f'No wavenumbers selected by {wn_mask_fn}, will return empty data. ')
-					break # exit loop as soon as we find a compatible group
+				else:
+					_lgr.warn(f'No wavenumbers selected by {wn_mask_fn}, will return empty data. ')
 			
 			if result is None:
 				_lgr.warn(f'No group found that is compatible with {target_grp_parameters=}, will return empty data. ')

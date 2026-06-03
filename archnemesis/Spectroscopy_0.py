@@ -34,10 +34,10 @@ import os
 import os.path
 import archnemesis as ans
 from numba import jit, njit
-from archnemesis.database.datatypes.wave_range import WaveRange
+#from archnemesis.database.datatypes.wave_range import WaveRange
 
 from archnemesis.helpers import h5py_helper, path_redirect
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 
 import logging
@@ -2491,14 +2491,14 @@ def calc_ktable(outname,                       #Name of the output .lta file
 
     _lgr.info(f'Selecting lines in the spectral range {vbinmin:.2f} - {vbinmax:.2f} for the calculations')
 
-    linedata.fetch_linedata(
+    linedata.set_params(
         vmin = vbinmin, 
         vmax = vbinmax, 
-        wave_unit = ispace
-    )
+        wave_unit = ispace,
+    ).fetch_linedata()
 
     # Download partition function tables for the gas isotopes
-    linedata.fetch_partition_function()
+    linedata.fetch_partition_fn()
 
     #Looping through the pressure and temperature levels to calculate the k-coefficients
     k_coefficients = np.zeros((Spectroscopy.NWAVE, Spectroscopy.NG, Spectroscopy.NP, Spectroscopy.NT))
@@ -2517,35 +2517,46 @@ def calc_ktable(outname,                       #Name of the output .lta file
                 nus = 1e4 / linedata.line_data.NU
 
             #Estimating the spacing in the cross section calculations
-            alpha_d = linedata.calculate_doppler_width(tempx)
-            gamma_l = linedata.calculate_lorentz_width(pressx,tempx,amb_frac=1.-self_frac)
+            alpha_d = linedata.calculate_doppler_width(tempx, combined_output=True)
+            gamma_l = linedata.calculate_lorentz_width(tempx,pressx, amb_frac=1.-self_frac, combined_output=True)
 
             delv_calc_doppler = np.min(alpha_d * nus / linedata.line_data.NU)
             delv_calc_lorentz = np.min(gamma_l * nus / linedata.line_data.NU) 
-            delv_calc = np.min([delv_calc_doppler]) / 5.
+            delv_calc = np.min([delv_calc_doppler, delv_calc_lorentz]) / 5.
 
             ncalc = int((vbinmax-vbinmin)/delv_calc)
             wavecalc = np.linspace(vbinmin,vbinmax,ncalc)
 
             _lgr.info(f'Number of absorption lines in the range = {len(linedata.line_data.NU)}')
             _lgr.info(f'Number of spectral points in the range = {ncalc} - delta_wave = {delv_calc}')    
-            _lgr.info(f'Calculating line-by-line absorption coefficients')        
+            _lgr.info('Calculating line-by-line absorption coefficients')        
 
             #Calculating the absorption coefficients at the line-by-line level for the given pressure and temperature
-            kabs = linedata.calculate_monochromatic_absorption(
-                        waves=wavecalc,     # spectral points
-                        temp=tempx,         # kelvin
-                        press=pressx,       # Atmospheres
-                        amb_frac=1.-self_frac,  # fraction of broadening due to ambient gas
-                        wave_unit=ispace,   # unit of `waves` argument
-                        lineshape_fn=lineshape, # lineshape function to use
-                        line_calculation_wavenumber_window=vrel, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
-                        add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+            kabs = np.empty((wavecalc.shape[0],), dtype=float)
+            linedata.calculate_monochromatic_absorption(
+                wave_grid = wavecalc,
+                t_calc = tempx,
+                p_calc = pressx,
+                
+                amb_frac = 1.0 - self_frac, # fraction of broadening due to ambient gas
+                wave_calc_range  = None, # If not `None`, restrict calculation to (min,max) values
+                isotopic_abundance = None, # if not `None`, use custom isotopic abundance otherwise use terrestrial values. Must have the same number of entries as isotopologues in `line_data`
+                lineshape_fn = lineshape, # lineshape function to use.
+                s_min  = 1E-32, # minimum strength of line to include in calculation (will still include continuum if present regardless of this)
+                wn_calc_window = vrel, # (cm^{-1})
+                wn_approx_window = 3*vrel, # (cm^{-1})
+                wave_unit = ispace, # unit of `wave_grid` and `wave_calc_range`
+                
+                include_lines = True, # include line set in calculation?
+                include_continuum  = True, # include contintuunm in calculation
+            
+                out = kabs, # where to put the result. if 2-dimensions, will assume the 1st dimension is 2 and will fill with (line_set absorption, continuum absorption), if 3 dimensional will assume 1st dimension is 2 (line set, contiuum) then 2nd dimension is per isotopologue
+                store = None, # Temporary storage, if `None` will create some. Useful when you know you will need to perform calculations on similarlty shaped data over and over again.
             )
 
 
             #Calculating fo each wavelength bin
-            _lgr.info(f'Calculating the cumulative distributions and k-coefficients for each bin')
+            _lgr.info('Calculating the cumulative distributions and k-coefficients for each bin')
             for iwave in range(Spectroscopy.NWAVE):
 
                 #Calculating the bin size
