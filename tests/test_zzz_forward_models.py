@@ -4,6 +4,9 @@ import numpy as np
 import os
 curr = os.getcwd()
 
+if False:
+    print(pytest) # Removes the "unused import" error
+
 def test_thermal_emission_cirs():  
     '''
     Jupiter thermal emission test against NEMESIS
@@ -353,15 +356,62 @@ def test_solar_occultation_mars():
     runname = 'mars_solocc'
     
     #Reading the input files
-    Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval,Telluric = ans.Files.read_input_files_hdf5(runname)
+    (
+        Atmosphere,
+        Measurement,
+        Spectroscopy,
+        Scatter,
+        Stellar,
+        Surface,
+        CIA,
+        Layer,
+        Variables,
+        Retrieval,
+        Telluric
+    ) = ans.Files.read_input_files_hdf5(runname)
     
     #Calculating forward model with CIRSrad
-    ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
+    ForwardModel = ans.ForwardModel_0(
+        runname=runname, 
+        Atmosphere=Atmosphere,
+        Surface=Surface,
+        Measurement=Measurement,
+        Spectroscopy=Spectroscopy,
+        Stellar=Stellar,
+        Scatter=Scatter,
+        CIA=CIA,
+        Layer=Layer,
+        Variables=Variables
+    )
     SPECONV = ForwardModel.nemesisSOfm()
     SPECONVg,dSPECONV = ForwardModel.nemesisSOfmg()
     
     #Reading the reference results
     expected_speconv = np.load('reference_result.npy')
+    
+    if False: # More diagnostics for testing. To enable change `if False:` to `if True:`
+        import matplotlib.pyplot as plt
+        
+        print(f'{SPECONV.shape=} {SPECONVg.shape=} {dSPECONV.shape=}')
+        print(f'{expected_speconv.shape=} ')
+    
+        plt.figure()
+        plt.title('SPECONV')
+        plt.imshow(SPECONV, cmap = 'viridis')
+        
+        plt.figure()
+        plt.title('SPECONVg')
+        plt.imshow(SPECONVg, cmap = 'viridis')
+        
+        plt.figure()
+        plt.title('expected_speconv')
+        plt.imshow(expected_speconv, cmap = 'viridis')
+        
+        plt.show()
+        
+        
+        
+        
     np.testing.assert_allclose(SPECONV, expected_speconv, rtol=1e-5, atol=1e-8)
     np.testing.assert_allclose(SPECONVg, expected_speconv, rtol=1e-5, atol=1e-8)
     

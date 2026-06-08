@@ -3,7 +3,10 @@ import archnemesis as ans
 import numpy as np
 import os
 curr = os.getcwd()
-  
+
+if False:
+    print(pytest) # Removes the "unused import" error
+
 ################################################################################################################################################
 
 def test_layer_nemesis_units():

@@ -788,7 +788,7 @@ class Surface_0:
         
         #Opening file
         f = open(runname+'.sur','r')
-        nem = int(np.fromfile(f,sep=' ',count=1,dtype='int'))
+        nem = int(np.fromfile(f,sep=' ',count=1,dtype='int')[0])
     
         vem = np.zeros([nem])
         emissivity = np.zeros([nem])

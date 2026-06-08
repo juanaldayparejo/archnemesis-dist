@@ -69,8 +69,11 @@ class AnsDatabaseFile:
 			if leaf_grp_name in grp:
 				yield i, leaf_grp_name, grp[leaf_grp_name]
 			else:
-				return
+				break
 			i+=1
+		
+		if i == 0:
+			raise RuntimeError(f'No leaf group with prefix "{cls.leaf_group_prefix}" found in group "{grp.name}" of file "{grp.file.filename}". The HDF5 file is probably not the correct format.')
 	
 	@contextmanager
 	def open(

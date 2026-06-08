@@ -21,44 +21,44 @@ from archnemesis.database.data_layouts.record_layout import RecordLayout
 
 class PseudoContinuumDataRecordLayout(RecordLayout):
 	mol_id                                         : Annotated[int,   IDNumber(
-		'RADTRAN ID of molecule'
+		r'RADTRAN ID of molecule'
 	)]
 	local_iso_id                                   : Annotated[int,   IDNumber(
-		'Isotope ID in context of parent molecule'
+		r'Isotope ID in context of parent molecule'
 	)]
 	wn_bin_center                                  : Annotated[float, Quantity(
-		"Wavenumber of pseudo-continuum bin center", 
-		"cm^{-1}"
+		r"Wavenumber of pseudo-continuum bin center", 
+		r"cm^{-1}"
 	)]
 	wn_bin_width                                   : Annotated[float, Quantity(
-		"Width of pseudo-continuum bin", 
-		"cm^{-1}"
+		r"Width of pseudo-continuum bin", 
+		r"cm^{-1}"
 	)]
 	line_strength_sum                              : Annotated[float, Quantity(
-		"Sum of line strengths in this pseudo-continuum bin at reference temperature (see containing group) [\sum{S_{i}}]", 
-		'cm^{-1}/(molec.cm^{-2})'
+		r"Sum of line strengths in this pseudo-continuum bin at reference temperature (see containing group) [\sum{S_{i}}]", 
+		r'cm^{-1}/(molec.cm^{-2})'
 	)]
 	line_strength_weighted_mean_lower_energy_state : Annotated[float, Quantity(
-		"Mean lower energy state of lines in this pseudo-continuum bin weighted by line strength at reference temperature (see containing group) [\frac{\sum{{S_{i} E_{\textrm{lower}}}}{\sum{S_{i}}}]", 
-		"cm^{-1}"
+		r"Mean lower energy state of lines in this pseudo-continuum bin weighted by line strength at reference temperature (see containing group) [\frac{\sum{{S_{i} E_{\textrm{lower}}}}{\sum{S_{i}}}]", 
+		r"cm^{-1}"
 	)]
 	line_strength_weighted_gamma_self              : Annotated[float, Quantity(
-		"Mean lorentzian HWHM of lines in this pseudo-continuum bin weighted by line strength at reference temperature and pressure (see containing group) [\frac{\sum{{S_{i} \gamma_{\textrm{self}}}}{\sum{S_{i}}}]", 
-		'cm{^-1} atm^{-1}'
+		r"Mean lorentzian HWHM of lines in this pseudo-continuum bin weighted by line strength at reference temperature and pressure (see containing group) [\frac{\sum{{S_{i} \gamma_{\textrm{self}}}}{\sum{S_{i}}}]", 
+		r'cm{^-1} atm^{-1}'
 	)]
 	line_strength_weighted_n_self                  : Annotated[float, Quantity(
-		"Mean temperature exponent for lorentzian HWHM of lines in this pseudo-continuum bin weighted by line strength at reference temperature (see containing group) [\frac{\sum{{S_{i} n_{\textrm{self}}}}{\sum{S_{i}}}]", 
-		"NUMBER"
+		r"Mean temperature exponent for lorentzian HWHM of lines in this pseudo-continuum bin weighted by line strength at reference temperature (see containing group) [\frac{\sum{{S_{i} n_{\textrm{self}}}}{\sum{S_{i}}}]", 
+		r"NUMBER"
 	)]
 	
 
 class PseudoContinuumBroadenerRecordLayout(RecordLayout):
 	line_strength_weighted_gamma_amb               : Annotated[float, Quantity(
-		"Mean ambient gas lorentzian HWHM of lines in this pseudo-continuum bin weighted by line strength at reference temperature and pressure [\frac{\sum{{S_{i} \gamma_{\textrm{self}}}}{\sum{S_{i}}}]", 
-		'cm{^-1} atm^{-1}'
+		r"Mean ambient gas lorentzian HWHM of lines in this pseudo-continuum bin weighted by line strength at reference temperature and pressure [\frac{\sum{{S_{i} \gamma_{\textrm{self}}}}{\sum{S_{i}}}]", 
+		r'cm{^-1} atm^{-1}'
 	)]
 	line_strength_weighted_n_amb                   : Annotated[float, Quantity(
-		"Mean ambient gas temperature exponent for lorentzian HWHM of lines in this pseudo-continuum bin weighted by line strength at reference temperature [\frac{\sum{{S_{i} n_{\textrm{self}}}}{\sum{S_{i}}}]", 
-		"NUMBER"
+		r"Mean ambient gas temperature exponent for lorentzian HWHM of lines in this pseudo-continuum bin weighted by line strength at reference temperature [\frac{\sum{{S_{i} n_{\textrm{self}}}}{\sum{S_{i}}}]", 
+		r"NUMBER"
 	)]
 	

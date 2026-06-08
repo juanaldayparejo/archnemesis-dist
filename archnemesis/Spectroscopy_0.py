@@ -42,6 +42,7 @@ from archnemesis.helpers import h5py_helper, path_redirect
 
 import logging
 _lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.INFO)
 
 ###############################################################################################
 
@@ -52,6 +53,8 @@ Created on Tue Jul 22 17:27:12 2021
 
 State Vector Class.
 """
+
+BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR : float = 1.0E20
 
 class Spectroscopy_0:
 
@@ -820,6 +823,8 @@ class Spectroscopy_0:
         @param wavemax: real
             Maximum wavenumber (cm-1) or wavelength (um)
         """
+        
+        _lgr.info(f'Reading table {self.LOCATION=} {wavemin=} {wavemax=}')
         
         if self.LOCATION is None:
             raise ValueError('error in Spectroscopy.read_tables() :: LOCATION is not defined')
@@ -1848,6 +1853,7 @@ def read_lbltable(filename,wavemin,wavemax):
     if not filename.endswith('.lta'):
         filename += '.lta'
     
+    _lgr.debug(f'{filename=}')
     with open(filename, 'rb') as f:
 
         #nbytes_int32 = 4
@@ -1897,7 +1903,7 @@ def read_lbltable(filename,wavemin,wavemax):
 
         #Reading the absorption coefficients
         #######################################
-        k = np.zeros([nwave,npress,abs(ntemp)])
+        k = np.zeros([nwave,npress,abs(ntemp)], dtype=np.float64)
 
         #Jumping until we get to the minimum wavenumber
         njump = npress*abs(ntemp)*(wn_idxs[0])
@@ -1909,20 +1915,8 @@ def read_lbltable(filename,wavemin,wavemax):
         il = 0
         for ik in range(nwave):
             for i in range(npress):
-                k[ik,i,:] = k_out[il:il+abs(ntemp)]
+                k[ik,i,:] = (k_out[il:il+abs(ntemp)] / BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR)
                 il = il + abs(ntemp)
-    """
-    _lgr.debug(f'{filename=}')
-    _lgr.debug(f'{npress=}')
-    _lgr.debug(f'{ntemp=}')
-    _lgr.debug(f'{gasID=}')
-    _lgr.debug(f'{isoID=}')
-    _lgr.debug(f'{presslevels=}')
-    _lgr.debug(f'{templevels=}')
-    _lgr.debug(f'{nwave=}')
-    _lgr.debug(f'{wave=}')
-    _lgr.debug(f'{k=}')
-    """
     
     return npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wave,k
 
@@ -2031,7 +2025,7 @@ def read_ktable(filename,wavemin,wavemax):
         #Reading the k-coefficients
         #######################################
 
-        k_g = np.zeros([nwave,ng,npress,ntemp])
+        k_g = np.zeros([nwave,ng,npress,ntemp], dtype=np.float64)
 
         #Jumping until we get to the minimum wavenumber
         njump = npress*ntemp*ng*ins[0]
@@ -2044,7 +2038,7 @@ def read_ktable(filename,wavemin,wavemax):
         for ik in range(nwave):
             for i in range(npress):
                 for j in range(ntemp):
-                    k_g[ik,:,i,j] = k_out[il:il+ng]
+                    k_g[ik,:,i,j] = (k_out[il:il+ng] / BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR)
                     il = il + ng
 
     return gasID,isoID,nwave,wave,fwhm,ng,g_ord,del_g,npress,presslevels,ntemp,templevels,k_g
@@ -2139,7 +2133,7 @@ def write_lbltable(filename,npress,ntemp,gasID,isoID,presslevels,templevels,nwav
 
         for i in range(nwave):
             for j in range(npress):
-                tmp = k[i,j,:] * 1.0e20
+                tmp = k[i,j,:] * BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR
                 myfmt=df*len(tmp)
                 bin=struct.pack(myfmt,*tmp) #K
                 f.write(bin)
@@ -2218,13 +2212,13 @@ def write_ktable(filename,gasID,isoID,g_ord,del_g,presslevels,templevels,nwave,v
         # -------------------------
         # k-coefficients
         # Order MUST match read_ktable():
-        # wave → press → temp → g
+        # wave -> press -> temp -> g
         # -------------------------
         for iw in range(nwave):
             for ip in range(npress):
                 for it in range(ntemp):
                     np.asarray(
-                        k_g[iw, :, ip, it],
+                        k_g[iw, :, ip, it] * BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR,
                         dtype='float32'
                     ).tofile(f)
 
@@ -2406,7 +2400,7 @@ def calc_lbltable(outname,                       #Name of the output .lta file
         k[:,i,:,0] = Spectroscopy.calc_klbl_online(Spectroscopy.NT,pressx,Spectroscopy.TEMP,self_frac=self_frac,add_pressure_shift=add_pressure_shift)[:,:,0]
 
     #Writing the look-up table
-    write_lbltable(outname,npress,ntemp,gasID,isoID,Spectroscopy.PRESS,Spectroscopy.TEMP,nwave,wavemin,delwave,k*1.0e-20,DOUBLE=False)
+    write_lbltable(outname,npress,ntemp,gasID,isoID,Spectroscopy.PRESS,Spectroscopy.TEMP,nwave,wavemin,delwave,k,DOUBLE=False)
 
 
 def calc_ktable(outname,                       #Name of the output .lta file

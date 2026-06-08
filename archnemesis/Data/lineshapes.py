@@ -43,9 +43,13 @@ def get(name: str, signature: Any) -> Any:
     )
     return cls()
 
-
-voigt_profile = get("voigt_profile", float64(float64, float64, float64))
-
+# VOIGT PROFILE ##########################################################
+voigt_profile = get("voigt_profile", float64(float64, float64, float64)) #
+# ARGUMENTS -------------------------------------------------------------#
+#   x - Value to calculate probability for                               #
+#   sigma - Standard deviation of normal distribution part               #
+#   gamma - Half-width at Half-maximum of Cauchy distribution part       #
+##########################################################################
 
 SQRT_2 = np.sqrt(2)
 SQRT_PI = np.sqrt(np.pi)
@@ -54,28 +58,12 @@ SQRT_2log2 = np.sqrt(2*np.log(2))
 SQRT_log2 = np.sqrt(np.log(2))
 
 
-@njit
-def voigt_ch4_H2_ambient(
-        delta_wn : np.ndarray, 
-        alpha_d : float, 
-        gamma_l : float
-    ) -> np.ndarray:
-    
-    
-    # NOTE: Unsure where the log(2) factor comes from but do not get the same answer as existing LBL tables without it.
-    #       it could also be a factor of 1/sqrt(2), they are very similar numbers.
-    #return voigt_profile(delta_wn, alpha_d, np.log(2)*gamma_l) 
-
-    # NOTE: Unsure where the 1/sqrt(2) factor comes from but do not get the same answer as existing LBL tables without it.
-    #       it could also be a factor of log(2), they are very similar numbers.
-    return voigt_profile(delta_wn, alpha_d/SQRT_2, gamma_l/SQRT_2)
-
 
 @njit
 def voigt(
         delta_wn : np.ndarray, 
-        alpha_d : float, 
-        gamma_l : float
+        alpha_d : float, # HWHM of gaussian
+        gamma_l : float, # HWHM of cauchy
     ) -> np.ndarray:
     """
     Compute Voigt profile using Humlicek's algorithm
@@ -118,6 +106,24 @@ def voigt(
     return voigt_profile(delta_wn, alpha_d / SQRT_2log2, gamma_l)
 
 @njit
+def voigt_ch4_H2_ambient(
+        delta_wn : np.ndarray, 
+        alpha_d : float, 
+        gamma_l : float
+    ) -> np.ndarray:
+    
+    
+    # NOTE: Unsure where the log(2) factor comes from but do not get the same answer as existing LBL tables without it.
+    #       it could also be a factor of 1/sqrt(2), they are very similar numbers.
+    #return voigt_profile(delta_wn, alpha_d, np.log(2)*gamma_l) 
+
+    # NOTE: Unsure where the 1/sqrt(2) factor comes from but do not get the same answer as existing LBL tables without it.
+    #       it could also be a factor of log(2), they are very similar numbers.
+    return voigt_profile(delta_wn, alpha_d/SQRT_2, gamma_l/SQRT_2)
+
+
+
+@njit
 def hartmann_empirical_infrared_ch4_h2_broadening(
         delta_wn : np.ndarray, 
         alpha_d : float, 
@@ -143,7 +149,7 @@ def hartmann_empirical_infrared_ch4_h2_broadening(
 @njit
 def lorentz(
         delta_wn : np.ndarray, 
-        alpha_d : float, 
+        alpha_d : float,
         gamma_l : float
     ) -> np.ndarray:
     """

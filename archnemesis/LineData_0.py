@@ -167,6 +167,9 @@ def doppler_width(
         nu : np.ndarray, #[N] wavenumber
         out : np.ndarray, #[N] doppler width
 ):
+    """
+    Computes Half-width-half-maximum (HWHM) of doppler broadening component
+    """
     doppler_width_const_cgs = (1.0 / Data.constants.c_light_cgs) * np.sqrt(2 * np.log(2) * Data.constants.N_avogadro * Data.constants.k_boltzmann_cgs)
     
     for i in prange(nu.shape[0]):
@@ -180,13 +183,14 @@ def lorentz_width(
         broadening_params : np.ndarray, #[M,N] M = N_mol * 3, note: N_mol = 1 + number of ambient molecules (self counts as 1), M is arranged (gamma, n, delta) for each molecule
         out : np.ndarray, #[N]
 ):
+    """
+    Computes Half-width-half-maximum (HWHM) of pressure broadening component
+    """
     for i in prange(broadening_params.shape[1]):
-        n_combined = 0
         gamma_combined = 0
         for j in prange(mol_mix_frac.shape[0]):
-            n_combined += broadening_params[3*j+1,i] * mol_mix_frac[j]
-            gamma_combined += broadening_params[3*j,i] * mol_mix_frac[j]
-        out[i] = (t_ratio**n_combined) * gamma_combined * p_ratio
+            gamma_combined += (t_ratio**broadening_params[3*j+1,i])*broadening_params[3*j,i] * mol_mix_frac[j] * p_ratio
+        out[i] = gamma_combined
 
 @njit(parallel=False)
 def line_strength(
@@ -218,7 +222,7 @@ def add_line_set_monochromatic_spectrum(
         strength : np.ndarray, #[N_lines]
         alpha_d : np.ndarray, #[N_lines]
         gamma_l : np.ndarray, #[N_lines]
-        factor : float, # Factor to apply to final result (e.g. 1E20 when creating k-tables, a factor to account for isotopic abundance, or a combination)
+        factor : float, # Factor to apply to final result (e.g. a factor to account for isotopic abundance)
         
         out : np.ndarray, #[N_waves] should be all zeros, as result will be ADDED to this not overwritten
         
@@ -340,7 +344,7 @@ def add_pseudo_continuum_monochromatic_spectrum(
         strength_sum : np.ndarray, #[N]
         mean_alpha_d : np.ndarray, #[N]
         mean_gamma_l : np.ndarray, #[N]
-        factor : float, # Factor to apply to final result (e.g. 1E20 when creating k-tables, a factor to account for isotopic abundance, or a combination)
+        factor : float, # Factor to apply to final result (e.g. a factor to account for isotopic abundance)
         
         out : np.ndarray, #[N_waves] should be all zeros, as result will be ADDED to this not overwritten
         
@@ -1426,11 +1430,11 @@ class AnsDatabase:
 @dc.dataclass(slots=True)
 class LineDataParams:
     ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,)
-    wn_min : float = 0
-    wn_max : float = 0
+    wn_min : float = 0.0
+    wn_max : float = np.inf
     s_min : float = -1
-    temp_requested : float = 0
-    press_requested : float = 0
+    temp_requested : float = 296
+    press_requested : float = 1
 
     
 
@@ -1622,23 +1626,25 @@ class LineData_0:
     def fetch_partition_fn(
             self,
             refresh : bool = False,
-    ):
+    ) -> Self:
         print('LineData_0::fetch_partition_fn()')
         if self._params_fetched_partition_last and not refresh:
-            return
+            return self
         
         print('Actually getting the partition function')
         self.partition_fn_data = self._ans_database.fetch_partition_fn(self.mol_ids, self.iso_ids, refresh=refresh)
-        print(f'{self.partition_fn_data=}')
+        #print(f'{self.partition_fn_data=}')
         self._params_fetched_partition_last = True
+        
+        return self
 
     def fetch_linedata(
             self, 
             refresh : bool = False,
-    ) -> None:
+    ) -> Self:
     
         if self._params_fetched_lines_last and not refresh:
-            return
+            return self
         
         self.fetch_partition_fn(refresh=refresh)
     
@@ -1705,7 +1711,7 @@ class LineData_0:
         # Remember that we used these parameters to fetch the last lot of linedata
         self._params_fetched_lines_last = True
         
-        return
+        return self
 
     def calculate_doppler_width(
             self,
@@ -1842,6 +1848,8 @@ class LineData_0:
             include_continuum : bool = True,
     ) -> np.ndarray:
         
+        
+        
         # Create default arrays
         if out is None:
             result = np.zeros_like(wave_grid, dtype=float)
@@ -1888,6 +1896,27 @@ class LineData_0:
             isotopic_abundance = np.array([isotopic_abundance], dtype=float)
         else:
             assert self.n_isos == isotopic_abundance.shape[0], "If provided, there must be an isotopic abundance for each isotopologue in the LineData_0 instance"
+        
+        if _lgr.level <= logging.INFO:
+            msg = '## ARGUMENTS ##' +'\n\t'.join((
+                f'{wave_grid=}',
+                f'{t_calc=}',
+                f'{p_calc=}',
+                f'{amb_frac=}',
+                f'{wave_calc_range=}',
+                f'{isotopic_abundance=}',
+                f'{lineshape_fn=}',
+                f'{s_min=}',
+                f'{wn_calc_window=}',
+                f'{wn_approx_window=}',
+                f'{wave_unit=}',
+                f'{include_lines=}',
+                f'{include_continuum=}',
+                f'{out=}',
+                f'{store=}',
+            )) + '##-----------##'
+            _lgr.info(msg)
+        
         
         if out.ndim >= 2:
             out_line_set_abs = out[0]

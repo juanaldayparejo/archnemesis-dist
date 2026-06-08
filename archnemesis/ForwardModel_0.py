@@ -463,7 +463,7 @@ class ForwardModel_0:
             #Reading tables in the required wavelength range
             self.SpectroscopyX = deepcopy(self.Spectroscopy)
             self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
-
+            
             #Initialise array for averaging spectra (if required by NAV>1)
             SPEC = np.zeros(self.SpectroscopyX.NWAVE)
             WGEOMTOT = 0.0
@@ -893,7 +893,7 @@ class ForwardModel_0:
                 
             #Reading tables in the required wavelength range
             self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
-
+            
             #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
             self.adjust_hydrostat = False
 
@@ -1594,7 +1594,7 @@ class ForwardModel_0:
         """
         
         from joblib import Parallel, delayed
-        from copy import copy, deepcopy
+        from copy import deepcopy
         
         #Errors and checks
         if self.Atmosphere.NLOCATIONS!=1:
@@ -1657,7 +1657,7 @@ class ForwardModel_0:
                 else:
                     FWHMEXIST=''
 
-                SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST='')
+                SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
             elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
                 SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
@@ -1705,7 +1705,7 @@ class ForwardModel_0:
         """
         
         from joblib import Parallel, delayed
-        from copy import copy, deepcopy
+        from copy import deepcopy
         
         #Errors and checks
         if self.Atmosphere.NLOCATIONS!=1:
@@ -1951,13 +1951,13 @@ class ForwardModel_0:
 
             return SPECONV,dSPECONV
         
-########################################################################
+    ########################################################################
 
     def process_IAV(self,IAV,IGEOM,return_grad=False):
         
         from copy import deepcopy
 
-        WGEOMTOT = 0.0
+        #WGEOMTOT = 0.0
         #Selecting the relevant Measurement
         self.select_Measurement(IGEOM,IAV)
 
@@ -1969,7 +1969,7 @@ class ForwardModel_0:
         self.LayerX = deepcopy(self.Layer)
         self.CIAX = deepcopy(self.CIA)
         self.TelluricX = deepcopy(self.Telluric)
-        flagh2p = False
+        #flagh2p = False
 
         #Updating the required parameters based on the current geometry
         if self.MeasurementX.EMISS_ANG[0,0]>=0.0:
@@ -2055,7 +2055,7 @@ class ForwardModel_0:
 
             return SPEC1
 
-###############################################################################################
+    ###############################################################################################
 
     def chunked_execution(self, args):
         """
@@ -2415,7 +2415,7 @@ class ForwardModel_0:
                     ix += self.Variables.models[ivar].n_state_vector_entries
 
         #Calculate atmospheric density
-        rho = self.AtmosphereX.calc_rho() #rho kg/m3
+        _ = self.AtmosphereX.calc_rho() #rho kg/m3
 
 
         # NOTE: instead of having two different versions of `xmap`, just use the multiple location version.
@@ -3758,13 +3758,13 @@ class ForwardModel_0:
                 IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
 
                 #Calculating vertical column density in each self.LayerX
-                VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-24   #m-2
+                VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-4   #m-2
 
                 #Calculating vertical opacity for each gas in each self.LayerX
                 TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
                 
                 if return_grad:
-                    dTAUGAS[:,0,IGAS,:] = k[:,:,i] * 1.0e-24  #dTAUGAS/dAMOUNT (m2)
+                    dTAUGAS[:,0,IGAS,:] = k[:,:,i] * 1.0e-4  #dTAUGAS/dAMOUNT (m2)
                     dTAUGAS[:,0,self.AtmosphereX.NVMR,:] = dTAUGAS[:,0,self.AtmosphereX.NVMR,:] + dkdT[:,:,i] * VLOSDENS #dTAUGAS/dT
 
             #Combining the gaseous opacity in each self.LayerX
@@ -3781,7 +3781,7 @@ class ForwardModel_0:
             #utotl = np.zeros(self.LayerX.NLAY)
             for i in range(self.SpectroscopyX.NGAS):
                 IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-                f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * 1.0e-24  #Vertical column density of the radiatively active gases in cm-2
+                f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * 1.0e-4  #Vertical column density of the radiatively active gases in cm-2
 
             #Combining the k-distributions of the different gases in each self.LayerX, as well as their gradients
             if return_grad:
@@ -3790,7 +3790,7 @@ class ForwardModel_0:
                 #Calculating the gradients of each self.LayerX and for each gas
                 for i in range(self.SpectroscopyX.NGAS):
                     IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-                    dTAUGAS[:,:,IGAS,:] = dk_layer[:,:,:,i] * 1.0e-4 * 1.0e-20  #dTAU/dAMOUNT (m2)
+                    dTAUGAS[:,:,IGAS,:] = dk_layer[:,:,:,i] * 1.0e-4  #dTAU/dAMOUNT (m2)
 
                 dTAUGAS[:,:,self.AtmosphereX.NVMR,:] = dk_layer[:,:,:,self.SpectroscopyX.NGAS] #dTAU/dT
             else:
@@ -3928,7 +3928,6 @@ class ForwardModel_0:
         
         return TAUTOT_LAYINC, TAUTOT_PATH, dTAUTOT_LAYINC
 
-
     def calculate_layer_emission(self, return_grad=False):
         #This function calculates the emission radiance per layer along the line-of-sight
 
@@ -3956,7 +3955,7 @@ class ForwardModel_0:
 
             #Calculating the emission rates in [photons cm-2 um-1] or [photons cm-2 (cm-1)-1]
             #(NWAVE,NLAYER,NEM)
-            emission_rate = self.EmissionsX.calc_rates_hdf5(self.LayerX.TEMP,dist=self.StellarX.DIST)
+            emission_rate = self.EmissionsX.calc_rates_hdf5(self.LayerX.TEMP,dist=dist)
 
             #Calculating the density of the gases that contribute to the emission and the layer emitted intensity
             for iemi in range(self.EmissionsX.NEM):
@@ -4014,7 +4013,6 @@ class ForwardModel_0:
                 dEMITOT_LAYINC = None
 
         return EMITOT_LAYINC,dEMITOT_LAYINC
-
 
     def calculate_transmission_spectrum(
             self,
@@ -4138,10 +4136,10 @@ class ForwardModel_0:
                 else:
                     EMRAD = None
 
-                if dEMITOT_LAYINC is not None:
-                    dEMRAD = dEMITOT_LAYINC[:,:,0:NLAYIN,ipath]
-                else:
-                    dEMRAD = None
+                #if dEMITOT_LAYINC is not None:
+                #    dEMRAD = dEMITOT_LAYINC[:,:,0:NLAYIN,ipath]
+                #else:
+                #    dEMRAD = None
 
                 SPECOUT[:,:,ipath],dSPECOUT[:,:,:,0:NLAYIN,ipath],dTSURF[:,:,ipath] = calc_thermal_emission_spectrumg(self.MeasurementX.ISPACE,self.SpectroscopyX.WAVE,TAUTOT_LAYINC[:,:,0:NLAYIN,ipath],dTAUTOT_LAYINC[:,:,:,0:NLAYIN,ipath],self.AtmosphereX.NVMR,EMTEMP,EMPRESS,self.SurfaceX.TSURF,EMISSIVITY)
             else:
@@ -4882,7 +4880,7 @@ class ForwardModel_0:
                 IGAS = IGAS[0]
 
                 #Calculating vertical column density in each layer
-                VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-4 * 1.0e-20   #cm-2
+                VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-4   #cm-2
 
                 #Calculating vertical opacity for each gas in each layer
                 TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
@@ -4905,7 +4903,7 @@ class ForwardModel_0:
                 IGAS = IGAS[0]
 
                 #When using gradients
-                f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS[0]] * 1.0e-4 * 1.0e-20  #Vertical column density of the radiatively active gases in cm-2
+                f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS[0]] * 1.0e-4  #Vertical column density of the radiatively active gases in cm-2
 
             #Combining the k-distributions of the different gases in each layer
             k_layer,dk_layer = k_overlapg(self.SpectroscopyX.DELG,k_gas,dkgasdT,f_gas)

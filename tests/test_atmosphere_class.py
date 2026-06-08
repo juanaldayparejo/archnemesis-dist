@@ -3,7 +3,10 @@ import archnemesis as ans
 import numpy as np
 
 from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum
-  
+
+if False:
+    print(pytest) # Removes the "unused import" error
+
 def test_gravity():  
     '''
     Test calculation of gravity

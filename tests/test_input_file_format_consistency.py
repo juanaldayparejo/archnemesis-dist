@@ -1,5 +1,5 @@
 import os
-from collections.abc import Sequence, Iterable
+from collections.abc import Iterable
 import shutil
 
 import pytest
@@ -10,6 +10,9 @@ import archnemesis as ans
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
+
+if False:
+    print(pytest) # Removes the "unused import" error
 
 def ensure_equal_type(a, b):
     # 'a' and 'b' are not neccesarily the same types at this point
@@ -38,7 +41,7 @@ def ensure_equal_type(a, b):
                 or type_b in (int,float,complex)
             )
         ):
-        _lgr.info(f'\tTypes are number-like, so we can compare casting rules...')
+        _lgr.info('\tTypes are number-like, so we can compare casting rules...')
         casting_rules_compared = True
         is_fwd_safe_casting_possible = np.can_cast(type_a, type_b, "safe")
         is_bkwd_safe_casting_possible = np.can_cast(type_b, type_a, "safe")
