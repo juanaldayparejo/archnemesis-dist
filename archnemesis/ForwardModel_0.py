@@ -1929,15 +1929,15 @@ class ForwardModel_0:
         dSPECMOD = np.zeros((self.SpectroscopyX.NWAVE,self.MeasurementX.NGEOM,self.Variables.NX))
         for i in range(self.PathX.NPATH-1):
 
-            SPECTRUM0 = (1. - SPECOUT[:,i]) * 2. * np.pi * BASEH_TANHE[i] * 1.0e3 
-            SPECTRUM1 = (1. - SPECOUT[:,i+1]) * 2. * np.pi * BASEH_TANHE[i+1] * 1.0e3
+            SPECTRUM0 = (1. - SPECOUT[:,i]) * 2. * np.pi * (BASEH_TANHE[i] * 1.0e3 + self.AtmosphereX.RADIUS)
+            SPECTRUM1 = (1. - SPECOUT[:,i+1]) * 2. * np.pi * (BASEH_TANHE[i+1] * 1.0e3 + self.AtmosphereX.RADIUS)
             dH = (BASEH_TANHE[i+1] - BASEH_TANHE[i]) * 1.0e3
             SPECMOD[:,0] += 0.5 * (SPECTRUM0 + SPECTRUM1) * dH   #Integrating over height to get the total absorption area
 
             if gradients is True:
 
-                dSPECTRUM0 = -dSPECOUT[:,i,:] * 2. * np.pi * BASEH_TANHE[i] * 1.0e3 
-                dSPECTRUM1 = -dSPECOUT[:,i+1,:] * 2. * np.pi * BASEH_TANHE[i+1] * 1.0e3
+                dSPECTRUM0 = -dSPECOUT[:,i,:] * 2. * np.pi * (BASEH_TANHE[i] * 1.0e3 + self.AtmosphereX.RADIUS)
+                dSPECTRUM1 = -dSPECOUT[:,i+1,:] * 2. * np.pi * (BASEH_TANHE[i+1] * 1.0e3 + self.AtmosphereX.RADIUS)
                 dSPECMOD[:,0,:] += 0.5 * (dSPECTRUM0 + dSPECTRUM1) * dH   #Integrating over height to get the total absorption area
 
         #Calculating the transit depth spectrum

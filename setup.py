@@ -33,7 +33,8 @@ setup(
       'pytest',
       'corner',
       'typing_extensions',
-      'hitran-api'
+      'hitran-api',
+      'beautifulsoup4',
     ],
     extras_require={
         'grib': ['pygrib'],
@@ -44,5 +45,5 @@ setup(
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.8',
+    python_requires='>=3.10',
 )

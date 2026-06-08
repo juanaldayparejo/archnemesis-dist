@@ -165,3 +165,8 @@ cython_debug/
 .vscode/
 
 local_*_database/
+*.h5
+*.zip
+HITRAN??/
+HITRAN_TEST/
+test_data/

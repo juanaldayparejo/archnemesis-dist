@@ -20,7 +20,6 @@
 
 
 import os
-import textwrap
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -38,10 +37,10 @@ from archnemesis import (
 from archnemesis.Layer_0 import read_play,read_hlay
 from archnemesis.Data.planet_data import planet_info
 
-from archnemesis.Models import Models, ModelBase, ModelParameterEntry
+from archnemesis.Models import Models
 from copy import copy
 
-from archnemesis.helpers import h5py_helper, io_helper
+from archnemesis.helpers import h5py_helper
 from archnemesis.enums import (
     #PlanetEnum, 
     #AtmosphericProfileFormatEnum, 
@@ -1620,7 +1619,9 @@ def write_inp(runname,ispace,iscat,ilbl,woff,niter,philimit,nspec,ioff,lin,IFORM
 ###############################################################################################
 
 def read_pre(runname):
-    
+    # TODO: This shares a large amount of code with `Variables_0.read_apr(...)`, we should consider
+    # factoring out the common elements into their own methods so code only has to be maintained in
+    # one place.
     
     """
         FUNCTION NAME : read_pre()
@@ -1663,7 +1664,7 @@ def read_pre(runname):
     
     #Reading file
     idx = 0
-    nspec = int(lines[idx].split()[0])
+    nspec = int(lines[idx].split()[0]) # Number of retrievals in the file
     _lgr.debug(f'nspec = {nspec}')
     idx += 1
     if nspec != 1:
@@ -1672,7 +1673,8 @@ def read_pre(runname):
     for ispec in range(nspec):
     
         #Reading lines
-        #ispecx = int(lines[idx].split()[0])
+        ispecx = int(lines[idx].split()[0]) # Retrieval number, ignored for now in ArchNemesis as multiple retrievals per file are not implemented.
+        _lgr.debug(f'{ispecx=}')
         idx += 1
         
         #Reading latitude and longitude

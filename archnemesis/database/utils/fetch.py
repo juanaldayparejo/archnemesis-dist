@@ -1,9 +1,11 @@
 """
 Functions and classes etc. that fetch resources from the web.
 """
+#import os
+from pathlib import Path
 import urllib
 import ssl
-from typing import Generator
+from typing import Generator, Literal
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -18,7 +20,8 @@ def file_in_chunks(
         *, # All following arguments are keyword only
         chunk_size : None | int = (1024*1024), 
         encoding : str = 'ascii', 
-        proxy : None | dict[str,str]
+        proxy : None | dict[str,str],
+        error_code_action : dict[int,Literal['ignore','warning','error']] = dict()
 ) -> Generator[bytes | str]:
     """
     Fetch a file from the web and download it in chunks of `chunk_size`
@@ -64,7 +67,18 @@ def file_in_chunks(
     
     opener = urllib.request.build_opener(*handlers)
     
-    response = opener.open(url)
+    try:
+        response = opener.open(url)
+    except urllib.error.HTTPError as e:
+        eca = error_code_action.get(e.code, 'error')
+        match eca:
+            case 'ignore':
+                return
+            case 'warning':
+                _lgr.warn(f'Could not open url. Error: {str(e)}')
+                return
+            case _:
+                raise e
     
     if chunk_size is None:
         get_chunk = lambda response: response.readline()
@@ -97,9 +111,13 @@ def file_in_chunks(
 def file(
         url : str, 
         *, # All following arguments are keyword only
-        to_fpath : None | str = None, 
+        to_fpath : None | str | Path = None, 
         encoding : None | str = None, 
-        proxy : None | dict[str,str] = None
+        proxy : None | dict[str,str] = None,
+        prefix : None | str = None, # string to prefix to downloaded data
+        error_code_action : dict[int,Literal['ignore','warning','error']] = dict(),
+        use_working_file = False, # If True will use a "working file" to download data into, then move it into the "real" file after download is complete. Has not effect if `to_fpath` is None.
+        chunk_size : None | int = (1024*1024), 
 ) -> None | bytes | str:
     """
     ## ARGUMENTS ##
@@ -119,19 +137,45 @@ def file(
             If `to_fpath` is not `None` will return data from the file at the `url`.
             Otherwise will write the data to a file at `to_fpath` and return `None`.
     """
-    file_chunk_generator = file_in_chunks(url, encoding=encoding, proxy=proxy)
+    file_chunk_generator = file_in_chunks(url, chunk_size=chunk_size, encoding=encoding, proxy=proxy, error_code_action=error_code_action)
     
+    if file_chunk_generator is None: # The download failed
+        return
     
+    if encoding is None:
+        if prefix is not None and isinstance(prefix, str):
+            prefix = bytes(prefix, encoding='utf-8')
+        
     if to_fpath is not None:
         _lgr.info(f"Downloading from {url} and saving to path '{to_fpath}'")
         
         write_mode = 'wb' if encoding is None else 'w'
         
-        with open(to_fpath, write_mode) as f:
-            for chunk in file_chunk_generator:
-                f.write(chunk)
+        if use_working_file:
+            real_fpath = Path(to_fpath)
+            to_fpath = real_fpath.with_stem('~'+real_fpath.stem)
+        
+        try:
+            with open(to_fpath, write_mode) as f:
+                if prefix is not None:
+                    f.write(prefix)
+                for chunk in file_chunk_generator:
+                    f.write(chunk)
+        
+        except Exception as e:
+            # delete working file if we have one
+            if use_working_file:
+                to_fpath.unlink()
+            raise e
+        
+        else:
+            # If no error, move the working file to the desired file path
+            if use_working_file:
+                to_fpath.replace(real_fpath)
+        
         return
+        
     else:
-        join_str = b'' if encoding is None else ''
-        return join_str.join(file_chunk_generator)
+        empty_str = b'' if encoding is None else ''
+        return (empty_str if prefix is None else prefix) + empty_str.join(file_chunk_generator)
    
