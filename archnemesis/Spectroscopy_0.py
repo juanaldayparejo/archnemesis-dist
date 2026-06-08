@@ -273,66 +273,67 @@ class Spectroscopy_0:
 
         from archnemesis.Data import gas_info
 
+        msg = f'\n#===== SUMMARY =====#\n\tSpectroscopy_0 instance at memory location {id(self)}'
         if self.ILBL==SpectralCalculationMode.K_TABLES:
-            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (k-distribution)")}')
-            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
+            msg += f'\n\tCalculation type ILBL ::  {(self.ILBL," (k-distribution)")}'
+            msg += f'\n\tNumber of radiatively-active gaseous species ::  {(self.NGAS)}'
             gasname = ['']*self.NGAS
             for i in range(self.NGAS):
                 gasname1 = gas_info[str(self.ID[i])]['name']
                 if self.ISO[i]!=0:
                     gasname1 = gasname1+' ('+str(self.ISO[i])+')'
                 gasname[i] = gasname1
-            _lgr.info(f'Gaseous species ::  {(gasname)}')
+            msg += f'\n\tGaseous species ::  {(gasname)}'
 
-            _lgr.info(f'Number of g-ordinates ::  {(self.NG)}')
+            msg += f'\n\tNumber of g-ordinates ::  {(self.NG)}'
 
-            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
-            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
-            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
+            msg += f'\n\tNumber of spectral points ::  {(self.NWAVE)}'
+            msg += f"\n\tWavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}"
+            msg += f'\n\tStep size ::  {(self.WAVE[1]-self.WAVE[0])}'
 
-            _lgr.info(f'Spectral resolution of the k-tables (FWHM) ::  {(self.FWHM)}')
+            msg += f'\n\tSpectral resolution of the k-tables (FWHM) ::  {(self.FWHM)}'
 
-            _lgr.info(f'Number of temperature levels ::  {(self.NT)}')
-            _lgr.info(f"Temperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}")
+            msg += f'\n\tNumber of temperature levels ::  {(self.NT)}'
+            msg += f"\n\tTemperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}"
 
-            _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
-            _lgr.info(f"Pressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}")
+            msg += f'\n\tNumber of pressure levels ::  {(self.NP)}'
+            msg += f"\n\tPressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}"
 
         elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (line-by-line)")}')
-            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
+            msg += f'\n\tCalculation type ILBL ::  {(self.ILBL," (line-by-line)")}'
+            msg += f'\n\tNumber of radiatively-active gaseous species ::  {(self.NGAS)}'
             gasname = ['']*self.NGAS
             for i in range(self.NGAS):
                 gasname1 = gas_info[str(self.ID[i])]['name']
                 if self.ISO[i]!=0:
                     gasname1 = gasname1+' ('+str(self.ISO[i])+')'
                 gasname[i] = gasname1
-            _lgr.info(f'Gaseous species ::  {(gasname)}')
+            msg += f'\n\tGaseous species ::  {(gasname)}'
 
-            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
-            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
-            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
+            msg += f'\n\tNumber of spectral points ::  {(self.NWAVE)}'
+            msg += f"\n\tWavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}"
+            msg += f'\n\tStep size ::  {(self.WAVE[1]-self.WAVE[0])}'
 
-            _lgr.info(f'Number of temperature levels ::  {(self.NT)}')
-            _lgr.info(f"Temperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}")
+            msg += f'\n\tNumber of temperature levels ::  {(self.NT)}'
+            msg += f"\n\tTemperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}"
 
-            _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
-            _lgr.info(f"Pressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}")
+            msg += f'\n\tNumber of pressure levels ::  {(self.NP)}'
+            msg += f"\n\tPressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}"
 
         elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
-            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (line-by-line runtime)")}')
-            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
+            msg += f'\n\tCalculation type ILBL ::  {(self.ILBL," (line-by-line runtime)")}'
+            msg += f'\n\tNumber of radiatively-active gaseous species ::  {(self.NGAS)}'
             gasname = ['']*self.NGAS
             for i in range(self.NGAS):
                 gasname1 = gas_info[str(self.ID[i])]['name']
                 if self.ISO[i]!=0:
                     gasname1 = gasname1+' ('+str(self.ISO[i])+')'
                 gasname[i] = gasname1
-            _lgr.info(f'Gaseous species ::  {(gasname)}')
+            msg += f'\n\tGaseous species ::  {(gasname)}'
 
-            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
-            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
-            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
+            msg += f'\n\tNumber of spectral points ::  {(self.NWAVE)}'
+            msg += f"\n\tWavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}"
+            msg += f'\n\tStep size ::  {(self.WAVE[1]-self.WAVE[0])}'
 
             lineshape = ['']*self.NGAS
             for i in range(self.NGAS):
@@ -350,7 +351,10 @@ class Spectroscopy_0:
                     lineshape1 = 'UNKNOWN'
                 lineshape[i] = lineshape1
 
-            _lgr.info(f'Line shapes for each gas ::  {(lineshape)}')
+            msg += f'\n\tLine shapes for each gas ::  {(lineshape)}'
+        
+        msg += '\n#===================#'
+        _lgr.info(msg)
 
 
     ######################################################################################################
@@ -935,7 +939,7 @@ class Spectroscopy_0:
             raise ValueError('error in write_table_hdf5 :: selected ILBL has not been implemented yet (only ILBL=2 is currently working)')
 
     ######################################################################################################
-    def calc_klblg(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
+    def calc_klblg(self,npoints,press,temp,MakePlot=False):
         """
         Calculate the absorption coefficient at a given pressure and temperature
         looking at pre-tabulated line-by-line tables (assumed to be already stored in this class)
@@ -1102,7 +1106,7 @@ class Spectroscopy_0:
         return kgood,dkgooddT
 
     ######################################################################################################
-    def calc_klbl(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
+    def calc_klbl(self,npoints,press,temp,MakePlot=False):
         """
         Calculate the absorption coefficient at a given pressure and temperature
         looking at pre-tabulated line-by-line tables (assumed to be already stored in this class)
@@ -1340,7 +1344,7 @@ class Spectroscopy_0:
 
 
     ######################################################################################################
-    def calc_kg(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
+    def calc_kg(self,npoints,press,temp,WAVECALC=None,MakePlot=False):
         """
         Calculate the k-coefficients at a given pressure and temperature
         looking at pre-tabulated k-tables (assumed to be already stored in this class)
@@ -1446,7 +1450,7 @@ class Spectroscopy_0:
         #Checking that the calculation wavenumbers coincide with the wavenumbers in the k-tables
         ##########################################################################################
 
-        if WAVECALC[0]!=12345678.:
+        if WAVECALC is not None:
 
             NWAVEC = len(WAVECALC)
             kret = np.zeros([NWAVEC,self.NG,npoints,self.NGAS])
@@ -1491,7 +1495,7 @@ class Spectroscopy_0:
         return kret,dkretdT
 
     ######################################################################################################
-    def calc_k(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False,linear=False):
+    def calc_k(self,npoints,press,temp,WAVECALC=None,MakePlot=False,linear=False):
         """
         Calculate the k-coefficients at a given pressure and temperature
         looking at pre-tabulated k-tables (assumed to be already stored in this class)
@@ -1602,30 +1606,34 @@ class Spectroscopy_0:
         #Checking that the calculation wavenumbers coincide with the wavenumbers in the k-tables
         ##########################################################################################
         
-        NWAVEC = len(WAVECALC)
-        kret = np.zeros([NWAVEC,self.NG,npoints,self.NGAS])
-        # Precompute indices and weights for WAVECALC
-        precomputed_indices = np.zeros((NWAVEC,2),dtype=int)
-        precomputed_weights = np.zeros(NWAVEC)
+        if WAVECALC is not None:
+            NWAVEC = len(WAVECALC)
+            kret = np.zeros([NWAVEC,self.NG,npoints,self.NGAS])
+            # Precompute indices and weights for WAVECALC
+            precomputed_indices = np.zeros((NWAVEC,2),dtype=int)
+            precomputed_weights = np.zeros(NWAVEC)
 
-        for iwave in range(NWAVEC):
-            wave = WAVECALC[iwave]
-            iw_closest = np.searchsorted(self.WAVE, wave)  # Find insertion point
+            for iwave in range(NWAVEC):
+                wave = WAVECALC[iwave]
+                iw_closest = np.searchsorted(self.WAVE, wave)  # Find insertion point
 
-            iw_low = max(iw_closest - 1, 0)
-            iw_high = min(iw_closest, len(self.WAVE) - 1)
-            if iw_high == iw_low:
-                iw_high = min(iw_high + 1, len(self.WAVE) - 1)
+                iw_low = max(iw_closest - 1, 0)
+                iw_high = min(iw_closest, len(self.WAVE) - 1)
+                if iw_high == iw_low:
+                    iw_high = min(iw_high + 1, len(self.WAVE) - 1)
 
-            wave_low = self.WAVE[iw_low]
-            wave_high = self.WAVE[iw_high]
-            w = (wave - wave_low) / (wave_high - wave_low) if wave_high != wave_low else 0
+                wave_low = self.WAVE[iw_low]
+                wave_high = self.WAVE[iw_high]
+                w = (wave - wave_low) / (wave_high - wave_low) if wave_high != wave_low else 0
 
-            precomputed_indices[iwave] = ((iw_low, iw_high))
-            precomputed_weights[iwave] = (w)
+                precomputed_indices[iwave] = ((iw_low, iw_high))
+                precomputed_weights[iwave] = (w)
 
-        kret = interpolate_k_values(npoints, self.NGAS, NWAVEC, precomputed_indices,
+            kret = interpolate_k_values(npoints, self.NGAS, NWAVEC, precomputed_indices,
                                              precomputed_weights, kgood, self.DELG, kret)
+        else:
+            kret = kgood
+        
         return kret
 
 
