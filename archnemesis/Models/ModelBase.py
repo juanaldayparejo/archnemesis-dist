@@ -647,7 +647,14 @@ class ModelBase(abc.ABC):
             #   Number of locations defined for the atmosphere component
         ) -> Self:
         """
-            Constructs a model from its entry in a *.apr file. Should be overwritten by a subclass
+            Constructs the model when it is loaded from a bookmark. 
+            
+            The state vector, `varident`, `varparms`, etc. should all have been loaded from the bookmark by 
+            this point, therefore this does not need to set any state vector information.
+            
+            What this method *should* do is construct and return a model instance similarly to 
+            `self.from_apr_to_state_vector(...)`, but *not* set anything on the state vector as the state vector
+            is populated elsewhere in this case.
             
             ## ARGUMENTS ##
             
@@ -681,7 +688,7 @@ class ModelBase(abc.ABC):
             ## RETURNS ##
             
                 instance : Self
-                    A constructed instance of the model class that has parameters set from information in the *.apr file
+                    A constructed instance of the model class that has parameters set from information the bookmark.
         """
         
         ...
