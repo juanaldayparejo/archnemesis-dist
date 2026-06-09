@@ -26,6 +26,8 @@ from typing import Any, Callable, TYPE_CHECKING
 from contextlib import contextmanager
 # Third party
 import numpy as np
+import matplotlib as mpl
+import matplotlib.collections
 import matplotlib.pyplot as plt
 # This package
 from archnemesis import Data
@@ -631,7 +633,7 @@ class LineSetSpecData:
     
     # private attrs
     _molecular_mass : float
-    _data : np.ndarray
+    _data : np.ndarray # [M, N_lines], M = (3[nu,sw,elower] + 1[stimulated_emission_at_t_ref] + 1[a] + 3[gamma_self, n_self, delta_self] + 3*n_ambient_gasses[gamma_amb, n_amb, delta_amb for each ambient gas])
     _result_cache : Cache = dc.field(default_factory=lambda : Cache())
     
     @classmethod
@@ -694,7 +696,6 @@ class LineSetSpecData:
             ], 
             axis=0,
         )
-        
     
     @property
     def identity(self):
@@ -703,6 +704,14 @@ class LineSetSpecData:
     @property
     def n_lines(self):
         return self._data.shape[1]
+    
+    @property
+    def n_fields(self):
+        return self._data.shape[0]
+    
+    @property
+    def n_broadeners(self):
+        return len(self.broadening_molecule_ids)
     
     @property
     def NU(self):
@@ -907,6 +916,82 @@ class LineSetSpecData:
         old_data = self._data
         self._data = np.empty((old_data.shape[0], np.count_nonzero(~mask)), dtype=float)
         self._data[...] = old_data[:,mask]
+
+@dc.dataclass
+class CombinedLineSetSpecData:
+    n_isos : int
+    _id_data : np.ndarray
+    _data : np.ndarray
+    
+    @classmethod
+    def create_from(cls, ld_list : list[LineSetSpecData]) -> Self:
+        n_total_lines = sum(x.n_lines for x in ld_list)
+    
+            
+        if not all(x.n_fields == ld_list[0].n_fields for x in ld_list):
+            raise RuntimeError('Cannot create combined line data as different isotopologues have a different number of fields')
+        
+        if not all(x.n_broadeners == ld_list[0].n_broadeners for x in ld_list):
+            raise RuntimeError('Cannot create combined line data as different isotopologues have a different number of broadeners')
+    
+        id_data = np.empty((2,n_total_lines), dtype=int)
+        data = np.empty((ld_list[0].n_fields, n_total_lines), dtype=float)
+        
+        i = 0
+        j = 0
+        for iso_line_data in ld_list:
+            j = i + iso_line_data.n_lines
+            id_data[0,i:j] = iso_line_data.rt_gas_desc.gas_id
+            id_data[1,i:j] = iso_line_data.rt_gas_desc.iso_id
+            data[:,i:j] = iso_line_data._data
+            i = j
+        
+        instance = cls(len(ld_list), _id_data=id_data, _data = data)
+        
+        return instance
+        
+    
+    @property
+    def ID(self):
+        return self._id_data[0]
+    
+    @property
+    def ISO(self):
+        return self._id_data[1]
+    
+    @property
+    def NU(self):
+        return self._data[0]
+    
+    @property
+    def SW(self):
+        return self._data[1]
+    
+    @property
+    def ELOWER(self):
+        return self._data[2]
+    
+    @property
+    def STIMULATED_EMISSION_REF(self):
+        return self._data[3]
+    
+    @property
+    def A(self):
+        return self._data[4]
+    
+    @property
+    def SELF_BROADENING_PARAMS(self):
+        """
+        gamma_self, n_self, delta_self
+        """
+        return self._data[5:8]
+    
+    @property
+    def FOREIGN_BROADENING_PARAMS(self):
+        """
+        (gamma_amb, n_amb, delta_amb) for each ambient gas
+        """
+        return self._data[8:]
 
 @dc.dataclass
 class PseudoContSpecData:
@@ -1320,7 +1405,7 @@ class AnsDatabase:
                         ambient_gasses = ambient_gasses,
                         requested_wn_range = (wn_min, wn_max),
                     )
-                print(f'{pc_instance=}')
+                _lgr.debug(f'{pc_instance=}')
                 self.cache.set(pc_cache_bucket, pc_cache_identity, pc_instance)
         
         return ld_instance, pc_instance
@@ -1469,6 +1554,7 @@ class LineData_0:
         self._params : LineDataParams = LineDataParams(ambient_gasses=(ambient_gasses,) if isinstance(ambient_gasses, ans.enums.AmbientGas) else ambient_gasses)
         self._params_fetched_lines_last = False
         self._params_fetched_partition_last = False
+        self._combined_line_data = None
         
         # Public attrs from args
         self.ID = ID
@@ -1567,6 +1653,12 @@ class LineData_0:
         if self._iso_id_tpl is None:
             self._iso_id_tpl = tuple(tuple(x.iso_id for x in self.rt_gas_descs if x.gas_id == mol_id) for mol_id in self.mol_id_tpl)
         return self._iso_id_tpl
+    
+    @property
+    def combined_line_data(self) -> np.array:
+        if self._combined_line_data is None and self.line_data is not None:
+            self._combined_line_data = CombinedLineSetSpecData.create_from(self.line_data)
+        return self._combined_line_data
     
     def _set_params_direct(self, **kwargs):
         for k,v in kwargs.items():
@@ -1823,7 +1915,44 @@ class LineData_0:
                 result[i_start:i_end] = iso_line_data.get_line_strength(t_calc, self.partition_fn_data[i], wn_calc_range)
                 i_start = i_end
             
-        return tuple(self.line_data[i].get_line_strength(t_calc, self.partition_fn_data[i], wn_calc_range) for i in range(len(self.line_data)))
+        else:
+            result = tuple(self.line_data[i].get_line_strength(t_calc, self.partition_fn_data[i], wn_calc_range) for i in range(len(self.line_data)))
+        
+        return result
+
+    def calculate_monochromatic_absorption(
+            self,
+            wave_grid : np.ndarray,
+            
+            t_calc : float,
+            p_calc : float,
+
+            amb_frac : float | np.ndarray = 0.5,
+            wave_calc_range : None | tuple[float,float] = None,
+            isotopic_abundance : None | float | np.ndarray = None,
+            lineshape_fn : Callable[[float,float,float], float] = Data.lineshapes.voigt,
+            s_min : float = 1E-32,
+            wn_calc_window : float = 25.0, # (cm^{-1})
+            wn_approx_window : float = 75.0, # (cm^{-1})
+            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm, # unit of `wave_grid` and `wave_calc_range`
+            
+            include_lines : bool = True,
+            include_continuum : bool = True,
+    ) -> np.ndarray:
+        return self.add_monochromatic_absorption(
+            wave_grid = wave_grid,
+            t_calc = t_calc,
+            p_calc = p_calc,
+            amb_frac = amb_frac,
+            wave_calc_range = wave_calc_range,
+            isotopic_abundance = isotopic_abundance,
+            lineshape_fn = lineshape_fn,
+            s_min = s_min,
+            wn_calc_window = wn_calc_window,
+            wn_approx_window = wn_approx_window,
+            include_lines = include_lines,
+            include_continuum = include_continuum,
+        )
 
     def add_monochromatic_absorption(
             self,
@@ -1897,7 +2026,7 @@ class LineData_0:
         else:
             assert self.n_isos == isotopic_abundance.shape[0], "If provided, there must be an isotopic abundance for each isotopologue in the LineData_0 instance"
         
-        if _lgr.level <= logging.INFO:
+        if _lgr.level <= logging.DEBUG:
             msg = '## ARGUMENTS ##' +'\n\t'.join((
                 f'{wave_grid=}',
                 f'{t_calc=}',
@@ -1915,7 +2044,7 @@ class LineData_0:
                 f'{out=}',
                 f'{store=}',
             )) + '##-----------##'
-            _lgr.info(msg)
+            _lgr.debug(msg)
         
         
         if out.ndim >= 2:
@@ -1927,7 +2056,7 @@ class LineData_0:
         
         # Loop over all line data and add monochromatic absorption to `out`
         for i, (iso_line_data, iso_continuum_data) in enumerate(zip(self.line_data, self.continuum_data)):
-            print(f'{i=} {iso_line_data._data.shape=} {(iso_continuum_data._data.shape if iso_continuum_data is not None else "None")=}')
+            _lgr.info(f'{i=} {iso_line_data._data.shape=} iso_continuum_data._data.shape={iso_continuum_data._data.shape if iso_continuum_data is not None else "None"}')
             
             if out.ndim < 3:
                 out_line_set_abs_i = out_line_set_abs
@@ -1979,7 +2108,7 @@ class LineData_0:
                     wn_calc_range = wn_calc_range,
                 )
             else:
-                print('No continuum data')
+                _lgr.info('No continuum data')
             
         
         return result # This should be a view of `out`
@@ -2058,16 +2187,17 @@ class LineData_0:
 
             if iso_line_data.n_lines == 0:
                 ls_max = 0
-                ls_min = 0
+                ls_min = np.inf
                 no_data_str = ' [NO DATA]'
             else:
                 ls_max = iso_line_data.SW.max()
-                ls_min = iso_line_data.SW.min()
+                ls_min = iso_line_data.SW[iso_line_data.SW>0].min()
                 if iso_continuum_data is not None and iso_continuum_data.LINE_STRENGTH_SUM.size > 0:
-                    ls_min = iso_continuum_data.LINE_STRENGTH_SUM.min() if ls_min > iso_continuum_data.LINE_STRENGTH_SUM.min() else ls_min
+                    iso_ls_min = np.min(iso_continuum_data.LINE_STRENGTH_SUM[iso_continuum_data.LINE_STRENGTH_SUM > 0])
+                    ls_min = ls_min if ls_min < iso_ls_min else iso_ls_min
                 no_data_str = ''
             line_strengths_max = ls_max if ls_max > line_strengths_max else line_strengths_max
-            line_strengths_min = ls_min if ls_min < line_strengths_min else line_strengths_min
+            line_strengths_min = ls_min if ((ls_min < line_strengths_min) and (ls_min > 0)) else line_strengths_min
             
             try:
                 gas_name_latex = ans.Data.gas_data.molecule_to_latex(iso_line_data.rt_gas_desc.isotope_name)
@@ -2084,27 +2214,38 @@ class LineData_0:
             )
             
             # Plot twice so we can have contrasting colour, remember to set z_order
-            combined_ax.plot(
-                iso_continuum_data.WN_BIN_CENTER,
-                iso_continuum_data.LINE_STRENGTH_SUM,
-                linewidth = line_style_defaults['linewidth']*2,
-                color=ax_style_defaults['facecolor'],
-                zorder = self.n_isos + i,
-            )
-            combined_ax.plot(
-                iso_continuum_data.WN_BIN_CENTER,
-                iso_continuum_data.LINE_STRENGTH_SUM,
-                label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}',
-                zorder = 2*self.n_isos + i,
-                **line_style_defaults
-            )
+            if iso_continuum_data is not None:
+                combined_ax.plot(
+                    iso_continuum_data.WN_BIN_CENTER,
+                    iso_continuum_data.LINE_STRENGTH_SUM,
+                    linewidth = line_style_defaults['linewidth']*2,
+                    color=ax_style_defaults['facecolor'],
+                    zorder = self.n_isos + i,
+                )
+                combined_ax.plot(
+                    iso_continuum_data.WN_BIN_CENTER,
+                    iso_continuum_data.LINE_STRENGTH_SUM,
+                    label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}',
+                    zorder = 2*self.n_isos + i,
+                    **line_style_defaults
+                )
         
-        combined_ax.legend(
+        lgnd = combined_ax.legend(
             loc='upper left', 
             bbox_to_anchor=(1.01, 1.05),  # Shift legend to the right
             title='Isotope', 
             **legend_style_defaults
         )
+        for hdl in lgnd.legend_handles:
+            if isinstance(hdl, mpl.collections.PathCollection):
+                hdl.set_sizes([50.0])
+            else:
+                pass
+        
+        if np.isinf(line_strengths_min):
+            line_strengths_min = 1E-25
+        if line_strengths_max == 0:
+            line_strengths_max = 1E-15
         
         if logscale:
             combined_ax.set_yscale('log')
@@ -2141,13 +2282,15 @@ class LineData_0:
                 vmin = 0,
                 **scatter_style_defaults
             )
-            ax.plot(
-                iso_continuum_data.WN_BIN_CENTER,
-                iso_continuum_data.LINE_STRENGTH_SUM,
-                color='#EE22EE',
-                label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}',
-                **line_style_defaults
-            )
+            
+            if iso_continuum_data is not None:
+                ax.plot(
+                    iso_continuum_data.WN_BIN_CENTER,
+                    iso_continuum_data.LINE_STRENGTH_SUM,
+                    color='#EE22EE',
+                    label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}',
+                    **line_style_defaults
+                )
             
             # Create a colourbar axes on the right side of ax.
             x_pad = 0.01
