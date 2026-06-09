@@ -38,7 +38,7 @@ def retrieval_nemesis(
         nemesisPT=False,
         nemesisC=False,
         NS_prefix='chains/'
-    ):
+):
     
     """
         FUNCTION NAME : retrieval_nemesis()
@@ -97,6 +97,8 @@ def retrieval_nemesis(
     if Retrieval.NITER <= 0:
         _lgr.info('Only running forward model as NITER <= 0')
         
+        retrieval_method = None
+        
         forward_model_instance = ans.ForwardModel_0(
             Atmosphere=Atmosphere,
             Measurement=Measurement,
@@ -136,9 +138,20 @@ def retrieval_nemesis(
         
         # Set retrieval result to the forward model result
         Retrieval.NY = Measurement.NY
+        Retrieval.NX = len(Variables.XN)
         
-        if Measurement.Y is not None:
-            Retrieval.edit_Y(Measurement.Y)
+        Retrieval.edit_Y(Measurement.Y)
+        Retrieval.edit_SE(Measurement.SE)
+        Retrieval.edit_XN(Variables.XN)
+        Retrieval.edit_SA(Variables.SA)
+        Retrieval.edit_XA(Variables.XA)
+        
+        Retrieval.edit_KK(np.full((Retrieval.NY, Retrieval.NX), fill_value=np.nan))
+        Retrieval.DD = np.full((Retrieval.NX, Retrieval.NY), fill_value=np.nan)
+        Retrieval.AA = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
+        Retrieval.SM = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
+        Retrieval.SN = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
+        Retrieval.ST = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
         
         if Measurement.SPECMOD is not None:
             if Retrieval.YN is None:
@@ -302,7 +315,7 @@ def retrieval_nemesis(
     ######################################################
     ######################################################
 
-    if retrieval_method == RetrievalStrategy.Optimal_Estimation:
+    if retrieval_method is None or retrieval_method == RetrievalStrategy.Optimal_Estimation:
         
         if legacy_files is False:
             Retrieval.write_output_hdf5(runname,Variables)
