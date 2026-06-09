@@ -1323,21 +1323,24 @@ class Spectroscopy_0:
 
             # Download partition function tables for the gas isotopes
             linedata.fetch_partition_function()
-
+            store = np.empty((3, linedata.max_lines_or_bins), dtype=float)
             for ipoint in range(npoints):
 
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
 
-                k[:,ipoint,igas] = linedata.calculate_monochromatic_absorption(
-                            waves=wave,        # wavenumbers in cm^{-1}
-                            temp=t_l,               # kelvin
-                            press=p_l,              # Atmospheres
+                linedata.add_monochromatic_absorption(
+                            wave_grid=wave,        # wavenumbers in cm^{-1}
+                            t_calc=t_l,               # kelvin
+                            p_calc=p_l,              # Atmospheres
                             amb_frac=1.-self_frac,  # fraction of broadening due to ambient gas
                             wave_unit=self.ISPACE,  # unit of `waves` argument
                             lineshape_fn=lineshape, # lineshape function to use
-                            line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
-                            add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                            wn_calc_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                            include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                            
+                            store = store,
+                            out = k[:,ipoint,igas],
                 )
 
         return k
@@ -2501,6 +2504,8 @@ def calc_ktable(outname,                       #Name of the output .lta file
 
     # Download partition function tables for the gas isotopes
     linedata.fetch_partition_fn()
+    
+    store = np.empty((3, linedata.max_lines_or_bins), dtype=float)
 
     #Looping through the pressure and temperature levels to calculate the k-coefficients
     k_coefficients = np.zeros((Spectroscopy.NWAVE, Spectroscopy.NG, Spectroscopy.NP, Spectroscopy.NT))
@@ -2534,8 +2539,9 @@ def calc_ktable(outname,                       #Name of the output .lta file
             _lgr.info('Calculating line-by-line absorption coefficients')        
 
             #Calculating the absorption coefficients at the line-by-line level for the given pressure and temperature
-            kabs = np.empty((wavecalc.shape[0],), dtype=float)
-            linedata.calculate_monochromatic_absorption(
+            kabs = np.zeros((wavecalc.shape[0],), dtype=float)
+            
+            linedata.add_monochromatic_absorption(
                 wave_grid = wavecalc,
                 t_calc = tempx,
                 p_calc = pressx,
@@ -2553,7 +2559,7 @@ def calc_ktable(outname,                       #Name of the output .lta file
                 include_continuum  = True, # include contintuunm in calculation
             
                 out = kabs, # where to put the result. if 2-dimensions, will assume the 1st dimension is 2 and will fill with (line_set absorption, continuum absorption), if 3 dimensional will assume 1st dimension is 2 (line set, contiuum) then 2nd dimension is per isotopologue
-                store = None, # Temporary storage, if `None` will create some. Useful when you know you will need to perform calculations on similarlty shaped data over and over again.
+                store = store, # Temporary storage, if `None` will create some. Useful when you know you will need to perform calculations on similarlty shaped data over and over again.
             )
 
 

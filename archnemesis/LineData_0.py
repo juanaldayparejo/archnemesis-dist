@@ -61,29 +61,6 @@ _lgr.setLevel(logging.INFO)
 
 if TYPE_CHECKING:
     NWAVE = "Number of wave points"
-
-# TODO: 
-# * Account for HITRAN weighting by terrestrial abundances .
-#   NOTE: do this correction in the HITRAN.py file, not here as ideally LineData_0 would give 
-#         line strengths and absorption coefficients per unit of gas (e.g. per column density,
-#         per gram, per mole, something like that) the exact unit to be worked out later.
-# * Natural Broadening
-# * Pressure shift
-# * Multiple ambient gasses. At the moment can only have one, but should be able to define
-#   a gas mixture.
-# * Additional lineshapes, have a look at https://www.degruyterbrill.com/document/doi/10.1515/pac-2014-0208/html
-
-# TODO: Instead of dictionaries change `line_data` and `partition_data` to be available as big arrays with `gas_id` and `iso_id` fields
-# or maybe just `iso_id` fields as these are only for one gas at a time.
-# 
-# Either `partition_data` is combined into the giant array, or it can be in a seprate array and looked up based on `gas_id` and `iso_id`.
-#
-# Only partition functions and abundances are isotope dependent so after those are accounted for, one large array is a perfectly good
-# structure to have the data in.
-
-# TODO: Speed up molecular mass lookup for each isotopologue
-
-if TYPE_CHECKING:
     N_LINES_OF_GAS = 'Number of lines for a gas isotopologue'
     N_TEMPS_OF_GAS = 'Number of temperature points for a gas isotopologue'
 
@@ -1189,7 +1166,6 @@ class PseudoContSpecData:
         )
         
         return out
-    
 
 
 @dc.dataclass(slots=True)
@@ -1519,7 +1495,6 @@ class LineDataParams:
     temp_requested : float = 296
     press_requested : float = 1
 
-    
 
 class LineData_0:
     def __init__(
@@ -1657,6 +1632,10 @@ class LineData_0:
         if self._combined_line_data is None and self.line_data is not None:
             self._combined_line_data = CombinedLineSetSpecData.create_from(self.line_data)
         return self._combined_line_data
+    
+    @property
+    def max_lines_or_bins(self) -> int:
+        return max(max(x.NU.shape[0] for x in self.line_data), max(x.WN_BIN_CENTER.shape[0] if x is not None else 0 for x in self.continuum_data))
     
     def _set_params_direct(self, **kwargs):
         for k,v in kwargs.items():
@@ -1833,9 +1812,10 @@ class LineData_0:
                 i_end = i_start + n_iso_lines[i]
                 result[i_start:i_end] = iso_line_data.get_doppler_width(t_calc, wn_calc_range)
                 i_start = i_end
+        else:
+            result = tuple(x.get_doppler_width(t_calc, wn_calc_range) for x in self.line_data)
         
-        
-        return tuple(x.get_doppler_width(t_calc, wn_calc_range) for x in self.line_data)
+        return result
     
     def calculate_lorentz_width(
             self,
@@ -1878,7 +1858,10 @@ class LineData_0:
                 result[i_start:i_end] = iso_line_data.get_lorentz_width(t_calc, p_calc, mol_mix_frac, wn_calc_range)
                 i_start = i_end
         
-        return tuple(x.get_lorentz_width(t_calc, p_calc, mol_mix_frac, wn_calc_range) for x in self.line_data)
+        else:
+            result = tuple(x.get_lorentz_width(t_calc, p_calc, mol_mix_frac, wn_calc_range) for x in self.line_data)
+        
+        return result
 
     def calculate_line_strength(
             self,
@@ -1936,8 +1919,16 @@ class LineData_0:
             
             include_lines : bool = True,
             include_continuum : bool = True,
+            include_pressure_shift : bool = False,
+            combined_output : bool = False,
     ) -> np.ndarray:
-        return self.add_monochromatic_absorption(
+    
+        if not combined_output:
+            out = np.zeros((2,self.n_isos, wave_grid.shape[0]), dtype=float)
+        else:
+            out = np.zeros((wave_grid.shape[0],), dtype=float)
+    
+        self.add_monochromatic_absorption(
             wave_grid = wave_grid,
             t_calc = t_calc,
             p_calc = p_calc,
@@ -1950,7 +1941,14 @@ class LineData_0:
             wn_approx_window = wn_approx_window,
             include_lines = include_lines,
             include_continuum = include_continuum,
+            include_pressure_shift = include_pressure_shift,
+            out = out
         )
+        
+        if not combined_output:
+            return np.sum(out, axis=0)
+        else:
+            return out
 
     def add_monochromatic_absorption(
             self,
@@ -1973,6 +1971,7 @@ class LineData_0:
             
             include_lines : bool = True,
             include_continuum : bool = True,
+            include_pressure_shift : bool = False, # NOT IMPLEMENTED YET
     ) -> np.ndarray:
         
         
@@ -1985,7 +1984,7 @@ class LineData_0:
             result = out[...]
         
         if store is None:
-            store = np.empty((3, max(max(x.NU.shape[0] for x in self.line_data), max(x.WN_BIN_CENTER.shape[0] if x is not None else 0 for x in self.continuum_data))), dtype=float)
+            store = np.empty((3, self.max_lines_or_bins), dtype=float)
         
         
         # Handle wave units
