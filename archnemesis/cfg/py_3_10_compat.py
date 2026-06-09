@@ -9,7 +9,7 @@ import contextlib
 typing.Self = typing_extensions.Self
 
 @contextlib.contextmanager
-def __chdir(self, path):
+def __chdir(path):
 	prev_path = os.getcwd()
 	os.chdir(path)
 	yield
