@@ -170,6 +170,23 @@ def lorentz_width(
         out[i] = gamma_combined
 
 @njit(parallel=False)
+def line_shift(
+        t_ratio : float,
+        p_ratio : float,
+        mol_mix_frac : np.ndarray, #[M] fraction of mixture that consists of each molecule. Should sum to 1.0
+        broadening_params : np.ndarray, #[M,N] M = N_mol * 3, note: N_mol = 1 + number of ambient molecules (self counts as 1), M is arranged (gamma, n, delta) for each molecule
+        out : np.ndarray, #[N]
+):
+    """
+    Computes shift of lines
+    """
+    for i in prange(broadening_params.shape[1]):
+        shift_combined = 0
+        for j in prange(mol_mix_frac.shape[0]):
+            shift_combined += (p_ratio*broadening_params[3*j+2,i]) * mol_mix_frac[j]
+        out[i] = shift_combined
+
+@njit(parallel=False)
 def line_strength(
         t_calc : float,
         t_ref : float,
@@ -199,6 +216,7 @@ def add_line_set_monochromatic_spectrum(
         strength : np.ndarray, #[N_lines]
         alpha_d : np.ndarray, #[N_lines]
         gamma_l : np.ndarray, #[N_lines]
+        line_shift : np.ndarray, #[N_lines]
         factor : float, # Factor to apply to final result (e.g. a factor to account for isotopic abundance)
         
         out : np.ndarray, #[N_waves] should be all zeros, as result will be ADDED to this not overwritten
@@ -225,7 +243,7 @@ def add_line_set_monochromatic_spectrum(
         line_approx_const = lineshape_fn(wn_calc_window_max, alpha_d[i], gamma_l[i])
         
         for j in range(wn_grid.shape[0]):
-            wn_delta = wn_grid[j] - nu[i]
+            wn_delta = wn_grid[j] - (nu[i] + line_shift[i])
             
             if wn_delta >= wn_approx_window_max:
                     break
@@ -261,14 +279,14 @@ def add_line_set_monochromatic_absorption(
         
         out : np.ndarray,
         
-        store : np.ndarray | None = None, #[3,N]
+        store : np.ndarray | None = None, #[4,N]
         
         s_min : float = 1E-32,
         wn_calc_window : float = 25.0, # (cm^{-1})
         wn_approx_window : float = 75.0, # (cm^{-1})
 ):
     if store is None:
-        store = np.empty((3, nu.shape[0]), dtype=float)
+        store = np.empty((4, nu.shape[0]), dtype=float)
     
     line_strength(
         t_calc,
@@ -296,6 +314,15 @@ def add_line_set_monochromatic_absorption(
         out = store[2]
     )
     
+    line_shift(
+        t_ref / t_calc,
+        p_calc / p_ref,
+        mol_mix_frac,
+        broadening_params,
+        out = store[3]
+    )
+    
+    
     add_line_set_monochromatic_spectrum(
         wn_grid,
         lineshape_fn,
@@ -303,6 +330,7 @@ def add_line_set_monochromatic_absorption(
         store[0],
         store[1],
         store[2],
+        store[3],
         factor = isotopic_abundance,
         out = out,
         s_min = s_min,
@@ -733,20 +761,30 @@ class LineSetSpecData:
         isotopic_abundance : float = 1.0,
         
         out : None | np.ndarray = None, #[N_waves]
-        store : None | np.ndarray = None, #[3,N_lines]
+        store : None | np.ndarray = None, #[4,N_lines]
         
         s_min : float = 1E-32,
         wn_calc_window : float = 25.0, # (cm^{-1})
         wn_approx_window : float = 75.0, # (cm^{-1})
         wn_calc_range : None | tuple[float,float] = None,
+        include_pressure_shift : bool = False,
         use_cache : bool = True,
     ) -> np.ndarray:
         if out is None:
             out = np.zeros_like(wn_grid, dtype=float)
         
+        if store is None:
+            store = np.empty((4,self.n_lines), dtype=float)
+        
         q_ratio = partition_function(self.t_ref) / partition_function(t_calc)
         
         wn_mask = np.ones((self._data.shape[1],), dtype=bool) if wn_calc_range is None else ((wn_calc_range[0] <= self.NU) & (self.NU <= wn_calc_range[1]))
+        
+        
+        broadening_data = self._data[5:, wn_mask]
+        if not include_pressure_shift:
+            # make a copy of the broadening data and set all pressure shifts to zero
+            broadening_data = np.array(broadening_data) * np.array([0 if ((i+1)%3) == 0 else 1 for i in range(broadening_data.shape[0])], dtype=int)[:,None]
         
         add_line_set_monochromatic_absorption(
             wn_grid,
@@ -759,7 +797,7 @@ class LineSetSpecData:
             isotopic_abundance,
             self._molecular_mass,
             mol_mix_frac,
-            self._data[5:, wn_mask],
+            broadening_data,
             *self._data[:4, wn_mask],
             
             out = out,
@@ -1971,7 +2009,7 @@ class LineData_0:
             
             include_lines : bool = True,
             include_continuum : bool = True,
-            include_pressure_shift : bool = False, # NOT IMPLEMENTED YET
+            include_pressure_shift : bool = False,
     ) -> np.ndarray:
         
         
@@ -1984,7 +2022,7 @@ class LineData_0:
             result = out[...]
         
         if store is None:
-            store = np.empty((3, self.max_lines_or_bins), dtype=float)
+            store = np.empty((4, self.max_lines_or_bins), dtype=float)
         
         
         # Handle wave units
@@ -2076,13 +2114,13 @@ class LineData_0:
                     isotopic_abundance[i],
                     
                     out = out_line_set_abs_i, #[N_waves]
-                    #store = store[:,:iso_line_data.n_lines], #[3,N_lines]
                     store = store,
                     
                     s_min = s_min,
                     wn_calc_window = wn_calc_window,
                     wn_approx_window = wn_approx_window,
                     wn_calc_range = wn_calc_range,
+                    include_pressure_shift = include_pressure_shift,
                 )
             
             if include_continuum and iso_continuum_data is not None:

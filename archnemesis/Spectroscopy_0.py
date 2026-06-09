@@ -1570,7 +1570,7 @@ class Spectroscopy_0:
 
             # Download partition function tables for the gas isotopes
             linedata.fetch_partition_function()
-            store = np.empty((3, linedata.max_lines_or_bins), dtype=float)
+            store = np.empty((4, linedata.max_lines_or_bins), dtype=float)
             for ipoint in range(npoints):
 
                 p_l = press[ipoint]
@@ -2791,7 +2791,7 @@ def calc_ktable_bin(iwave,Spectroscopy,linedata,self_frac,ispace,lineshape,vrel,
     # Download partition function tables for the gas isotopes
     linedata.fetch_partition_fn()
     
-    store = np.empty((3, linedata.max_lines_or_bins), dtype=float)
+    store = np.empty((4, linedata.max_lines_or_bins), dtype=float)
 
     #Checking that there are lines in the spectral range. If not, the k-coefficients will be set to zero and a warning will be issued.
     k_coefficients = np.zeros((Spectroscopy.NG, Spectroscopy.NP, Spectroscopy.NT))
@@ -2856,15 +2856,6 @@ def calc_ktable_bin(iwave,Spectroscopy,linedata,self_frac,ispace,lineshape,vrel,
 
             #Calculating fo each wavelength bin
             _lgr.info('Calculating the cumulative distributions and k-coefficients for each bin')
-            for iwave in range(Spectroscopy.NWAVE):
-
-                #Calculating the bin size
-                if Measurement is not None:
-                    vbinminx = Spectroscopy.WAVE[iwave] - (Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0]).max()
-                    vbinmaxx = Spectroscopy.WAVE[iwave] + (Measurement.VFIL[0:Measurement.NFIL[iwave],iwave]-Measurement.VCONV[iwave,0]).max()
-                else:
-                    vbinminx = Spectroscopy.WAVE[iwave] - delwave / 2.
-                    vbinmaxx = Spectroscopy.WAVE[iwave] + delwave / 2.
 
             #Sorting the absorption coefficients in the bin
             mask = (wavecalc >= vbinmin) & (wavecalc <= vbinmax)
