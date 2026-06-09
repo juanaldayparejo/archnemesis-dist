@@ -26,9 +26,11 @@ from archnemesis.database.filetypes.ans_line_data_file import AnsLineDataFile
 from archnemesis.database.filetypes.ans_partition_fn_data_file import AnsPartitionFunctionDataFile
 
 
-tips_version = "2021"
+tips_version = "2025"
 
 table_pf_name = 'tips'+tips_version
+
+tabulated_data = False
 
 pf_data = []
 
@@ -99,7 +101,7 @@ for mol_id_rt, iso_id_rt in yy:
 	mol_list.append(mol_id_rt)
 	iso_list.append(iso_id_rt)
 	
-	if False:
+	if tabulated_data:
 		pfdh.add(
 			mol_id_rt,
 			iso_id_rt,
