@@ -790,7 +790,7 @@ class Measurement_0:
 
 
                 self.NCONV = h5py_helper.retrieve_data(f, 'Measurement/NCONV', np.array)
-                self.WOFF = h5py_helper.retrieve_data(f, 'Measurement/WOFF', np.float64)
+                self.WOFF = h5py_helper.retrieve_data(f, 'Measurement/WOFF', np.float64, default=0)
                 self.VCONV = h5py_helper.retrieve_data(f, 'Measurement/VCONV', np.array) + self.WOFF
                 self.MEAS = h5py_helper.retrieve_data(f, 'Measurement/MEAS', np.array)
                 self.ERRMEAS = h5py_helper.retrieve_data(f, 'Measurement/ERRMEAS', np.array)

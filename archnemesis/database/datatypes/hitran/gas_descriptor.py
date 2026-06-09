@@ -1,7 +1,5 @@
 from typing import NamedTuple
 
-import archnemesis.database.wrappers.hapi as hapi
-
 from ..gas_descriptor import RadtranGasDescriptor
 from ...mappings.hitran import radtran_to_hitran, hitran_to_radtran
 
@@ -14,11 +12,10 @@ _lgr.setLevel(logging.DEBUG)
 class HitranGasDescriptor(NamedTuple):
     gas_id : int
     iso_id : int
-    global_id : int # ID of the (gas_id, iso_id) pair
     
     @classmethod
     def from_gas_and_iso_id(cls, gas_id, iso_id):
-        return cls(gas_id, iso_id, hapi.ISO[(gas_id, iso_id)][0])
+        return cls(gas_id, iso_id)
     
     @classmethod
     def from_radtran(cls, rt_gas_desc : RadtranGasDescriptor):

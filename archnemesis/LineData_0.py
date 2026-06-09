@@ -38,8 +38,6 @@ import archnemesis.enums
 #import archnemesis.helpers.maths_helper as maths_helper
 #from archnemesis.helpers.io_helper import SimpleProgressTracker
 import archnemesis.database
-import archnemesis.database.line_database.hitran
-import archnemesis.database.partition_function_database.hitran
 #from archnemesis.database.filetypes.lbltable import LblDataTProfilesAtPressure#, LblDataTPGrid
 from archnemesis.database.datatypes.wave_point import WavePoint
 #from archnemesis.database.datatypes.wave_range import WaveRange
