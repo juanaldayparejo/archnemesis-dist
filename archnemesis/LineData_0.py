@@ -117,7 +117,9 @@ def wn_range_is_within(
 ) -> bool:
     return (wn_range_reference[0] <= wn_range[0]) and (wn_range[1] <= wn_range_reference[1])
 
-@njit(parallel=False)
+MODULE_NUMBA_CACHE = True
+
+@njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def stimulated_emission(
     t_calc : float,
     nu : np.ndarray, # [N] wavenumber
@@ -126,7 +128,7 @@ def stimulated_emission(
     for i in prange(nu.shape[0]):
         out[i] = 1 - np.exp(-Data.constants.c2_cgs * nu[i] / t_calc)
 
-@njit(parallel=False)
+@njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def boltzmann_factor(
     t_calc : float,
     t_ref : float,
@@ -137,7 +139,7 @@ def boltzmann_factor(
     for i in prange(e_lower.shape[0]):
         out[i] = np.exp(boltz_const_factor*e_lower[i])
 
-@njit(parallel=False)
+@njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def doppler_width(
         t_calc : float, 
         molecular_mass : float,
@@ -152,7 +154,7 @@ def doppler_width(
     for i in prange(nu.shape[0]):
         out[i] = doppler_width_const_cgs * nu[i] * np.sqrt( t_calc / molecular_mass)
 
-@njit(parallel=False)
+@njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def lorentz_width(
         t_ratio : float,
         p_ratio : float,
@@ -169,7 +171,7 @@ def lorentz_width(
             gamma_combined += (t_ratio**broadening_params[3*j+1,i])*broadening_params[3*j,i] * mol_mix_frac[j] * p_ratio
         out[i] = gamma_combined
 
-@njit(parallel=False)
+@njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def line_shift(
         t_ratio : float,
         p_ratio : float,
@@ -186,7 +188,7 @@ def line_shift(
             shift_combined += (p_ratio*broadening_params[3*j+2,i]) * mol_mix_frac[j]
         out[i] = shift_combined
 
-@njit(parallel=False)
+@njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def line_strength(
         t_calc : float,
         t_ref : float,
@@ -208,7 +210,7 @@ def line_strength(
             * q_ratio
         )
 
-@njit(parallel=False)
+@njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def add_line_set_monochromatic_spectrum(
         wn_grid : np.ndarray, #[N_waves] (cm^{-1}) must be in ascending order
         lineshape_fn : Callable[[float,float,float], float],
@@ -259,7 +261,7 @@ def add_line_set_monochromatic_spectrum(
     
     return
 
-@njit(parallel=False)
+@njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def add_line_set_monochromatic_absorption(
         wn_grid : np.ndarray, #[N_waves]
         lineshape_fn : Callable[[float,float,float], float],
@@ -340,7 +342,7 @@ def add_line_set_monochromatic_absorption(
     
     return
 
-@njit(parallel=False)
+@njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def add_pseudo_continuum_monochromatic_spectrum(
         wn_grid : np.ndarray, #[N_waves] (cm^{-1}) must be in ascending order
         lineshape_fn : Callable[[float,float,float], float],
@@ -466,7 +468,7 @@ def add_pseudo_continuum_monochromatic_spectrum(
     return
 
 
-@njit(parallel=False)
+@njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def add_pseudo_continuum_monochromatic_absorption(
         wn_grid : np.ndarray, #[N_waves]
         lineshape_fn : Callable[[float,float,float], float],
@@ -609,11 +611,22 @@ class CachePriorityDataHolder:
 
 class Cache:
     def __init__(self, n_max_per_bucket : int = 10):
+        self.n_cache_hit : int = 0
+        self.n_cache_miss : int = 0
         self._n_max_per_bucket = n_max_per_bucket
         self._buckets = dict()
     
+    def cache_performance_str(self):
+        n_cache_req = self.n_cache_hit + self.n_cache_miss
+        return f'Cache Performance :: requests {n_cache_req} :: hit {self.n_cache_hit} [{100*self.n_cache_hit/n_cache_req:5.2f}%] :: miss {self.n_cache_miss} [{100*self.n_cache_miss/n_cache_req:5.2f}%]'
+    
     def get(self, bucket : str, identity : tuple[Any,...], default : None | Any = None) -> Any:
-        return self._buckets.setdefault(bucket, CachePriorityDataHolder(self._n_max_per_bucket)).get(identity, default=default)
+        result = self._buckets.setdefault(bucket, CachePriorityDataHolder(self._n_max_per_bucket)).get(identity, default=default)
+        if result is None:
+            self.n_cache_miss += 1
+        else:
+            self.n_cache_hit += 1
+        return result
         
     def set(self, bucket : str, identity : tuple[Any,...], value : Any) -> Any:
         return self._buckets.setdefault(bucket, CachePriorityDataHolder(self._n_max_per_bucket)).set(identity, value)
@@ -637,7 +650,8 @@ class LineSetSpecData:
     # private attrs
     _molecular_mass : float
     _data : np.ndarray # [M, N_lines], M = (3[nu,sw,elower] + 1[stimulated_emission_at_t_ref] + 1[a] + 3[gamma_self, n_self, delta_self] + 3*n_ambient_gasses[gamma_amb, n_amb, delta_amb for each ambient gas])
-    _result_cache : Cache = dc.field(default_factory=lambda : Cache())
+    _result_cache : Cache = dc.field(default_factory=lambda : _MODULE_CACHE)
+    _data_hash : int = 0
     
     @classmethod
     def create_from(
@@ -646,6 +660,7 @@ class LineSetSpecData:
             iso_id : int, 
             ambient_gasses : tuple[ans.enums.AmbientGas,...],
             single_iso_line_set_data : LineSetData,
+            cache : None | Cache = None,
     ) -> Self:
         print(f'{single_iso_line_set_data.nu=}')
         
@@ -661,6 +676,9 @@ class LineSetSpecData:
             _molecular_mass = rt_gas_desc.molecular_mass,
             _data = None
         )
+        
+        if cache is not None:
+            instance._result_cache = cache
         
         instance._set_data_from_line_set_data(single_iso_line_set_data)
     
@@ -699,10 +717,9 @@ class LineSetSpecData:
             ], 
             axis=0,
         )
-    
-    @property
-    def identity(self):
-        return (self.s_min, self.t_ref, self.p_ref, self.rt_gas_desc.gas_id, self.rt_gas_desc.iso_id, *self.broadening_molecule_ids)
+        
+        self._data.flags.writeable = False
+        self._data_hash = hash(bytes(self._data))
     
     @property
     def n_lines(self):
@@ -715,6 +732,10 @@ class LineSetSpecData:
     @property
     def n_broadeners(self):
         return len(self.broadening_molecule_ids)
+    
+    @property
+    def has_data(self):
+        return self.n_lines != 0
     
     @property
     def NU(self):
@@ -750,6 +771,18 @@ class LineSetSpecData:
         """
         return self._data[8:]
     
+    def cache_identity(self):
+        return (
+            self.s_min,
+            self.t_ref,
+            self.p_ref,
+            self.broadening_molecule_ids,
+            self.req_wn_range,
+            *self.rt_gas_desc,
+            self._molecular_mass,
+            self._data_hash,
+        )
+    
     def add_monochromatic_absorption(
         self,
         wn_grid : np.ndarray, #[N_waves] (cm^{-1})
@@ -772,6 +805,37 @@ class LineSetSpecData:
     ) -> np.ndarray:
         if out is None:
             out = np.zeros_like(wn_grid, dtype=float)
+        
+        if not self.has_data: # Skip all calculation if no data present
+            return out
+        
+        
+        if use_cache:
+            wn_grid.flags.writeable = False
+            mol_mix_frac.flags.writeable = False
+            
+            result_bucket = 'add_monochromatic_absorption'
+            result_identity = (
+                self.cache_identity(),
+                hash(bytes(wn_grid.data)),
+                id(lineshape_fn),
+                t_calc, 
+                p_calc,
+                id(partition_function),
+                hash(bytes(mol_mix_frac.data)),
+                isotopic_abundance,
+                s_min,
+                wn_calc_window,
+                wn_approx_window,
+                wn_calc_range,
+                include_pressure_shift,
+            )
+            cache_result = self._result_cache.get(result_bucket, result_identity, None)
+            
+            if cache_result is not None:
+                out[...] = cache_result
+                return out
+        
         
         if store is None:
             store = np.empty((4,self.n_lines), dtype=float)
@@ -808,6 +872,9 @@ class LineSetSpecData:
             wn_approx_window = wn_approx_window,
         )
         
+        if use_cache:
+            self._result_cache.set(result_bucket, result_identity, out)
+        
         return out
     
     def get_line_strength(
@@ -821,7 +888,7 @@ class LineSetSpecData:
         
         if use_cache:
             result_bucket = 'get_line_strength'
-            result_identity = (wn_calc_range, t_calc,)
+            result_identity = (wn_calc_range, t_calc, self.cache_identity())
             result = self._result_cache.get(result_bucket, result_identity, None)
         
         if result is None:
@@ -857,7 +924,7 @@ class LineSetSpecData:
         
         if use_cache:
             result_bucket = 'get_doppler_width'
-            result_identity = ( wn_calc_range, t_calc,)
+            result_identity = ( wn_calc_range, t_calc, self.cache_identity())
             result = self._result_cache.get(result_bucket, result_identity, None)
         
         if result is None:
@@ -893,7 +960,7 @@ class LineSetSpecData:
         
         if use_cache:
             result_bucket = 'get_lorentz_width'
-            result_identity = ( wn_calc_range, t_calc, p_calc, *mol_mix_frac)
+            result_identity = ( wn_calc_range, t_calc, p_calc, *mol_mix_frac, self.cache_identity())
             result = self._result_cache.get(result_bucket, result_identity, None)
         
         if result is None:
@@ -928,7 +995,10 @@ class LineSetSpecData:
         
         old_data = self._data
         self._data = np.empty((old_data.shape[0], np.count_nonzero(~mask)), dtype=float)
-        self._data[...] = old_data[:,mask]
+        self._data[...] = old_data[:,~mask]
+        
+        self._data.flags.writeable=False
+        self._data_hash = hash(bytes(self._data))
 
 @dc.dataclass
 class CombinedLineSetSpecData:
@@ -953,6 +1023,7 @@ class CombinedLineSetSpecData:
         i = 0
         j = 0
         for iso_line_data in ld_list:
+            _lgr.info(f'{iso_line_data._data.shape=}')
             j = i + iso_line_data.n_lines
             id_data[0,i:j] = iso_line_data.rt_gas_desc.gas_id
             id_data[1,i:j] = iso_line_data.rt_gas_desc.iso_id
@@ -1022,7 +1093,8 @@ class PseudoContSpecData:
     # private attrs
     _molecular_mass : float # mass of isotopologue (g)
     _data : np.ndarray # [X, N_cont_bins]
-    _result_cache : Cache = dc.field(default_factory=lambda : Cache())
+    _result_cache : Cache = dc.field(default_factory=lambda : _MODULE_CACHE)
+    _data_hash : int = 0
 
     @classmethod
     def create_from(
@@ -1031,6 +1103,7 @@ class PseudoContSpecData:
             iso_id : int, 
             ambient_gasses : tuple[ans.enums.AmbientGas,...],
             single_iso_pseudo_continuum_data : PseudoContinuumData,
+            cache : None | Cache = None,
     ) -> Self:
 
         rt_gas_desc = RadtranGasDescriptor(mol_id, iso_id)
@@ -1045,6 +1118,9 @@ class PseudoContSpecData:
             _molecular_mass = rt_gas_desc.molecular_mass,
             _data = None
         )
+        
+        if cache is not None:
+            instance._result_cache = cache
         
         instance._set_data_from_pseudo_continuum_data(single_iso_pseudo_continuum_data)
         
@@ -1068,9 +1144,9 @@ class PseudoContSpecData:
         self.LSW_MEAN_LOWER_STATE_ENERGY[...] = pseudo_continuum_data.line_strength_weighted_mean_lower_energy_state
         self.SELF_BROADENING_LSW_PARAMS[...] = np.stack(
             [
-                pseudo_continuum_data.line_strength_weighted_gamma_self,
+                pseudo_continuum_data.line_strength_weighted_gamma_self, 
                 pseudo_continuum_data.line_strength_weighted_n_self,
-                np.zeros_like(pseudo_continuum_data.line_strength_weighted_n_self),
+                np.zeros_like(pseudo_continuum_data.line_strength_weighted_n_self), # lsw_delta_self
             ],
             axis=0
         )
@@ -1078,10 +1154,13 @@ class PseudoContSpecData:
             [
                 *(pseudo_continuum_data.line_strength_weighted_gamma_amb.T),
                 *(pseudo_continuum_data.line_strength_weighted_n_amb.T),
-                *(np.zeros_like(pseudo_continuum_data.line_strength_weighted_n_amb.T))
+                *(np.zeros_like(pseudo_continuum_data.line_strength_weighted_n_amb.T)) # lsw_delta_amb
             ],
             axis=0
         )
+        
+        self._data.flags.writeable = False
+        self._data_hash = hash(bytes(self._data))
     
     @property
     def WN_BIN_CENTER(self):
@@ -1107,6 +1186,25 @@ class PseudoContSpecData:
     def FOREIGN_BROADENING_LSW_PARAMS(self):
         return self._data[7:]
     
+    @property
+    def has_data(self):
+        """
+        Return `True` if there is some data in the pseudo continuum that would produce some absorption.
+        """
+        return np.any(self._data[2] != 0)
+    
+    def cache_identity(self) -> tuple:
+        return (
+            self.s_min,
+            self.t_cont,
+            self.p_cont,
+            self.broadening_molecule_ids,
+            self.req_wn_range,
+            *self.rt_gas_desc,
+            self._molecular_mass,
+            self._data_hash,
+        )
+    
     def add_lines(
             self,
             line_set_data : LineSetSpecData,
@@ -1116,13 +1214,14 @@ class PseudoContSpecData:
         """
         Add lines with strength below `s_max` to the pseudo continuum from `line_set_data` 
         """
+        self._data.flags.writeable = True
         
         self._data[3:] *= self._data[2:3] # multiply "line strength weighted means" by line strength sum
         
         # loop through `line_set_data` and add lower state energies and broadening params to correct wn_bins
         bin_edges = np.zeros((self.WN_BIN_CENTER.shape[0]+1,), dtype=float)
         bin_edges[:-1] = self.WN_BIN_CENTER - self.WN_BIN_WIDTH/2
-        bin_edges[-1] = self.WN_BIN_CENTER[-1] + self.wn_bin_width/2
+        bin_edges[-1] = self.WN_BIN_CENTER[-1] + self.WN_BIN_WIDTH[-1]/2
         
         line_strength = line_set_data.get_line_strength(
             t_calc = self.t_cont,
@@ -1134,12 +1233,15 @@ class PseudoContSpecData:
     
         for i in np.flatnonzero(ls_mask):
             self.LINE_STRENGTH_SUM[ls_idxs[i]] += line_strength[i]
-            self.LSW_MEAN_LOWER_ENERGY_STATE[ls_idxs[i]] += line_set_data.ELOWER[i]
+            self.LSW_MEAN_LOWER_STATE_ENERGY[ls_idxs[i]] += line_set_data.ELOWER[i]
             self.SELF_BROADENING_LSW_PARAMS[:,ls_idxs[i]] += line_set_data.SELF_BROADENING_PARAMS[:,i]
             self.FOREIGN_BROADENING_LSW_PARAMS[:,ls_idxs[i]] += line_set_data.FOREIGN_BROADENING_PARAMS[:,i]
         
         self._data[3:] /= self._data[2:3] # divide by line strength sum to get "line strength weighted means" again
         self.s_min = s_max
+        
+        self._data.flags.writeable=False
+        self._data_hash = hash(bytes(self._data))
         
         line_set_data.remove_lines(ls_mask)
         line_set_data.s_min = s_max
@@ -1169,8 +1271,38 @@ class PseudoContSpecData:
         """
         Adds monochromatic absorption from PseudoContinuum. Will calculate at `self.WN_BIN_CENTER` and interpolate to `wn_grid`
         """
+        
         if out is None:
             out = np.zeros_like(wn_grid, dtype=float)
+        
+        if not self.has_data: # Skip all calculation if no data present
+            return out
+        
+        
+        if use_cache:
+            wn_grid.flags.writeable = False
+            mol_mix_frac.flags.writeable = False
+            
+            result_bucket = 'add_monochromatic_absorption'
+            result_identity = (
+                self.cache_identity(),
+                hash(bytes(wn_grid.data)),
+                id(lineshape_fn),
+                t_calc, 
+                p_calc,
+                id(partition_function),
+                hash(bytes(mol_mix_frac.data)),
+                isotopic_abundance,
+                n_neighbour_bins,
+                wn_calc_range,
+            )
+            cache_result = self._result_cache.get(result_bucket, result_identity, None)
+            
+            if cache_result is not None:
+                out[...] = cache_result
+                return out
+        
+        
         if store is None:
             store = np.empty((3,self.WN_BIN_WIDTH.shape[0]), dtype=float)
         if store_x is None:
@@ -1206,6 +1338,9 @@ class PseudoContSpecData:
             store_z = store_z,
             n_neighbour_bins = n_neighbour_bins
         )
+        
+        if use_cache:
+            self._result_cache.set(result_bucket, result_identity, out)
         
         return out
 
@@ -1313,7 +1448,7 @@ class AnsDatabase:
             ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
             out : None | list | tuple[list,...] = None,
             refresh : bool = False,
-    ) -> tuple[list[tuple[tuple[int, int], LineSetData, None | PseudoContinuumData]],...] | list[tuple[tuple[int,int], LineSetData, None | PseudoContinuumData]] | Self:
+    ) -> tuple[list[tuple[tuple[int, int], LineSetData, PseudoContinuumData]],...] | list[tuple[tuple[int,int], LineSetData, PseudoContinuumData]] | Self:
         """
         Fetches line data for a single isotopologue, a set of isotopologues, or a set of molecules and isotopologues.
         
@@ -1385,7 +1520,7 @@ class AnsDatabase:
             temperature : float = 0, # Kelvin
             ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
             refresh : bool = False,
-    ) -> tuple[LineSetData, None | PseudoContinuumData]:
+    ) -> tuple[LineSetData, PseudoContinuumData]:
 
         # build data group
         ld_cache_bucket = self.LINE_DATABASE
@@ -1405,7 +1540,13 @@ class AnsDatabase:
             self.cache.set(ld_cache_bucket, ld_cache_identity, ld_instance)
     
         if self._ans_pseudo_continuum_file is None:
-            pc_instance = None
+            pc_instance = AnsPseudoContinuumFile._get_null_data(
+                ld_instance.s_min,
+                ld_instance.t_ref,
+                ld_instance.p_ref,
+                (wn_min, wn_max),
+                len(ambient_gasses),
+            )
         else:
             pc_cache_bucket = self.CONTINUUM_DATABASE
             pc_cache_identity = (mol_id, iso_id, ld_instance.s_min, ld_instance.t_ref, *ambient_gasses)
@@ -1437,7 +1578,7 @@ class AnsDatabase:
             ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
             out : None | list | tuple[list,...] = None,
             refresh : bool = False,
-    ) -> tuple[list[tuple[tuple[int,int], LineSetData, None | PseudoContinuumData, PFList]],...] | list[tuple[tuple[int,int], LineSetData, None | PseudoContinuumData, PFList]] | Self:
+    ) -> tuple[list[tuple[tuple[int,int], LineSetData, PseudoContinuumData, PFList]],...] | list[tuple[tuple[int,int], LineSetData, PseudoContinuumData, PFList]] | Self:
         mol_id, iso_id = mol_id_and_iso_id_to_arrays(mol_id, iso_id)
     
         if out is None:
@@ -1508,7 +1649,7 @@ class AnsDatabase:
             temperature : float = 0,
             ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
             refresh : bool = False,
-    ) -> tuple[LineSetData, None | PseudoContinuumData, PFList]:
+    ) -> tuple[LineSetData, PseudoContinuumData, PFList]:
         ld_instance, pc_instance = self._single_iso_fetch_linedata(
             mol_id,
             iso_id,
@@ -1534,8 +1675,20 @@ class LineDataParams:
     wn_min : float = 0.0
     wn_max : float = np.inf
     s_min : float = -1
-    temp_requested : float = 296
-    press_requested : float = 1
+    t_req : float = 296 # (Kelvin) temperature that we want to request data for
+    p_req : float = 1 # (Atmospheres) pressure that we want to request data for
+    default_continuum_wn_bin_width : float = 1.0 # (cm^{-1})
+    
+    def cache_identity(self) -> tuple:
+        """
+        Returns a tuple that can be used to identify a set of line and continuum data that was calculated previously
+        """
+        return (
+            self.s_min,
+            self.t_req,
+            self.p_req,
+            self.ambient_gasses,
+        )
 
 
 class LineData_0:
@@ -1588,6 +1741,7 @@ class LineData_0:
     
     @ID.setter
     def ID(self, value : int):
+        assert isinstance(value, (int, np.integer)), "LineData_0.ID must be an integer"
         if value != self._ID:
             self._ID = value
             self._rt_gas_descs = None
@@ -1604,6 +1758,7 @@ class LineData_0:
     
     @ISO.setter
     def ISO(self, value : int | tuple[int,...]):
+        assert isinstance(value, (int, np.integer)) if not isinstance(value, tuple) else all(isinstance(x,(int,np.integer)) for x in value), "LineData_0.ISO must be an integer or a tuple of integers"
         if value != self._ISO:
             self._ISO = value
             self._rt_gas_descs = None
@@ -1679,6 +1834,12 @@ class LineData_0:
     def max_lines_or_bins(self) -> int:
         return max(max(x.NU.shape[0] for x in self.line_data), max(x.WN_BIN_CENTER.shape[0] if x is not None else 0 for x in self.continuum_data))
     
+    def cache_identity(self) -> tuple:
+        """
+        Returns a tuple that can be used to identify a set of line and continuum data that was calculated previously
+        """
+        return (self.mol_id_tpl, self.iso_id_tpl, self._params.cache_identity())
+    
     def _set_params_direct(self, **kwargs):
         for k,v in kwargs.items():
             if v is not None and getattr(self._params, k) != v:
@@ -1691,8 +1852,9 @@ class LineData_0:
             vmin : None | float = None,
             vmax : None | float = None,
             s_min : None | float = None,
-            temp_requested : None | float = None, # Kelvin
-            press_requested : None | float = None, # Atmospheres
+            t_req : None | float = None, # Kelvin
+            p_req : None | float = None, # Atmospheres
+            default_continuum_bin_width : None | float = None,
             wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
     ) -> Self:
         if vmin is not None:
@@ -1700,13 +1862,17 @@ class LineData_0:
         
         if vmax is not None:
             vmax = WavePoint(vmax, wave_unit).as_unit(ans.enums.WaveUnit.Wavenumber_cm).value
-            
+        
+        if default_continuum_bin_width is not None:
+            default_continuum_bin_width = WavePoint(default_continuum_bin_width, wave_unit).as_unit(ans.enums.WaveUnit.Wavenumber_cm).value
+        
         self._set_params_direct(
             wn_min = vmin, 
             wn_max = vmax, 
             s_min = s_min, 
-            temp_requested = temp_requested, 
-            press_requested = press_requested
+            t_req = t_req, 
+            p_req = p_req,
+            default_continuum_wn_bin_width = default_continuum_bin_width,
         )
         
         return self
@@ -1720,13 +1886,14 @@ class LineData_0:
             vmin : None | float = None,
             vmax : None | float = None,
             s_min : None | float = None,
-            temp_requested : None | float = None, # Kelvin
-            press_requested : None | float = None, # Atmospheres
+            t_req : None | float = None, # Kelvin
+            p_req : None | float = None, # Atmospheres
+            default_continuum_bin_width : None | float = None,
             wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
     ) -> Self:
         prev_params = self.get_params()
         
-        self.set_params(vmin, vmax, s_min, temp_requested, press_requested, wave_unit)
+        self.set_params(vmin, vmax, s_min, t_req, p_req, default_continuum_bin_width, wave_unit)
         
         yield self
         
@@ -1768,10 +1935,17 @@ class LineData_0:
         if self.cache is not None:
             # build data group
             ld_pc_cache_bucket = ('line_and_continuum_data_pairs',id(self._ans_database))
-            ld_pc_cache_identity = (self.mol_id_tpl, self.iso_id_tpl, self._params.s_min, self._params.temp_requested, *self._params.ambient_gasses)
+            ld_pc_cache_identity = self.cache_identity()
             
             ld_pc_pairs = self.cache.get(ld_pc_cache_bucket, ld_pc_cache_identity, None)
-            if refresh or ld_pc_pairs is None or not all(wn_range_is_within((self._params.wn_min, self._params.wn_max), ld_pc_pair[0].req_wn_range) for ld_pc_pair in ld_pc_pairs):
+            if (
+                refresh 
+                or ld_pc_pairs is None 
+                or not all(wn_range_is_within((self._params.wn_min, self._params.wn_max), ld_pc_pair[0].req_wn_range) for ld_pc_pair in ld_pc_pairs)
+            ): # retrieval from cache failed
+                retrieved_from_cache = False
+                
+                # When getting data again, request the superset of all wavenumbers requested
                 if ld_pc_pairs is not None:
                     for ld_pc_pair in ld_pc_pairs:
                         self._params.wn_min = self._params.wn_min if self._params.wn_min <= ld_pc_pair[0].req_wn_range[0] else ld_pc_pair[0].req_wn_range[0]
@@ -1791,18 +1965,18 @@ class LineData_0:
                 self._params.wn_min,
                 self._params.wn_max,
                 self._params.s_min,
-                self._params.temp_requested,
+                self._params.t_req,
                 self._params.ambient_gasses,
                 out = id_line_cont_triplet
             )
             
-            #print(f'{type(id_line_cont_triplet)=} {len(id_line_cont_triplet)=}')
-            #print(f'{type(id_line_cont_triplet[0])=} {len(id_line_cont_triplet[0])=}')
-            #print(f'{type(id_line_cont_triplet[0][0])=} {len(id_line_cont_triplet[0][0])=}')
+            # At this point `id_line_cont_triplet` is 
+            # a list of ((mol_id, iso_id), line_data, cont_data) entries
+            # as any instance of LineData_0 only everh as one molecule
             
             for i, ((mol_id, iso_id), line_data, cont_data) in enumerate(id_line_cont_triplet):
-                self.line_data[i] = LineSetSpecData.create_from(mol_id, iso_id, self._params.ambient_gasses, line_data)
-                self.continuum_data[i] = None if cont_data is None else PseudoContSpecData.create_from(mol_id, iso_id, self._params.ambient_gasses, cont_data)
+                self.line_data[i] = LineSetSpecData.create_from(mol_id, iso_id, self._params.ambient_gasses, line_data, cache=self.cache)
+                self.continuum_data[i] = PseudoContSpecData.create_from(mol_id, iso_id, self._params.ambient_gasses, cont_data, cache=self.cache)
         
                 # If we need to, add more lines into the continuum so that we always have the requested `s_min` for both the line set data and continuum data.
                 if (self._params.s_min > self.line_data[i].s_min):
@@ -1922,24 +2096,18 @@ class LineData_0:
         else:
             wn_calc_range = wave_calc_range
         
+        result = tuple(self.line_data[i].get_line_strength(t_calc, self.partition_fn_data[i], wn_calc_range) for i in range(len(self.line_data)))
+        
         if combined_output:
-            n_iso_lines = []
-            for iso_line_data in self.line_data:
-                if wn_calc_range is None:
-                    n_iso_lines.append( iso_line_data.n_lines)
-                else:
-                    n_iso_lines.append(np.count_nonzero((wn_calc_range[0] <= iso_line_data.NU ) & (iso_line_data.NU < wn_calc_range[1])))
-            
-            result = np.empty((sum(n_iso_lines),), dtype=float)
+            combined_result = np.empty((sum(x.shape[0] for x in result),), dtype=float)
             
             i_start = 0
-            for i, iso_line_data in enumerate(self.line_data):
-                i_end = i_start + n_iso_lines[i]
-                result[i_start:i_end] = iso_line_data.get_line_strength(t_calc, self.partition_fn_data[i], wn_calc_range)
+            for i, x in enumerate(result):
+                i_end = i_start + x.shape[0]
+                combined_result[i_start:i_end] = x
                 i_start = i_end
             
-        else:
-            result = tuple(self.line_data[i].get_line_strength(t_calc, self.partition_fn_data[i], wn_calc_range) for i in range(len(self.line_data)))
+            result = combined_result
         
         return result
 
@@ -1963,6 +2131,7 @@ class LineData_0:
             include_continuum : bool = True,
             include_pressure_shift : bool = False,
             combined_output : bool = True,
+            use_cache : bool = True,
     ) -> np.ndarray:
     
         if not combined_output:
@@ -1984,7 +2153,8 @@ class LineData_0:
             include_lines = include_lines,
             include_continuum = include_continuum,
             include_pressure_shift = include_pressure_shift,
-            out = out
+            use_cache = use_cache,
+            out = out,
         )
         
         if not combined_output:
@@ -2014,6 +2184,7 @@ class LineData_0:
             include_lines : bool = True,
             include_continuum : bool = True,
             include_pressure_shift : bool = False,
+            use_cache : bool = True,
     ) -> np.ndarray:
         
         
@@ -2080,6 +2251,7 @@ class LineData_0:
                 f'{wave_unit=}',
                 f'{include_lines=}',
                 f'{include_continuum=}',
+                f'{use_cache=}',
                 f'{out=}',
                 f'{store=}',
             )) + '##-----------##'
@@ -2125,10 +2297,11 @@ class LineData_0:
                     wn_approx_window = wn_approx_window,
                     wn_calc_range = wn_calc_range,
                     include_pressure_shift = include_pressure_shift,
+                    use_cache=use_cache,
                 )
             
-            if include_continuum and iso_continuum_data is not None:
-                print(f'{iso_continuum_data=}')
+            if include_continuum:
+                _lgr.debug(f'{iso_continuum_data=}')
                 iso_continuum_data.add_monochromatic_absorption(
                     wn_grid,
                     lineshape_fn,
@@ -2145,9 +2318,8 @@ class LineData_0:
                     n_neighbour_bins= 3,
                     
                     wn_calc_range = wn_calc_range,
+                    use_cache=use_cache,
                 )
-            else:
-                _lgr.info('No continuum data')
             
         
         return result # This should be a view of `out`
@@ -2194,11 +2366,12 @@ class LineData_0:
         
         line_style_defaults = dict(
             linewidth=1,
+            alpha=0.5,
         )
         line_style_defaults.update(line_style_kw)
         
         ax_style_defaults = dict(
-            facecolor='#EEEEEE'
+            facecolor='#F8F8F8'
         )
         ax_style_defaults.update(ax_style_kw)
         
@@ -2224,17 +2397,24 @@ class LineData_0:
         
         for i, (iso_line_data, iso_continuum_data) in enumerate(zip(self.line_data, self.continuum_data)):
 
-            if iso_line_data.n_lines == 0:
-                ls_max = 0
-                ls_min = np.inf
-                no_data_str = ' [NO DATA]'
-            else:
+            if iso_line_data.has_data:
                 ls_max = iso_line_data.SW.max()
                 ls_min = iso_line_data.SW[iso_line_data.SW>0].min()
-                if iso_continuum_data is not None and iso_continuum_data.LINE_STRENGTH_SUM.size > 0:
-                    iso_ls_min = np.min(iso_continuum_data.LINE_STRENGTH_SUM[iso_continuum_data.LINE_STRENGTH_SUM > 0])
-                    ls_min = ls_min if ls_min < iso_ls_min else iso_ls_min
-                no_data_str = ''
+                line_no_data_str = ''
+            else:
+                ls_max = 0
+                ls_min = np.inf
+                line_no_data_str = ' [NO DATA]'
+            
+            if iso_continuum_data.has_data:
+                cont_ls_min = np.min(iso_continuum_data.LINE_STRENGTH_SUM[iso_continuum_data.LINE_STRENGTH_SUM > 0])
+                cont_ls_max = iso_continuum_data.LINE_STRENGTH_SUM.max()
+                ls_min = ls_min if ls_min < cont_ls_min else cont_ls_min
+                ls_max = ls_max if ls_max > cont_ls_max else cont_ls_max
+                cont_no_data_str = ''
+            else:
+                cont_no_data_str = ' [NO DATA]'
+            
             line_strengths_max = ls_max if ls_max > line_strengths_max else line_strengths_max
             line_strengths_min = ls_min if ((ls_min < line_strengths_min) and (ls_min > 0)) else line_strengths_min
             
@@ -2247,7 +2427,7 @@ class LineData_0:
             combined_ax.scatter(
                 iso_line_data.NU,
                 iso_line_data.SW,
-                label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}',
+                label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){line_no_data_str}',
                 zorder = i,
                 **scatter_style_defaults
             )
@@ -2258,13 +2438,14 @@ class LineData_0:
                     iso_continuum_data.WN_BIN_CENTER,
                     iso_continuum_data.LINE_STRENGTH_SUM,
                     linewidth = line_style_defaults['linewidth']*2,
+                    alpha = line_style_defaults['alpha'],
                     color=ax_style_defaults['facecolor'],
                     zorder = self.n_isos + i,
                 )
                 combined_ax.plot(
                     iso_continuum_data.WN_BIN_CENTER,
                     iso_continuum_data.LINE_STRENGTH_SUM,
-                    label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}',
+                    label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){cont_no_data_str}',
                     zorder = 2*self.n_isos + i,
                     **line_style_defaults
                 )
@@ -2303,12 +2484,21 @@ class LineData_0:
                 gas_name_latex = r'\text{UNKNOWN GAS ISOTOPE}'
             
             
-            if iso_line_data.n_lines == 0:
-                no_data_str = ' [NO DATA]'
+            if iso_line_data.has_data:
+                line_no_data_str = ''
             else:
-                no_data_str = ''
+                line_no_data_str = ' [NO LINE DATA]'
+            if iso_continuum_data.has_data:
+                cont_no_data_str = ''
+            else:
+                cont_no_data_str = ' [NO CONT DATA]'
             
-            ax.set_title(f'Line data for ${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}')
+            ax.set_title(
+                '\n'.join((
+                    f'Line data ${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){line_no_data_str}{cont_no_data_str}',
+                    f'line: (t_ref={iso_line_data.t_ref}, p_ref={iso_line_data.p_ref}) cont: (t_cont={iso_continuum_data.t_cont}, p_cont={iso_continuum_data.p_cont})'
+                ))
+            )
             
             
             # Plots for specific isotopes, coloured by lower energy state
@@ -2322,12 +2512,12 @@ class LineData_0:
                 **scatter_style_defaults
             )
             
-            if iso_continuum_data is not None:
+            if iso_continuum_data.has_data:
                 ax.plot(
                     iso_continuum_data.WN_BIN_CENTER,
                     iso_continuum_data.LINE_STRENGTH_SUM,
                     color='#EE22EE',
-                    label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){no_data_str}',
+                    label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id})',
                     **line_style_defaults
                 )
             

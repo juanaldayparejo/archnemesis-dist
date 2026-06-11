@@ -27,7 +27,7 @@ _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 
 
-
+P_REF_DEFAULT = 1.0 # atmospheres
 
 
 class AnsPseudoContinuumFile(AnsDatabaseFile):
@@ -416,28 +416,46 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 					amb_grp = h5py_helper.ensure_grp(b_grp, line_broadener_part.name)
 					broadener_table.to_hdf5(amb_grp)
 	
-	
+	@staticmethod
 	def _get_null_data(
-			self,
 			s_max : float,
 			t_cont : float,
 			p_cont : float,
 			requested_wn_range : tuple[float,float],
-			n_ambient_gasses : int
+			n_ambient_gasses : int,
+			wn_bin_center : None | np.ndarray = None, # (cm^{-1})
+			wn_bin_width : None | float | np.ndarray = 1.0, # (cm^{-1})
 	) -> PseudoContinuumData:
+		"""
+		Return an empty dataset, but it should be ready to accept extra lines if required therefore need to compute a decent value for
+		`wn_bin_center` and `wn_bin_width`.
+		"""
+		if wn_bin_width is not None:
+			if wn_bin_center is None:
+				if isinstance(wn_bin_width, float):
+					wn_bin_center = np.arange(*requested_wn_range, wn_bin_width, dtype=float)
+				else:
+					wn_bin_width_sum = np.cumsum(wn_bin_width)
+					wn_bin_center = np.array([requested_wn_range[0] - wn_bin_width[0]/2, *(requested_wn_range[0] - wn_bin_width[0]/2 + wn_bin_width_sum)], dtype=float)
+			n_bins = len(wn_bin_center)
+		else:
+			n_bins = 0
+			wn_bin_center = np.zeros((n_bins,), dtype=float)
+			wn_bin_width = np.zeros((n_bins,), dtype=float)
+		
 		return PseudoContinuumData(
 			s_max,
 			t_cont,
 			p_cont,
 			requested_wn_range,
-			np.zeros((0,),dtype=float),
-			np.zeros((0,),dtype=float),
-			np.zeros((0,),dtype=float),
-			np.zeros((0,),dtype=float),
-			np.zeros((0,),dtype=float),
-			np.zeros((0,),dtype=float),
-			np.zeros((0,n_ambient_gasses),dtype=float),
-			np.zeros((0,n_ambient_gasses),dtype=float),
+			wn_bin_center,
+			wn_bin_width,
+			np.zeros((n_bins,), dtype=float),
+			np.zeros((n_bins,), dtype=float),
+			np.zeros((n_bins,), dtype=float),
+			np.zeros((n_bins,), dtype=float),
+			np.zeros((n_bins,n_ambient_gasses),dtype=float),
+			np.zeros((n_bins,n_ambient_gasses),dtype=float),
 		)
 	
 	def _get_broadeners_grp(
@@ -522,7 +540,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		with self.open('r'):
 			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_target, on_missing_mol, on_missing_iso)
 			if iso_grp is None:
-				return self._get_null_data(s_max, temperature, 1, requested_wn_range, n_ambient_gasses)
+				return self._get_null_data(s_max, temperature, P_REF_DEFAULT, requested_wn_range, n_ambient_gasses)
 			
 			result = None
 			
@@ -580,7 +598,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			
 			if result is None:
 				_lgr.warn(f'No group found that is compatible with {target_grp_parameters=}, will return empty data. ')
-				return self._get_null_data(s_max, temperature, 1, requested_wn_range, n_ambient_gasses)
+				return self._get_null_data(s_max, temperature, P_REF_DEFAULT, requested_wn_range, n_ambient_gasses)
 			else:
 				return result
 			

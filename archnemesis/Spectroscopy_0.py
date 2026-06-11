@@ -1447,32 +1447,40 @@ class Spectroscopy_0:
                 lineshape = ans.Data.lineshapes.lorentz
             else:
                 raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
-
+            
+            store = np.empty((4, linedata.max_lines_or_bins), dtype=float)
+            k1 = np.empty((k.shape[0],), dtype=float)
             for ipoint in range(npoints):
 
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
 
-                k[:,ipoint,igas] = linedata.calculate_monochromatic_absorption(
-                            waves=wave,             # wavenumbers or wavelengths
-                            temp=t_l,               # kelvin
-                            press=p_l,              # Atmospheres
-                            amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
-                            wave_unit=self.ISPACE,  # unit of `waves` argument
-                            lineshape_fn=lineshape, # lineshape function to use
-                            line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
-                            add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                linedata.add_monochromatic_absorption(
+                    wave_grid=wave,             # wavenumbers or wavelengths
+                    t_calc=t_l,               # kelvin
+                    p_calc=p_l,              # Atmospheres
+                    amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
+                    wave_unit=self.ISPACE,  # unit of `waves` argument
+                    lineshape_fn=lineshape, # lineshape function to use
+                    wn_calc_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                    include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                    
+                    out = k[:,ipoint,igas],
+                    store = store
                 )
 
-                k1 = linedata.calculate_monochromatic_absorption(
-                            waves=wave,             # wavenumbers or wavelengths
-                            temp=t_l+5.,               # kelvin
-                            press=p_l,              # Atmospheres
-                            amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
-                            wave_unit=self.ISPACE,  # unit of `waves` argument
-                            lineshape_fn=lineshape, # lineshape function to use
-                            line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
-                            add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                linedata.add_monochromatic_absorption(
+                    wave_grid=wave,             # wavenumbers or wavelengths
+                    t_calc=t_l+5.,               # kelvin
+                    p_calc=p_l,              # Atmospheres
+                    amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
+                    wave_unit=self.ISPACE,  # unit of `waves` argument
+                    lineshape_fn=lineshape, # lineshape function to use
+                    wn_calc_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                    include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                
+                    out = k1,
+                    store = store,
                 )
 
                 dkdt[:,ipoint,igas] = (k1-k[:,ipoint,igas])/5.

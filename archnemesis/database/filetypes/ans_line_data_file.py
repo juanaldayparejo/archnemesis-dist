@@ -411,8 +411,8 @@ class AnsLineDataFile(AnsDatabaseFile):
 					line_broadener_table.to_hdf5(amb_grp)
 		return
 
+	@staticmethod
 	def _get_null_data(
-			self,
 			s_min : float,
 			t_ref : float,
 			p_ref : float,

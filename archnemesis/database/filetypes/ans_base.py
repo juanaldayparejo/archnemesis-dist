@@ -238,6 +238,39 @@ class AnsDatabaseFile:
 			return h5py_helper.ensure_grp(x_grp, self.target_group_name, attrs=self.data_grp_attrs)
 
 
+	def iter_mol_grps(
+			self,
+			x_grp_name : str = '/',
+	) -> Generator[h5py.Group]:
+		with self.open():
+			x_grp = self._file_hdl[x_grp_name]
+			
+			if self.target_group_name not in x_grp:
+				return
+				
+			yield from x_grp[self.target_group_name].items()
+		return
+
+
+	def iter_iso_grps(
+			self,
+			x_grp_name : str = '/',
+	) -> Generator[h5py.Group]:
+
+		for mol_name, mol_grp in self.iter_mol_grps(x_grp_name):
+			yield from mol_grp.items()
+		return
+
+
+	def iter_leaf_grps(
+			self,
+			x_grp_name : str = '/',
+	) -> Generator[h5py.Group]:
+		for iso_name, iso_grp in self.iter_iso_grps(x_grp_name):
+			yield from iso_grp.items()
+		return
+	
+	
 	def _get_data_mol_iso_grp(
 			self,
 			mol_name : str,
@@ -462,6 +495,12 @@ class AnsDatabaseFile:
 		"""
 		raise NotImplementedError()
 	
+	@staticmethod
+	def _get_null_data(self, *args, **kwargs)-> Any:
+		"""
+		Return empty data e.g. when requested data does not exist in file.
+		"""
+		raise NotImplementedError()
 	
 	def _add_data(
 			self, 
