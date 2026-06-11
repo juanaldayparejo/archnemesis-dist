@@ -973,6 +973,10 @@ class CombinedLineSetSpecData:
         return self._id_data[1]
     
     @property
+    def RT_GAS_DESC(self):
+        return self._id_data
+    
+    @property
     def NU(self):
         return self._data[0]
     
@@ -1958,7 +1962,7 @@ class LineData_0:
             include_lines : bool = True,
             include_continuum : bool = True,
             include_pressure_shift : bool = False,
-            combined_output : bool = False,
+            combined_output : bool = True,
     ) -> np.ndarray:
     
         if not combined_output:
