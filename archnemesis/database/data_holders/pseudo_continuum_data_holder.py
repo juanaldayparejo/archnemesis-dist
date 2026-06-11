@@ -4,50 +4,44 @@ from typing import Iterable
 
 import numpy as np
 
-from archnemesis.database.data_holders.line_broadener_holder import LineBroadenerHolder
+from archnemesis.database.data_holders.pseudo_continuum_broadener_part import PseudoContinuumBroadenerPart
 from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
 
 @dc.dataclass
-class LineDataHolder:
+class PseudoContinuumDataHolder:
 	# source information
 	name : str        # Name of source, will result in a "/sources/X" group
 	description : str # Description of source, will be the "description" attribute of the "/sources/X" group
-
-	# spectral line data
+	
+	# Pseudo-continuum creation parameters
+	t_cont : float # Temperature this continuum data was calculated at, Kelvin
+	s_max : float  # Maximum line strength included in pseudo-continuum, 'cm^{-1}/(molec.cm^{-2})'
+	
+	# pseudo-continuum data. 
 	mol_id : np.ndarray
 	local_iso_id : np.ndarray
-	nu : np.ndarray
-	sw : np.ndarray
-	a : np.ndarray
-	elower : np.ndarray
-
+	wn_bin_center : np.ndarray
+	wn_bin_width : np.ndarray
+	line_strength_sum : np.ndarray
+	line_strength_weighted_mean_lower_energy_state : np.ndarray
+	
 	# self broadening
-	gamma_self : None | np.ndarray = None
-	n_self : None | np.ndarray = None
-
+	line_strength_weighted_gamma_self : np.ndarray
+	line_strength_weighted_n_self : np.ndarray
+	
 	# foreign broadening
-	broadeners : Iterable[LineBroadenerHolder] = tuple()
-
-	# Line data set creation parameters
-	s_min : float = 0 # Minimum line strength included in this set of lines
+	broadeners : Iterable[PseudoContinuumBroadenerPart] = tuple()
+	
+	# Pseudo-continuum creation parameters with defaults
 	s_unit : str = 'cm^{-1}/(molec.cm^{-2})'
-	t_ref : float = 296 # Reference temperature at which data was calculated
 	t_unit : str = 'Kelvin' # Unit of reference temperature
 	p_ref : float = 1 # Reference pressure
 	p_unit : str = 'atm' # Unit of reference pressure
-
+	
 	_rt_gas_descs : None | tuple = None
-
-	def __post_init__(self):
-		if self.gamma_self is None:
-			self.gamma_self = np.ones_like(self.nu, dtype=float)
-
-		if self.n_self is None:
-			self.n_self = np.zeros_like(self.nu, dtype=float)
-		return
-
+	
 	@property
-	def rt_gas_descs(self) -> tuple[RadtranGasDescriptor,...]:
+	def rt_gas_descs(self):
 		if self._rt_gas_descs is None:
 			u_ids = np.unique(np.array([self.mol_id, self.local_iso_id], dtype=int), axis=1)
 			self._rt_gas_descs = tuple(RadtranGasDescriptor(int(gas_id), int(iso_id)) for gas_id, iso_id in u_ids.T)

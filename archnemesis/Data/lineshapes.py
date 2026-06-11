@@ -1,11 +1,55 @@
 
 
 import numpy as np
-from scipy.special import (
-    voigt_profile, 
+#from scipy.special import (
+    #voigt_profile, 
     #wofz, 
     #dawsn
-)
+#)
+
+
+# Borrowed from https://github.com/scikit-hep/numba-stats/blob/main/src/numba_stats/_special.py
+#
+# numba currently does not support scipy, so we cannot access
+# scipy.stats.norm.ppf and scipy.stats.poisson.cdf in a JIT'ed
+# function. As a workaround, we wrap special functions from
+# scipy to implement the needed functions here.
+from typing import Any
+
+from numba import njit
+from numba.extending import get_cython_function_address
+from numba.types import WrapperAddressProtocol, float64
+
+
+def get(name: str, signature: Any) -> Any:
+    # create new function object with correct signature that numba can call
+    from scipy.special import cython_special
+
+    # scipy-1.12 started to provide fused versions for some special functions
+    if name in {"betainc", "stdtr", "stdtrit"}:
+        fuse_name = f"__pyx_fuse_0{name}"
+    else:
+        fuse_name = f"__pyx_fuse_1{name}"
+    if fuse_name not in cython_special.__pyx_capi__:
+        fuse_name = name
+
+    addr = get_cython_function_address("scipy.special.cython_special", fuse_name)
+
+    # dynamically create type that inherits from WrapperAddressProtocol
+    cls = type(
+        name,
+        (WrapperAddressProtocol,),
+        {"__wrapper_address__": lambda self: addr, "signature": lambda self: signature},
+    )
+    return cls()
+
+# VOIGT PROFILE ##########################################################
+voigt_profile = get("voigt_profile", float64(float64, float64, float64)) #
+# ARGUMENTS -------------------------------------------------------------#
+#   x - Value to calculate probability for                               #
+#   sigma - Standard deviation of normal distribution part               #
+#   gamma - Half-width at Half-maximum of Cauchy distribution part       #
+##########################################################################
 
 SQRT_2 = np.sqrt(2)
 SQRT_PI = np.sqrt(np.pi)
@@ -16,27 +60,11 @@ SQRT_log2 = np.sqrt(np.log(2))
 
 ###########################################################################################
 
-def voigt_ch4_H2_ambient(
-        delta_wn : np.ndarray, 
-        alpha_d : float, 
-        gamma_l : float
-    ) -> np.ndarray:
-    
-    
-    # NOTE: Unsure where the log(2) factor comes from but do not get the same answer as existing LBL tables without it.
-    #       it could also be a factor of 1/sqrt(2), they are very similar numbers.
-    #return voigt_profile(delta_wn, alpha_d, np.log(2)*gamma_l) 
-
-    # NOTE: Unsure where the 1/sqrt(2) factor comes from but do not get the same answer as existing LBL tables without it.
-    #       it could also be a factor of log(2), they are very similar numbers.
-    return voigt_profile(delta_wn, alpha_d/SQRT_2, gamma_l/SQRT_2)
-
-###########################################################################################
-
+@njit
 def voigt(
         delta_wn : np.ndarray, 
-        alpha_d : float, 
-        gamma_l : float
+        alpha_d : float, # HWHM of gaussian
+        gamma_l : float, # HWHM of cauchy
     ) -> np.ndarray:
     """
     Compute Voigt profile using Humlicek's algorithm
@@ -76,12 +104,27 @@ def voigt(
         
         gamma_l : cauchy-lorents HWHM = gamma
     """
+    return voigt_profile(delta_wn, alpha_d / SQRT_2log2, gamma_l)
+
+@njit
+def voigt_ch4_H2_ambient(
+        delta_wn : np.ndarray, 
+        alpha_d : float, 
+        gamma_l : float
+    ) -> np.ndarray:
     
-    sigma = alpha_d / SQRT_2log2
-    return voigt_profile(delta_wn, sigma, gamma_l)
+    
+    # NOTE: Unsure where the log(2) factor comes from but do not get the same answer as existing LBL tables without it.
+    #       it could also be a factor of 1/sqrt(2), they are very similar numbers.
+    #return voigt_profile(delta_wn, alpha_d, np.log(2)*gamma_l) 
 
-###########################################################################################
+    # NOTE: Unsure where the 1/sqrt(2) factor comes from but do not get the same answer as existing LBL tables without it.
+    #       it could also be a factor of log(2), they are very similar numbers.
+    return voigt_profile(delta_wn, alpha_d/SQRT_2, gamma_l/SQRT_2)
 
+
+
+@njit
 def hartmann_empirical_infrared_ch4_h2_broadening(
         delta_wn : np.ndarray, 
         alpha_d : float, 
@@ -104,11 +147,10 @@ def hartmann_empirical_infrared_ch4_h2_broadening(
     
     return chi*voigt(delta_wn, alpha_d, gamma_l)
 
-###########################################################################################
-
+@njit
 def lorentz(
         delta_wn : np.ndarray, 
-        alpha_d : float, 
+        alpha_d : float,
         gamma_l : float
     ) -> np.ndarray:
     """
@@ -124,8 +166,7 @@ def lorentz(
     """
     return gamma_l / (np.pi * (gamma_l**2 + delta_wn**2))
 
-###########################################################################################
-
+@njit
 def gaussian(
         delta_wn : np.ndarray, 
         alpha_d : float, 
@@ -143,8 +184,6 @@ def gaussian(
             Lorentz width (cauchy-lorentz HWHM) - not used in gaussian profile
     """
     return np.sqrt(np.log(2)/np.pi) / alpha_d * np.exp(- (delta_wn**2 * np.log(2)) / (alpha_d**2))
-
-###########################################################################################
 
 def co2_sublorentz_tonkov96(
         delta_wn : np.ndarray, 
@@ -186,5 +225,30 @@ def co2_sublorentz_tonkov96(
     chi[mask] = 0.025 * np.exp(-0.009 * (np.abs(delta_wn[mask])))
 
     return chi*voigt(delta_wn, alpha_d, gamma_l)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

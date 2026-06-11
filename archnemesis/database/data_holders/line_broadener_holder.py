@@ -9,10 +9,16 @@ import numpy as np
 
 @dc.dataclass
 class LineBroadenerHolder:
-	name : str
+	name : str # Name of the broadening molecule mixture (e.g. "CO2", "SELF", "AIR",...)
+	
 	gamma_amb : None | np.ndarray = None
 	n_amb : None | np.ndarray = None
 	delta_amb : None | np.ndarray = None
+	
+	t_ref : float = 296 # Reference temperature
+	t_unit : str = 'Kelvin' # Unit of reference temperature
+	p_ref : float = 1 # Reference pressure
+	p_unit : str = 'atm' # Unit of reference pressure
 	
 	def __post_init__(self):
 		if all(x is None for x in (self.gamma_amb, self.n_amb, self.delta_amb)):

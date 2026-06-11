@@ -34,14 +34,15 @@ import os
 import os.path
 import archnemesis as ans
 from numba import jit, njit
-from archnemesis.database.datatypes.wave_range import WaveRange
+#from archnemesis.database.datatypes.wave_range import WaveRange
 
 from archnemesis.helpers import h5py_helper, path_redirect
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 
 import logging
 _lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.INFO)
 
 ###############################################################################################
 
@@ -52,6 +53,8 @@ Created on Tue Jul 22 17:27:12 2021
 
 State Vector Class.
 """
+
+BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR : float = 1.0E20
 
 class Spectroscopy_0:
 
@@ -313,66 +316,67 @@ class Spectroscopy_0:
 
         from archnemesis.Data import gas_info
 
+        msg = f'\n#===== SUMMARY =====#\n\tSpectroscopy_0 instance at memory location {id(self)}'
         if self.ILBL==SpectralCalculationMode.K_TABLES:
-            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (k-distribution)")}')
-            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
+            msg += f'\n\tCalculation type ILBL ::  {(self.ILBL," (k-distribution)")}'
+            msg += f'\n\tNumber of radiatively-active gaseous species ::  {(self.NGAS)}'
             gasname = ['']*self.NGAS
             for i in range(self.NGAS):
                 gasname1 = gas_info[str(self.ID[i])]['name']
                 if self.ISO[i]!=0:
                     gasname1 = gasname1+' ('+str(self.ISO[i])+')'
                 gasname[i] = gasname1
-            _lgr.info(f'Gaseous species ::  {(gasname)}')
+            msg += f'\n\tGaseous species ::  {(gasname)}'
 
-            _lgr.info(f'Number of g-ordinates ::  {(self.NG)}')
+            msg += f'\n\tNumber of g-ordinates ::  {(self.NG)}'
 
-            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
-            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
-            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
+            msg += f'\n\tNumber of spectral points ::  {(self.NWAVE)}'
+            msg += f"\n\tWavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}"
+            msg += f'\n\tStep size ::  {(self.WAVE[1]-self.WAVE[0])}'
 
-            _lgr.info(f'Spectral resolution of the k-tables (FWHM) ::  {(self.FWHM)}')
+            msg += f'\n\tSpectral resolution of the k-tables (FWHM) ::  {(self.FWHM)}'
 
-            _lgr.info(f'Number of temperature levels ::  {(self.NT)}')
-            _lgr.info(f"Temperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}")
+            msg += f'\n\tNumber of temperature levels ::  {(self.NT)}'
+            msg += f"\n\tTemperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}"
 
-            _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
-            _lgr.info(f"Pressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}")
+            msg += f'\n\tNumber of pressure levels ::  {(self.NP)}'
+            msg += f"\n\tPressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}"
 
         elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
-            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (line-by-line)")}')
-            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
+            msg += f'\n\tCalculation type ILBL ::  {(self.ILBL," (line-by-line)")}'
+            msg += f'\n\tNumber of radiatively-active gaseous species ::  {(self.NGAS)}'
             gasname = ['']*self.NGAS
             for i in range(self.NGAS):
                 gasname1 = gas_info[str(self.ID[i])]['name']
                 if self.ISO[i]!=0:
                     gasname1 = gasname1+' ('+str(self.ISO[i])+')'
                 gasname[i] = gasname1
-            _lgr.info(f'Gaseous species ::  {(gasname)}')
+            msg += f'\n\tGaseous species ::  {(gasname)}'
 
-            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
-            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
-            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
+            msg += f'\n\tNumber of spectral points ::  {(self.NWAVE)}'
+            msg += f"\n\tWavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}"
+            msg += f'\n\tStep size ::  {(self.WAVE[1]-self.WAVE[0])}'
 
-            _lgr.info(f'Number of temperature levels ::  {(self.NT)}')
-            _lgr.info(f"Temperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}")
+            msg += f'\n\tNumber of temperature levels ::  {(self.NT)}'
+            msg += f"\n\tTemperature range ::  {(self.TEMP.min(),'-',self.TEMP.max())}"
 
-            _lgr.info(f'Number of pressure levels ::  {(self.NP)}')
-            _lgr.info(f"Pressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}")
+            msg += f'\n\tNumber of pressure levels ::  {(self.NP)}'
+            msg += f"\n\tPressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}"
 
         elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
-            _lgr.info(f'Calculation type ILBL ::  {(self.ILBL," (line-by-line runtime)")}')
-            _lgr.info(f'Number of radiatively-active gaseous species ::  {(self.NGAS)}')
+            msg += f'\n\tCalculation type ILBL ::  {(self.ILBL," (line-by-line runtime)")}'
+            msg += f'\n\tNumber of radiatively-active gaseous species ::  {(self.NGAS)}'
             gasname = ['']*self.NGAS
             for i in range(self.NGAS):
                 gasname1 = gas_info[str(self.ID[i])]['name']
                 if self.ISO[i]!=0:
                     gasname1 = gasname1+' ('+str(self.ISO[i])+')'
                 gasname[i] = gasname1
-            _lgr.info(f'Gaseous species ::  {(gasname)}')
+            msg += f'\n\tGaseous species ::  {(gasname)}'
 
-            _lgr.info(f'Number of spectral points ::  {(self.NWAVE)}')
-            _lgr.info(f"Wavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}")
-            _lgr.info(f'Step size ::  {(self.WAVE[1]-self.WAVE[0])}')
+            msg += f'\n\tNumber of spectral points ::  {(self.NWAVE)}'
+            msg += f"\n\tWavelength range ::  {(self.WAVE.min(),'-',self.WAVE.max())}"
+            msg += f'\n\tStep size ::  {(self.WAVE[1]-self.WAVE[0])}'
 
             lineshape = ['']*self.NGAS
             for i in range(self.NGAS):
@@ -390,7 +394,10 @@ class Spectroscopy_0:
                     lineshape1 = 'UNKNOWN'
                 lineshape[i] = lineshape1
 
-            _lgr.info(f'Line shapes for each gas ::  {(lineshape)}')
+            msg += f'\n\tLine shapes for each gas ::  {(lineshape)}'
+        
+        msg += '\n#===================#'
+        _lgr.info(msg)
 
 
     ######################################################################################################
@@ -918,6 +925,8 @@ class Spectroscopy_0:
             Maximum wavenumber (cm-1) or wavelength (um)
         """
         
+        _lgr.info(f'Reading table {self.LOCATION=} {wavemin=} {wavemax=}')
+        
         if self.LOCATION is None:
             raise ValueError('error in Spectroscopy.read_tables() :: LOCATION is not defined')
             
@@ -1033,7 +1042,7 @@ class Spectroscopy_0:
             raise ValueError('error in write_table_hdf5 :: selected ILBL has not been implemented yet (only ILBL=2 is currently working)')
 
     ######################################################################################################
-    def calc_klblg(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
+    def calc_klblg(self,npoints,press,temp,MakePlot=False):
         """
         Calculate the absorption coefficient at a given pressure and temperature
         looking at pre-tabulated line-by-line tables (assumed to be already stored in this class)
@@ -1200,7 +1209,7 @@ class Spectroscopy_0:
         return kgood,dkgooddT
 
     ######################################################################################################
-    def calc_klbl(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
+    def calc_klbl(self,npoints,press,temp,MakePlot=False):
         """
         Calculate the absorption coefficient at a given pressure and temperature
         looking at pre-tabulated line-by-line tables (assumed to be already stored in this class)
@@ -1438,32 +1447,40 @@ class Spectroscopy_0:
                 lineshape = ans.Data.lineshapes.lorentz
             else:
                 raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
-
+            
+            store = np.empty((4, linedata.max_lines_or_bins), dtype=float)
+            k1 = np.empty((k.shape[0],), dtype=float)
             for ipoint in range(npoints):
 
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
 
-                k[:,ipoint,igas] = linedata.calculate_monochromatic_absorption(
-                            waves=wave,             # wavenumbers or wavelengths
-                            temp=t_l,               # kelvin
-                            press=p_l,              # Atmospheres
-                            amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
-                            wave_unit=self.ISPACE,  # unit of `waves` argument
-                            lineshape_fn=lineshape, # lineshape function to use
-                            line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
-                            add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                linedata.add_monochromatic_absorption(
+                    wave_grid=wave,             # wavenumbers or wavelengths
+                    t_calc=t_l,               # kelvin
+                    p_calc=p_l,              # Atmospheres
+                    amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
+                    wave_unit=self.ISPACE,  # unit of `waves` argument
+                    lineshape_fn=lineshape, # lineshape function to use
+                    wn_calc_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                    include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                    
+                    out = k[:,ipoint,igas],
+                    store = store
                 )
 
-                k1 = linedata.calculate_monochromatic_absorption(
-                            waves=wave,             # wavenumbers or wavelengths
-                            temp=t_l+5.,               # kelvin
-                            press=p_l,              # Atmospheres
-                            amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
-                            wave_unit=self.ISPACE,  # unit of `waves` argument
-                            lineshape_fn=lineshape, # lineshape function to use
-                            line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
-                            add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                linedata.add_monochromatic_absorption(
+                    wave_grid=wave,             # wavenumbers or wavelengths
+                    t_calc=t_l+5.,               # kelvin
+                    p_calc=p_l,              # Atmospheres
+                    amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
+                    wave_unit=self.ISPACE,  # unit of `waves` argument
+                    lineshape_fn=lineshape, # lineshape function to use
+                    wn_calc_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                    include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                
+                    out = k1,
+                    store = store,
                 )
 
                 dkdt[:,ipoint,igas] = (k1-k[:,ipoint,igas])/5.
@@ -1559,27 +1576,33 @@ class Spectroscopy_0:
             else:
                 raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
 
+            # Download partition function tables for the gas isotopes
+            linedata.fetch_partition_function()
+            store = np.empty((4, linedata.max_lines_or_bins), dtype=float)
             for ipoint in range(npoints):
 
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
 
-                k[:,ipoint,igas] = linedata.calculate_monochromatic_absorption(
-                            waves=wave,             # wavenumbers or wavelengths
-                            temp=t_l,               # kelvin
-                            press=p_l,              # Atmospheres
+                linedata.add_monochromatic_absorption(
+                            wave_grid=wave,             # wavenumbers or wavelengths
+                            t_calc=t_l,               # kelvin
+                            p_calc=p_l,              # Atmospheres
                             amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
                             wave_unit=self.ISPACE,  # unit of `waves` argument
                             lineshape_fn=lineshape, # lineshape function to use
-                            line_calculation_wavenumber_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
-                            add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                            wn_calc_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                            include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                            
+                            store = store,
+                            out = k[:,ipoint,igas],
                 )
 
         return k
 
 
     ######################################################################################################
-    def calc_kg(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False):
+    def calc_kg(self,npoints,press,temp,WAVECALC=None,MakePlot=False):
         """
         Calculate the k-coefficients at a given pressure and temperature
         looking at pre-tabulated k-tables (assumed to be already stored in this class)
@@ -1685,7 +1708,7 @@ class Spectroscopy_0:
         #Checking that the calculation wavenumbers coincide with the wavenumbers in the k-tables
         ##########################################################################################
 
-        if WAVECALC[0]!=12345678.:
+        if WAVECALC is not None:
 
             NWAVEC = len(WAVECALC)
             kret = np.zeros([NWAVEC,self.NG,npoints,self.NGAS])
@@ -1730,7 +1753,7 @@ class Spectroscopy_0:
         return kret,dkretdT
 
     ######################################################################################################
-    def calc_k(self,npoints,press,temp,WAVECALC=[12345678.],MakePlot=False,linear=False):
+    def calc_k(self,npoints,press,temp,WAVECALC=None,MakePlot=False,linear=False):
         """
         Calculate the k-coefficients at a given pressure and temperature
         looking at pre-tabulated k-tables (assumed to be already stored in this class)
@@ -1841,30 +1864,34 @@ class Spectroscopy_0:
         #Checking that the calculation wavenumbers coincide with the wavenumbers in the k-tables
         ##########################################################################################
         
-        NWAVEC = len(WAVECALC)
-        kret = np.zeros([NWAVEC,self.NG,npoints,self.NGAS])
-        # Precompute indices and weights for WAVECALC
-        precomputed_indices = np.zeros((NWAVEC,2),dtype=int)
-        precomputed_weights = np.zeros(NWAVEC)
+        if WAVECALC is not None:
+            NWAVEC = len(WAVECALC)
+            kret = np.zeros([NWAVEC,self.NG,npoints,self.NGAS])
+            # Precompute indices and weights for WAVECALC
+            precomputed_indices = np.zeros((NWAVEC,2),dtype=int)
+            precomputed_weights = np.zeros(NWAVEC)
 
-        for iwave in range(NWAVEC):
-            wave = WAVECALC[iwave]
-            iw_closest = np.searchsorted(self.WAVE, wave)  # Find insertion point
+            for iwave in range(NWAVEC):
+                wave = WAVECALC[iwave]
+                iw_closest = np.searchsorted(self.WAVE, wave)  # Find insertion point
 
-            iw_low = max(iw_closest - 1, 0)
-            iw_high = min(iw_closest, len(self.WAVE) - 1)
-            if iw_high == iw_low:
-                iw_high = min(iw_high + 1, len(self.WAVE) - 1)
+                iw_low = max(iw_closest - 1, 0)
+                iw_high = min(iw_closest, len(self.WAVE) - 1)
+                if iw_high == iw_low:
+                    iw_high = min(iw_high + 1, len(self.WAVE) - 1)
 
-            wave_low = self.WAVE[iw_low]
-            wave_high = self.WAVE[iw_high]
-            w = (wave - wave_low) / (wave_high - wave_low) if wave_high != wave_low else 0
+                wave_low = self.WAVE[iw_low]
+                wave_high = self.WAVE[iw_high]
+                w = (wave - wave_low) / (wave_high - wave_low) if wave_high != wave_low else 0
 
-            precomputed_indices[iwave] = ((iw_low, iw_high))
-            precomputed_weights[iwave] = (w)
+                precomputed_indices[iwave] = ((iw_low, iw_high))
+                precomputed_weights[iwave] = (w)
 
-        kret = interpolate_k_values(npoints, self.NGAS, NWAVEC, precomputed_indices,
+            kret = interpolate_k_values(npoints, self.NGAS, NWAVEC, precomputed_indices,
                                              precomputed_weights, kgood, self.DELG, kret)
+        else:
+            kret = kgood
+        
         return kret
 
 
@@ -2092,6 +2119,7 @@ def read_lbltable(filename,wavemin,wavemax):
     if not filename.endswith('.lta'):
         filename += '.lta'
     
+    _lgr.debug(f'{filename=}')
     with open(filename, 'rb') as f:
 
         #nbytes_int32 = 4
@@ -2141,7 +2169,7 @@ def read_lbltable(filename,wavemin,wavemax):
 
         #Reading the absorption coefficients
         #######################################
-        k = np.zeros([nwave,npress,abs(ntemp)])
+        k = np.zeros([nwave,npress,abs(ntemp)], dtype=np.float64)
 
         #Jumping until we get to the minimum wavenumber
         njump = npress*abs(ntemp)*(wn_idxs[0])
@@ -2153,20 +2181,8 @@ def read_lbltable(filename,wavemin,wavemax):
         il = 0
         for ik in range(nwave):
             for i in range(npress):
-                k[ik,i,:] = k_out[il:il+abs(ntemp)]
+                k[ik,i,:] = (k_out[il:il+abs(ntemp)] / BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR)
                 il = il + abs(ntemp)
-    """
-    _lgr.debug(f'{filename=}')
-    _lgr.debug(f'{npress=}')
-    _lgr.debug(f'{ntemp=}')
-    _lgr.debug(f'{gasID=}')
-    _lgr.debug(f'{isoID=}')
-    _lgr.debug(f'{presslevels=}')
-    _lgr.debug(f'{templevels=}')
-    _lgr.debug(f'{nwave=}')
-    _lgr.debug(f'{wave=}')
-    _lgr.debug(f'{k=}')
-    """
     
     return npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wave,k
 
@@ -2275,7 +2291,7 @@ def read_ktable(filename,wavemin,wavemax):
         #Reading the k-coefficients
         #######################################
 
-        k_g = np.zeros([nwave,ng,npress,ntemp])
+        k_g = np.zeros([nwave,ng,npress,ntemp], dtype=np.float64)
 
         #Jumping until we get to the minimum wavenumber
         njump = npress*ntemp*ng*ins[0]
@@ -2288,7 +2304,7 @@ def read_ktable(filename,wavemin,wavemax):
         for ik in range(nwave):
             for i in range(npress):
                 for j in range(ntemp):
-                    k_g[ik,:,i,j] = k_out[il:il+ng]
+                    k_g[ik,:,i,j] = (k_out[il:il+ng] / BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR)
                     il = il + ng
 
     return gasID,isoID,nwave,wave,fwhm,ng,g_ord,del_g,npress,presslevels,ntemp,templevels,k_g
@@ -2383,7 +2399,7 @@ def write_lbltable(filename,npress,ntemp,gasID,isoID,presslevels,templevels,nwav
 
         for i in range(nwave):
             for j in range(npress):
-                tmp = k[i,j,:] * 1.0e20
+                tmp = k[i,j,:] * BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR
                 myfmt=df*len(tmp)
                 bin=struct.pack(myfmt,*tmp) #K
                 f.write(bin)
@@ -2462,13 +2478,13 @@ def write_ktable(filename,gasID,isoID,g_ord,del_g,presslevels,templevels,nwave,v
         # -------------------------
         # k-coefficients
         # Order MUST match read_ktable():
-        # wave → press → temp → g
+        # wave -> press -> temp -> g
         # -------------------------
         for iw in range(nwave):
             for ip in range(npress):
                 for it in range(ntemp):
                     np.asarray(
-                        k_g[iw, :, ip, it],
+                        k_g[iw, :, ip, it] * BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR,
                         dtype='float32'
                     ).tofile(f)
 
@@ -2650,7 +2666,7 @@ def calc_lbltable(outname,                       #Name of the output .lta file
         k[:,i,:,0] = Spectroscopy.calc_klbl_online(Spectroscopy.NT,pressx,Spectroscopy.TEMP,self_frac=self_frac,add_pressure_shift=add_pressure_shift)[:,:,0]
 
     #Writing the look-up table
-    write_lbltable(outname,npress,ntemp,gasID,isoID,Spectroscopy.PRESS,Spectroscopy.TEMP,nwave,wavemin,delwave,k*1.0e-20,DOUBLE=False)
+    write_lbltable(outname,npress,ntemp,gasID,isoID,Spectroscopy.PRESS,Spectroscopy.TEMP,nwave,wavemin,delwave,k,DOUBLE=False)
 
 
 def calc_ktable(outname,                       #Name of the output .lta file
@@ -2773,14 +2789,17 @@ def calc_ktable_bin(iwave,Spectroscopy,linedata,self_frac,ispace,lineshape,vrel,
 
     #Downloading the line data for the required spectral range
     _lgr.info(f'Selecting lines in the spectral range {vbinmin:.2f} - {vbinmax:.2f} for the calculations')
-    linedata.fetch_linedata(
+
+    linedata.set_params(
         vmin = vbinmin, 
         vmax = vbinmax, 
-        wave_unit = ispace
-    )
+        wave_unit = ispace,
+    ).fetch_linedata()
 
     # Download partition function tables for the gas isotopes
-    linedata.fetch_partition_function()
+    linedata.fetch_partition_fn()
+    
+    store = np.empty((4, linedata.max_lines_or_bins), dtype=float)
 
     #Checking that there are lines in the spectral range. If not, the k-coefficients will be set to zero and a warning will be issued.
     k_coefficients = np.zeros((Spectroscopy.NG, Spectroscopy.NP, Spectroscopy.NT))
@@ -2803,12 +2822,12 @@ def calc_ktable_bin(iwave,Spectroscopy,linedata,self_frac,ispace,lineshape,vrel,
                 nus = 1e4 / linedata.line_data.NU
 
             #Estimating the spacing in the cross section calculations
-            alpha_d = linedata.calculate_doppler_width(tempx)
-            gamma_l = linedata.calculate_lorentz_width(pressx,tempx,amb_frac=1.-self_frac)
+            alpha_d = linedata.calculate_doppler_width(tempx, combined_output=True)
+            gamma_l = linedata.calculate_lorentz_width(tempx,pressx, amb_frac=1.-self_frac, combined_output=True)
 
             delv_calc_doppler = np.min(alpha_d * nus / linedata.line_data.NU)
             delv_calc_lorentz = np.min(gamma_l * nus / linedata.line_data.NU) 
-            delv_calc = np.min([delv_calc_doppler]) / 5.
+            delv_calc = np.min([delv_calc_doppler, delv_calc_lorentz]) / 5.
 
             ncalc = int((vbinmax-vbinmin)/delv_calc)
             wavecalc = np.linspace(vbinmin,vbinmax,ncalc)
@@ -2816,23 +2835,35 @@ def calc_ktable_bin(iwave,Spectroscopy,linedata,self_frac,ispace,lineshape,vrel,
             _lgr.info(f'Central wavelength of the bin = {Spectroscopy.WAVE[iwave]}')
             _lgr.info(f'Number of absorption lines in the range = {len(linedata.line_data.NU)}')
             _lgr.info(f'Number of spectral points in the range = {ncalc} - delta_wave = {delv_calc}')    
-            _lgr.info(f'Calculating line-by-line absorption coefficients')        
+            _lgr.info('Calculating line-by-line absorption coefficients')        
 
             #Calculating the absorption coefficients at the line-by-line level for the given pressure and temperature
-            kabs = linedata.calculate_monochromatic_absorption(
-                        waves=wavecalc,     # spectral points
-                        temp=tempx,         # kelvin
-                        press=pressx,       # Atmospheres
-                        amb_frac=1.-self_frac,  # fraction of broadening due to ambient gas
-                        wave_unit=ispace,   # unit of `waves` argument
-                        lineshape_fn=lineshape, # lineshape function to use
-                        line_calculation_wavenumber_window=vrel, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
-                        add_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+            kabs = np.zeros((wavecalc.shape[0],), dtype=float)
+            
+            linedata.add_monochromatic_absorption(
+                wave_grid = wavecalc,
+                t_calc = tempx,
+                p_calc = pressx,
+                
+                amb_frac = 1.0 - self_frac, # fraction of broadening due to ambient gas
+                wave_calc_range  = None, # If not `None`, restrict calculation to (min,max) values
+                isotopic_abundance = None, # if not `None`, use custom isotopic abundance otherwise use terrestrial values. Must have the same number of entries as isotopologues in `line_data`
+                lineshape_fn = lineshape, # lineshape function to use.
+                s_min  = 1E-32, # minimum strength of line to include in calculation (will still include continuum if present regardless of this)
+                wn_calc_window = vrel, # (cm^{-1})
+                wn_approx_window = 3*vrel, # (cm^{-1})
+                wave_unit = ispace, # unit of `wave_grid` and `wave_calc_range`
+                
+                include_lines = True, # include line set in calculation?
+                include_continuum  = True, # include contintuunm in calculation
+            
+                out = kabs, # where to put the result. if 2-dimensions, will assume the 1st dimension is 2 and will fill with (line_set absorption, continuum absorption), if 3 dimensional will assume 1st dimension is 2 (line set, contiuum) then 2nd dimension is per isotopologue
+                store = store, # Temporary storage, if `None` will create some. Useful when you know you will need to perform calculations on similarlty shaped data over and over again.
             )
 
 
             #Calculating fo each wavelength bin
-            _lgr.info(f'Calculating the cumulative distributions and k-coefficients')
+            _lgr.info('Calculating the cumulative distributions and k-coefficients for each bin')
 
             #Sorting the absorption coefficients in the bin
             mask = (wavecalc >= vbinmin) & (wavecalc <= vbinmax)

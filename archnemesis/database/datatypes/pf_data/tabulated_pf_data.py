@@ -12,8 +12,7 @@ class TabulatedPFData(PFData):
 	q : np.ndarray
 	domain : np.ndarray = dc.field(default_factory=lambda : np.array([0,np.inf],dtype=float))
 	
-	
-	def init_domain(self):
+	def __post_init__(self):
 		min, max = (np.min(self.temp), np.max(self.temp))
 		if self.domain[0] < min:
 			self.domain[0] = min
@@ -33,13 +32,16 @@ class TabulatedPFData(PFData):
 	def __call__(self, T : float | np.ndarray) -> float | np.ndarray:
 		return np.interp(T, self.temp, self.q)
 	
-	def as_table(self, t_array : None | np.ndarray = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+	def as_table(self, t_array : None | np.ndarray = None) -> tuple[tuple[np.ndarray, np.ndarray], np.ndarray]:
 		if t_array is None:
-			return (self.temp, self.q, self.domain) 
+			return ((self.temp, self.q), self.domain) 
 		else:
-			return (t_array, np.interp(t_array, self.temp, self.q), np.array([np.min(t_array), np.max(t_array)], dtype=float))
+			return ((t_array, np.interp(t_array, self.temp, self.q)), np.array([np.min(t_array), np.max(t_array)], dtype=float))
 		
 	
 	def as_poly(self, t_array : None | np.ndarray = None, n : int = 5) -> tuple[np.ndarray, np.ndarray]:
-		temp, q, domain = self.as_table(t_array)
-		return (np.polynomial.Polynomial.fit(temp, q, deg=n).coef, domain)
+		(temp, q), domain = self.as_table(t_array)
+		q_altered = np.array(q)
+		q_altered[np.abs(q) < 1E-6] = 1E-6
+		fit = np.polynomial.Polynomial.fit(temp, q, w=1/q_altered, deg=n, domain=domain, window=domain)
+		return (fit.coef, fit.domain)
