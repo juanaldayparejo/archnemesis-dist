@@ -90,7 +90,9 @@ class AnsDatabaseFile:
 			try:
 				self._file_hdl = h5py.File(self.path, self._open_mode)
 				yield self._file_hdl
-			finally:
+			except:
+				raise
+			else:
 				self._file_hdl.close()
 				self._file_hdl = None
 				self._open_mode = None

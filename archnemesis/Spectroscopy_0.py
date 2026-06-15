@@ -91,9 +91,7 @@ class Spectroscopy_0:
         @param LOCATION: 1D array,
             List of strings indicating where the .lta or .kta tables are stored for each of the gases
             If ILBL = 1 it means we are calculating the cross sections at runtime. In that case, LOCATION indicates
-            the location of the line list files to use for each gas.
-        @param LOCATION_PF: 1D array,
-            List of strings indicating where the partition function files are stored for each of the gases (only needed if ILBL=1)
+            the location of the ANS_DATABASE files to use in the following order (partition_fn, line_data, continuum)
         @param IPROC: 1D array,
             If ILBL=1, then IPROC indicates the line profile to use for each gas:
                 (0 - VOIGT) Voigt profile
@@ -193,13 +191,6 @@ class Spectroscopy_0:
             return None
         return self._locations
 
-    @property
-    def LOCATION_PF(self) -> list[str]:
-        # NOTE: paths are stored as strings so we should be able to use `str.startswith(...)` to match them up.
-        if not self._locations_pf_initialised:
-            return None
-        return self._locations_pf
-
 
     @LOCATION.setter
     def LOCATION(self, value) -> None:
@@ -208,15 +199,6 @@ class Spectroscopy_0:
         else:
             self._locations._raw_paths = [x for x in value]
             self._locations_initialised = True
-
-    @LOCATION_PF.setter
-    def LOCATION_PF(self, value) -> None:
-        if value is None:
-            self._locations_pf_initialised = False
-        else:
-            self._locations_pf._raw_paths = [x for x in value]
-            self._locations_pf_initialised = True
-
 
     @property
     def RUNNAME(self):
@@ -278,9 +260,6 @@ class Spectroscopy_0:
                 'LOCATION must have size (NGAS)'
 
         if self.ILBL == 1:
-
-            assert len(self.LOCATION_PF) == self.NGAS , \
-                'LOCATION_PF must have size (NGAS)'
 
             assert self.IPROC is not None , \
                 'IPROC must be set when ILBL=1'
@@ -444,7 +423,7 @@ class Spectroscopy_0:
         
         return self
 
-    def add_table_location(self, *new_locations : str) -> None:
+    def add_table_location(self, *new_locations : str, reject_duplicates : bool = True) -> None:
         """
         Adds the location of a table to this class, will not add the same table twice.
         """
@@ -458,10 +437,11 @@ class Spectroscopy_0:
             add_new_loc_flag = True
             
             # Check that the new_location is not already in our list of locations
-            for location in self.LOCATION:
-                if os.path.samefile(self._locations._get_redirected_path(new_location), location): # NOTE: must apply redirects here as well otherwise we will be comparing the wrong files
-                    _lgr.warning(f'Spectral table file "{new_location}" is the same file as "{location}". Spectroscopy_0 instance will not add the same file twice as the data is already included')
-                    add_new_loc_flag = False
+            if reject_duplicates:
+                for location in self.LOCATION:
+                    if os.path.samefile(self._locations._get_redirected_path(new_location), location): # NOTE: must apply redirects here as well otherwise we will be comparing the wrong files
+                        _lgr.warning(f'Spectral table file "{new_location}" is the same file as "{location}". Spectroscopy_0 instance will not add the same file twice as the data is already included')
+                        add_new_loc_flag = False
             
             if add_new_loc_flag:
                 self.LOCATION.append(new_location)
@@ -473,9 +453,12 @@ class Spectroscopy_0:
                     self.NGAS = len(self.LOCATION)
         
         
-        # If tables have already been read, re-read them
-        if self.ID is not None:
-            self.read_header()
+        if self.ILBL != SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+            # If tables have already been read, re-read them
+            if self.ID is not None:
+                self.read_header()
+        else:
+            _lgr.info(f'{self.ILBL=}, not reading any header information.')
         
         return
 
@@ -538,11 +521,7 @@ class Spectroscopy_0:
 
                     dt = h5py.special_dtype(vlen=str)
                     dset = h5py_helper.store_data(grp, 'LOCATION', self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
-                    dset.attrs['title'] = "Location of the pre-tabulated tables"
-
-                    dt = h5py.special_dtype(vlen=str)
-                    dset = h5py_helper.store_data(grp, 'LOCATION_PF', self._locations_pf._raw_paths,dtype=dt) # do not save the redirected paths.
-                    dset.attrs['title'] = "Location of the partition function database files"
+                    dset.attrs['title'] = "Location of the database files in the following order (partition_fn, line_data, continuum)"
 
                     dset = h5py_helper.store_data(grp, 'IPROC', self.IPROC)
                     dset.attrs['title'] = "Line profile to use for each gas"
@@ -598,11 +577,6 @@ class Spectroscopy_0:
                     self.LOCATION = LOCATION
                     
                     if self.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
-                        LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION_PF', default=tuple())
-                        LOCATION_PF = ['']*self.NGAS
-                        for igas in range(self.NGAS):
-                            LOCATION_PF[igas] = LOCATION1[igas].decode('ascii')
-                        self.LOCATION_PF = LOCATION_PF
                         self.ID = np.array(f.get(name+'/ID'))
                         self.ISO = np.array(f.get(name+'/ISO'))
                         self.IPROC = np.array(f.get(name+'/IPROC'))
@@ -624,7 +598,12 @@ class Spectroscopy_0:
         @param runname: str
             Name of the Nemesis run
         """
-
+        
+        # Read the RUNTIME version if applicable
+        if self.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+            return self.read_lls_runtime(runname)
+        
+        # Otherwise read the normal version
         ngasact = len(open(runname+'.lls').readlines(  ))
 
         #Opening .lls file
@@ -672,6 +651,168 @@ class Spectroscopy_0:
         vmax = vmin + delv * (nwave-1)
         wavelta = np.linspace(vmin,vmax,nwave)
         self.WAVE = wavelta
+
+    def read_lls_runtime(self, runname):
+        """
+        Read the .lls file in RUNTIME format and store the parameters into the Spectroscopy Class
+
+        RUNTIME format is as follows:
+        ```
+        WAVE <start> <stop> <step>
+        LINESHAPE <iproc> <param_1> <param_2> ... <param_N>
+        <path_to_partiton_function_database_file>
+        <path_to_line_data_database_file>
+        <path_to_continuum_data_database_file>
+        START GASSES
+            AMB <broad_gas_1> <frac_1> <broad_gas_2> <frac_2> ... <broad_gas_N> <frac_N>
+            <gas_1_id> <gas_1_iso_id>
+            <gas_2_id> <gas_2_iso_id>
+            ...
+            <gas_n_id> <gas_n_iso_id>
+        END GASSES
+        <path_to_partiton_function_database_file>
+        <path_to_line_data_database_file>
+        <path_to_continuum_data_database_file>
+        START GASSES
+            AMB <broad_gas_1> <frac_1> <broad_gas_2> <frac_2> ... <broad_gas_N> <frac_N>
+            <gas_n+1_id> <gas_n+1_iso_id>
+            <gas_n+2_id> <gas_n+2_iso_id>
+            ...
+            <gas_n+m_id> <gas_n+m_iso_id>
+        END GASSES
+        ...
+        ```
+        
+        Comments are prefaced by the `#` character. 
+        Lines with no printable characters are ignored.
+        Omitted database files take on the same values as the previously present databse file (in a block).
+
+        @param runname: str
+            Name of the Nemesis run
+        """
+        lls_fpath = f"./{runname}.lls"
+        
+        _wave_spec = None
+        _lineshape = None
+        _id = []
+        _iso = []
+        _locations = []
+        _amb_gas_ids = []
+        
+        current_pf_dbase = None
+        current_line_data_dbase = None
+        current_continuum_dbase = None
+        current_gaslist = []
+        current_amb_gas_ids = []
+        in_gaslist_flag : bool = False
+        
+        with open(lls_fpath, 'r') as f:
+            for aline in f:
+                aline = aline.split('#', maxsplit=1)[0].strip() # Comments are prefaced by `#` characters, remove them and any trailing whitespace
+                if len(aline) == 0 or aline.isspace(): # skip any empty lines
+                    continue
+                
+                print(f'TESTING: {aline=}')
+                
+                if aline.startswith('WAVE'):
+                    if _wave_spec is not None:
+                        raise RuntimeError('Cannot have more than one WAVE entry.')
+                    _wave_spec = tuple(float(x) for x in aline.split()[1:])
+                
+                elif aline.startswith('LINESHAPE'):
+                    if _lineshape is not None:
+                        raise RuntimeError('Cannot have more than one LINESHAPE entry.')
+                    _lineshape = tuple(str(x) for x in aline.split()[1:])
+                
+                elif aline == 'END GASSES': # output the current block and reset the state to read a new block
+                    if not in_gaslist_flag:
+                        raise RuntimeError('RUNTIME format .lls file encountered "END GASSES" before "START GASSES"')
+                    if current_pf_dbase is None:
+                        raise RuntimeError('RUNTIME format .lls file must have at least one path to a database file')
+                    if current_line_data_dbase is None:
+                        current_line_data_dbase = current_pf_dbase
+                    if current_continuum_dbase is None:
+                        current_continuum_dbase = current_line_data_dbase
+                    
+                    for x in current_gaslist:
+                        print(f'TESTING: {x=}')
+                        _id.append(x[0])
+                        _iso.append(x[1])
+                        _locations.append(
+                            (current_pf_dbase, current_line_data_dbase, current_continuum_dbase)
+                        )
+                    n_current_gasses = len(current_gaslist)
+                    if len(current_amb_gas_ids) > 0:
+                        _amb_gas_ids.extend([tuple(current_amb_gas_ids)]*n_current_gasses)
+                    else:
+                        _amb_gas_ids.extend([(ans.enums.AmbientGas.AIR,)]*n_current_gasses)
+                    
+                    current_pf_dbase = None
+                    current_line_data_dbase = None
+                    current_continuum_dbase = None
+                    current_gaslist = []
+                    current_amb_gas_ids = []
+                    in_gaslist_flag = False
+                    
+                elif in_gaslist_flag:
+                    if aline.startswith('AMB'):
+                        current_amb_gas_ids = [ans.enums.AmbientGas(int(x)) for x in aline.split()[1:]]
+                    else:
+                        current_gaslist.append(tuple(aline.split(maxsplit=2)[:2]))
+                
+                elif aline == 'START GASSES': # Each line until `END_GASSES` is an "ID ISO" pair
+                    in_gaslist_flag = True
+                    
+                else: # Other lines are assumed to be database locations
+                    if current_pf_dbase is None:
+                        current_pf_dbase = ans.Data.path_data.archnemesis_resolve_path(aline)
+                    elif current_line_data_dbase is None:
+                        current_line_data_dbase = ans.Data.path_data.archnemesis_resolve_path(aline)
+                    elif current_continuum_dbase is None:
+                        current_continuum_dbase = ans.Data.path_data.archnemesis_resolve_path(aline)
+                    else: # We are not expecting any more database files
+                        raise RuntimeError(f'Expected no more than three database files per block when reading "{lls_fpath}"')
+        
+        # Now we have populated `_id` `_iso` and `_locations` so assign them
+        print(f'TESTING: {_id=}')
+        print(f'TESTING: {_iso=}')
+        print(f'TESTING: {_locations=}')
+        
+        if _wave_spec is None:
+            raise RuntimeError('WAVE entry is required in .lls RUNTIME format')
+        if _lineshape is None:
+            _lgr.info('No LINESHAPE entry found in .lls RUNTIME file. Using VOIGT profile with wn_calc_window=25.0, wn_approx_window=75.0')
+            _lineshape = (0, 25.0, 75.0)
+            
+        self.ID = np.array(_id, dtype=int)
+        self.ISO = np.array(_iso, dtype=int)
+        self.NGAS = self.ID.size
+        self.LOCATION = _locations
+        self.LINE_DATA = []
+        self.WAVE = np.arange(*_wave_spec, dtype=float)
+        self.NWAVE = self.WAVE.size
+        self.LINE_DATA_DEFAULTS = dict(
+            wn_calc_window = float(_lineshape[1]),
+            wn_approx_window = float(_lineshape[2]),
+        )
+        
+        self.IPROC = [SpectroscopicLineProfile(int(_lineshape[0]))] * len(self.ID) # Unless otherwise specified, always use VOIGT profile
+        
+        for igas in range(len(self.ID)):
+            pf_dbase, ld_dbase, pc_dbase = self.LOCATION[igas]
+            self.LINE_DATA.append(
+                ans.LineData_0(
+                    self.ID[igas], #ID of the gas
+                    self.ISO[igas], #Isotope ID of the gas
+                    ambient_gasses = _amb_gas_ids[igas],
+                    LINE_DATABASE=ld_dbase,
+                    CONTINUUM_DATABASE=pc_dbase,
+                    PARTITION_FUNCTION_DATABASE=pf_dbase,
+                )
+            )
+            self.LINE_DATA[igas].fetch_partition_fn() # May as well get this now as we will always want it
+        
+        return
 
     ######################################################################################################
     def read_kls(self, runname):
@@ -733,7 +874,6 @@ class Spectroscopy_0:
         self.G_ORD = g_ord
         self.FWHM = fwhmk
         self.WAVE = wavekta
-
 
     ######################################################################################################
     def read_header(self):
@@ -910,7 +1050,7 @@ class Spectroscopy_0:
             self.ISO = np.zeros((0,),dtype=int)
 
     ######################################################################################################
-    def read_tables(self, wavemin=0., wavemax=1.0e10):
+    def read_tables(self, wavemin=0., wavemax=1.0e10, wavedelta=1.0):
         """
         Reads the .kta or .lta tables and stores the results into this class
         
@@ -923,9 +1063,28 @@ class Spectroscopy_0:
             Minimum wavenumber (cm-1) or wavelength (um)
         @param wavemax: real
             Maximum wavenumber (cm-1) or wavelength (um)
+        @param wavedelta: real
+            Wave step wavenumber (cm-1) or wavelength (um) if `self.WAVE` is not defined
         """
         
-        _lgr.info(f'Reading table {self.LOCATION=} {wavemin=} {wavemax=}')
+        _lgr.info('Reading tables')
+        
+        if self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+            _lgr.info('RUNTIME calculation is loading desired wavenumber range from databases')
+            self.NG = 1
+            self.G_ORD = np.array([0.])
+            self.DELG = np.array([1.0])
+            """
+            if self.WAVE is None or (self.WAVE.size==2 and self.WAVE[0] == 0 and self.WAVE[-1]==np.inf):
+                self.WAVE = np.arange(wavemin, wavemax+1E-3*wavedelta, wavedelta)
+                self.NWAVE = len(self.WAVE)
+            """
+            for igas in range(len(self.ID)):
+                _lgr.info(f'Reading table {self.LOCATION[igas]=} {wavemin=} {wavemax=}')
+                self.LINE_DATA[igas].set_params(vmin = wavemin, vmax = wavemax)
+                self.LINE_DATA[igas].fetch_linedata()
+            
+            return
         
         if self.LOCATION is None:
             raise ValueError('error in Spectroscopy.read_tables() :: LOCATION is not defined')
@@ -946,19 +1105,13 @@ class Spectroscopy_0:
         self.NWAVE = len(wave1)
         self.WAVE = wave1
 
-        if self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
-            self.NG = 1
-            self.G_ORD = np.array([0.])
-            self.DELG = np.array([1.0])
-            #In this case we do not read any tables, as the line-by-line calculation will be done during runtime
-            return
-
         if self.ONLINE==False:
             #Tables must be read and stored on memory
             if self.ILBL==SpectralCalculationMode.K_TABLES: #K-tables
 
                 kstore = np.zeros([self.NWAVE,self.NG,self.NP,self.NT,self.NGAS])
                 for igas in range(self.NGAS):
+                    _lgr.info(f'Reading table {self.LOCATION[igas]=} {wavemin=} {wavemax=}')
                     gasID,isoID,nwave,wave,fwhm,ng,g_ord,del_g,npress,presslevels,ntemp,templevels,k_g = read_ktable(self.LOCATION[igas],self.WAVE.min(),self.WAVE.max())
                     kstore[:,:,:,:,igas] = k_g[:,:,:,:]
                 self.edit_K(kstore)
@@ -967,6 +1120,7 @@ class Spectroscopy_0:
             elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
                 kstore = np.zeros([self.NWAVE,self.NP,abs(self.NT),self.NGAS])
                 for igas in range(self.NGAS):
+                    _lgr.info(f'Reading table {self.LOCATION[igas]=} {wavemin=} {wavemax=}')
                     npress,ntemp,gasID,isoID,presslevels,templevels,nwave,wave,k = read_lbltable(self.LOCATION[igas],self.WAVE.min(),self.WAVE.max())
                     kstore[:,:,:,igas] = k[:,:,:]
                 self.edit_K(kstore)
@@ -1363,7 +1517,17 @@ class Spectroscopy_0:
         return kgood
 
     ######################################################################################################
-    def calc_klblg_online(self,npoints,press,temp,self_frac=1.0,wave=None,add_pressure_shift=True):
+    def calc_klblg_online(
+            self,
+            npoints,
+            press,
+            temp,
+            self_frac=1.0,
+            wave=None,
+            add_pressure_shift=True,
+            include_continuum : bool = False,
+            s_min : float = 1E-25
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Calculate the absorption coefficient at a given pressure and temperature
         from the LineData class
@@ -1430,14 +1594,7 @@ class Spectroscopy_0:
             else:
                 self_frac_gas = self_frac
 
-            _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections...')
-
-            linedata = ans.LineData_0(
-                self.ID[igas], #ID of the gas
-                self.ISO[igas], #Isotope ID of the gas
-                LINE_DATABASE=self.LOCATION[igas], # Different database location
-                PARTITION_FUNCTION_DATABASE=self.LOCATION_PF[igas], # Different partition function database location
-            )
+            _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
 
             if self.IPROC[igas]==SpectroscopicLineProfile.VOIGT:
                 lineshape = ans.Data.lineshapes.voigt
@@ -1448,47 +1605,64 @@ class Spectroscopy_0:
             else:
                 raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
             
-            store = np.empty((4, linedata.max_lines_or_bins), dtype=float)
+            store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
             k1 = np.empty((k.shape[0],), dtype=float)
             for ipoint in range(npoints):
 
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
 
-                linedata.add_monochromatic_absorption(
+                self.LINE_DATA[igas].add_monochromatic_absorption(
                     wave_grid=wave,             # wavenumbers or wavelengths
                     t_calc=t_l,               # kelvin
                     p_calc=p_l,              # Atmospheres
                     amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
                     wave_unit=self.ISPACE,  # unit of `waves` argument
                     lineshape_fn=lineshape, # lineshape function to use
-                    wn_calc_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                    
                     include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                    include_continuum = include_continuum,
+                    s_min = s_min,
                     
                     out = k[:,ipoint,igas],
-                    store = store
+                    store = store,
+                    
+                    **self.LINE_DATA_DEFAULTS,
                 )
 
-                linedata.add_monochromatic_absorption(
+                self.LINE_DATA[igas].add_monochromatic_absorption(
                     wave_grid=wave,             # wavenumbers or wavelengths
-                    t_calc=t_l+5.,               # kelvin
+                    t_calc=t_l+5.0,               # kelvin
                     p_calc=p_l,              # Atmospheres
                     amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
                     wave_unit=self.ISPACE,  # unit of `waves` argument
                     lineshape_fn=lineshape, # lineshape function to use
-                    wn_calc_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
+                    
                     include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
-                
+                    include_continuum = include_continuum,
+                    s_min = s_min,
+                    
                     out = k1,
                     store = store,
+                    
+                    **self.LINE_DATA_DEFAULTS,
                 )
 
-                dkdt[:,ipoint,igas] = (k1-k[:,ipoint,igas])/5.
+                dkdt[:,ipoint,igas] = (k1-k[:,ipoint,igas])/5.0
 
         return k, dkdt
 
     ######################################################################################################
-    def calc_klbl_online(self,npoints,press,temp,self_frac=1.0,wave=None,add_pressure_shift=True):
+    def calc_klbl_online(self,
+            npoints,
+            press,
+            temp,
+            self_frac=1.0,
+            wave=None,
+            add_pressure_shift: bool = True,
+            include_continuum : bool = True,
+            s_min : float = 0
+    ) -> np.ndarray:
         """
         Calculate the absorption coefficient at a given pressure and temperature
         from the LineData class
@@ -1520,6 +1694,20 @@ class Spectroscopy_0:
         K(NWAVE,NPOINTS,NGAS) :: Absorption cross sections of each gas in each p-T point
 
         """
+        
+        _lgr.info(f'{npoints=}')
+        _lgr.info(f'{press=}')
+        _lgr.info(f'{temp=}')
+        _lgr.info(f'{self_frac=}')
+        _lgr.info(f'{wave=}')
+        _lgr.info(f'{add_pressure_shift=}')
+        _lgr.info(f'{include_continuum=}')
+        _lgr.info(f'{s_min=}')
+        
+        _lgr.info(f'{self.ID=}')
+        _lgr.info(f'{self.ISO=}')
+        _lgr.info(f'{len(self.LINE_DATA)=}')
+        _lgr.info(f'{self.NGAS=}')
 
         #Defining the wavelengths at which to calculate the cross sections
         if wave is None:
@@ -1547,23 +1735,15 @@ class Spectroscopy_0:
         #Calculating the line-by-line cross sections for each gas and each p-T point
         k = np.zeros((nwave, npoints, self.NGAS))
         for igas in range(self.NGAS):
-
+            
+            _lgr.info(f'{self.LINE_DATA[igas]=}')
+            
             if self_frac_array:
                 self_frac_gas = self_frac[igas]
             else:
                 self_frac_gas = self_frac
 
-            _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections...')
-
-            print(self.LOCATION[igas])
-            print(self.LOCATION_PF[igas])
-
-            linedata = ans.LineData_0(
-                self.ID[igas], #ID of the gas
-                self.ISO[igas], #Isotope ID of the gas
-                LINE_DATABASE=self.LOCATION[igas], # Different database location
-                PARTITION_FUNCTION_DATABASE=self.LOCATION_PF[igas], # Different partition function database location
-            )
+            _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
 
             if self.IPROC[igas]==SpectroscopicLineProfile.VOIGT:
                 lineshape = ans.Data.lineshapes.voigt
@@ -1576,26 +1756,27 @@ class Spectroscopy_0:
             else:
                 raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
 
-            # Download partition function tables for the gas isotopes
-            linedata.fetch_partition_function()
-            store = np.empty((4, linedata.max_lines_or_bins), dtype=float)
+            store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
             for ipoint in range(npoints):
-
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
 
-                linedata.add_monochromatic_absorption(
-                            wave_grid=wave,             # wavenumbers or wavelengths
-                            t_calc=t_l,               # kelvin
-                            p_calc=p_l,              # Atmospheres
-                            amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
-                            wave_unit=self.ISPACE,  # unit of `waves` argument
-                            lineshape_fn=lineshape, # lineshape function to use
-                            wn_calc_window=self.VREL, # cm^{-1}, contribution from lines outside this region should be modelled as continuum absorption (see page 29 of RADTRANS manual).
-                            include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
-                            
-                            store = store,
-                            out = k[:,ipoint,igas],
+                self.LINE_DATA[igas].add_monochromatic_absorption(
+                    wave_grid=wave,             # wavenumbers or wavelengths
+                    t_calc=t_l,               # kelvin
+                    p_calc=p_l,              # Atmospheres
+                    amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
+                    wave_unit=self.ISPACE,  # unit of `waves` argument
+                    lineshape_fn=lineshape, # lineshape function to use
+                    
+                    include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
+                    include_continuum = include_continuum,
+                    s_min = s_min,
+                    
+                    store = store,
+                    out = k[:,ipoint,igas],
+                    
+                    **self.LINE_DATA_DEFAULTS,
                 )
 
         return k
@@ -2693,8 +2874,7 @@ def calc_ktable(outname,                       #Name of the output .lta file
     Spectroscopy.NGAS = 1
     Spectroscopy.ID = [gasID]
     Spectroscopy.ISO = [isoID]
-    Spectroscopy.LOCATION = [database]
-    Spectroscopy.LOCATION_PF = [database_pf]
+    Spectroscopy.LOCATION = [(database_pf, database, database)]
 
     #Calculating the pressure grid
     presslevels = np.linspace( np.log(p0) , np.log(pn), npress )

@@ -662,7 +662,7 @@ class LineSetSpecData:
             single_iso_line_set_data : LineSetData,
             cache : None | Cache = None,
     ) -> Self:
-        print(f'{single_iso_line_set_data.nu=}')
+        #print(f'{single_iso_line_set_data.nu=}')
         
         rt_gas_desc = RadtranGasDescriptor(mol_id, iso_id)
         
@@ -1127,7 +1127,7 @@ class PseudoContSpecData:
         return instance
     
     def _set_data_from_pseudo_continuum_data(self, pseudo_continuum_data : PseudoContinuumData):
-        print(f'{pseudo_continuum_data=}')
+        #print(f'{pseudo_continuum_data=}')
         n = pseudo_continuum_data.wn_bin_center.shape[0]
         m = (
             2   # (wn_bin_center, wn_bin_width,)
@@ -1539,6 +1539,11 @@ class AnsDatabase:
             )
             self.cache.set(ld_cache_bucket, ld_cache_identity, ld_instance)
     
+            if wn_min == 0:
+                wn_min = np.min(ld_instance.nu)
+            if wn_max == np.inf:
+                wn_max = np.max(ld_instance.nu)
+    
         if self._ans_pseudo_continuum_file is None:
             pc_instance = AnsPseudoContinuumFile._get_null_data(
                 ld_instance.s_min,
@@ -1734,6 +1739,17 @@ class LineData_0:
         self.line_data         : list[LineSetSpecData]    = [None]*self.n_isos
         self.continuum_data    : list[PseudoContSpecData] = [None]*self.n_isos
     
+    
+    def __repr__(self):
+        s = (
+            'LineData_0('
+            f'MEM={id(self)},'
+            f'ID={self.ID},'
+            f'ISO={self.ISO},'
+            f'params={self._params}'
+            ')'
+        )
+        return s
     
     @property
     def ID(self) -> int:
@@ -2188,7 +2204,6 @@ class LineData_0:
     ) -> np.ndarray:
         
         
-        
         # Create default arrays
         if out is None:
             result = np.zeros_like(wave_grid, dtype=float)
@@ -2267,7 +2282,7 @@ class LineData_0:
         
         # Loop over all line data and add monochromatic absorption to `out`
         for i, (iso_line_data, iso_continuum_data) in enumerate(zip(self.line_data, self.continuum_data)):
-            _lgr.info(f'{i=} {iso_line_data._data.shape=} iso_continuum_data._data.shape={iso_continuum_data._data.shape if iso_continuum_data is not None else "None"}')
+            _lgr.debug(f'{i=} {iso_line_data._data.shape=} iso_continuum_data._data.shape={iso_continuum_data._data.shape if iso_continuum_data is not None else "None"}')
             
             if out.ndim < 3:
                 out_line_set_abs_i = out_line_set_abs

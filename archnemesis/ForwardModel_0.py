@@ -58,6 +58,17 @@ import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 
+ATM_TO_PASCAL            : float = 101325.0
+MICRON_TO_CM             : float = 1.0E-4
+CM_TO_MICRON             : float = 1.0E+4
+CM_TO_METER              : float = 1.0E-2
+METER_TO_CM              : float = 1.0E+2
+SQ_CM_TO_SQ_METER        : float = 1.0E-4
+SQ_METER_TO_SQ_CM        : float = 1.0E+4
+SQ_MICRON_TO_SQ_CM       : float = 1.0E-8
+SQ_CM_TO_SQ_MICRON       : float = 1.0E+8
+CUBIC_CM_TO_CUBIC_MICRON : float = 1.0E+12
+CUBIC_MICRON_TO_CUBIC_CM : float = 1.0E-12
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
 
@@ -3777,21 +3788,21 @@ class ForwardModel_0:
 
                 #Calculating the cross sections for each gas in each self.LayerX
                 if return_grad:
-                    k,dkdT = self.SpectroscopyX.calc_klblg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP)
+                    k,dkdT = self.SpectroscopyX.calc_klblg(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP)
                 else:
-                    k = self.SpectroscopyX.calc_klbl(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP)
+                    k = self.SpectroscopyX.calc_klbl(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP)
 
                 for i in range(self.SpectroscopyX.NGAS):
                     IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
 
                     #Calculating vertical column density in each self.LayerX
-                    VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-4   #m-2
+                    VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * SQ_CM_TO_SQ_METER   #m-2
 
                     #Calculating vertical opacity for each gas in each self.LayerX
                     TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
                     
                     if return_grad:
-                        dTAUGAS[:,0,IGAS,:] = k[:,:,i] * 1.0e-4  #dTAUGAS/dAMOUNT (m2)
+                        dTAUGAS[:,0,IGAS,:] = k[:,:,i] * SQ_CM_TO_SQ_METER  #dTAUGAS/dAMOUNT (m2)
                         dTAUGAS[:,0,self.AtmosphereX.NVMR,:] = dTAUGAS[:,0,self.AtmosphereX.NVMR,:] + dkdT[:,:,i] * VLOSDENS #dTAUGAS/dT
 
                 #Combining the gaseous opacity in each self.LayerX
@@ -3806,27 +3817,28 @@ class ForwardModel_0:
                     self_fracx[i] = self_frac[igas]
 
                 #Converting IDs into list
+                # QUESTION: Why does this need to be done?
                 self.SpectroscopyX.ID = np.atleast_1d(self.SpectroscopyX.ID).astype(int).tolist()
                 self.SpectroscopyX.ISO = np.atleast_1d(self.SpectroscopyX.ISO).astype(int).tolist()
 
                 #Calculating the absorption cross sections
                 if return_grad:
-                    k,dkdT = self.SpectroscopyX.calc_klblg_online(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,self_frac=self_fracx,wave=None,add_pressure_shift=True)
+                    k,dkdT = self.SpectroscopyX.calc_klblg_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,self_frac=self_fracx,wave=None,add_pressure_shift=True)
                 else:
-                    k = self.SpectroscopyX.calc_klbl_online(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,self_frac=self_fracx,wave=None,add_pressure_shift=True)
+                    k = self.SpectroscopyX.calc_klbl_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,self_frac=self_fracx,wave=None,add_pressure_shift=True)
 
                 #Calculating the optical depths
                 for i in range(self.SpectroscopyX.NGAS):
                     IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
 
                     #Calculating vertical column density in each self.LayerX
-                    VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-24   #m-2
+                    VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * SQ_CM_TO_SQ_METER   #m-2
 
                     #Calculating vertical opacity for each gas in each self.LayerX
                     TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
                     
                     if return_grad:
-                        dTAUGAS[:,0,IGAS,:] = k[:,:,i] * 1.0e-24  #dTAUGAS/dAMOUNT (m2)
+                        dTAUGAS[:,0,IGAS,:] = k[:,:,i] * SQ_CM_TO_SQ_METER  #dTAUGAS/dAMOUNT (m2)
                         dTAUGAS[:,0,self.AtmosphereX.NVMR,:] = dTAUGAS[:,0,self.AtmosphereX.NVMR,:] + dkdT[:,:,i] * VLOSDENS #dTAUGAS/dT
 
                 #Combining the gaseous opacity in each self.LayerX
@@ -3835,15 +3847,15 @@ class ForwardModel_0:
             elif self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:    #K-table
                 #Calculating the k-coefficients for each gas in each self.LayerX
                 if return_grad:
-                    k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP) # (NWAVE,NG,NLAY,NGAS)
+                    k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP) # (NWAVE,NG,NLAY,NGAS)
                 else:
-                    k_gas = self.SpectroscopyX.calc_k(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP) # (NWAVE,NG,NLAY,NGAS) 
+                    k_gas = self.SpectroscopyX.calc_k(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP) # (NWAVE,NG,NLAY,NGAS) 
 
                 f_gas = np.zeros([self.SpectroscopyX.NGAS,self.LayerX.NLAY])
                 #utotl = np.zeros(self.LayerX.NLAY)
                 for i in range(self.SpectroscopyX.NGAS):
                     IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-                    f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * 1.0e-4  #Vertical column density of the radiatively active gases in cm-2
+                    f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS] * SQ_CM_TO_SQ_METER  #Vertical column density of the radiatively active gases in cm-2
 
                 #Combining the k-distributions of the different gases in each self.LayerX, as well as their gradients
                 if return_grad:
@@ -3852,7 +3864,7 @@ class ForwardModel_0:
                     #Calculating the gradients of each self.LayerX and for each gas
                     for i in range(self.SpectroscopyX.NGAS):
                         IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-                        dTAUGAS[:,:,IGAS,:] = dk_layer[:,:,:,i] * 1.0e-4  #dTAU/dAMOUNT (m2)
+                        dTAUGAS[:,:,IGAS,:] = dk_layer[:,:,:,i] * SQ_CM_TO_SQ_METER  #dTAU/dAMOUNT (m2)
 
                     dTAUGAS[:,:,self.AtmosphereX.NVMR,:] = dk_layer[:,:,:,self.SpectroscopyX.NGAS] #dTAU/dT
                 else:
@@ -4049,7 +4061,7 @@ class ForwardModel_0:
                     igasx = np.where( (self.AtmosphereX.ID==self.EmissionsX.ID[igas,iemi]) & (self.AtmosphereX.ISO==self.EmissionsX.ISO[igas,iemi]) )[0][0]
                     
                     #Calculating the vertical column density in cm-2
-                    VLOSDENS = self.LayerX.AMOUNT[:,igasx] * 1.0e-4   #cm-2
+                    VLOSDENS = self.LayerX.AMOUNT[:,igasx] * SQ_CM_TO_SQ_METER   #cm-2
 
                     #Calculating the emitted radiance from the layer
                     EMI[:,:] += emission_rate[:,:,iemi] * VLOSDENS[np.newaxis,:] / (4.*np.pi) #photons s-1 cm-2 sr-1 um-1
@@ -4572,7 +4584,7 @@ class ForwardModel_0:
         INORMALD = CIA.locate_INORMAL_pairs()
         
         #Calculating the factor to be multiplied by the cross sections to get total optical depth
-        TOTAM = Layer.TOTAM * 1.0e-4 #Total column density in each layer (cm-2)
+        TOTAM = Layer.TOTAM * SQ_CM_TO_SQ_METER #Total column density in each layer (cm-2)
         XLEN = Layer.DELH * 1.0e2 #Height of each layer (cm)
         XFAC = TOTAM**2. / XLEN   #molec^2 cm-5, which multiplied by cross sections in cm5 molec-2 gives unitless optical depth
         
@@ -4844,10 +4856,10 @@ class ForwardModel_0:
             # Calculating the opacity at each layer
             for j in range(Layer.NLAY):
                 DUSTCOLDENS = Layer.CONT[j, i]  # particles/m2
-                TAUDUST[:, j, i] = kext * 1.0e-4 * DUSTCOLDENS
-                TAUCLSCAT[:, j, i] = ksca * 1.0e-4 * DUSTCOLDENS
-                dTAUDUSTdq[:, j, i] = kext * 1.0e-4  # dtau/dAMOUNT (m2)
-                dTAUCLSCATdq[:, j, i] = ksca * 1.0e-4  # dtau/dAMOUNT (m2)
+                TAUDUST[:, j, i] = kext * SQ_CM_TO_SQ_METER * DUSTCOLDENS
+                TAUCLSCAT[:, j, i] = ksca * SQ_CM_TO_SQ_METER * DUSTCOLDENS
+                dTAUDUSTdq[:, j, i] = kext * SQ_CM_TO_SQ_METER  # dtau/dAMOUNT (m2)
+                dTAUCLSCATdq[:, j, i] = ksca * SQ_CM_TO_SQ_METER  # dtau/dAMOUNT (m2)
 
         return TAUDUST, TAUCLSCAT, dTAUDUSTdq, dTAUCLSCATdq
 
@@ -4947,14 +4959,14 @@ class ForwardModel_0:
             TAUGAS = np.zeros((self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.LayerX.NLAY,self.SpectroscopyX.NGAS))  #Vertical opacity of each gas in each layer
 
             #Calculating the cross sections for each gas in each layer
-            k = self.SpectroscopyX.calc_klbl(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE)
+            k = self.SpectroscopyX.calc_klbl(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE)
 
             for i in range(self.SpectroscopyX.NGAS):
                 IGAS = np.where( (self.AtmosphereX.ID==self.SpectroscopyX.ID[i]) & (self.AtmosphereX.ISO==self.SpectroscopyX.ISO[i]) )
                 IGAS = IGAS[0]
 
                 #Calculating vertical column density in each layer
-                VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * 1.0e-4   #cm-2
+                VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * SQ_CM_TO_SQ_METER   #cm-2
 
                 #Calculating vertical opacity for each gas in each layer
                 TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
@@ -4968,7 +4980,7 @@ class ForwardModel_0:
         elif self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:    #K-table
 
             #Calculating the k-coefficients for each gas in each layer
-            k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/101325.,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE) # (NWAVE,NG,NLAY,NGAS)
+            k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE) # (NWAVE,NG,NLAY,NGAS)
 
             f_gas = np.zeros((self.SpectroscopyX.NGAS,self.LayerX.NLAY))
             #utotl = np.zeros(self.LayerX.NLAY)
@@ -4977,7 +4989,7 @@ class ForwardModel_0:
                 IGAS = IGAS[0]
 
                 #When using gradients
-                f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS[0]] * 1.0e-4  #Vertical column density of the radiatively active gases in cm-2
+                f_gas[i,:] = self.LayerX.AMOUNT[:,IGAS[0]] * SQ_CM_TO_SQ_METER  #Vertical column density of the radiatively active gases in cm-2
 
             #Combining the k-distributions of the different gases in each layer
             k_layer,dk_layer = k_overlapg(self.SpectroscopyX.DELG,k_gas,dkgasdT,f_gas)
@@ -5540,8 +5552,8 @@ def calc_tau_rayleighj(ISPACE,WAVEC,TOTAM):
     NLAY = len(TOTAM)
 
     if ISPACE==WaveUnit.Wavenumber_cm:
-        LAMBDA = 1./WAVEC * 1.0e-2  #Wavelength in metres
-        x = 1.0/(LAMBDA*1.0e6)
+        LAMBDA = 1./WAVEC * CM_TO_METER  #Wavelength in metres
+        x = 1.0/(LAMBDA * 1.0e6)
     elif ISPACE==WaveUnit.Wavelength_um:
         LAMBDA = WAVEC * 1.0e-6 #Wavelength in metres
         x = 1.0/(LAMBDA*1.0e6)
@@ -5604,7 +5616,7 @@ def calc_tau_rayleighv(ISPACE,WAVEC,TOTAM):
     NLAY = len(TOTAM)
 
     if ISPACE==WaveUnit.Wavenumber_cm:
-        LAMBDA = 1./WAVEC * 1.0e-2 * 1.0e6  #Wavelength in microns
+        LAMBDA = 1./WAVEC * CM_TO_MICRON  #Wavelength in microns
         #x = 1.0/(LAMBDA*1.0e6)
     elif ISPACE == WaveUnit.Wavelength_um:
         LAMBDA = WAVEC #Wavelength in microns
@@ -5614,7 +5626,7 @@ def calc_tau_rayleighv(ISPACE,WAVEC,TOTAM):
     C = 8.8e-28   #provided by B. Bezard
 
     #Calculating the scattering cross sections in m2
-    k_rayleighv = C/LAMBDA**4. * 1.0e-4 #(NWAVE)
+    k_rayleighv = C/LAMBDA**4. * SQ_CM_TO_SQ_METER #(NWAVE)
     
     #Calculating the Rayleigh opacities in each layer
     tau_ray = np.zeros((NWAVE,NLAY))
@@ -5654,7 +5666,7 @@ def calc_tau_rayleighv2(ISPACE,WAVEC,TOTAM):
     NLAY = len(TOTAM)
 
     if ISPACE==WaveUnit.Wavenumber_cm:
-        LAMBDA = 1./WAVEC * 1.0e-2 * 1.0e6  #Wavelength in microns
+        LAMBDA = 1./WAVEC * CM_TO_MICRON  #Wavelength in microns
         #x = 1.0/(LAMBDA*1.0e6)
     elif ISPACE == WaveUnit.Wavelength_um:
         LAMBDA = WAVEC #Wavelength in microns
@@ -5665,7 +5677,7 @@ def calc_tau_rayleighv2(ISPACE,WAVEC,TOTAM):
     dens = 2.5475605e+19
 
     #wave in microns -> cm
-    lam = LAMBDA*1.0e-4
+    lam = LAMBDA*MICRON_TO_CM
 
     #King factor (taken from Ityaksov et al.)
     f_king = 1.14 + (25.3e-12)/(lam*lam)
@@ -5679,7 +5691,7 @@ def calc_tau_rayleighv2(ISPACE,WAVEC,TOTAM):
     factor1 = ( (n*n-1)/(n*n+2.0) )**2.
 
     k_rayleighv = (24.*np.pi**3./lam**4./dens**2.) * factor1 * f_king  #cm2
-    k_rayleighv = k_rayleighv * 1.0e-4
+    k_rayleighv = k_rayleighv * SQ_CM_TO_SQ_METER
 
     #Calculating the Rayleigh opacities in each layer
     tau_ray = np.zeros((NWAVE,NLAY))
@@ -5768,10 +5780,10 @@ def calc_tau_rayleighls(ISPACE,WAVEC,ID,ISO,VMR,TOTAM):
     comp[:,3] = fnh3[:]                           #NH3
     
     #loschpm3 is molecules per cubic micron at STP
-    loschpm3=2.687e19*1.0e-12
+    loschpm3 = 2.687e19 * CUBIC_CM_TO_CUBIC_MICRON
     
     if ISPACE==WaveUnit.Wavenumber_cm:
-        wl = 1./WAVEC * 1.0e-2 * 1.0e6  #Wavelength in microns
+        wl = 1./WAVEC * CM_TO_MICRON  #Wavelength in microns
     elif ISPACE == WaveUnit.Wavelength_um:
         wl = WAVEC #Wavelength in microns
     else:
@@ -5806,7 +5818,7 @@ def calc_tau_rayleighls(ISPACE,WAVEC,ID,ISO,VMR,TOTAM):
     fact=8.0*(np.pi**3.0)/(3.0*(wl**4.0)*(loschpm3**2.0))   #(NWAVE)
 
     #average cross section in m^2 per molecule 
-    k_rayleighls=np.transpose(fact*1e-8*xc1)/sumwt * 1.0e-4 #(NWAVE,NLAY)
+    k_rayleighls=np.transpose(fact*xc1*SQ_MICRON_TO_SQ_CM)/sumwt * SQ_CM_TO_SQ_METER #(NWAVE,NLAY)
     
     #Calculating the Rayleigh opacities in each layer
     tau_ray = np.zeros((NWAVE,NLAY))

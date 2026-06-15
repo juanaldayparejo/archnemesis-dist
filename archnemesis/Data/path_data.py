@@ -17,6 +17,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import os
+
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
@@ -30,7 +32,7 @@ def archnemesis_path():
 
 def archnemesis_resolve_path(path : str):
     if path.startswith(ARCHNEMESIS_PATH_PLACEHOLDER):
-        return archnemesis_path() + path[len(ARCHNEMESIS_PATH_PLACEHOLDER):]
+        return os.path.normpath(archnemesis_path() + path[len(ARCHNEMESIS_PATH_PLACEHOLDER):])
     else:
         return path
 

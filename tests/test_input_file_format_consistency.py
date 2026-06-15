@@ -70,7 +70,7 @@ def ensure_equal_value(a, b):
         return a == b
 
 
-def test_input_file_legacy_to_hdf5_conversion_does_not_alter_paramters():
+def test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters():
     """
     Test that input data is consistent when we read in LEGACY format, write as HDF5, then read in the new HDF5.
     

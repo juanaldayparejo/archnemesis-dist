@@ -1,0 +1,15 @@
+WAVE 5.0 1500 1
+LINESHAPE 0 25 75
+ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Partition Functions
+ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Line Data
+ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Continuum Data
+START GASSES
+	AMB 0
+	26 0 # C2H2
+	27 0 # C2H6
+	6  1 # CH4
+	6  2
+	6  3
+	28 0 # PH3
+	11 0 # NH3
+END GASSES
