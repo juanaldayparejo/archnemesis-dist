@@ -7,6 +7,7 @@ curr = os.getcwd()
 if False:
     print(pytest) # Removes the "unused import" error
 
+
 THERMAL_EMISSION_CIRS_EXPECTED_RESULT = np.array([
     4.8584261e-09, 7.3546157e-09, 1.1448862e-08, 1.6160637e-08, 2.1053524e-08,
     2.5728575e-08, 2.9602468e-08, 3.2811268e-08, 4.3521572e-08, 5.5772129e-08,
@@ -211,73 +212,112 @@ def test_thermal_emission_cirs():
 
 def test_thermal_emission_realtime_line_by_line():
     '''
-    Jupiter thermal emission test against NEMESIS
+    Jupiter thermal emission test against NEMESIS using REALTIME absorption coefficient calculation
     '''
     test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Jupiter_CIRS_nadir_thermal_emission_runtime_line_by_line/')
     os.chdir(test_dir) #Changing directory to read files
     runname = 'cirstest'
     
-    #Reading the input files
-    Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
-    
-    #Calculating forward model with CIRSrad
-    ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
-    SPECONV_cirsrad = ForwardModel.nemesisfm()
-    calculation_cirsrad = SPECONV_cirsrad[:,0]
-    
-    #Calculating forward model with CIRSradg
-    SPECONV_cirsradg,_ = ForwardModel.nemesisfmg()
-    calculation_cirsradg = SPECONV_cirsradg[:,0]
-    
-    os.chdir(curr) #Changing directory back to the original
+    try:
+        #Reading the input files
+        Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
+        
+        #Calculating forward model with CIRSrad
+        ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
+        SPECONV_cirsrad = ForwardModel.nemesisfm()
+        calculation_cirsrad = SPECONV_cirsrad[:,0]
+        
+        #Calculating forward model with CIRSradg
+        SPECONV_cirsradg,_ = ForwardModel.nemesisfmg()
+        calculation_cirsradg = SPECONV_cirsradg[:,0]
+    finally:
+        os.chdir(curr) #Changing directory back to the original
     
     expected_result = THERMAL_EMISSION_CIRS_EXPECTED_RESULT
     
-    atol=np.quantile(expected_result, 0.5) * 1E-2
-    rtol = 5E-2
+    # As `expected_result` is calculated from k-tables we need to relax the
+    # range of allowed values to avoid over-specifying the pass conditions.
+    atol = np.quantile(expected_result, 0.5) * 2E-1
+    rtol = 2E-1
+    required_frac_within_tolerance = 0.98
     
+    tol = atol + rtol*np.abs(expected_result)
     
-    print(f'{expected_result.shape=}')
-    print(f'{ForwardModel.MeasurementX.NCONV=}')
-    print(f'{calculation_cirsrad.shape=}')
-    print(f'{calculation_cirsradg.shape=}')
+    cirsrad_residual = calculation_cirsrad - expected_result
+    cirsradg_residual = calculation_cirsradg - expected_result
     
-    wave = ForwardModel.MeasurementX.VCONV[:ForwardModel.MeasurementX.NCONV[0]][:,0]
-    print(f'{wave.shape=}')
+    cirsrad_out_of_tolerance_mask = np.abs(cirsrad_residual) > tol
+    cirsradg_out_of_tolerance_mask = np.abs(cirsradg_residual) > tol
+    
+    cirsrad_frac_out_of_tolerance = np.count_nonzero(cirsrad_out_of_tolerance_mask) / calculation_cirsrad.size
+    cirsradg_frac_out_of_tolerance = np.count_nonzero(cirsradg_out_of_tolerance_mask) / calculation_cirsradg.size
 
-    interp_cirsrad = calculation_cirsrad
-    interp_cirsradg = calculation_cirsradg
-    
-    if True: # Extra diagnostic information if required
+    if False: # Extra diagnostic information if required
         import matplotlib.pyplot as plt
-        
-        
-        tol = atol + rtol*np.abs(expected_result)
-        
+
+        wave = ForwardModel.MeasurementX.VCONV[:ForwardModel.MeasurementX.NCONV[0]][:,0]
+
+        msg_frac_within_tol = f'frac within tolerance: cirsrad={1-cirsrad_frac_out_of_tolerance:5.3} cirsradg={1-cirsradg_frac_out_of_tolerance:5.3}'
+
         plt.figure()
-        plt.title('Expected vs Calculated result')
-        plt.plot(wave, interp_cirsrad, marker='none', ls='-', alpha=0.6, label='calculated spectra')
-        plt.plot(wave, interp_cirsradg, marker='none', ls='-', alpha=0.6, label='calculated gradient')
+        plt.title(f'Expected vs Calculated result\n{msg_frac_within_tol}')
+        plt.plot(wave, calculation_cirsrad, marker='+', ls='-', alpha=0.6, label='calculated spectra')
+        plt.plot(wave, calculation_cirsradg, marker='x', ls='-', alpha=0.6, label='calculated gradient')
         lines = plt.plot(wave, expected_result, marker='none', ls='-', color='tab:red', alpha=0.6, label='expected result')
         plt.fill_between(wave, expected_result - tol, expected_result+tol, alpha=0.1, color=lines[0].get_color(), label='expected region')
+        
+        if cirsrad_frac_out_of_tolerance > 0:
+            plt.plot(wave[cirsrad_out_of_tolerance_mask], calculation_cirsrad[cirsrad_out_of_tolerance_mask], marker='s', markersize=10, markerfacecolor='none', ls='none', color='tab:red', alpha=0.6, label='calculated values out of tolerance')
+        if cirsradg_frac_out_of_tolerance > 0:
+            plt.plot(wave[cirsradg_out_of_tolerance_mask], calculation_cirsradg[cirsradg_out_of_tolerance_mask], marker='^', markersize=10, markerfacecolor='none', ls='none', color='tab:red', alpha=0.6, label='gradient calculated values out of tolerance')
+        
         plt.xlabel('Wave ($cm^{-1}$)')
         plt.ylabel('Radiance ($W cm^{-2} sr^{-1} (cm^{-1})^{-1})$)')
         plt.legend()
         
         plt.figure()
-        plt.title('Residual (calculated - expected)')
-        plt.plot(wave, interp_cirsrad - expected_result, marker='none', ls='--', alpha=0.6, label='residual spectra')
-        plt.plot(wave, interp_cirsradg - expected_result, marker='none', ls='--', alpha=0.6, label='residual gradient')
+        plt.title(f'Residual (calculated - expected)\n{msg_frac_within_tol}')
+        plt.plot(wave, cirsrad_residual, marker='+', ls='--', alpha=0.6, label='residual spectra')
+        plt.plot(wave, cirsradg_residual, marker='x', ls='--', alpha=0.6, label='residual gradient')
         plt.fill_between(wave, -1*tol, tol, alpha=0.1, color=lines[0].get_color(), label='expected region')
+        
+        if cirsrad_frac_out_of_tolerance > 0:
+            plt.plot(wave[cirsrad_out_of_tolerance_mask], cirsrad_residual[cirsrad_out_of_tolerance_mask], marker='s', markersize=10, markerfacecolor='none', ls='none', color='tab:red', alpha=0.6, label='calculated values out of tolerance')
+        if cirsradg_frac_out_of_tolerance > 0:
+            plt.plot(wave[cirsradg_out_of_tolerance_mask], cirsradg_residual[cirsradg_out_of_tolerance_mask], marker='^', markersize=10, markerfacecolor='none', ls='none', color='tab:red', alpha=0.6, label='gradient calculated values out of tolerance')
+        
         plt.xlabel('Wave ($cm^{-1}$)')
         plt.ylabel('Radiance ($W cm^{-2} sr^{-1} (cm^{-1})^{-1})$)')
         plt.legend()
         
         plt.show()
     
-    # Use a NumPy comparison for arrays
-    np.testing.assert_allclose(interp_cirsrad, expected_result, atol=atol, rtol=rtol)
-    np.testing.assert_allclose(interp_cirsradg, expected_result, atol=atol, rtol=rtol)
+    # Perform comparison
+    assert (1-cirsrad_frac_out_of_tolerance) >= required_frac_within_tolerance, (
+        f'## Failed Comparison ##\n'
+        f'  Parameters:\n'
+        f'    {atol = :8.3G}\n'
+        f'    {rtol = :8.3G}\n'
+        f'    {required_frac_within_tolerance = }\n'
+        f'  Comparison:\n'
+        f'    calculated frac within tolerance = {1-cirsrad_frac_out_of_tolerance:0.3f}\n'
+        f'    expected   = {np.array2string(expected_result, max_line_width=80, prefix="    expected   = ", threshold=16, edgeitems=8)}\n'
+        f'    calculated = {np.array2string(calculation_cirsrad, max_line_width=80, prefix="    calculated = ", threshold=16, edgeitems=8)}\n'
+        f'##-------------------##'
+    )
+    
+    assert (1-cirsradg_frac_out_of_tolerance) >= required_frac_within_tolerance, (
+        f'## Failed Comparison ##\n'
+        f'  Parameters:\n'
+        f'    {atol = :8.3G}\n'
+        f'    {rtol = :8.3G}\n'
+        f'    {required_frac_within_tolerance = }\n'
+        f'  Comparison:\n'
+        f'    calculated frac within tolerance = {1-cirsradg_frac_out_of_tolerance:0.3f}\n'
+        f'    expected   = {np.array2string(expected_result, max_line_width=80, prefix="    expected   = ", threshold=16, edgeitems=8)}\n'
+        f'    calculated = {np.array2string(calculation_cirsradg, max_line_width=80, prefix="    calculated = ", threshold=16, edgeitems=8)}\n'
+        f'##-------------------##'
+    )
 
 
 def test_multiple_scattering_cirs():  

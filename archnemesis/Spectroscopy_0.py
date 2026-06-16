@@ -18,6 +18,13 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 
+import os
+import os.path
+from typing import NamedTuple
+
+import numpy as np
+import scipy
+from numba import jit, njit
 
 #from archnemesis import *
 from archnemesis.enums import (
@@ -27,13 +34,8 @@ from archnemesis.enums import (
     SpectroscopicLineProfile,
     #Gas
 )
-import numpy as np
-import scipy
 #import matplotlib.pyplot as plt
-import os
-import os.path
 import archnemesis as ans
-from numba import jit, njit
 #from archnemesis.database.datatypes.wave_range import WaveRange
 
 from archnemesis.helpers import h5py_helper, path_redirect
@@ -659,33 +661,53 @@ class Spectroscopy_0:
         RUNTIME format is as follows:
         ```
         WAVE <start> <stop> <step>
-        LINESHAPE <iproc> <param_1> <param_2> ... <param_N>
-        <path_to_partiton_function_database_file>
-        <path_to_line_data_database_file>
-        <path_to_continuum_data_database_file>
-        START GASSES
-            AMB <broad_gas_1> <frac_1> <broad_gas_2> <frac_2> ... <broad_gas_N> <frac_N>
-            <gas_1_id> <gas_1_iso_id>
-            <gas_2_id> <gas_2_iso_id>
-            ...
-            <gas_n_id> <gas_n_iso_id>
-        END GASSES
-        <path_to_partiton_function_database_file>
-        <path_to_line_data_database_file>
-        <path_to_continuum_data_database_file>
-        START GASSES
-            AMB <broad_gas_1> <frac_1> <broad_gas_2> <frac_2> ... <broad_gas_N> <frac_N>
-            <gas_n+1_id> <gas_n+1_iso_id>
-            <gas_n+2_id> <gas_n+2_iso_id>
-            ...
-            <gas_n+m_id> <gas_n+m_iso_id>
-        END GASSES
+        DBASE_PF <path_to_partiton_function_database_file>
+        DBASE_LD <path_to_line_data_database_file>
+        DBASE_PC <path_to_continuum_data_database_file>
+        LINESHAPE <iproc|lineshape_enum>
+        WN_CALC_WINDOW <float>
+        WN_APPROX_WINDOW <float>
+        AMB_GAS <broad_gas_1> <broad_gas_2> ... <broad_gas_N>
+        S_MIN <float>
+        INCLUDE_PRESSURE_SHIFT True|False
+        INCLUDE_CONTINUUM True|False
+        INCLUDE_LINES True|False
+        USE_CACHE True|False
+        MOL <gas_1_id> <gas_1_iso_id> [<gas_1_abundance>]
+        MOL <gas_2_id> <gas_2_iso_id> [<gas_2_abundance>]
+        MOL ...
+        MOL <gas_n_id> <gas_n_iso_id> [<gas_n_abundance>]
+        END_BLOCK
+        DBASE_PF <path_to_partiton_function_database_file>
+        DBASE_LD <path_to_line_data_database_file>
+        DBASE_PC <path_to_continuum_data_database_file>
+        MOL <gas_n+1_id> <gas_n+1_iso_id> [<gas_n+1_abundance>]
+        MOL <gas_n+2_id> <gas_n+2_iso_id> [<gas_n+2_abundance>]
+        MOL ...
+        MOL <gas_n+m_id> <gas_n+m_iso_id> [<gas_n+m_abundance>]
+        END_BLOCK
         ...
         ```
         
         Comments are prefaced by the `#` character. 
         Lines with no printable characters are ignored.
-        Omitted database files take on the same values as the previously present databse file (in a block).
+        Omitted values take on the same values as the last set value (within a block, or defaults otherwise).
+        I.e. values "flow downwards", so e.g. you only have to set `LINESHAPE` once at the top and all 
+        subsequent `MOL` statements will use the specified `LINESHAPE` until it is set to something else.
+        NOTE: Can only have ONE `WAVE` statement.
+        
+        ### DEFAULTS ###
+            * `DBASE_XX` = Any previous `DBASE_XX` within the block. NOTE: at least one `DBASE_XX` must be defined per block.
+            * `LINESHAPE` = `VOIGT`
+            * `WN_CALC_WINDOW` = 25.0
+            * `WN_APPROX_WINDOW` = 75.0
+            * `AMB_GAS` = `AIR`
+            * `S_MIN` = 0.0
+            * `INCLUDE_PRESSURE_SHIFT` = `True`
+            * `INCLUDE_CONTINUUM` = `True`
+            * `INCLUDE_LINES` = `True`
+            * `USE_CACHE` = `True`
+            * <gas_n_abundance> = `None`. I.e. Will use terrestrial abundances if not specified.
 
         @param runname: str
             Name of the Nemesis run
@@ -693,18 +715,44 @@ class Spectroscopy_0:
         lls_fpath = f"./{runname}.lls"
         
         _wave_spec = None
-        _lineshape = None
-        _id = []
-        _iso = []
-        _locations = []
-        _amb_gas_ids = []
+        _wave_unit = None
         
+        class MolDatabaseSpecification(NamedTuple):
+            mol_id : int
+            iso_id : int
+            pf_dbase : str
+            line_data_dbase : str
+            continuum_dbase : str
+        
+        class MolLineDataParams(NamedTuple):
+            lineshape : SpectroscopicLineProfile
+            wn_calc_window : float
+            wn_approx_window : float
+            amb_gas : tuple[ans.enums.AmbientGas,...]
+            s_min : float
+            isotopic_abundance : None | float | np.ndarray
+            include_pressure_shift : bool
+            include_continuum : bool
+            include_lines : bool
+            use_cache : bool
+        
+        mol_dbase_specs = []
+        mol_linedata_params = []
+        
+        current_dbase = None
         current_pf_dbase = None
         current_line_data_dbase = None
         current_continuum_dbase = None
-        current_gaslist = []
-        current_amb_gas_ids = []
-        in_gaslist_flag : bool = False
+        current_lineshape = SpectroscopicLineProfile.VOIGT
+        current_wn_calc_window = 25.0
+        current_wn_approx_window = 75.0
+        current_amb_gas = [ans.enums.AmbientGas.AIR]
+        current_s_min = 0
+        current_include_pressure_shift = True
+        current_include_continuum = True
+        current_include_lines = True
+        current_use_cache = True
+        
         
         with open(lls_fpath, 'r') as f:
             for aline in f:
@@ -712,91 +760,207 @@ class Spectroscopy_0:
                 if len(aline) == 0 or aline.isspace(): # skip any empty lines
                     continue
                 
-                print(f'TESTING: {aline=}')
-                
                 if aline.startswith('WAVE'):
-                    if _wave_spec is not None:
-                        raise RuntimeError('Cannot have more than one WAVE entry.')
-                    _wave_spec = tuple(float(x) for x in aline.split()[1:])
+                    if aline.startswith('WAVE_UNIT'):
+                        if _wave_unit is not None:
+                            raise RuntimeError('Cannot have more than one WAVE_UNIT entry.')
+                        x = aline.split(maxsplit=1)[1]
+                        if x in [x.name for x in ans.enums.WaveUnit.Wavenumber_cm]:
+                            _wave_unit = ans.enums.WaveUnit.Wavenumber_cm[x]
+                        else:
+                            _wave_unit = ans.enums.WaveUnit.Wavenumber_cm(int(x))
+                    else:
+                        if _wave_spec is not None:
+                            raise RuntimeError('Cannot have more than one WAVE entry.')
+                        _wave_spec = tuple(float(x) for x in aline.split()[1:])
+                
+                elif aline.startswith('DBASE'):
+                    current_dbase = aline.split(maxsplit=1)[1]
+                    if aline.startswith('DBASE_PF'):
+                        current_pf_dbase = current_dbase
+                    elif aline.startswith('DBASE_LD'):
+                        current_line_data_dbase = current_dbase
+                    elif aline.startswith('DBASE_PC'):
+                        current_continuum_dbase = current_dbase
+                    else:
+                        raise RuntimeError(f'When reading "{lls_fpath}", encountered unknown keyword `{aline.split(maxsplit=1)[0]}`')
                 
                 elif aline.startswith('LINESHAPE'):
-                    if _lineshape is not None:
-                        raise RuntimeError('Cannot have more than one LINESHAPE entry.')
-                    _lineshape = tuple(str(x) for x in aline.split()[1:])
+                    _x = aline.split(maxsplit=1)[1]
+                    current_lineshape = SpectroscopicLineProfile[_x] if _x in [z.name for z in SpectroscopicLineProfile] else SpectroscopicLineProfile(int(_x))
                 
-                elif aline == 'END GASSES': # output the current block and reset the state to read a new block
-                    if not in_gaslist_flag:
-                        raise RuntimeError('RUNTIME format .lls file encountered "END GASSES" before "START GASSES"')
-                    if current_pf_dbase is None:
-                        raise RuntimeError('RUNTIME format .lls file must have at least one path to a database file')
-                    if current_line_data_dbase is None:
-                        current_line_data_dbase = current_pf_dbase
-                    if current_continuum_dbase is None:
-                        current_continuum_dbase = current_line_data_dbase
-                    
-                    for x in current_gaslist:
-                        print(f'TESTING: {x=}')
-                        _id.append(x[0])
-                        _iso.append(x[1])
-                        _locations.append(
-                            (current_pf_dbase, current_line_data_dbase, current_continuum_dbase)
-                        )
-                    n_current_gasses = len(current_gaslist)
-                    if len(current_amb_gas_ids) > 0:
-                        _amb_gas_ids.extend([tuple(current_amb_gas_ids)]*n_current_gasses)
+                elif aline.startswith('WN_CALC_WINDOW'):
+                    current_wn_calc_window = float(aline.split(maxsplit=1)[1])
+                
+                elif aline.startswith('WN_APPROX_WINDOW'):
+                    current_wn_approx_window = float(aline.split(maxsplit=1)[1])
+                
+                elif aline.startswith('AMB_GAS'):
+                    current_amb_gas = tuple(ans.enums.AmbientGas[x] if x in [y.name for y in ans.enums.AmbientGas] else ans.enums.AmbientGas(int(x)) for x in aline.split()[1:])
+                
+                elif aline.startswith('S_MIN'):
+                    current_s_min = float(aline.split(maxsplit=1)[1])
+                
+                elif aline.startswith('INCLUDE_PRESSURE_SHIFT'):
+                    _x = aline.split(maxsplit=1)[1]
+                    if _x.upper() in ('TRUE','T'):
+                        current_include_pressure_shift = True
+                    elif _x.upper() in ('FALSE','F'):
+                        current_include_pressure_shift = False
                     else:
-                        _amb_gas_ids.extend([(ans.enums.AmbientGas.AIR,)]*n_current_gasses)
+                        try:
+                            _y = int(_x)
+                        except Exception as e:
+                            raise RuntimeError(f'When reading "{lls_fpath}", cannot convert value of keyword "{aline.split(maxsplit=1)[0]}" to True or False') from e
+                        else:
+                            current_include_pressure_shift = False if _y == 0 else True
+                
+                elif aline.startswith('INCLUDE_CONTINUUM'):
+                    _x = aline.split(maxsplit=1)[1]
+                    if _x.upper() in ('TRUE','T'):
+                        current_include_continuum = True
+                    elif _x.upper() in ('FALSE','F'):
+                        current_include_continuum = False
+                    else:
+                        try:
+                            _y = int(_x)
+                        except Exception as e:
+                            raise RuntimeError(f'When reading "{lls_fpath}", cannot convert value of keyword "{aline.split(maxsplit=1)[0]}" to True or False') from e
+                        else:
+                            current_include_continuum = False if _y == 0 else True
+                
+                elif aline.startswith('INCLUDE_LINES'):
+                    _x = aline.split(maxsplit=1)[1]
+                    if _x.upper() in ('TRUE','T'):
+                        current_include_lines = True
+                    elif _x.upper() in ('FALSE','F'):
+                        current_include_lines = False
+                    else:
+                        try:
+                            _y = int(_x)
+                        except Exception as e:
+                            raise RuntimeError(f'When reading "{lls_fpath}", cannot convert value of keyword "{aline.split(maxsplit=1)[0]}" to True or False') from e
+                        else:
+                            current_include_lines = False if _y == 0 else True
+                
+                elif aline.startswith('USE_CACHE'):
+                    _x = aline.split(maxsplit=1)[1]
+                    if _x.upper() in ('TRUE','T'):
+                        current_use_cache = True
+                    elif _x.upper() in ('FALSE','F'):
+                        current_use_cache = False
+                    else:
+                        try:
+                            _y = int(_x)
+                        except Exception as e:
+                            raise RuntimeError(f'When reading "{lls_fpath}", cannot convert value of keyword "{aline.split(maxsplit=1)[0]}" to True or False') from e
+                        else:
+                            current_use_cache = False if _y == 0 else True
+                
+                elif aline.startswith('MOL'):
+                    # Assume "MOL_NAME ISO_ID [abundance]" or "MOL_ID ISO_ID [abundance]" for each line
+                    parts = aline.split(maxsplit=4)
+                    if len(parts) < 3:
+                        raise RuntimeError(f'RUNTIME format .lls file "{lls_fpath}", `MOL` keyword must have 2 or 3 arguments `<mol_id> <iso_id> [<abundance>]')
                     
+                    mol_id = mol_id if ((mol_id := ans.Data.gas_data.gas_id.get(parts[1], None)) is not None) else int(parts[1])
+                    iso_id = parts[2]
+                    
+                    if len(parts) >= 4:
+                        abundance = float(parts[4]) if len(parts) == 4 else np.array([float(x) for x in parts[4:]], dtype=float)
+                        if (abundance < 0) or (abundance > 1):
+                            raise ValueError(f'RUNTIME format .lls file "{lls_fpath}". `MOL` keyword optional <abundance> parameter must be between 0 and 1.')
+                    else:
+                        abundance = None
+                    
+                    # Ensure we have at least one database file
+                    if current_dbase is None:
+                        raise RuntimeError(f'RUNTIME format .lls file "{lls_fpath}" must have at least one path to a database file')
+                    
+                    print(f'TESTING: {aline=}')
+                    print(f'TESTING: {parts=}')
+                    print(f'TESTING: {mol_id=} {iso_id=} {abundance=}')
+                    
+                    # Add `mol_descriptor` to list of known molecules
+                    mol_dbase_specs.append(
+                        MolDatabaseSpecification(
+                            mol_id = mol_id,
+                            iso_id = iso_id,
+                            
+                            pf_dbase = current_pf_dbase if current_pf_dbase is not None else current_dbase,
+                            line_data_dbase = current_line_data_dbase if current_line_data_dbase is not None else current_dbase,
+                            continuum_dbase = current_continuum_dbase if current_continuum_dbase is not None else current_dbase,
+                        )
+                    )
+                    
+                    # Add default LINEDATA values
+                    mol_linedata_params.append(
+                        MolLineDataParams(
+                            lineshape = current_lineshape,
+                            wn_calc_window = current_wn_calc_window,
+                            wn_approx_window = current_wn_approx_window,
+                            amb_gas = tuple(current_amb_gas),
+                            s_min = current_s_min,
+                            isotopic_abundance = abundance,
+                            include_pressure_shift = current_include_pressure_shift,
+                            include_continuum = current_include_continuum,
+                            include_lines = current_include_lines,
+                            use_cache = current_use_cache,
+                        )
+                    )
+                
+                elif aline == 'END_BLOCK': # output the current block and reset the state to read a new block, must come before `in_gaslist_flag` is used
+                    # Reset to defaults
+                    current_dbase = None
                     current_pf_dbase = None
                     current_line_data_dbase = None
                     current_continuum_dbase = None
-                    current_gaslist = []
-                    current_amb_gas_ids = []
-                    in_gaslist_flag = False
+                    current_lineshape = SpectroscopicLineProfile.VOIGT
+                    current_wn_calc_window = 25.0
+                    current_wn_approx_window = 75.0
+                    current_amb_gas = [ans.enums.AmbientGas.AIR]
+                    current_s_min = 0
+                    current_include_pressure_shift = True
+                    current_include_continuum = True
+                    current_include_lines = True
+                    current_use_cache = True
                     
-                elif in_gaslist_flag:
-                    if aline.startswith('AMB'):
-                        current_amb_gas_ids = [ans.enums.AmbientGas(int(x)) for x in aline.split()[1:]]
-                    else:
-                        current_gaslist.append(tuple(aline.split(maxsplit=2)[:2]))
                 
-                elif aline == 'START GASSES': # Each line until `END_GASSES` is an "ID ISO" pair
-                    in_gaslist_flag = True
                     
-                else: # Other lines are assumed to be database locations
-                    if current_pf_dbase is None:
-                        current_pf_dbase = ans.Data.path_data.archnemesis_resolve_path(aline)
-                    elif current_line_data_dbase is None:
-                        current_line_data_dbase = ans.Data.path_data.archnemesis_resolve_path(aline)
-                    elif current_continuum_dbase is None:
-                        current_continuum_dbase = ans.Data.path_data.archnemesis_resolve_path(aline)
-                    else: # We are not expecting any more database files
-                        raise RuntimeError(f'Expected no more than three database files per block when reading "{lls_fpath}"')
+                else: # no known task for keyword
+                    raise RuntimeError(f'When reading "{lls_fpath}" encountered unknown keyword `{aline.split(maxsplit=1)[0]}`')
         
-        # Now we have populated `_id` `_iso` and `_locations` so assign them
-        print(f'TESTING: {_id=}')
-        print(f'TESTING: {_iso=}')
-        print(f'TESTING: {_locations=}')
+        # Now we have populated `_id`, `_iso`, `_locations`, etc. so now assign them
+        #print(f'TESTING: {_id=}')
+        #print(f'TESTING: {_iso=}')
+        #print(f'TESTING: {_locations=}')
         
         if _wave_spec is None:
             raise RuntimeError('WAVE entry is required in .lls RUNTIME format')
-        if _lineshape is None:
-            _lgr.info('No LINESHAPE entry found in .lls RUNTIME file. Using VOIGT profile with wn_calc_window=25.0, wn_approx_window=75.0')
-            _lineshape = (0, 25.0, 75.0)
-            
-        self.ID = np.array(_id, dtype=int)
-        self.ISO = np.array(_iso, dtype=int)
-        self.NGAS = self.ID.size
-        self.LOCATION = _locations
-        self.LINE_DATA = []
+        if _wave_unit is None:
+            _lgr.warning('WAVE_UNIT not specified assuming wavenumbers in (cm^{-1})')
+            _wave_unit = ans.enums.WaveUnit.Wavenumber_cm
+        
         self.WAVE = np.arange(*_wave_spec, dtype=float)
         self.NWAVE = self.WAVE.size
-        self.LINE_DATA_DEFAULTS = dict(
-            wn_calc_window = float(_lineshape[1]),
-            wn_approx_window = float(_lineshape[2]),
-        )
+        self.ISPACE = _wave_unit
         
-        self.IPROC = [SpectroscopicLineProfile(int(_lineshape[0]))] * len(self.ID) # Unless otherwise specified, always use VOIGT profile
+        self.ID = np.array([x.mol_id for x in mol_dbase_specs], dtype=int)
+        self.ISO = np.array([x.iso_id for x in mol_dbase_specs], dtype=int)
+        self.NGAS = self.ID.size
+        self.LOCATION = [
+            (
+                ans.Data.path_data.archnemesis_resolve_path(x.pf_dbase), 
+                ans.Data.path_data.archnemesis_resolve_path(x.line_data_dbase), 
+                ans.Data.path_data.archnemesis_resolve_path(x.continuum_dbase),
+            ) for x in mol_dbase_specs
+        ]
+        self.LINE_DATA_PARAMS = mol_linedata_params
+        self.IPROC = [x.lineshape for x in mol_linedata_params]
+        self.LINE_DATA = []
+        
+        assert all(len(self.LINE_DATA_PARAMS[0].amb_gas) == len(x.amb_gas) for x in self.LINE_DATA_PARAMS), "For .lls RUNTIME format. All LINE_DATA instances must have the same number of ambient gasses"
+        self.N_AMB_GASSES = len(self.LINE_DATA_PARAMS[0].amb_gas)
         
         for igas in range(len(self.ID)):
             pf_dbase, ld_dbase, pc_dbase = self.LOCATION[igas]
@@ -804,7 +968,7 @@ class Spectroscopy_0:
                 ans.LineData_0(
                     self.ID[igas], #ID of the gas
                     self.ISO[igas], #Isotope ID of the gas
-                    ambient_gasses = _amb_gas_ids[igas],
+                    ambient_gasses = self.LINE_DATA_PARAMS[igas].amb_gas,
                     LINE_DATABASE=ld_dbase,
                     CONTINUUM_DATABASE=pc_dbase,
                     PARTITION_FUNCTION_DATABASE=pf_dbase,
@@ -1069,16 +1233,18 @@ class Spectroscopy_0:
         
         _lgr.info('Reading tables')
         
+        if self.LOCATION is None:
+            raise ValueError('error in Spectroscopy.read_tables() :: LOCATION is not defined')
+        
         if self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+            if not hasattr(self, 'LINE_DATA'):
+                raise AttributeError('Line-by-line RUNTIME calculation requires `LINE_DATA` attribute to already be created when reading tables.')
+            
             _lgr.info('RUNTIME calculation is loading desired wavenumber range from databases')
             self.NG = 1
             self.G_ORD = np.array([0.])
             self.DELG = np.array([1.0])
-            """
-            if self.WAVE is None or (self.WAVE.size==2 and self.WAVE[0] == 0 and self.WAVE[-1]==np.inf):
-                self.WAVE = np.arange(wavemin, wavemax+1E-3*wavedelta, wavedelta)
-                self.NWAVE = len(self.WAVE)
-            """
+            
             for igas in range(len(self.ID)):
                 _lgr.info(f'Reading table {self.LOCATION[igas]=} {wavemin=} {wavemax=}')
                 self.LINE_DATA[igas].set_params(vmin = wavemin, vmax = wavemax)
@@ -1086,8 +1252,7 @@ class Spectroscopy_0:
             
             return
         
-        if self.LOCATION is None:
-            raise ValueError('error in Spectroscopy.read_tables() :: LOCATION is not defined')
+        
             
         if self.WAVE is None:
             #In this case the headers have not been read so we need to read them
@@ -1519,14 +1684,11 @@ class Spectroscopy_0:
     ######################################################################################################
     def calc_klblg_online(
             self,
-            npoints,
-            press,
-            temp,
-            self_frac=1.0,
-            wave=None,
-            add_pressure_shift=True,
-            include_continuum : bool = False,
-            s_min : float = 1E-25
+            npoints : int,
+            press : np.ndarray,
+            temp : np.ndarray,
+            amb_frac : float | np.ndarray = 0.0, # [N_ambient_gasses] or [NGAS,N_ambient_gasses]
+            wave : None | np.ndarray = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Calculate the absorption coefficient at a given pressure and temperature
@@ -1561,38 +1723,29 @@ class Spectroscopy_0:
 
         """
 
-        #Defining the wavelengths at which to calculate the cross sections
         if wave is None:
             wave = self.WAVE
             nwave = self.NWAVE
         else:
             wave = np.array(wave)
             nwave = len(wave)
-
-        #Checking that self_frac has the correct format and values
-        self_frac_array = False
-        if isinstance(self_frac, (int, float)):
-            if not (0.0 <= self_frac <= 1.0):
-                raise ValueError(f"self_frac float must be between 0 and 1. Got: {self_frac}")
-        else:
-            # Convert to numpy array for easy size checking
-            self_frac = np.asarray(self_frac)
-            if self_frac.size != self.NGAS:
-                raise ValueError(
-                    f"self_frac array size ({self_frac.size}) does not match "
-                    f"the number of gases ({self.NGAS})."
-                )
-            self_frac_array = True
+        
+        # Get `amb_frac` into the correct format
+        if isinstance(amb_frac, (int, float)):
+            amb_frac = np.array([amb_frac]*self.N_AMB_GASSES, dtype=float)
+        
+        if amb_frac.ndim == 1:
+            amb_frac = np.ones((self.NGAS, self.N_AMB_GASSES), dtype=float) * amb_frac[1,:]
+            
+        assert amb_frac.shape == (self.NGAS, self.N_AMB_GASSES), f"amb_frac must have the shape {(self.NGAS, self.N_AMB_GASSES)=}"
+        
+        assert np.all(np.sum(amb_frac, axis=1) >= 0), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
+        assert np.all(np.sum(amb_frac, axis=1) <= 1), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
 
         #Calculating the line-by-line cross sections for each gas and each p-T point
         k = np.zeros((nwave, npoints, self.NGAS))
         dkdt = np.zeros((nwave, npoints, self.NGAS))
         for igas in range(self.NGAS):
-
-            if self_frac_array:
-                self_frac_gas = self_frac[igas]
-            else:
-                self_frac_gas = self_frac
 
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
 
@@ -1607,6 +1760,9 @@ class Spectroscopy_0:
             
             store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
             k1 = np.empty((k.shape[0],), dtype=float)
+            
+            line_data_params = self.LINE_DATA_PARAMS[igas]
+            
             for ipoint in range(npoints):
 
                 p_l = press[ipoint]
@@ -1616,36 +1772,44 @@ class Spectroscopy_0:
                     wave_grid=wave,             # wavenumbers or wavelengths
                     t_calc=t_l,               # kelvin
                     p_calc=p_l,              # Atmospheres
-                    amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
                     wave_unit=self.ISPACE,  # unit of `waves` argument
                     lineshape_fn=lineshape, # lineshape function to use
+                    amb_frac = amb_frac[igas],
                     
-                    include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
-                    include_continuum = include_continuum,
-                    s_min = s_min,
+                    isotopic_abundance = line_data_params.isotopic_abundance,
+                    s_min = line_data_params.s_min,
+                    wn_calc_window = line_data_params.wn_calc_window,
+                    wn_approx_window = line_data_params.wn_approx_window,
                     
-                    out = k[:,ipoint,igas],
+                    include_lines = line_data_params.include_lines,
+                    include_continuum = line_data_params.include_continuum,
+                    include_pressure_shift=line_data_params.include_pressure_shift, # whether to include pressure shift in the line positions
+                    use_cache = line_data_params.use_cache,
+                    
                     store = store,
-                    
-                    **self.LINE_DATA_DEFAULTS,
+                    out = k[:,ipoint,igas],
                 )
 
                 self.LINE_DATA[igas].add_monochromatic_absorption(
                     wave_grid=wave,             # wavenumbers or wavelengths
                     t_calc=t_l+5.0,               # kelvin
                     p_calc=p_l,              # Atmospheres
-                    amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
-                    wave_unit=self.ISPACE,  # unit of `waves` argument
                     lineshape_fn=lineshape, # lineshape function to use
+                    wave_unit=self.ISPACE,  # unit of `waves` argument
+                    amb_frac = amb_frac[igas],
                     
-                    include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
-                    include_continuum = include_continuum,
-                    s_min = s_min,
+                    isotopic_abundance = line_data_params.isotopic_abundance,
+                    s_min = line_data_params.s_min,
+                    wn_calc_window = line_data_params.wn_calc_window,
+                    wn_approx_window = line_data_params.wn_approx_window,
+                    
+                    include_lines = line_data_params.include_lines,
+                    include_continuum = line_data_params.include_continuum,
+                    include_pressure_shift=line_data_params.include_pressure_shift, # whether to include pressure shift in the line positions
+                    use_cache = line_data_params.use_cache,
                     
                     out = k1,
                     store = store,
-                    
-                    **self.LINE_DATA_DEFAULTS,
                 )
 
                 dkdt[:,ipoint,igas] = (k1-k[:,ipoint,igas])/5.0
@@ -1653,15 +1817,13 @@ class Spectroscopy_0:
         return k, dkdt
 
     ######################################################################################################
-    def calc_klbl_online(self,
-            npoints,
-            press,
-            temp,
-            self_frac=1.0,
-            wave=None,
-            add_pressure_shift: bool = True,
-            include_continuum : bool = True,
-            s_min : float = 0
+    def calc_klbl_online(
+            self,
+            npoints : int,
+            press : np.ndarray,
+            temp : np.ndarray,
+            amb_frac : float | np.ndarray = 0.0, # [N_ambient_gasses] or [NGAS,N_ambient_gasses]
+            wave : None | np.ndarray = None,
     ) -> np.ndarray:
         """
         Calculate the absorption coefficient at a given pressure and temperature
@@ -1682,11 +1844,8 @@ class Spectroscopy_0:
             Minimum wavenumber (cm-1) or wavelength (um)
         @param wavemax: real
             Maximum wavenumber (cm-1) or wavelength (um)
-        @param self_frac: real
+        @param amb_frac: real
             Fraction of the line broadening that is due to self-broadening (as opposed to broadening by the ambient gas)
-        @param add_pressure_shift: bool
-            Whether to include pressure shift in the line positions (NEMESIS does not include it)
-
 
         Outputs
         ---------
@@ -1698,11 +1857,8 @@ class Spectroscopy_0:
         _lgr.info(f'{npoints=}')
         _lgr.info(f'{press=}')
         _lgr.info(f'{temp=}')
-        _lgr.info(f'{self_frac=}')
+        _lgr.info(f'{amb_frac=}')
         _lgr.info(f'{wave=}')
-        _lgr.info(f'{add_pressure_shift=}')
-        _lgr.info(f'{include_continuum=}')
-        _lgr.info(f'{s_min=}')
         
         _lgr.info(f'{self.ID=}')
         _lgr.info(f'{self.ISO=}')
@@ -1716,32 +1872,25 @@ class Spectroscopy_0:
         else:
             wave = np.array(wave)
             nwave = len(wave)
-
-        #Checking that self_frac has the correct format and values
-        self_frac_array = False
-        if isinstance(self_frac, (int, float)):
-            if not (0.0 <= self_frac <= 1.0):
-                raise ValueError(f"self_frac float must be between 0 and 1. Got: {self_frac}")
-        else:
-            # Convert to numpy array for easy size checking
-            self_frac = np.asarray(self_frac)
-            if self_frac.size != self.NGAS:
-                raise ValueError(
-                    f"self_frac array size ({self_frac.size}) does not match "
-                    f"the number of gases ({self.NGAS})."
-                )
-            self_frac_array = True
+        
+        # Get `amb_frac` into the correct format
+        if isinstance(amb_frac, (int, float)):
+            amb_frac = np.array([amb_frac]*self.N_AMB_GASSES, dtype=float)
+        
+        if amb_frac.ndim == 1:
+            amb_frac = np.ones((self.NGAS, self.N_AMB_GASSES), dtype=float) * amb_frac[1,:]
+            
+        assert amb_frac.shape == (self.NGAS, self.N_AMB_GASSES), f"amb_frac must have the shape {(self.NGAS, self.N_AMB_GASSES)=}"
+        
+        assert np.all(np.sum(amb_frac, axis=1) >= 0), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
+        assert np.all(np.sum(amb_frac, axis=1) <= 1), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
+            
 
         #Calculating the line-by-line cross sections for each gas and each p-T point
         k = np.zeros((nwave, npoints, self.NGAS))
         for igas in range(self.NGAS):
             
             _lgr.info(f'{self.LINE_DATA[igas]=}')
-            
-            if self_frac_array:
-                self_frac_gas = self_frac[igas]
-            else:
-                self_frac_gas = self_frac
 
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
 
@@ -1757,6 +1906,7 @@ class Spectroscopy_0:
                 raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
 
             store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
+            line_data_params = self.LINE_DATA_PARAMS[igas]
             for ipoint in range(npoints):
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
@@ -1765,18 +1915,22 @@ class Spectroscopy_0:
                     wave_grid=wave,             # wavenumbers or wavelengths
                     t_calc=t_l,               # kelvin
                     p_calc=p_l,              # Atmospheres
-                    amb_frac=1.-self_frac_gas,  # fraction of broadening due to ambient gas
                     wave_unit=self.ISPACE,  # unit of `waves` argument
                     lineshape_fn=lineshape, # lineshape function to use
+                    amb_frac = amb_frac[igas],
                     
-                    include_pressure_shift=add_pressure_shift, # whether to include pressure shift in the line positions
-                    include_continuum = include_continuum,
-                    s_min = s_min,
+                    isotopic_abundance = line_data_params.isotopic_abundance,
+                    s_min = line_data_params.s_min,
+                    wn_calc_window = line_data_params.wn_calc_window,
+                    wn_approx_window = line_data_params.wn_approx_window,
+                    
+                    include_lines = line_data_params.include_lines,
+                    include_continuum = line_data_params.include_continuum,
+                    include_pressure_shift=line_data_params.include_pressure_shift, # whether to include pressure shift in the line positions
+                    use_cache = line_data_params.use_cache,
                     
                     store = store,
                     out = k[:,ipoint,igas],
-                    
-                    **self.LINE_DATA_DEFAULTS,
                 )
 
         return k

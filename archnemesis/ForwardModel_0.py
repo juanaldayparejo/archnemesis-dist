@@ -3811,10 +3811,10 @@ class ForwardModel_0:
             elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME:    #Online calculation of the line-by-line opacity
                 
                 self_frac = np.mean((self.LayerX.PP.T / self.LayerX.PRESS),axis=1) #(NGAS) average volume mixing ratio of each gas
-                self_fracx = np.zeros(self.SpectroscopyX.NGAS)
+                amb_frac = np.ones((self.SpectroscopyX.NGAS,1))
                 for i in range(self.SpectroscopyX.NGAS):
                     igas = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-                    self_fracx[i] = self_frac[igas]
+                    amb_frac[i,0] = 1.0 - self_frac[igas]
 
                 #Converting IDs into list
                 # QUESTION: Why does this need to be done?
@@ -3823,9 +3823,9 @@ class ForwardModel_0:
 
                 #Calculating the absorption cross sections
                 if return_grad:
-                    k,dkdT = self.SpectroscopyX.calc_klblg_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,self_frac=self_fracx,wave=None,add_pressure_shift=True)
+                    k,dkdT = self.SpectroscopyX.calc_klblg_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,amb_frac=amb_frac,wave=None)
                 else:
-                    k = self.SpectroscopyX.calc_klbl_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,self_frac=self_fracx,wave=None,add_pressure_shift=True)
+                    k = self.SpectroscopyX.calc_klbl_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,amb_frac=amb_frac,wave=None)
 
                 #Calculating the optical depths
                 for i in range(self.SpectroscopyX.NGAS):

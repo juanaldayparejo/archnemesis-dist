@@ -1,15 +1,16 @@
-WAVE 5.0 1500 1
-LINESHAPE 0 25 75
-ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Partition Functions
-ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Line Data
-ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Continuum Data
-START GASSES
-	AMB 0
-	26 0 # C2H2
-	27 0 # C2H6
-	6  1 # CH4
-	6  2
-	6  3
-	28 0 # PH3
-	11 0 # NH3
-END GASSES
+WAVE             5.0 1500 1
+LINESHAPE        VOIGT 
+WN_CALC_WINDOW   25 
+WN_APPROX_WINDOW 75
+AMB_GAS          AIR
+DBASE_PF         ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Partition Functions
+DBASE_LD         ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Line Data
+DBASE_PC         ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Continuum Data
+	MOL C2H2 0 # MOL_ID 26
+	MOL C2H6 0 # MOL_ID 27
+	MOL CH4  1 # MOL_ID 6
+	MOL CH4  2
+	MOL CH4  3
+	MOL PH3  0 # MOL_ID 28
+	MOL NH3  0 # MOL_ID 11
+END_BLOCK
