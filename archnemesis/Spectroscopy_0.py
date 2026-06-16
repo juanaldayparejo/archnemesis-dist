@@ -58,6 +58,26 @@ State Vector Class.
 
 BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR : float = 1.0E20
 
+class MolDatabaseSpecification(NamedTuple):
+    mol_id : int
+    iso_id : int
+    pf_dbase : str
+    line_data_dbase : str
+    continuum_dbase : str
+
+class MolLineDataParams(NamedTuple):
+    lineshape : SpectroscopicLineProfile
+    wn_calc_window : float
+    wn_approx_window : float
+    amb_gas : tuple[ans.enums.AmbientGas,...]
+    s_min : float
+    s_floor : float
+    isotopic_abundance : None | float | np.ndarray
+    include_pressure_shift : bool
+    include_continuum : bool
+    include_lines : bool
+    use_cache : bool
+
 class Spectroscopy_0:
 
     def __init__(
@@ -669,6 +689,7 @@ class Spectroscopy_0:
         WN_APPROX_WINDOW <float>
         AMB_GAS <broad_gas_1> <broad_gas_2> ... <broad_gas_N>
         S_MIN <float>
+        S_FLOOR <float>
         INCLUDE_PRESSURE_SHIFT True|False
         INCLUDE_CONTINUUM True|False
         INCLUDE_LINES True|False
@@ -702,7 +723,8 @@ class Spectroscopy_0:
             * `WN_CALC_WINDOW` = 25.0
             * `WN_APPROX_WINDOW` = 75.0
             * `AMB_GAS` = `AIR`
-            * `S_MIN` = 0.0
+            * `S_MIN` = -1
+            * `S_FLOOR` = 0.0
             * `INCLUDE_PRESSURE_SHIFT` = `True`
             * `INCLUDE_CONTINUUM` = `True`
             * `INCLUDE_LINES` = `True`
@@ -716,28 +738,8 @@ class Spectroscopy_0:
         
         _wave_spec = None
         _wave_unit = None
-        
-        class MolDatabaseSpecification(NamedTuple):
-            mol_id : int
-            iso_id : int
-            pf_dbase : str
-            line_data_dbase : str
-            continuum_dbase : str
-        
-        class MolLineDataParams(NamedTuple):
-            lineshape : SpectroscopicLineProfile
-            wn_calc_window : float
-            wn_approx_window : float
-            amb_gas : tuple[ans.enums.AmbientGas,...]
-            s_min : float
-            isotopic_abundance : None | float | np.ndarray
-            include_pressure_shift : bool
-            include_continuum : bool
-            include_lines : bool
-            use_cache : bool
-        
-        mol_dbase_specs = []
-        mol_linedata_params = []
+        mol_dbase_specs : list[MolDatabaseSpecification] = []
+        mol_linedata_params : list[MolLineDataParams] = []
         
         current_dbase = None
         current_pf_dbase = None
@@ -747,7 +749,8 @@ class Spectroscopy_0:
         current_wn_calc_window = 25.0
         current_wn_approx_window = 75.0
         current_amb_gas = [ans.enums.AmbientGas.AIR]
-        current_s_min = 0
+        current_s_min = -1
+        current_s_floor = 0
         current_include_pressure_shift = True
         current_include_continuum = True
         current_include_lines = True
@@ -800,6 +803,9 @@ class Spectroscopy_0:
                 
                 elif aline.startswith('S_MIN'):
                     current_s_min = float(aline.split(maxsplit=1)[1])
+                
+                elif aline.startswith('S_FLOOR'):
+                    current_s_floor = float(aline.split(maxsplit=1)[1])
                 
                 elif aline.startswith('INCLUDE_PRESSURE_SHIFT'):
                     _x = aline.split(maxsplit=1)[1]
@@ -901,6 +907,7 @@ class Spectroscopy_0:
                             wn_approx_window = current_wn_approx_window,
                             amb_gas = tuple(current_amb_gas),
                             s_min = current_s_min,
+                            s_floor = current_s_floor,
                             isotopic_abundance = abundance,
                             include_pressure_shift = current_include_pressure_shift,
                             include_continuum = current_include_continuum,
@@ -919,7 +926,8 @@ class Spectroscopy_0:
                     current_wn_calc_window = 25.0
                     current_wn_approx_window = 75.0
                     current_amb_gas = [ans.enums.AmbientGas.AIR]
-                    current_s_min = 0
+                    current_s_min = -1
+                    current_s_floor = 0
                     current_include_pressure_shift = True
                     current_include_continuum = True
                     current_include_lines = True
@@ -1247,7 +1255,11 @@ class Spectroscopy_0:
             
             for igas in range(len(self.ID)):
                 _lgr.info(f'Reading table {self.LOCATION[igas]=} {wavemin=} {wavemax=}')
-                self.LINE_DATA[igas].set_params(vmin = wavemin, vmax = wavemax)
+                self.LINE_DATA[igas].set_params(
+                    vmin = wavemin, 
+                    vmax = wavemax,
+                    s_min = self.LINE_DATA_PARAMS[igas].s_min,
+                )
                 self.LINE_DATA[igas].fetch_linedata()
             
             return
@@ -1690,7 +1702,7 @@ class Spectroscopy_0:
             amb_frac : float | np.ndarray = 0.0, # [N_ambient_gasses] or [NGAS,N_ambient_gasses]
             wave : None | np.ndarray = None,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """
+        """s_min
         Calculate the absorption coefficient at a given pressure and temperature
         from the LineData class
 
@@ -1732,15 +1744,10 @@ class Spectroscopy_0:
         
         # Get `amb_frac` into the correct format
         if isinstance(amb_frac, (int, float)):
-            amb_frac = np.array([amb_frac]*self.N_AMB_GASSES, dtype=float)
+            amb_frac = np.ones((self.N_AMB_GASSES,), dtype=float) * amb_frac
         
-        if amb_frac.ndim == 1:
-            amb_frac = np.ones((self.NGAS, self.N_AMB_GASSES), dtype=float) * amb_frac[1,:]
-            
-        assert amb_frac.shape == (self.NGAS, self.N_AMB_GASSES), f"amb_frac must have the shape {(self.NGAS, self.N_AMB_GASSES)=}"
-        
-        assert np.all(np.sum(amb_frac, axis=1) >= 0), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
-        assert np.all(np.sum(amb_frac, axis=1) <= 1), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
+        assert np.all(np.sum(amb_frac, axis=-1) >= 0), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
+        assert np.all(np.sum(amb_frac, axis=-1) <= 1), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
 
         #Calculating the line-by-line cross sections for each gas and each p-T point
         k = np.zeros((nwave, npoints, self.NGAS))
@@ -1774,10 +1781,10 @@ class Spectroscopy_0:
                     p_calc=p_l,              # Atmospheres
                     wave_unit=self.ISPACE,  # unit of `waves` argument
                     lineshape_fn=lineshape, # lineshape function to use
-                    amb_frac = amb_frac[igas],
+                    amb_frac = amb_frac[igas] if amb_frac.ndim == 2 else amb_frac,
                     
                     isotopic_abundance = line_data_params.isotopic_abundance,
-                    s_min = line_data_params.s_min,
+                    s_floor = line_data_params.s_floor,
                     wn_calc_window = line_data_params.wn_calc_window,
                     wn_approx_window = line_data_params.wn_approx_window,
                     
@@ -1796,10 +1803,10 @@ class Spectroscopy_0:
                     p_calc=p_l,              # Atmospheres
                     lineshape_fn=lineshape, # lineshape function to use
                     wave_unit=self.ISPACE,  # unit of `waves` argument
-                    amb_frac = amb_frac[igas],
+                    amb_frac = amb_frac[igas] if amb_frac.ndim == 2 else amb_frac,
                     
                     isotopic_abundance = line_data_params.isotopic_abundance,
-                    s_min = line_data_params.s_min,
+                    s_floor = line_data_params.s_floor,
                     wn_calc_window = line_data_params.wn_calc_window,
                     wn_approx_window = line_data_params.wn_approx_window,
                     
@@ -1875,15 +1882,10 @@ class Spectroscopy_0:
         
         # Get `amb_frac` into the correct format
         if isinstance(amb_frac, (int, float)):
-            amb_frac = np.array([amb_frac]*self.N_AMB_GASSES, dtype=float)
+            amb_frac = np.ones((self.N_AMB_GASSES,), dtype=float) * amb_frac
         
-        if amb_frac.ndim == 1:
-            amb_frac = np.ones((self.NGAS, self.N_AMB_GASSES), dtype=float) * amb_frac[1,:]
-            
-        assert amb_frac.shape == (self.NGAS, self.N_AMB_GASSES), f"amb_frac must have the shape {(self.NGAS, self.N_AMB_GASSES)=}"
-        
-        assert np.all(np.sum(amb_frac, axis=1) >= 0), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
-        assert np.all(np.sum(amb_frac, axis=1) <= 1), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
+        assert np.all(np.sum(amb_frac, axis=-1) >= 0), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
+        assert np.all(np.sum(amb_frac, axis=-1) <= 1), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
             
 
         #Calculating the line-by-line cross sections for each gas and each p-T point
@@ -1917,10 +1919,10 @@ class Spectroscopy_0:
                     p_calc=p_l,              # Atmospheres
                     wave_unit=self.ISPACE,  # unit of `waves` argument
                     lineshape_fn=lineshape, # lineshape function to use
-                    amb_frac = amb_frac[igas],
+                    amb_frac = amb_frac[igas] if amb_frac.ndim == 2 else amb_frac,
                     
                     isotopic_abundance = line_data_params.isotopic_abundance,
-                    s_min = line_data_params.s_min,
+                    s_floor = line_data_params.s_floor,
                     wn_calc_window = line_data_params.wn_calc_window,
                     wn_approx_window = line_data_params.wn_approx_window,
                     

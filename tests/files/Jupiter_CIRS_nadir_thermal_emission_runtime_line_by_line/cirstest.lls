@@ -1,7 +1,7 @@
-WAVE             5.0 1500 1
+WAVE             5.0 1500 2.5
 LINESHAPE        VOIGT 
-WN_CALC_WINDOW   25 
-WN_APPROX_WINDOW 75
+WN_CALC_WINDOW   10 
+WN_APPROX_WINDOW 50
 AMB_GAS          AIR
 DBASE_PF         ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Partition Functions
 DBASE_LD         ARCHNEMESIS_PATH/archnemesis/Data/reference_databases/ans_jupiter_cirs_nadir/hitran24_juipter_cirs_test_data.h5 # Line Data

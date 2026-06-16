@@ -223,7 +223,7 @@ def add_line_set_monochromatic_spectrum(
         
         out : np.ndarray, #[N_waves] should be all zeros, as result will be ADDED to this not overwritten
         
-        s_min : float = 1E-32,
+        s_floor : float = 0.0,
         wn_calc_window : float = 25.0,
         wn_approx_window : float = 75.0
 ):
@@ -239,7 +239,7 @@ def add_line_set_monochromatic_spectrum(
     
     for i in range(nu.shape[0]):
         
-        if strength[i] < s_min:
+        if strength[i] < s_floor:
             continue
             
         line_approx_const = lineshape_fn(wn_calc_window_max, alpha_d[i], gamma_l[i])
@@ -283,7 +283,7 @@ def add_line_set_monochromatic_absorption(
         
         store : np.ndarray | None = None, #[4,N]
         
-        s_min : float = 1E-32,
+        s_floor : float = 0,
         wn_calc_window : float = 25.0, # (cm^{-1})
         wn_approx_window : float = 75.0, # (cm^{-1})
 ):
@@ -335,7 +335,7 @@ def add_line_set_monochromatic_absorption(
         store[3],
         factor = isotopic_abundance,
         out = out,
-        s_min = s_min,
+        s_floor = s_floor,
         wn_calc_window = wn_calc_window,
         wn_approx_window = wn_approx_window,
     )
@@ -467,7 +467,6 @@ def add_pseudo_continuum_monochromatic_spectrum(
         
     return
 
-
 @njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def add_pseudo_continuum_monochromatic_absorption(
         wn_grid : np.ndarray, #[N_waves]
@@ -562,7 +561,7 @@ def add_pseudo_continuum_monochromatic_absorption(
 
 @dc.dataclass(slots=True)
 class CachePriorityDataHolder:
-    n_max      : int                  = 10
+    n_max      : int                  = 1_000 # Need to set this to a large enough number that values don't constantly "fall off the back" of the cache
     identities : list[tuple[Any,...]] = dc.field(default_factory=list)
     values     : list[Any]            = dc.field(default_factory=list)
     
@@ -610,26 +609,47 @@ class CachePriorityDataHolder:
         return value
 
 class Cache:
-    def __init__(self, n_max_per_bucket : int = 10):
+    def __init__(
+            self, 
+            n_max_per_bucket : int = 1_000, # Need to set this to a large enough number that values don't constantly "fall off the back" of the cache
+    ):
         self.n_cache_hit : int = 0
         self.n_cache_miss : int = 0
         self._n_max_per_bucket = n_max_per_bucket
         self._buckets = dict()
+        
+        self.TESTING_CACHE_HITS = []
+        self.TESTING_CACHE_MISSES = []
     
     def cache_performance_str(self):
         n_cache_req = self.n_cache_hit + self.n_cache_miss
         return f'Cache Performance :: requests {n_cache_req} :: hit {self.n_cache_hit} [{100*self.n_cache_hit/n_cache_req:5.2f}%] :: miss {self.n_cache_miss} [{100*self.n_cache_miss/n_cache_req:5.2f}%]'
     
     def get(self, bucket : str, identity : tuple[Any,...], default : None | Any = None) -> Any:
-        result = self._buckets.setdefault(bucket, CachePriorityDataHolder(self._n_max_per_bucket)).get(identity, default=default)
+        found_bucket = self._buckets.get(bucket, None)
+        if found_bucket is None:
+            self._buckets[bucket] = CachePriorityDataHolder(self._n_max_per_bucket)
+            self.n_cache_miss += 1
+            self.TESTING_CACHE_MISSES.append((bucket, identity))
+            return None
+        
+        result = found_bucket.get(identity, default=default)
         if result is None:
             self.n_cache_miss += 1
+            self.TESTING_CACHE_MISSES.append((bucket, identity))
         else:
             self.n_cache_hit += 1
+            self.TESTING_CACHE_HITS.append((bucket, identity))
+            _lgr.debug(f'CACHE HIT:: {bucket=} {identity=}')
+        
         return result
         
     def set(self, bucket : str, identity : tuple[Any,...], value : Any) -> Any:
-        return self._buckets.setdefault(bucket, CachePriorityDataHolder(self._n_max_per_bucket)).set(identity, value)
+        found_bucket = self._buckets.get(bucket, None)
+        if found_bucket is None:
+            self._buckets[bucket] = CachePriorityDataHolder(self._n_max_per_bucket)
+        
+        return found_bucket.set(identity, value)
         
 _MODULE_CACHE : Cache = Cache()
 
@@ -796,7 +816,7 @@ class LineSetSpecData:
         out : None | np.ndarray = None, #[N_waves]
         store : None | np.ndarray = None, #[4,N_lines]
         
-        s_min : float = 1E-32,
+        s_floor : float = 0,
         wn_calc_window : float = 25.0, # (cm^{-1})
         wn_approx_window : float = 75.0, # (cm^{-1})
         wn_calc_range : None | tuple[float,float] = None,
@@ -809,6 +829,7 @@ class LineSetSpecData:
         if not self.has_data: # Skip all calculation if no data present
             return out
         
+        q_ratio = partition_function(self.t_ref) / partition_function(t_calc)
         
         if use_cache:
             wn_grid.flags.writeable = False
@@ -821,10 +842,10 @@ class LineSetSpecData:
                 id(lineshape_fn),
                 t_calc, 
                 p_calc,
-                id(partition_function),
+                q_ratio,
                 hash(bytes(mol_mix_frac.data)),
                 isotopic_abundance,
-                s_min,
+                s_floor,
                 wn_calc_window,
                 wn_approx_window,
                 wn_calc_range,
@@ -840,7 +861,7 @@ class LineSetSpecData:
         if store is None:
             store = np.empty((4,self.n_lines), dtype=float)
         
-        q_ratio = partition_function(self.t_ref) / partition_function(t_calc)
+        
         
         wn_mask = np.ones((self._data.shape[1],), dtype=bool) if wn_calc_range is None else ((wn_calc_range[0] <= self.NU) & (self.NU <= wn_calc_range[1]))
         
@@ -867,7 +888,7 @@ class LineSetSpecData:
             out = out,
             store = store,
             
-            s_min = s_min,
+            s_floor = s_floor,
             wn_calc_window = wn_calc_window,
             wn_approx_window = wn_approx_window,
         )
@@ -2192,7 +2213,7 @@ class LineData_0:
             wave_calc_range : None | tuple[float,float] = None,
             isotopic_abundance : None | float | np.ndarray = None,
             lineshape_fn : Callable[[float,float,float], float] = Data.lineshapes.voigt,
-            s_min : float = 1E-32,
+            s_floor : float = 0.0, # Minimum line strength to include. NOTE: Is independent of the value in `self._params.s_min`
             wn_calc_window : float = 25.0, # (cm^{-1})
             wn_approx_window : float = 75.0, # (cm^{-1})
             wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm, # unit of `wave_grid` and `wave_calc_range`
@@ -2260,7 +2281,7 @@ class LineData_0:
                 f'{wave_calc_range=}',
                 f'{isotopic_abundance=}',
                 f'{lineshape_fn=}',
-                f'{s_min=}',
+                f'{s_floor=}',
                 f'{wn_calc_window=}',
                 f'{wn_approx_window=}',
                 f'{wave_unit=}',
@@ -2307,7 +2328,7 @@ class LineData_0:
                     out = out_line_set_abs_i, #[N_waves]
                     store = store,
                     
-                    s_min = s_min,
+                    s_floor = s_floor,
                     wn_calc_window = wn_calc_window,
                     wn_approx_window = wn_approx_window,
                     wn_calc_range = wn_calc_range,

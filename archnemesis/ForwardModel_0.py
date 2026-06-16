@@ -3810,37 +3810,28 @@ class ForwardModel_0:
 
             elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME:    #Online calculation of the line-by-line opacity
                 
+                igas = np.empty((self.SpectroscopyX.NGAS,), dtype=int)
+                for i, (mol_id, iso_id) in enumerate(zip(self.SpectroscopyX.ID,self.SpectroscopyX.ISO)):
+                    igas[i] = self.AtmosphereX.locate_gas(mol_id, iso_id)
+                
                 self_frac = np.mean((self.LayerX.PP.T / self.LayerX.PRESS),axis=1) #(NGAS) average volume mixing ratio of each gas
-                amb_frac = np.ones((self.SpectroscopyX.NGAS,1))
-                for i in range(self.SpectroscopyX.NGAS):
-                    igas = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-                    amb_frac[i,0] = 1.0 - self_frac[igas]
-
-                #Converting IDs into list
-                # QUESTION: Why does this need to be done?
-                self.SpectroscopyX.ID = np.atleast_1d(self.SpectroscopyX.ID).astype(int).tolist()
-                self.SpectroscopyX.ISO = np.atleast_1d(self.SpectroscopyX.ISO).astype(int).tolist()
+                amb_frac = np.ones((self.SpectroscopyX.NGAS,1), dtype=float)
+                amb_frac[:,0] = 1.0 - self_frac[igas]
 
                 #Calculating the absorption cross sections
                 if return_grad:
-                    k,dkdT = self.SpectroscopyX.calc_klblg_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,amb_frac=amb_frac,wave=None)
+                    k,dkdT = self.SpectroscopyX.calc_klblg_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,amb_frac=amb_frac)
                 else:
-                    k = self.SpectroscopyX.calc_klbl_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,amb_frac=amb_frac,wave=None)
+                    k = self.SpectroscopyX.calc_klbl_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,amb_frac=amb_frac)
 
-                #Calculating the optical depths
-                for i in range(self.SpectroscopyX.NGAS):
-                    IGAS = self.AtmosphereX.locate_gas(self.SpectroscopyX.ID[i],self.SpectroscopyX.ISO[i])
-
-                    #Calculating vertical column density in each self.LayerX
-                    VLOSDENS = self.LayerX.AMOUNT[:,IGAS].T * SQ_CM_TO_SQ_METER   #m-2
-
-                    #Calculating vertical opacity for each gas in each self.LayerX
-                    TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
-                    
-                    if return_grad:
-                        dTAUGAS[:,0,IGAS,:] = k[:,:,i] * SQ_CM_TO_SQ_METER  #dTAUGAS/dAMOUNT (m2)
-                        dTAUGAS[:,0,self.AtmosphereX.NVMR,:] = dTAUGAS[:,0,self.AtmosphereX.NVMR,:] + dkdT[:,:,i] * VLOSDENS #dTAUGAS/dT
-
+                #Calculating vertical column density in each self.LayerX
+                VLOSDENS = self.LayerX.AMOUNT * SQ_CM_TO_SQ_METER   #m-2
+                TAUGAS[:,0] = k * VLOSDENS[None,:,igas]
+                
+                if return_grad:
+                    dTAUGAS[:,0,igas] = np.moveaxis(k,-1,-2)[...] * SQ_CM_TO_SQ_METER
+                    dTAUGAS[:,0,self.AtmosphereX.NVMR] = np.sum(dkdT * VLOSDENS[:,igas],axis=-1) #dTAUGAS/dT
+                
                 #Combining the gaseous opacity in each self.LayerX
                 TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
 
