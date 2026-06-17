@@ -3,7 +3,7 @@
 
 import os
 from pathlib import Path
-from typing import Literal, Any, Callable, Generator
+from typing import Literal, Any, Callable, Iterator
 from contextlib import contextmanager
 
 import h5py
@@ -62,7 +62,7 @@ class AnsDatabaseFile:
 		return cls.leaf_group_prefix + cls.leaf_group_idx_fmt.format(n)
 	
 	@classmethod
-	def get_increasing_leaf_grp_name_in_grp_iterable(cls, grp : h5py.Group) -> Generator[int, str, h5py.Group | h5py.Dataset]:
+	def get_increasing_leaf_grp_name_in_grp_iterable(cls, grp : h5py.Group) -> Iterator[tuple[int, str, h5py.Group | h5py.Dataset]]:
 		i = 0
 		while True:
 			leaf_grp_name = cls.get_leaf_grp_name(i)
@@ -243,7 +243,7 @@ class AnsDatabaseFile:
 	def iter_mol_grps(
 			self,
 			x_grp_name : str = '/',
-	) -> Generator[h5py.Group]:
+	) -> Iterator[h5py.Group]:
 		with self.open():
 			x_grp = self._file_hdl[x_grp_name]
 			
@@ -257,7 +257,7 @@ class AnsDatabaseFile:
 	def iter_iso_grps(
 			self,
 			x_grp_name : str = '/',
-	) -> Generator[h5py.Group]:
+	) -> Iterator[h5py.Group]:
 
 		for mol_name, mol_grp in self.iter_mol_grps(x_grp_name):
 			yield from mol_grp.items()
@@ -267,7 +267,7 @@ class AnsDatabaseFile:
 	def iter_leaf_grps(
 			self,
 			x_grp_name : str = '/',
-	) -> Generator[h5py.Group]:
+	) -> Iterator[h5py.Group]:
 		for iso_name, iso_grp in self.iter_iso_grps(x_grp_name):
 			yield from iso_grp.items()
 		return
