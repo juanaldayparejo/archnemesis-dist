@@ -21,7 +21,7 @@ import os
 
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 ARCHNEMESIS_PATH_PLACEHOLDER='ARCHNEMESIS_PATH/'
 
@@ -31,8 +31,6 @@ def archnemesis_path():
     return nemesis_path
 
 def archnemesis_resolve_path(path : str):
-    _lgr.debug(f'{archnemesis_path()=}')
-    _lgr.debug(f'{path=}')
     if path.startswith(ARCHNEMESIS_PATH_PLACEHOLDER):
         n = len(ARCHNEMESIS_PATH_PLACEHOLDER)
         while path[n] == os.sep:
