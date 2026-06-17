@@ -32,7 +32,10 @@ def archnemesis_path():
 
 def archnemesis_resolve_path(path : str):
     if path.startswith(ARCHNEMESIS_PATH_PLACEHOLDER):
-        return os.path.normpath(archnemesis_path() + path[len(ARCHNEMESIS_PATH_PLACEHOLDER):])
+        n = len(ARCHNEMESIS_PATH_PLACEHOLDER)
+        while path[n] == os.sep:
+            n += 1
+        return os.path.normpath(os.path.join(archnemesis_path(), path[n:]))
     else:
         return path
 
