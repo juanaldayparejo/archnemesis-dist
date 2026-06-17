@@ -11,6 +11,11 @@ import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 
+"""
+How to stop `pytest` being annoying and capturing all output like an annoying thing:
+` pytest ./tests/test_input_file_format_consistency.py -k test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters -s --log-cli-level=INFO --show-capture=no`
+"""
+
 if False:
     print(pytest) # Removes the "unused import" error
 
@@ -149,9 +154,11 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters():
             _lgr.info(f'In directory "{current_example_dir}", performing input file format consistency test...')
         
             # Read LEGACY format
+            _lgr.info('Reading LEGACY format')
             Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
             
             # Write to HDF5 format
+            _lgr.info('Writing HDF5 format')
             for item in (Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Retrieval):#,Variables):
                 if hasattr(item, 'write_hdf5'):
                     item.write_hdf5(runname)
@@ -161,8 +168,10 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters():
                     raise RuntimeError(f'For example at "{current_example_dir}", class "{type(item)}" does not have an attribute like "write{{_input,_}}hdf5", cannot continue writing new style file.')
 
             # Read HDF5 format
+            _lgr.info('Reading HDF5 format')
             Atmosphere_,Measurement_,Spectroscopy_,Scatter_,Stellar_,Surface_,CIA_,Layer_,Variables_,Retrieval_,Telluric_ = ans.Files.read_input_files_hdf5(runname)
 
+            _lgr.info('Comparing parameters between LEGACY and HDF5')
             # Define the pairs of instances we want to compare
             pairs = (
                 (Atmosphere, Atmosphere_),

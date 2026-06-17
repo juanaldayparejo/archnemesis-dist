@@ -138,7 +138,7 @@ class CIA_0:
         self.FRAC = np.array([0])
         
         if CIADATA is None:
-            self.CIADATA = archnemesis_path()+'archnemesis/Data/cia/'
+            self.CIADATA = os.path.normpath(os.path.join(archnemesis_path(),'archnemesis/Data/cia/'))
         else:
             self.CIADATA = CIADATA
             
@@ -270,7 +270,7 @@ class CIA_0:
         self.CIADATA = archnemesis_resolve_path(self.CIADATA)
         
         #Reading the CIA table from the name specified
-        self.read_ciatable(self.CIADATA+self.CIATABLE)
+        self.read_ciatable(os.path.join(self.CIADATA,self.CIATABLE))
     
     ##################################################################################
         
@@ -342,7 +342,7 @@ class CIA_0:
 
         self.CIATABLE=cianame
 
-        self.read_ciatable(self.CIADATA+self.CIATABLE, dnu, NPARA)
+        self.read_ciatable(os.path.join(self.CIADATA,self.CIATABLE), dnu, NPARA)
 
     ##################################################################################
 

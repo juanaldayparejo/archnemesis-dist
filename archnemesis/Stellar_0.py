@@ -17,13 +17,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import os
 
+import numpy as np
+import h5py
+import matplotlib.pyplot as plt
 
 #from archnemesis import *
 from archnemesis.enums import WaveUnit
-import numpy as np
-import matplotlib.pyplot as plt
-import h5py
 
 from archnemesis.helpers import h5py_helper
 from archnemesis import planck
@@ -99,7 +100,7 @@ class Stellar_0:
         self.SOLSPEC = None # np.zeros(NWAVE)
         self.SOLFLUX = None #np.zeros(NWAVE)
 
-        self.STELLARDATA = archnemesis_path()+'archnemesis/Data/stellar/'
+        self.STELLARDATA = os.path.normpath(os.path.join(archnemesis_path(),'archnemesis/Data/stellar/'))
         
         # private attributes
         self._ispace = None
@@ -344,11 +345,12 @@ class Stellar_0:
 
         else:
 
-            nlines = file_lines(self.STELLARDATA+solname)
+            sol_fpath = os.path.join(self.STELLARDATA,solname)
+            nlines = file_lines(sol_fpath)
 
             #Reading buffer
             ibuff = 0
-            with open(self.STELLARDATA+solname,'r') as fsol:
+            with open(sol_fpath,'r') as fsol:
                 for curline in fsol:
                     if curline.startswith("#"):
                         ibuff = ibuff + 1
@@ -358,7 +360,7 @@ class Stellar_0:
             nvsol = nlines - ibuff - 2
             
             #Reading file
-            fsol = open(self.STELLARDATA+solname,'r')
+            fsol = open(sol_fpath,'r')
             for i in range(ibuff):
                 s = fsol.readline().split()
         

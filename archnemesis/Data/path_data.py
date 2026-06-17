@@ -27,7 +27,7 @@ ARCHNEMESIS_PATH_PLACEHOLDER='ARCHNEMESIS_PATH/'
 
 def archnemesis_path():
     import os
-    nemesis_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../')
+    nemesis_path = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../'))
     return nemesis_path
 
 def archnemesis_resolve_path(path : str):
