@@ -31,6 +31,8 @@ def archnemesis_path():
     return nemesis_path
 
 def archnemesis_resolve_path(path : str):
+    _lgr.debug(f'{archnemesis_path()=}')
+    _lgr.debug(f'{path=}')
     if path.startswith(ARCHNEMESIS_PATH_PLACEHOLDER):
         n = len(ARCHNEMESIS_PATH_PLACEHOLDER)
         while path[n] == os.sep:
@@ -40,7 +42,11 @@ def archnemesis_resolve_path(path : str):
         return path
 
 def archnemesis_indirect_path(path : str):
-    if path.startswith(archnemesis_path()):
-        return ARCHNEMESIS_PATH_PLACEHOLDER + path[len(archnemesis_path()):]
+    ans_path = archnemesis_path()
+    if path.startswith(ans_path):
+        n = len(ans_path)
+        while path[n] == os.sep:
+            n += 1
+        return os.path.join(ARCHNEMESIS_PATH_PLACEHOLDER, path[n:])
     else:
         return path

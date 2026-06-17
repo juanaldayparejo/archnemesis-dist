@@ -2159,7 +2159,7 @@ class LineData_0:
             wave_calc_range : None | tuple[float,float] = None,
             isotopic_abundance : None | float | np.ndarray = None,
             lineshape_fn : Callable[[float,float,float], float] = Data.lineshape.voigt,
-            s_min : float = 1E-32,
+            s_floor : float = 0.0,
             wn_calc_window : float = 25.0, # (cm^{-1})
             wn_approx_window : float = 75.0, # (cm^{-1})
             wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm, # unit of `wave_grid` and `wave_calc_range`
@@ -2184,7 +2184,7 @@ class LineData_0:
             wave_calc_range = wave_calc_range,
             isotopic_abundance = isotopic_abundance,
             lineshape_fn = lineshape_fn,
-            s_min = s_min,
+            s_floor = s_floor,
             wn_calc_window = wn_calc_window,
             wn_approx_window = wn_approx_window,
             include_lines = include_lines,
