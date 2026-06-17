@@ -157,28 +157,37 @@ def test_thermal_emission_cirs():
     Jupiter thermal emission test against NEMESIS
     '''
     test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Jupiter_CIRS_nadir_thermal_emission/')
-    os.chdir(test_dir) #Changing directory to read files
     runname = 'cirstest'
-    
-    #Reading the input files
-    Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
-    
-    #Calculating forward model with CIRSrad
-    ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
-    SPECONV_cirsrad = ForwardModel.nemesisfm()
-    calculation_cirsrad = SPECONV_cirsrad[:,0]
-    
-    #Calculating forward model with CIRSradg
-    SPECONV_cirsradg,_ = ForwardModel.nemesisfmg()
-    calculation_cirsradg = SPECONV_cirsradg[:,0]
-    os.chdir(curr) #Changing directory back to the original
-    
     expected_result = THERMAL_EMISSION_CIRS_EXPECTED_RESULT
+    
+    os.chdir(test_dir) #Changing directory to read files
+    try:
+        #Reading the input files
+        Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
+        
+        #Calculating forward model with CIRSrad
+        ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
+        SPECONV_cirsrad = ForwardModel.nemesisfm()
+        calculation_cirsrad = SPECONV_cirsrad[:,0]
+        
+        assert calculation_cirsrad.size == expected_result.size, f"Must have expected number of points {expected_result.size=} {calculation_cirsrad.size=}"
+        assert not np.any(np.isnan(calculation_cirsrad)), f"No computed values must be NAN, calculation_cirsrad has {np.count_nonzero(np.isnan(calculation_cirsrad))} NANs"
+        
+        #Calculating forward model with CIRSradg
+        SPECONV_cirsradg,_ = ForwardModel.nemesisfmg()
+        calculation_cirsradg = SPECONV_cirsradg[:,0]
+        
+        assert calculation_cirsradg.size == expected_result.size, f"Must have expected number of points {expected_result.size=} {calculation_cirsradg.size=}"
+        assert not np.any(np.isnan(calculation_cirsradg)), f"No computed values must be NAN, calculation_cirsradg has {np.count_nonzero(np.isnan(calculation_cirsradg))} NANs"
+    finally:
+        os.chdir(curr) #Changing directory back to the original
+    
+    
     
     atol=np.quantile(expected_result, 0.5) * 1E-2
     rtol = 5E-2
     
-    if True: # Extra diagnostic information if required
+    if False: # Extra diagnostic information if required
         import matplotlib.pyplot as plt
         
         wave = ForwardModel.MeasurementX.VCONV[:ForwardModel.MeasurementX.NCONV[0]][:,0]
@@ -215,11 +224,10 @@ def test_thermal_emission_realtime_line_by_line():
     Jupiter thermal emission test against NEMESIS using REALTIME absorption coefficient calculation
     '''
     test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Jupiter_CIRS_nadir_thermal_emission_runtime_line_by_line/')
-    os.chdir(test_dir) #Changing directory to read files
     runname = 'cirstest'
-    
     expected_result = THERMAL_EMISSION_CIRS_EXPECTED_RESULT
     
+    os.chdir(test_dir) #Changing directory to read files
     try:
         #Reading the input files
         Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
