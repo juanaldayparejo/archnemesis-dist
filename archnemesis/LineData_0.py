@@ -2158,7 +2158,7 @@ class LineData_0:
             amb_frac : float | np.ndarray = 0.5,
             wave_calc_range : None | tuple[float,float] = None,
             isotopic_abundance : None | float | np.ndarray = None,
-            lineshape_fn : Callable[[float,float,float], float] = Data.lineshapes.voigt,
+            lineshape_fn : Callable[[float,float,float], float] = Data.lineshape.voigt,
             s_min : float = 1E-32,
             wn_calc_window : float = 25.0, # (cm^{-1})
             wn_approx_window : float = 75.0, # (cm^{-1})
@@ -2212,7 +2212,7 @@ class LineData_0:
             amb_frac : float | np.ndarray = 0.5,
             wave_calc_range : None | tuple[float,float] = None,
             isotopic_abundance : None | float | np.ndarray = None,
-            lineshape_fn : Callable[[float,float,float], float] = Data.lineshapes.voigt,
+            lineshape_fn : Callable[[float,float,float], float] = Data.lineshape.voigt,
             s_floor : float = 0.0, # Minimum line strength to include. NOTE: Is independent of the value in `self._params.s_min`
             wn_calc_window : float = 25.0, # (cm^{-1})
             wn_approx_window : float = 75.0, # (cm^{-1})

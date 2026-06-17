@@ -34,6 +34,8 @@ from archnemesis.enums import (
     SpectroscopicLineProfile,
     #Gas
 )
+from archnemesis.Data.enum.map import SpectroscopicLineProfileEnum_to_lineshape_fn
+
 #import matplotlib.pyplot as plt
 import archnemesis as ans
 #from archnemesis.database.datatypes.wave_range import WaveRange
@@ -1755,15 +1757,7 @@ class Spectroscopy_0:
         for igas in range(self.NGAS):
 
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
-
-            if self.IPROC[igas]==SpectroscopicLineProfile.VOIGT:
-                lineshape = ans.Data.lineshapes.voigt
-            elif self.IPROC[igas]==SpectroscopicLineProfile.DOPPLER:
-                lineshape = ans.Data.lineshapes.doppler
-            elif self.IPROC[igas]==SpectroscopicLineProfile.LORENTZ:
-                lineshape = ans.Data.lineshapes.lorentz
-            else:
-                raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
+            lineshape = SpectroscopicLineProfileEnum_to_lineshape_fn(self.IPROC[igas])
             
             store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
             k1 = np.empty((k.shape[0],), dtype=float)
@@ -1895,17 +1889,7 @@ class Spectroscopy_0:
             _lgr.info(f'{self.LINE_DATA[igas]=}')
 
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
-
-            if self.IPROC[igas]==SpectroscopicLineProfile.VOIGT:
-                lineshape = ans.Data.lineshapes.voigt
-            elif self.IPROC[igas]==SpectroscopicLineProfile.DOPPLER:
-                lineshape = ans.Data.lineshapes.doppler
-            elif self.IPROC[igas]==SpectroscopicLineProfile.LORENTZ:
-                lineshape = ans.Data.lineshapes.lorentz
-            elif self.IPROC[igas]==SpectroscopicLineProfile.SUBLORENTZ_CO2_BROADENING_VENUS:
-                lineshape = ans.Data.lineshapes.co2_sublorentz_tonkov96
-            else:
-                raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
+            lineshape = SpectroscopicLineProfileEnum_to_lineshape_fn(self.IPROC[igas])
 
             store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
             line_data_params = self.LINE_DATA_PARAMS[igas]
@@ -3073,16 +3057,7 @@ def calc_ktable(outname,                       #Name of the output .lta file
     )
 
     #Defining the lineshape function to use in the line-by-line calculations
-    if Spectroscopy.IPROC[0]==SpectroscopicLineProfile.VOIGT:
-        lineshape = ans.Data.lineshapes.voigt
-    elif Spectroscopy.IPROC[0]==SpectroscopicLineProfile.DOPPLER:
-        lineshape = ans.Data.lineshapes.doppler
-    elif Spectroscopy.IPROC[0]==SpectroscopicLineProfile.LORENTZ:
-        lineshape = ans.Data.lineshapes.lorentz
-    elif Spectroscopy.IPROC[0]==SpectroscopicLineProfile.SUBLORENTZ_CO2_BROADENING_VENUS:
-        lineshape = ans.Data.lineshapes.co2_sublorentz_tonkov96
-    else:
-        raise ValueError('error in calc_klbl_online :: selected IPROC has not been implemented yet')
+    lineshape = SpectroscopicLineProfileEnum_to_lineshape_fn(Spectroscopy.IPROC[0])
 
     #Looping through the pressure and temperature levels to calculate the k-coefficients
     if n_cores == 1:
