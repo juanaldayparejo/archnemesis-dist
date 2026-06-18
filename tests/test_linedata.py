@@ -2,7 +2,7 @@ import os
 import pytest
 import numpy as np
 import archnemesis as ans
-import archnemesis.Data.lineshape
+import archnemesis.lineshape
 
 if False:
     print(pytest) # Removes the "unused import" error

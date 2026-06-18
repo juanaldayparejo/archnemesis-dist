@@ -3,7 +3,7 @@
 from typing import Callable
 
 # Import lineshape functions
-import archnemesis.Data.lineshape as lineshape
+import archnemesis.lineshape as lineshape
 
 # Import ENUM that chooses lineshape function
 from archnemesis.enums import SpectroscopicLineProfile
