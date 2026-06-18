@@ -6,7 +6,7 @@ from typing import Any, Literal#, Type, Literal#, NamedTuple, Self, Annotated, C
 import numpy as np
 import h5py
 
-from archnemesis.enums import AmbientGas
+from archnemesis.enum import AmbientGasEnum
 
 
 from archnemesis.helpers import h5py_helper
@@ -497,7 +497,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			local_iso_id : int,
 			temperature : float,
 			s_max : float,
-			ambient_gasses : AmbientGas | tuple[AmbientGas] = AmbientGas.AIR,
+			ambient_gasses : AmbientGasEnum | tuple[AmbientGasEnum] = AmbientGasEnum.AIR,
 			requested_wn_range : tuple[float,float] = (0, np.inf),
 			wn_bin_upper_edge_eta : float = 1E-9,
 			on_missing_target : Literal['ignore', 'warn', 'error'] = 'warn',
@@ -533,7 +533,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		
 		if ambient_gasses is None:
 			ambient_gasses = tuple()
-		elif isinstance(ambient_gasses, AmbientGas):
+		elif isinstance(ambient_gasses, AmbientGasEnum):
 			ambient_gasses = (ambient_gasses,)
 		
 		n_ambient_gasses = len(ambient_gasses)

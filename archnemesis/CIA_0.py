@@ -26,7 +26,7 @@ import os
 from numba import jit
 
 from archnemesis.helpers import h5py_helper
-from archnemesis.enums import Gas, ParaH2Ratio
+from archnemesis.enum import GasEnum, ParaH2RatioEnum
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class CIA_0:
     def __init__(
             self, 
             runname='', 
-            INORMAL=ParaH2Ratio.EQUILIBRIUM, 
+            INORMAL=ParaH2RatioEnum.EQUILIBRIUM, 
             NPAIR=9, 
             NT=25, 
             CIADATA=None, 
@@ -54,19 +54,19 @@ class CIA_0:
             NWAVE=1501, 
             NPARA=0, 
             IPAIRG1=[
-                Gas.H2, Gas.H2, Gas.H2, Gas.H2, Gas.H2, Gas.N2, Gas.N2, Gas.CH4, Gas.H2], 
+                GasEnum.H2, GasEnum.H2, GasEnum.H2, GasEnum.H2, GasEnum.H2, GasEnum.N2, GasEnum.N2, GasEnum.CH4, GasEnum.H2], 
             IPAIRG2=[
-                Gas.H2, Gas.He, Gas.H2, Gas.He, Gas.N2, Gas.CH4, Gas.N2, Gas.CH4, Gas.CH4], 
+                GasEnum.H2, GasEnum.He, GasEnum.H2, GasEnum.He, GasEnum.N2, GasEnum.CH4, GasEnum.N2, GasEnum.CH4, GasEnum.CH4], 
             INORMALT=[
-                ParaH2Ratio.EQUILIBRIUM,
-                ParaH2Ratio.EQUILIBRIUM,
-                ParaH2Ratio.NORMAL,
-                ParaH2Ratio.NORMAL,
-                ParaH2Ratio.EQUILIBRIUM,
-                ParaH2Ratio.EQUILIBRIUM,
-                ParaH2Ratio.EQUILIBRIUM,
-                ParaH2Ratio.EQUILIBRIUM,
-                ParaH2Ratio.EQUILIBRIUM
+                ParaH2RatioEnum.EQUILIBRIUM,
+                ParaH2RatioEnum.EQUILIBRIUM,
+                ParaH2RatioEnum.NORMAL,
+                ParaH2RatioEnum.NORMAL,
+                ParaH2RatioEnum.EQUILIBRIUM,
+                ParaH2RatioEnum.EQUILIBRIUM,
+                ParaH2RatioEnum.EQUILIBRIUM,
+                ParaH2RatioEnum.EQUILIBRIUM,
+                ParaH2RatioEnum.EQUILIBRIUM
             ]
         ):
         """
@@ -130,9 +130,9 @@ class CIA_0:
         #self.INORMAL : ParaH2Ratio = INORMAL
         self.NPAIR = NPAIR
         self.NPARA = NPARA
-        self.IPAIRG1 : list[Gas] = IPAIRG1
-        self.IPAIRG2 : list[Gas] = IPAIRG2
-        self.INORMALT : list[ParaH2Ratio] = INORMALT
+        self.IPAIRG1 : list[GasEnum] = IPAIRG1
+        self.IPAIRG2 : list[GasEnum] = IPAIRG2
+        self.INORMALT : list[ParaH2RatioEnum] = INORMALT
         self.NT = NT
         self.NWAVE = NWAVE
         self.FRAC = np.array([0])
@@ -156,12 +156,12 @@ class CIA_0:
         self.INORMAL = INORMAL
     
     @property
-    def INORMAL(self) -> ParaH2Ratio:
+    def INORMAL(self) -> ParaH2RatioEnum:
         return self._inormal
     
     @INORMAL.setter
     def INORMAL(self, value):
-        self._inormal = ParaH2Ratio(value)
+        self._inormal = ParaH2RatioEnum(value)
         
     ##################################################################################
 
@@ -187,8 +187,8 @@ class CIA_0:
         assert self.NWAVE > 0 , \
             'NWAVE must be >0'
         
-        assert isinstance(self.INORMAL, ParaH2Ratio) , \
-            'INORMAL must be ParaH2Ratio'
+        assert isinstance(self.INORMAL, ParaH2RatioEnum) , \
+            'INORMAL must be ParaH2RatioEnum'
             
         assert np.issubdtype(type(self.NPARA), np.integer) == True , \
             'NPARA must be int'
@@ -238,7 +238,7 @@ class CIA_0:
             gasname2 = gas_info[str(self.IPAIRG2[i])]['name']
 
             label = gasname1+'-'+gasname2
-            if self.INORMALT[i]== ParaH2Ratio.NORMAL:
+            if self.INORMALT[i]== ParaH2RatioEnum.NORMAL:
                 label = label + " ('normal')"
                 
             _lgr.info(label)
@@ -264,7 +264,7 @@ class CIA_0:
             else:
                 self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
                 self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
-                self.INORMAL = h5py_helper.retrieve_data(f, 'CIA/INORMAL', lambda x:  ParaH2Ratio(np.int32(x)))
+                self.INORMAL = h5py_helper.retrieve_data(f, 'CIA/INORMAL', lambda x:  ParaH2RatioEnum(np.int32(x)))
     
         # Resolve archnemesis path if it has been indirected
         self.CIADATA = archnemesis_resolve_path(self.CIADATA)
@@ -362,7 +362,7 @@ class CIA_0:
             gasname2 = gas_info[str(self.IPAIRG2[i])]['name']
 
             label = gasname1+'-'+gasname2
-            if self.INORMALT[i]==ParaH2Ratio.NORMAL:
+            if self.INORMALT[i]==ParaH2RatioEnum.NORMAL:
                 label = label + " ('normal')"
 
             iTEMP = np.argmin(np.abs(self.TEMP-296.))
@@ -472,9 +472,9 @@ class CIA_0:
                 K_H2H2 = f.read_reals(dtype='float32')
                 K_H2HE = f.read_reals(dtype='float32')
                 KCIA_list = np.vstack([K_H2H2, K_H2HE]).reshape((-1,), order='F')
-                IPAIRG1 = np.array([Gas.H2, Gas.H2])
-                IPAIRG2 = np.array([Gas.H2, Gas.He])
-                INORMALT = np.array([ParaH2Ratio.EQUILIBRIUM, ParaH2Ratio.EQUILIBRIUM])
+                IPAIRG1 = np.array([GasEnum.H2, GasEnum.H2])
+                IPAIRG2 = np.array([GasEnum.H2, GasEnum.He])
+                INORMALT = np.array([ParaH2RatioEnum.EQUILIBRIUM, ParaH2RatioEnum.EQUILIBRIUM])
                 
                 self.FRAC = FRAC
                 
@@ -483,18 +483,18 @@ class CIA_0:
                 NPAIR = 9  # 9 pairs of collision-induced absorption opacities
                 TEMPS = f.read_reals(dtype='float64')
                 KCIA_list = f.read_reals(dtype='float32')
-                IPAIRG1 = np.array([Gas.H2, Gas.H2, Gas.H2, Gas.H2, Gas.H2, Gas.N2, Gas.N2, Gas.CH4, Gas.H2])
-                IPAIRG2 = np.array([Gas.H2, Gas.He, Gas.H2, Gas.He, Gas.N2, Gas.CH4, Gas.N2, Gas.CH4, Gas.CH4])
+                IPAIRG1 = np.array([GasEnum.H2, GasEnum.H2, GasEnum.H2, GasEnum.H2, GasEnum.H2, GasEnum.N2, GasEnum.N2, GasEnum.CH4, GasEnum.H2])
+                IPAIRG2 = np.array([GasEnum.H2, GasEnum.He, GasEnum.H2, GasEnum.He, GasEnum.N2, GasEnum.CH4, GasEnum.N2, GasEnum.CH4, GasEnum.CH4])
                 INORMALT = np.array([
-                    ParaH2Ratio.EQUILIBRIUM,
-                    ParaH2Ratio.EQUILIBRIUM,
-                    ParaH2Ratio.NORMAL,
-                    ParaH2Ratio.NORMAL,
-                    ParaH2Ratio.EQUILIBRIUM,
-                    ParaH2Ratio.EQUILIBRIUM,
-                    ParaH2Ratio.EQUILIBRIUM,
-                    ParaH2Ratio.EQUILIBRIUM,
-                    ParaH2Ratio.EQUILIBRIUM
+                    ParaH2RatioEnum.EQUILIBRIUM,
+                    ParaH2RatioEnum.EQUILIBRIUM,
+                    ParaH2RatioEnum.NORMAL,
+                    ParaH2RatioEnum.NORMAL,
+                    ParaH2RatioEnum.EQUILIBRIUM,
+                    ParaH2RatioEnum.EQUILIBRIUM,
+                    ParaH2RatioEnum.EQUILIBRIUM,
+                    ParaH2RatioEnum.EQUILIBRIUM,
+                    ParaH2RatioEnum.EQUILIBRIUM
                 ])
         finally:
             f.close()

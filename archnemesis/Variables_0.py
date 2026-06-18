@@ -30,7 +30,7 @@ import matplotlib.pyplot as plt
 
 #from archnemesis import *
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
-from archnemesis.enums import AtmosphericProfileType, Gas
+from archnemesis.enum import AtmosphericProfileTypeEnum, GasEnum
 from archnemesis.helpers import io_helper
 from archnemesis.helpers import h5py_helper
 
@@ -175,14 +175,14 @@ class Variables_0:
         """
         Returns an iterable of models that deal with gas volume mixing ratios
         """
-        return filter(lambda model: hasattr(model, 'target') and model.target == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO, self.models)
+        return filter(lambda model: hasattr(model, 'target') and model.target == AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO, self.models)
     
     @property
     def aerosol_density_models(self) -> Iterable[ModelBase]:
         """
         Returns an iterable of models that deal with aerosol densities
         """
-        return filter(lambda model: hasattr(model, 'target') and model.target == AtmosphericProfileType.AEROSOL_DENSITY, self.models)
+        return filter(lambda model: hasattr(model, 'target') and model.target == AtmosphericProfileTypeEnum.AEROSOL_DENSITY, self.models)
     
     
     @property
@@ -599,7 +599,7 @@ class Variables_0:
             varident : np.ndarray[[3],int],
             ngas : int,
             ndust : int
-        ) -> tuple[Type, None | AtmosphericProfileType]:
+        ) -> tuple[Type, None | AtmosphericProfileTypeEnum]:
         """
         Works out the type of model (and subtype if applicable) identified by a VARIDENT triplet.
         
@@ -616,7 +616,7 @@ class Variables_0:
             
         ## RETURNS ##
         
-            model_classification : tuple[Type, None | AtmosphericProfileType]
+            model_classification : tuple[Type, None | AtmosphericProfileTypeEnum]
                 A tuple containing values that classify the model. From broadest scope to narrowest.
                 Currently the tuple has the elements (in order):
                     
@@ -625,22 +625,22 @@ class Variables_0:
                         classification of the model. This broadly corresponds to the retrieval component
                         that the model interacts with (e.g. Atmosphere_0, Scatter_0, Measurement_0).
                     
-                    ParameterisedTarget : None | AtmosphericProfileType
+                    ParameterisedTarget : None | AtmosphericProfileTypeEnum
                         The part of the retrieval component that the model parameterises (and therefore
                         alters). This is 'None' when unknown, or an ENUM corresponding to an attribute
                         of the retrieval component that the model parameterises.
         """
         model_classification = None
         if varident[0] == 0:
-            model_classification = ( ModelBase, AtmosphericProfileType.TEMPERATURE)
-        elif (varident[0] > 0) and int(varident[0]) in iter(Gas):
-            model_classification = ( ModelBase, AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO)
+            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.TEMPERATURE)
+        elif (varident[0] > 0) and int(varident[0]) in iter(GasEnum):
+            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO)
         elif (varident[0] < 0) and (-varident[0]) <= ndust:
-            model_classification = ( ModelBase, AtmosphericProfileType.AEROSOL_DENSITY)
+            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.AEROSOL_DENSITY)
         elif (varident[0] < 0) and (-varident[0]) == ndust + 1:
-            model_classification = ( ModelBase, AtmosphericProfileType.PARA_H2_FRACTION)
+            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.PARA_H2_FRACTION)
         elif (varident[0] < 0) and (-varident[0]) == ndust + 2:
-            model_classification = ( ModelBase, AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE)
+            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE)
         else:
             # Other models are classified by their ID number
             model_id_parent_classes = Models[varident[2]].__bases__

@@ -22,7 +22,7 @@ _logger_levels : dict[str,list[int]] = dict()
 
 def get_all_logger_decendents(_lgr):
     """
-    Generator that iterates over all decendents of `_lgr` including `_lgr` itself.
+    Iterator that iterates over all decendents of `_lgr` including `_lgr` itself.
     """
     yield _lgr
     

@@ -8,4 +8,3 @@ from .planet_data import *
 from .path_data import *
 
 import archnemesis.Data.constants as constants
-import archnemesis.Data.lineshape as lineshape

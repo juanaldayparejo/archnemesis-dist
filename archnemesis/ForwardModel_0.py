@@ -39,19 +39,19 @@ import archnemesis as ans
 from archnemesis.AtmCalc_0 import AtmCalc_0
 from archnemesis.Path_0 import Path_0
 
-import archnemesis.enums
-from archnemesis.enums import (
+import archnemesis.enum
+from archnemesis.enum import (
     AtmosphericProfileFormatEnum,
-    PathCalc,
-    SpectralCalculationMode,
-    ScatteringCalculationMode,
-    SpectraUnit,
-    LowerBoundaryCondition,
-    WaveUnit,
-    PathObserverPointing,
-    RayleighScatteringMode,
-    ZenithAngleOrigin,
-    AerosolPhaseFunctionCalculationMode,
+    PathCalcEnum,
+    SpectralCalculationModeEnum,
+    ScatteringCalculationModeEnum,
+    SpectraUnitEnum,
+    LowerBoundaryConditionEnum,
+    WaveUnitEnum,
+    PathObserverPointingEnum,
+    RayleighScatteringModeEnum,
+    ZenithAngleOriginEnum,
+    AerosolPhaseFunctionCalculationModeEnum,
 )
 
 import logging
@@ -268,7 +268,7 @@ class ForwardModel_0:
             assert self.Emissions is not None, "if Spectroscopy does not exist, Emissions must exist (to define the calculation wavelengths)"
 
             self.Spectroscopy = ans.Spectroscopy_0()
-            self.Spectroscopy.ILBL=SpectralCalculationMode.LINE_BY_LINE_TABLES
+            self.Spectroscopy.ILBL=SpectralCalculationModeEnum.LINE_BY_LINE_TABLES
             self.Spectroscopy.NG=1
             self.Spectroscopy.G_ORD = np.array([0.])
             self.Spectroscopy.DELG = np.array([1.0])
@@ -288,7 +288,7 @@ class ForwardModel_0:
             self.Scatter = ans.Scatter_0()
 
         # Check that Measurement has an instrument response function when LBL tables are used
-        if self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+        if self.Spectroscopy.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
             assert self.Measurement.FWHM != 0.0, "LINE_BY_LINE spectral calculation mode requires a non-zero Measurement_0.FWHM"
         
         if self.Spectroscopy.NGAS > 0:
@@ -299,14 +299,14 @@ class ForwardModel_0:
                 
                 # Test that the forward model has Spectroscopy data for each
                 # gas in the atmosphere.
-                if self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:
+                if self.Spectroscopy.ILBL==SpectralCalculationModeEnum.K_TABLES:
                     spect_table_type_str = 'k-table'
                     #spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
                     spect_legacy_filename = f'{self.runname}.kls'
-                elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                elif self.Spectroscopy.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                     spect_table_type_str = 'line-by-line-table'
                     spect_legacy_filename = f'{self.runname}.lls'
-                elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+                elif self.Spectroscopy.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
                     spect_table_type_str = 'line-by-line-runtime'
                     spect_legacy_filename = None
                 else:
@@ -327,7 +327,7 @@ class ForwardModel_0:
                     if gas_spec not in spect_gas_specifiers:
                         should_warn = True
                         warning_lines.append(
-                            f'    {archnemesis.enums.Gas(gas_spec[0]).name} (id {gas_spec[0]}) isotopologue {gas_spec[1]}'
+                            f'    {archnemesis.enum.GasEnum(gas_spec[0]).name} (id {gas_spec[0]}) isotopologue {gas_spec[1]}'
                         )
                 
                 if should_warn:
@@ -460,10 +460,10 @@ class ForwardModel_0:
         from copy import deepcopy
         
         #Errors and checks
-        if self.Atmosphere.NLOCATIONS!=1:
+        if self.Atmosphere.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
             
-        if self.Surface.NLOCATIONS!=1:
+        if self.Surface.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
 
         self.check_gas_spec_atm()
@@ -553,7 +553,7 @@ class ForwardModel_0:
                 
             
             #Convolving the spectra with the Instrument line shape or integrating over filter function
-            if self.Measurement.IFORM == SpectraUnit.Integrated_radiance:
+            if self.Measurement.IFORM == SpectraUnitEnum.Integrated_radiance:
                 
                 #Integrating the radiance over the filter function
                 SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = self.Measurement.integrate_filter(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
@@ -561,7 +561,7 @@ class ForwardModel_0:
             else:
                 
                 #Convolving the spectra with the Instrument line shape
-                if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+                if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES: #k-tables
                     if os.path.exists(self.runname+'.fwh')==True:
                         FWHMEXIST=self.runname
                     else:
@@ -569,16 +569,16 @@ class ForwardModel_0:
 
                     SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
-                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+                elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES: #LBL-tables
                     SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
 
-                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME: #LBL-runtime calculations
+                elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME: #LBL-runtime calculations
                     SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
 
                 SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
                 
                 #Normalising measurement to a given wavelength if required
-                if self.Measurement.IFORM == SpectraUnit.Normalised_radiance:
+                if self.Measurement.IFORM == SpectraUnitEnum.Normalised_radiance:
                     SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
 
 
@@ -628,10 +628,10 @@ class ForwardModel_0:
         from copy import deepcopy
         
         #Errors and checks
-        if self.Atmosphere.NLOCATIONS!=1:
+        if self.Atmosphere.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
             
-        if self.Surface.NLOCATIONS!=1:
+        if self.Surface.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
 
         self.check_gas_spec_atm()
@@ -746,7 +746,7 @@ class ForwardModel_0:
 
  
             #Convolving the spectra with the Instrument line shape or integrating over filter function
-            if self.Measurement.IFORM == SpectraUnit.Integrated_radiance:
+            if self.Measurement.IFORM == SpectraUnitEnum.Integrated_radiance:
                 
                 #Integrating the radiance over the filter function
                 SPECONV1,dSPECONV1 = self.Measurement.integrate_filterg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
@@ -755,7 +755,7 @@ class ForwardModel_0:
             
                 #Convolving the spectra with the Instrument line shape
             
-                if self.Spectroscopy.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+                if self.Spectroscopy.ILBL == SpectralCalculationModeEnum.K_TABLES: #k-tables
 
                     if os.path.exists(self.runname+'.fwh')==True:
                         FWHMEXIST=self.runname
@@ -764,10 +764,10 @@ class ForwardModel_0:
 
                     SPECONV1,dSPECONV1 = self.Measurement.convg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
-                elif self.Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+                elif self.Spectroscopy.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES: #LBL-tables
                     SPECONV1,dSPECONV1 = self.Measurement.lblconvg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
 
-                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME: #LBL-runtime calculations
+                elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME: #LBL-runtime calculations
                     SPECONV1,dSPECONV1 = self.Measurement.lblconvg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
 
             SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
@@ -890,9 +890,9 @@ class ForwardModel_0:
 
                 #Convolving the spectrum with the instrument line shape
                 _lgr.info('Convolving spectra and gradients with instrument line shape')
-                if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+                if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES:
                     SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
-                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                     SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
                 
                 #Applying AOTF weights to combine the different diffraction orders
@@ -961,9 +961,9 @@ class ForwardModel_0:
 
             #Convolving the spectrum with the instrument line shape
             _lgr.info('Convolving spectra and gradients with instrument line shape')
-            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+            if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES:
                 SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
-            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                 SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
             
             dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
@@ -1124,9 +1124,9 @@ class ForwardModel_0:
 
                 #Convolving the spectrum with the instrument line shape
                 _lgr.info('Convolving spectra and gradients with instrument line shape')
-                if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+                if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES:
                     SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
-                elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                     SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
 
                 #Calculating the gradients of any parameterisations involving the convolution
@@ -1227,9 +1227,9 @@ class ForwardModel_0:
 
             #Convolving the spectrum with the instrument line shape
             _lgr.info('Convolving spectra and gradients with instrument line shape')
-            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+            if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES:
                 SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
-            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                 SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
 
             #Calculating the gradients of any parameterisations involving the convolution
@@ -1336,7 +1336,7 @@ class ForwardModel_0:
 
 
         #Convolving the spectra with the Instrument line shape or integrating over filter function
-        if self.MeasurementX.IFORM == SpectraUnit.Integrated_radiance:
+        if self.MeasurementX.IFORM == SpectraUnitEnum.Integrated_radiance:
             
             #Integrating the radiance over the filter function
             _lgr.info('Integrating spectra and gradients over filter function')
@@ -1489,7 +1489,7 @@ class ForwardModel_0:
 
 
         #Convolving the spectra with the Instrument line shape or integrating over filter function
-        if self.MeasurementX.IFORM == SpectraUnit.Integrated_radiance:
+        if self.MeasurementX.IFORM == SpectraUnitEnum.Integrated_radiance:
             
             #Integrating the radiance over the filter function
             _lgr.info('Integrating spectra and gradients over filter function')
@@ -1589,9 +1589,9 @@ class ForwardModel_0:
 
         #Convolving the spectrum with the instrument line shape
         _lgr.info('Convolving spectra and gradients with instrument line shape')
-        if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+        if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES:
             SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECOUT,dSPECOUT,IGEOM='All')
-        elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+        elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
             SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECOUT,IGEOM='All')
 
         return SPECONV
@@ -1628,10 +1628,10 @@ class ForwardModel_0:
         from copy import deepcopy
         
         #Errors and checks
-        if self.Atmosphere.NLOCATIONS!=1:
+        if self.Atmosphere.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
             
-        if self.Surface.NLOCATIONS!=1:
+        if self.Surface.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
 
         self.check_gas_spec_atm()
@@ -1683,7 +1683,7 @@ class ForwardModel_0:
                 
             
             #Convolving the spectra with the Instrument line shape
-            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+            if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES: #k-tables
                 if os.path.exists(self.runname+'.fwh')==True:
                     FWHMEXIST=self.runname
                 else:
@@ -1691,13 +1691,13 @@ class ForwardModel_0:
 
                 SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
-            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+            elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES: #LBL-tables
                 SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPEC,IGEOM=IGEOM)
 
             SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
             
             #Normalising measurement to a given wavelength if required
-            if self.Measurement.IFORM == SpectraUnit.Normalised_radiance:
+            if self.Measurement.IFORM == SpectraUnitEnum.Normalised_radiance:
                 SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
 
         #Applying any changes to the computed spectra required by the state vector
@@ -1740,10 +1740,10 @@ class ForwardModel_0:
         from copy import deepcopy
         
         #Errors and checks
-        if self.Atmosphere.NLOCATIONS!=1:
+        if self.Atmosphere.NLOCATIONS > 1:
             raise ValueError('error in nemesisdiscfmg :: archNEMESIS has not been setup for dealing with multiple locations yet')
             
-        if self.Surface.NLOCATIONS!=1:
+        if self.Surface.NLOCATIONS > 1:
             raise ValueError('error in nemesisdiscfmg :: archNEMESIS has not been setup for dealing with multiple locations yet')
 
         self.check_gas_spec_atm()
@@ -1804,7 +1804,7 @@ class ForwardModel_0:
                 dSPEC[:,:] = (dSPEC[:,:].T * TRANSMISSION_TELLURICx).T
 
             #Convolving the spectra with the Instrument line shape
-            if self.Spectroscopy.ILBL == SpectralCalculationMode.K_TABLES: #k-tables
+            if self.Spectroscopy.ILBL == SpectralCalculationModeEnum.K_TABLES: #k-tables
 
                 if os.path.exists(self.runname+'.fwh')==True:
                     FWHMEXIST=self.runname
@@ -1813,7 +1813,7 @@ class ForwardModel_0:
 
                 SPECONV1,dSPECONV1 = self.Measurement.convg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
 
-            elif self.Spectroscopy.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+            elif self.Spectroscopy.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES: #LBL-tables
 
                 SPECONV1,dSPECONV1 = self.Measurement.lblconvg(self.SpectroscopyX.WAVE,SPEC,dSPEC,IGEOM=IGEOM)
 
@@ -1871,7 +1871,7 @@ class ForwardModel_0:
         #Errors and checks
         self.check_gas_spec_atm()
         self.check_wave_range_consistency()
-        if self.MeasurementX.IFORM != SpectraUnit.TransitDepth:
+        if self.MeasurementX.IFORM != SpectraUnitEnum.TransitDepth:
             raise ValueError('error in nemesisPTfm :: Measurement unit must be set to TransitDepth (IFORM=2) for primary transit observations')
         if self.MeasurementX.NGEOM != 1:
             raise ValueError('error in nemesisPTfm :: Only one geometry is allowed for primary transit observations (NGEOM=1)')
@@ -1961,9 +1961,9 @@ class ForwardModel_0:
         _lgr.info('Convolving spectra and gradients with instrument line shape')
         if gradients is False:
 
-            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+            if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES:
                 SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
-            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                 SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
             
             dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
@@ -1975,9 +1975,9 @@ class ForwardModel_0:
 
         else:
 
-            if self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:
+            if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES:
                 SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
-            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                 SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
 
             #Applying any changes to the spectra required by the state vector
@@ -2240,7 +2240,7 @@ class ForwardModel_0:
         #################################################################################
 
         #self.Variables.NUM[:] = 1     #Uncomment for trying numerical differentiation
-        if self.Scatter.ISCAT != ScatteringCalculationMode.THERMAL_EMISSION:
+        if self.Scatter.ISCAT != ScatteringCalculationModeEnum.THERMAL_EMISSION:
             self.Variables.NUM[:] = 1  #If scattering is present, gradients are calculated numerically
         
         if analytical_gradient is False:
@@ -2785,8 +2785,8 @@ class ForwardModel_0:
 
         self.MeasurementX.NGEOM = 1
         self.MeasurementX.FWHM = self.Measurement.FWHM
-        self.MeasurementX.IFORM = SpectraUnit(self.Measurement.IFORM)
-        self.MeasurementX.ISPACE = WaveUnit(self.Measurement.ISPACE)
+        self.MeasurementX.IFORM = SpectraUnitEnum(self.Measurement.IFORM)
+        self.MeasurementX.ISPACE = WaveUnitEnum(self.Measurement.ISPACE)
 
         #Selecting the measurement and spectral points
         NCONV = np.zeros(self.MeasurementX.NGEOM,dtype='int32')
@@ -2915,7 +2915,7 @@ class ForwardModel_0:
             self.SurfaceX.edit_EMISSIVITY(self.Surface.EMISSIVITY[:,ILOC])
             
             #Checking if it is a Hapke surface
-            if self.SurfaceX.LOWBC==LowerBoundaryCondition.HAPKE:
+            if self.SurfaceX.LOWBC==LowerBoundaryConditionEnum.HAPKE:
             
                 self.SurfaceX.edit_SGLALB(self.Surface.SGLALB[:,ILOC])
                 self.SurfaceX.edit_BS0(self.Surface.BS0[:,ILOC])
@@ -2995,37 +2995,37 @@ class ForwardModel_0:
         ##############################################################################
 
         
-        path_calc = PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE
-        path_observer_pointing = PathObserverPointing.DISK 
+        path_calc = PathCalcEnum.PLANCK_FUNCTION_AT_BIN_CENTRE
+        path_observer_pointing = PathObserverPointingEnum.DISK 
         
         if Scatter.EMISS_ANG >= 0.0:
-            path_observer_pointing = PathObserverPointing.NADIR
+            path_observer_pointing = PathObserverPointingEnum.NADIR
             angle = Scatter.EMISS_ANG
             botlay = 0
         else:
-            path_observer_pointing = PathObserverPointing.LIMB
+            path_observer_pointing = PathObserverPointingEnum.LIMB
             angle = 90.0
             botlay = 0
 
-        if Scatter.ISCAT == ScatteringCalculationMode.THERMAL_EMISSION:
-            if Measurement.IFORM == SpectraUnit.Atmospheric_transmission:
+        if Scatter.ISCAT == ScatteringCalculationModeEnum.THERMAL_EMISSION:
+            if Measurement.IFORM == SpectraUnitEnum.Atmospheric_transmission:
                 pass
             else:
-                path_calc |= PathCalc.THERMAL_EMISSION
-        elif Scatter.ISCAT == ScatteringCalculationMode.MULTIPLE_SCATTERING:
-            path_calc |= PathCalc.MULTIPLE_SCATTERING
-        elif Scatter.ISCAT == ScatteringCalculationMode.INTERNAL_RADIATION_FIELD:
-            path_calc |= PathCalc.MULTIPLE_SCATTERING | PathCalc.NEAR_LIMB
-        elif Scatter.ISCAT == ScatteringCalculationMode.SINGLE_SCATTERING_PLANE_PARALLEL:
-            path_calc |= PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL
-        elif Scatter.ISCAT == ScatteringCalculationMode.SINGLE_SCATTERING_SPHERICAL:
-            path_calc |= PathCalc.SINGLE_SCATTERING_SPHERICAL
-        elif Scatter.ISCAT == ScatteringCalculationMode.INTERNAL_NET_FJLUX:
+                path_calc |= PathCalcEnum.THERMAL_EMISSION
+        elif Scatter.ISCAT == ScatteringCalculationModeEnum.MULTIPLE_SCATTERING:
+            path_calc |= PathCalcEnum.MULTIPLE_SCATTERING
+        elif Scatter.ISCAT == ScatteringCalculationModeEnum.INTERNAL_RADIATION_FIELD:
+            path_calc |= PathCalcEnum.MULTIPLE_SCATTERING | PathCalcEnum.NEAR_LIMB
+        elif Scatter.ISCAT == ScatteringCalculationModeEnum.SINGLE_SCATTERING_PLANE_PARALLEL:
+            path_calc |= PathCalcEnum.SINGLE_SCATTERING_PLANE_PARALLEL
+        elif Scatter.ISCAT == ScatteringCalculationModeEnum.SINGLE_SCATTERING_SPHERICAL:
+            path_calc |= PathCalcEnum.SINGLE_SCATTERING_SPHERICAL
+        elif Scatter.ISCAT == ScatteringCalculationModeEnum.INTERNAL_NET_FJLUX:
             angle = 0.0
-            path_calc |= PathCalc.MULTIPLE_SCATTERING | PathCalc.NET_FLUX
-        elif Scatter.ISCAT == ScatteringCalculationMode.DOWNWARD_BOTTOM_FLUX:
+            path_calc |= PathCalcEnum.MULTIPLE_SCATTERING | PathCalcEnum.NET_FLUX
+        elif Scatter.ISCAT == ScatteringCalculationModeEnum.DOWNWARD_BOTTOM_FLUX:
             angle = 0.0
-            path_calc |= PathCalc.MULTIPLE_SCATTERING | PathCalc.DOWNWARD_FLUX
+            path_calc |= PathCalcEnum.MULTIPLE_SCATTERING | PathCalcEnum.DOWNWARD_FLUX
         else:
             raise ValueError('error in calc_path :: selected ISCAT has not been implemented yet')
 
@@ -3043,7 +3043,7 @@ class ForwardModel_0:
         iAtmCalc = AtmCalc_0(
             Layer,
             path_observer_pointing=path_observer_pointing,
-            IPZEN=ZenithAngleOrigin.BOTTOM,
+            IPZEN=ZenithAngleOriginEnum.BOTTOM,
             BOTLAY=botlay,
             ANGLE=angle,
             EMISS_ANG=Scatter.EMISS_ANG,
@@ -3117,31 +3117,31 @@ class ForwardModel_0:
         #Setting the flags for the Path and calculation types
         ##############################################################################
         
-        path_calc = PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE
-        path_observer_pointing = PathObserverPointing.DISK
+        path_calc = PathCalcEnum.PLANCK_FUNCTION_AT_BIN_CENTRE
+        path_observer_pointing = PathObserverPointingEnum.DISK
 
         if Scatter.EMISS_ANG>=0.0:
-            path_observer_pointing = PathObserverPointing.NADIR
+            path_observer_pointing = PathObserverPointingEnum.NADIR
             angle=Scatter.EMISS_ANG
             botlay=0
         else:
-            path_observer_pointing = PathObserverPointing.LIMB
+            path_observer_pointing = PathObserverPointingEnum.LIMB
             angle=90.0
             botlay=0
         
-        if Scatter.ISCAT == ScatteringCalculationMode.THERMAL_EMISSION:
-            if Measurement.IFORM == SpectraUnit.Atmospheric_transmission:
+        if Scatter.ISCAT == ScatteringCalculationModeEnum.THERMAL_EMISSION:
+            if Measurement.IFORM == SpectraUnitEnum.Atmospheric_transmission:
                 pass
             else:
-                path_calc |= PathCalc.THERMAL_EMISSION
-        elif Scatter.ISCAT == ScatteringCalculationMode.MULTIPLE_SCATTERING:
-            path_calc |= PathCalc.MULTIPLE_SCATTERING
-        elif Scatter.ISCAT == ScatteringCalculationMode.INTERNAL_RADIATION_FIELD:
-            path_calc |= PathCalc.MULTIPLE_SCATTERING | PathCalc.NEAR_LIMB
-        elif Scatter.ISCAT == ScatteringCalculationMode.SINGLE_SCATTERING_PLANE_PARALLEL:
-            path_calc |= PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL
-        elif Scatter.ISCAT == ScatteringCalculationMode.SINGLE_SCATTERING_SPHERICAL:
-            path_calc |= PathCalc.SINGLE_SCATTERING_SPHERICAL
+                path_calc |= PathCalcEnum.THERMAL_EMISSION
+        elif Scatter.ISCAT == ScatteringCalculationModeEnum.MULTIPLE_SCATTERING:
+            path_calc |= PathCalcEnum.MULTIPLE_SCATTERING
+        elif Scatter.ISCAT == ScatteringCalculationModeEnum.INTERNAL_RADIATION_FIELD:
+            path_calc |= PathCalcEnum.MULTIPLE_SCATTERING | PathCalcEnum.NEAR_LIMB
+        elif Scatter.ISCAT == ScatteringCalculationModeEnum.SINGLE_SCATTERING_PLANE_PARALLEL:
+            path_calc |= PathCalcEnum.SINGLE_SCATTERING_PLANE_PARALLEL
+        elif Scatter.ISCAT == ScatteringCalculationModeEnum.SINGLE_SCATTERING_SPHERICAL:
+            path_calc |= PathCalcEnum.SINGLE_SCATTERING_SPHERICAL
         else:
             raise ValueError('error in calc_pathg :: selected ISCAT has not been implemented yet')
 
@@ -3157,7 +3157,7 @@ class ForwardModel_0:
             path_observer_pointing = path_observer_pointing,
             BOTLAY=botlay,
             ANGLE=angle,
-            IPZEN=ZenithAngleOrigin.BOTTOM,
+            IPZEN=ZenithAngleOriginEnum.BOTTOM,
             EMISS_ANG=Scatter.EMISS_ANG,
             SOL_ANG=Scatter.SOL_ANG,
             AZI_ANG=Scatter.AZI_ANG,
@@ -3253,11 +3253,11 @@ class ForwardModel_0:
         for ICALC in range(NCALC):
             iAtmCalc = AtmCalc_0(
                 Layer,
-                path_observer_pointing=PathObserverPointing.LIMB,
+                path_observer_pointing=PathObserverPointingEnum.LIMB,
                 BOTLAY=ITANHE[ICALC],
                 ANGLE=90.0,
-                IPZEN=ZenithAngleOrigin.BOTTOM,
-                path_calc=PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE,
+                IPZEN=ZenithAngleOriginEnum.BOTTOM,
+                path_calc=PathCalcEnum.PLANCK_FUNCTION_AT_BIN_CENTRE,
             )
             AtmCalc_List.append(iAtmCalc)
 
@@ -3351,11 +3351,11 @@ class ForwardModel_0:
         for ICALC in range(NCALC):
             iAtmCalc = AtmCalc_0(
                 Layer,
-                path_observer_pointing = PathObserverPointing.LIMB,
+                path_observer_pointing = PathObserverPointingEnum.LIMB,
                 BOTLAY=ITANHE[ICALC],
                 ANGLE=90.0,
-                IPZEN=ZenithAngleOrigin.BOTTOM,
-                path_calc = PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE,
+                IPZEN=ZenithAngleOriginEnum.BOTTOM,
+                path_calc = PathCalcEnum.PLANCK_FUNCTION_AT_BIN_CENTRE,
             )
             AtmCalc_List.append(iAtmCalc)
 
@@ -3448,11 +3448,11 @@ class ForwardModel_0:
             #iAtmCalc = AtmCalc_0(Layer,LIMB=True,BOTLAY=ITANHE[ICALC],ANGLE=90.0,IPZEN=0,THERM=True)
             iAtmCalc = AtmCalc_0(
                 Layer,
-                path_observer_pointing = PathObserverPointing.LIMB,
+                path_observer_pointing = PathObserverPointingEnum.LIMB,
                 BOTLAY=ITANHE[ICALC],
                 ANGLE=90.0,
-                IPZEN=ZenithAngleOrigin.BOTTOM,
-                path_calc = PathCalc.THERMAL_EMISSION,
+                IPZEN=ZenithAngleOriginEnum.BOTTOM,
+                path_calc = PathCalcEnum.THERMAL_EMISSION,
             )
             AtmCalc_List.append(iAtmCalc)
 
@@ -3547,11 +3547,11 @@ class ForwardModel_0:
             #iAtmCalc = AtmCalc_0(Layer,LIMB=True,BOTLAY=ITANHE[ICALC],ANGLE=90.0,IPZEN=0,THERM=True)
             iAtmCalc = AtmCalc_0(
                 Layer,
-                path_observer_pointing = PathObserverPointing.LIMB,
+                path_observer_pointing = PathObserverPointingEnum.LIMB,
                 BOTLAY=ITANHE[ICALC],
                 ANGLE=90.0,
-                IPZEN=ZenithAngleOrigin.BOTTOM,
-                path_calc = PathCalc.THERMAL_EMISSION,
+                IPZEN=ZenithAngleOriginEnum.BOTTOM,
+                path_calc = PathCalcEnum.THERMAL_EMISSION,
             )
             AtmCalc_List.append(iAtmCalc)
 
@@ -3616,8 +3616,8 @@ class ForwardModel_0:
             raise ValueError('error in calc_path_C :: All geometries must be either upward-looking or downward-loong in this version (i.e. EMISS_ANG>90 or EMISS_ANG<90)')  
         
         #Checking that multiple scattering is turned on
-        if Scatter.ISCAT != ScatteringCalculationMode.MULTIPLE_SCATTERING:
-            raise ValueError(f'error in calc_path_C :: This version of the code is meant to use multiple scattering (ISCAT={ScatteringCalculationMode(1)})')
+        if Scatter.ISCAT != ScatteringCalculationModeEnum.MULTIPLE_SCATTERING:
+            raise ValueError(f'error in calc_path_C :: This version of the code is meant to use multiple scattering (ISCAT={ScatteringCalculationModeEnum(1)})')
 
         #Checking that there is only 1 NAV per geometry
         for iGEOM in range(Measurement.NGEOM):
@@ -3652,11 +3652,11 @@ class ForwardModel_0:
         ############################################################################## 
 
         
-        path_observer_pointing = PathObserverPointing.DISK
-        path_calc = PathCalc.MULTIPLE_SCATTERING | PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE
+        path_observer_pointing = PathObserverPointingEnum.DISK
+        path_calc = PathCalcEnum.MULTIPLE_SCATTERING | PathCalcEnum.PLANCK_FUNCTION_AT_BIN_CENTRE
         #Nadir observation
         if Scatter.EMISS_ANG>=0.0:
-            path_observer_pointing = PathObserverPointing.NADIR 
+            path_observer_pointing = PathObserverPointingEnum.NADIR 
             #angle=Scatter.EMISS_ANG
 
 
@@ -3673,7 +3673,7 @@ class ForwardModel_0:
                 path_observer_pointing=path_observer_pointing,
                 BOTLAY=0,
                 ANGLE=0.,
-                IPZEN=ZenithAngleOrigin.BOTTOM,
+                IPZEN=ZenithAngleOriginEnum.BOTTOM,
                 EMISS_ANG=Measurement.EMISS_ANG[iGEOM, 0],
                 SOL_ANG=Measurement.SOL_ANG[iGEOM, 0],
                 AZI_ANG=Measurement.AZI_ANG[iGEOM, 0],
@@ -3750,11 +3750,11 @@ class ForwardModel_0:
         for ICALC in range(NCALC):
             iAtmCalc = AtmCalc_0(
                 Layer,
-                path_observer_pointing=PathObserverPointing.LIMB,
+                path_observer_pointing=PathObserverPointingEnum.LIMB,
                 BOTLAY=ICALC,
                 ANGLE=90.0,
-                IPZEN=ZenithAngleOrigin.BOTTOM,
-                path_calc=PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE,
+                IPZEN=ZenithAngleOriginEnum.BOTTOM,
+                path_calc=PathCalcEnum.PLANCK_FUNCTION_AT_BIN_CENTRE,
             )
             AtmCalc_List.append(iAtmCalc)
 
@@ -3784,7 +3784,7 @@ class ForwardModel_0:
             _lgr.debug(f'{TAUGAS.shape=}')
 
             
-            if self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
+            if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:  #LBL-table
 
                 #Calculating the cross sections for each gas in each self.LayerX
                 if return_grad:
@@ -3808,7 +3808,7 @@ class ForwardModel_0:
                 #Combining the gaseous opacity in each self.LayerX
                 TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
 
-            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME:    #Online calculation of the line-by-line opacity
+            elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:    #Online calculation of the line-by-line opacity
                 
                 igas = np.empty((self.SpectroscopyX.NGAS,), dtype=int)
                 for i, (mol_id, iso_id) in enumerate(zip(self.SpectroscopyX.ID,self.SpectroscopyX.ISO)):
@@ -3835,7 +3835,7 @@ class ForwardModel_0:
                 #Combining the gaseous opacity in each self.LayerX
                 TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
 
-            elif self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:    #K-table
+            elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES:    #K-table
                 #Calculating the k-coefficients for each gas in each self.LayerX
                 if return_grad:
                     k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP) # (NWAVE,NG,NLAY,NGAS)
@@ -3864,7 +3864,7 @@ class ForwardModel_0:
                 #Calculating the opacity of each self.LayerX
                 TAUGAS = k_layer #(NWAVE,NG,NLAY)
             else:
-                raise NotImplementedError(f'ILBL must be either {SpectralCalculationMode(0)} or {SpectralCalculationMode(2)}')
+                raise NotImplementedError(f'ILBL must be either {SpectralCalculationModeEnum(0)} or {SpectralCalculationModeEnum(2)}')
             
         else:
 
@@ -4063,12 +4063,12 @@ class ForwardModel_0:
 
 
             #Converting from emitted intensity to emitted radiance
-            if self.EmissionsX.ISPACE==WaveUnit.Wavenumber_cm:
+            if self.EmissionsX.ISPACE==WaveUnitEnum.Wavenumber_cm:
                 factor = (ans.Data.constants.h_planck *ans.Data.constants.c_light_cgs * self.EmissionsX.WAVE)
                 EMI *= factor[:,np.newaxis]  #W cm-2 sr-1 (cm-1)-1
                 if return_grad:
                     dEMI *= factor[:,np.newaxis,np.newaxis]
-            elif self.EmissionsX.ISPACE==WaveUnit.Wavelength_um:
+            elif self.EmissionsX.ISPACE==WaveUnitEnum.Wavelength_um:
                 factor = (ans.Data.constants.h_planck *ans.Data.constants.c_light / (self.EmissionsX.WAVE * 1.0e-6) )
                 EMI *= factor[:,np.newaxis]  #W cm-2 sr-1 um-1
                 if return_grad:
@@ -4099,7 +4099,7 @@ class ForwardModel_0:
         #del TAUTOT_PATH
 
         xfac = np.ones(self.SpectroscopyX.NWAVE)
-        if self.MeasurementX.IFORM==SpectraUnit.Atmospheric_transmission:  #If IFORM=4 we should multiply the transmission by solar flux
+        if self.MeasurementX.IFORM==SpectraUnitEnum.Atmospheric_transmission:  #If IFORM=4 we should multiply the transmission by solar flux
             self.StellarX.calc_solar_flux()
             #Interpolating to the calculation wavelengths
             f =sp.interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLFLUX)
@@ -4144,7 +4144,7 @@ class ForwardModel_0:
         
         #Defining the units of the output spectrum
         xfac = np.ones(self.SpectroscopyX.NWAVE)
-        if self.MeasurementX.IFORM==SpectraUnit.FluxRatio:
+        if self.MeasurementX.IFORM==SpectraUnitEnum.FluxRatio:
             xfac*=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2.
             
             #Calculating the solar flux
@@ -4180,7 +4180,7 @@ class ForwardModel_0:
         if( 
             (self.StellarX.SOLEXIST is True) 
             and (self.SurfaceX.GASGIANT is False) 
-            and (self.SurfaceX.LOWBC != LowerBoundaryCondition.THERMAL) ):
+            and (self.SurfaceX.LOWBC != LowerBoundaryConditionEnum.THERMAL) ):
             
             #Calculating solar flux at top of the atmosphere
             self.StellarX.calc_solar_flux()
@@ -4188,7 +4188,7 @@ class ForwardModel_0:
             SOLFLUX = f(self.SpectroscopyX.WAVE)
             
             #Calculating the surface reflectance
-            if self.SurfaceX.LOWBC == LowerBoundaryCondition.LAMBERTIAN: #Lambertian reflection
+            if self.SurfaceX.LOWBC == LowerBoundaryConditionEnum.LAMBERTIAN: #Lambertian reflection
                 
                 ALBEDO = np.zeros(self.SpectroscopyX.NWAVE)
                 ALBEDO[:] = 1.0 - EMISSIVITY[:] if self.SurfaceX.GALB < 0.0 else self.SurfaceX.GALB
@@ -4277,7 +4277,7 @@ class ForwardModel_0:
 
         #Defining the units of the output spectrum
         xfac = np.ones(self.SpectroscopyX.NWAVE)
-        if self.MeasurementX.IFORM==SpectraUnit.FluxRatio:
+        if self.MeasurementX.IFORM==SpectraUnitEnum.FluxRatio:
             xfac *= np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2.
             f = scipy.interpolate.interp1d(self.StellarX.VCONV,self.StellarX.SOLSPEC)
             solpspec = f(self.SpectroscopyX.WAVE)  #Stellar power spectrum (W (cm-1)-1 or W um-1)
@@ -4291,7 +4291,7 @@ class ForwardModel_0:
             EMISSIVITY = np.zeros(self.SpectroscopyX.NWAVE)
             
         #Surface reflectance
-        if self.SurfaceX.LOWBC != LowerBoundaryCondition.THERMAL:
+        if self.SurfaceX.LOWBC != LowerBoundaryConditionEnum.THERMAL:
             BRDF = self.SurfaceX.calc_BRDF(self.SpectroscopyX.WAVE,self.PathX.SOL_ANG,self.PathX.EMISS_ANG,self.PathX.AZI_ANG) #(NWAVE,NPATH)
         else:
             BRDF = np.zeros((self.SpectroscopyX.NWAVE,self.PathX.NPATH))
@@ -4346,12 +4346,12 @@ class ForwardModel_0:
 
         #Defining the units of the output spectrum
         xfac = 1.
-        if self.MeasurementX.IFORM==SpectraUnit.FluxRatio:
+        if self.MeasurementX.IFORM==SpectraUnitEnum.FluxRatio:
             xfac=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2.
             f = scipy.interpolate.interp1d(self.StellarX.WAVE,self.StellarX.SOLSPEC)
             solpspec = f(self.SpectroscopyX.WAVE)  #Stellar power spectrum (W (cm-1)-1 or W um-1)
             xfac = xfac / solpspec
-        elif self.MeasurementX.IFORM==SpectraUnit.Integrated_spectral_power:
+        elif self.MeasurementX.IFORM==SpectraUnitEnum.Integrated_spectral_power:
             xfac=np.pi*4.*np.pi*((self.AtmosphereX.RADIUS)*1.0e2)**2. 
         
         #Calculating the radiance
@@ -4451,7 +4451,7 @@ class ForwardModel_0:
         IMODM  = np.unique(self.PathX.IMOD)
         assert IMODM.size==1, 'CIRSrad :: IMODM should be a single value, multiple path calculation types not supported yet'
 
-        IMODM = PathCalc(IMODM[0])  #Convert to enum
+        IMODM = PathCalcEnum(IMODM[0])  #Convert to enum
         
         _lgr.info(f'CIRSrad :: IMODM = {IMODM!r}')
         
@@ -4463,26 +4463,26 @@ class ForwardModel_0:
             dSPECOUT = None
             dTSURF = None
         
-        if not (PathCalc.ABSORBTION 
-                | PathCalc.THERMAL_EMISSION 
-                | PathCalc.MULTIPLE_SCATTERING
-                | PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL
+        if not (PathCalcEnum.ABSORBTION 
+                | PathCalcEnum.THERMAL_EMISSION 
+                | PathCalcEnum.MULTIPLE_SCATTERING
+                | PathCalcEnum.SINGLE_SCATTERING_PLANE_PARALLEL
             ) & IMODM:  #Pure transmission
             SPECOUT, dSPECOUT = self.calculate_transmission_spectrum(TAUTOT_PATH, dTAUTOT_LAYINC, return_grad)
         
-        elif PathCalc.ABSORBTION in IMODM: #Absorbtion (useful for small transmissions) 
+        elif PathCalcEnum.ABSORBTION in IMODM: #Absorbtion (useful for small transmissions) 
             SPECOUT, dSPECOUT = self.calculate_absorption_spectrum(TAUTOT_PATH, return_grad)
         
-        elif PathCalc.THERMAL_EMISSION in IMODM: #Thermal emission from planet 
+        elif PathCalcEnum.THERMAL_EMISSION in IMODM: #Thermal emission from planet 
             SPECOUT, dSPECOUT, dTSURF = self.calculate_thermal_emission_spectrum(TAUTOT_LAYINC, dTAUTOT_LAYINC, EMITOT_LAYINC, dEMITOT_LAYINC, return_grad)
         
-        elif PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL in IMODM: #Single scattering calculation
+        elif PathCalcEnum.SINGLE_SCATTERING_PLANE_PARALLEL in IMODM: #Single scattering calculation
             SPECOUT = self.calculate_single_scattering_plane_parallel_spectrum(TAUTOT_LAYINC, return_grad)
         
-        elif (PathCalc.DOWNWARD_FLUX | PathCalc.MULTIPLE_SCATTERING) in IMODM: #Downwards flux (bottom) calculation (scattering)
+        elif (PathCalcEnum.DOWNWARD_FLUX | PathCalcEnum.MULTIPLE_SCATTERING) in IMODM: #Downwards flux (bottom) calculation (scattering)
             SPECOUT = self.calculate_downward_multiple_scattering_spectrum(return_grad)
         
-        elif PathCalc.MULTIPLE_SCATTERING in IMODM: #Multiple scattering calculation
+        elif PathCalcEnum.MULTIPLE_SCATTERING in IMODM: #Multiple scattering calculation
             SPECOUT = self.calculate_multiple_scattering_spectrum(return_grad)
         
         else:
@@ -4532,7 +4532,7 @@ class ForwardModel_0:
 
        #Initialising variables
         if ISPACE is None:
-            ISPACE = WaveUnit(self.MeasurementX.ISPACE)
+            ISPACE = WaveUnitEnum(self.MeasurementX.ISPACE)
         if WAVEC is None:
             WAVEC = self.SpectroscopyX.WAVE
         if CIA is None:
@@ -4553,21 +4553,21 @@ class ForwardModel_0:
         in2 = -1
         for i in range(Atmosphere.NVMR):
 
-            if Atmosphere.ID[i]==ans.enums.Gas.H2:
+            if Atmosphere.ID[i]==ans.enum.GasEnum.H2:
                 if((Atmosphere.ISO[i]==0) or (Atmosphere.ISO[i]==1)):
                     ih2 = i
 
-            if Atmosphere.ID[i]==ans.enums.Gas.He:
+            if Atmosphere.ID[i]==ans.enum.GasEnum.He:
                 pass#ihe = i
 
-            if Atmosphere.ID[i]==ans.enums.Gas.N2:
+            if Atmosphere.ID[i]==ans.enum.GasEnum.N2:
                 in2 = i
 
-            if Atmosphere.ID[i]==ans.enums.Gas.CH4:
+            if Atmosphere.ID[i]==ans.enum.GasEnum.CH4:
                 if((Atmosphere.ISO[i]==0) or (Atmosphere.ISO[i]==1)):
                     pass#ich4 = i
 
-            if Atmosphere.ID[i]==ans.enums.Gas.CO2:
+            if Atmosphere.ID[i]==ans.enum.GasEnum.CO2:
                 if((Atmosphere.ISO[i]==0) or (Atmosphere.ISO[i]==1)):
                     ico2 = i
         
@@ -4580,9 +4580,9 @@ class ForwardModel_0:
         XFAC = TOTAM**2. / XLEN   #molec^2 cm-5, which multiplied by cross sections in cm5 molec-2 gives unitless optical depth
         
         #Defining the calculation wavenumbers
-        if ISPACE==WaveUnit.Wavenumber_cm:
+        if ISPACE==WaveUnitEnum.Wavenumber_cm:
             WAVEN = WAVEC
-        elif ISPACE==WaveUnit.Wavelength_um:
+        elif ISPACE==WaveUnitEnum.Wavelength_um:
             WAVEN = 1.e4/WAVEC
             isort = np.argsort(WAVEN)
             WAVEN = WAVEN[isort]
@@ -4760,7 +4760,7 @@ class ForwardModel_0:
             dtau_cia_layer[:,ilay,:] = dtau_cia_layer[:,ilay,:] * XFAC[ilay]
 
                 
-        if ISPACE==WaveUnit.Wavelength_um:
+        if ISPACE==WaveUnitEnum.Wavelength_um:
             tau_cia_layer[:,:] = tau_cia_layer[isort,:]
             dtau_cia_layer[:,:,:] = dtau_cia_layer[isort,:,:]
 
@@ -4885,7 +4885,7 @@ class ForwardModel_0:
         if IRAY is None:
             IRAY = self.ScatterX.IRAY
         if ISPACE is None:
-            ISPACE = WaveUnit(self.MeasurementX.ISPACE)
+            ISPACE = WaveUnitEnum(self.MeasurementX.ISPACE)
         if WAVEC is None:
             WAVEC = self.SpectroscopyX.WAVE
         if ID is None:
@@ -4895,14 +4895,14 @@ class ForwardModel_0:
         if Layer is None:
             Layer = self.LayerX
         
-        if IRAY==RayleighScatteringMode.NOT_INCLUDED:  #No Rayleigh scattering
+        if IRAY==RayleighScatteringModeEnum.NOT_INCLUDED:  #No Rayleigh scattering
             TAURAY = np.zeros((len(WAVEC),Layer.NLAY))
             dTAURAY = np.zeros((len(WAVEC),Layer.NLAY))
-        elif IRAY==RayleighScatteringMode.GAS_GIANT_ATM: #Gas giant atmosphere
+        elif IRAY==RayleighScatteringModeEnum.GAS_GIANT_ATM: #Gas giant atmosphere
             TAURAY,dTAURAY = calc_tau_rayleighj(ISPACE,WAVEC,Layer.TOTAM) #(NWAVE,NLAY)
-        elif IRAY==RayleighScatteringMode.C02_DOMINATED_ATM:
+        elif IRAY==RayleighScatteringModeEnum.C02_DOMINATED_ATM:
             TAURAY,dTAURAY = calc_tau_rayleighv2(ISPACE,WAVEC,Layer.TOTAM) #(NWAVE,NLAY)
-        elif IRAY==RayleighScatteringMode.JOVIAN_AIR: #Jovian air
+        elif IRAY==RayleighScatteringModeEnum.JOVIAN_AIR: #Jovian air
             TAURAY,dTAURAY = calc_tau_rayleighls(ISPACE,WAVEC,ID,ISO,(Layer.PP.T/Layer.PRESS).T,Layer.TOTAM)
         else:
             raise ValueError('error in CIRSrad :: IRAY = '+str(IRAY)+' type has not been implemented yet')
@@ -4913,9 +4913,9 @@ class ForwardModel_0:
             fig,ax1 = plt.subplots(1,1,figsize=(7,4))
             ax1.plot(WAVEC,np.sum(TAURAY,axis=1))
             ax1.grid()
-            if ISPACE==WaveUnit.Wavenumber_cm:
+            if ISPACE==WaveUnitEnum.Wavenumber_cm:
                 vlabel = 'Wavenumber (cm$^{-1}$)'
-            elif ISPACE==WaveUnit.Wavelength_um:
+            elif ISPACE==WaveUnitEnum.Wavelength_um:
                 vlabel = r'Wavelength ($\mu$m)'
             ax1.set_xlabel(vlabel)
             ax1.set_ylabel('Rayleigh scattering optical depth')
@@ -4945,7 +4945,7 @@ class ForwardModel_0:
         #Calculating the gaseous line opacity in each layer
         ########################################################################################################
 
-        if self.SpectroscopyX.ILBL == SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
+        if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:  #LBL-table
 
             TAUGAS = np.zeros((self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.LayerX.NLAY,self.SpectroscopyX.NGAS))  #Vertical opacity of each gas in each layer
 
@@ -4968,7 +4968,7 @@ class ForwardModel_0:
             #Removing necessary data to save memory
             del k
 
-        elif self.SpectroscopyX.ILBL == SpectralCalculationMode.K_TABLES:    #K-table
+        elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES:    #K-table
 
             #Calculating the k-coefficients for each gas in each layer
             k_gas,dkgasdT = self.SpectroscopyX.calc_kg(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,WAVECALC=self.SpectroscopyX.WAVE) # (NWAVE,NG,NLAY,NGAS)
@@ -4993,7 +4993,7 @@ class ForwardModel_0:
             del k_layer
 
         else:
-            raise ValueError(f'error in CIRSrad :: ILBL must be either {SpectralCalculationMode(0)} or {SpectralCalculationMode(2)}')
+            raise ValueError(f'error in CIRSrad :: ILBL must be either {SpectralCalculationModeEnum(0)} or {SpectralCalculationModeEnum(2)}')
         return TAUGAS
 
 
@@ -5076,7 +5076,7 @@ class ForwardModel_0:
             for imu in range(Scatter.NMU):
                 RADGROUND[:,imu] = bbsurf * EMISSIVITY
 
-        if (not Surface.GASGIANT) and (Surface.LOWBC != LowerBoundaryCondition.THERMAL):
+        if (not Surface.GASGIANT) and (Surface.LOWBC != LowerBoundaryConditionEnum.THERMAL):
             BRDF_matrix = self.calc_brdf_matrix(WAVEC=WAVE, Surface=Surface, Scatter=Scatter)  #(NWAVE,NMU,NMU,NF+1)
         else:
             BRDF_matrix = np.zeros((NWAVE, Scatter.NMU, Scatter.NMU, Scatter.NF+1))
@@ -5114,7 +5114,7 @@ class ForwardModel_0:
         
         # Phase function
         PHASE_ARRAY = np.zeros((Scatter.NDUST, NWAVE, 2, NTHETA))
-        if Scatter.IMIE == AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:
+        if Scatter.IMIE == AerosolPhaseFunctionCalculationModeEnum.HENYEY_GREENSTEIN:
             for i in range(Scatter.NDUST):
                 PHASE_ARRAY[i, :, 0, -1] = np.interp(VWAVES,Scatter.WAVE,Scatter.F.T[i])
                 PHASE_ARRAY[i, :, 0, -2] = np.interp(VWAVES,Scatter.WAVE,Scatter.G1.T[i])
@@ -5190,13 +5190,13 @@ class ForwardModel_0:
         mu[:] = Scatter.MU[::-1]
         
         BRDF_mat = np.zeros((NWAVE,Scatter.NMU,Scatter.NMU,Scatter.NF+1))
-        if Surface.LOWBC == LowerBoundaryCondition.LAMBERTIAN: #Lambertian reflection (isotropic)
+        if Surface.LOWBC == LowerBoundaryConditionEnum.LAMBERTIAN: #Lambertian reflection (isotropic)
             
             #We only need to calculate the BRDF in one angle since it will be the same everywhere
             BRDFx = Surface.calc_BRDF(WAVEC,[0.],[0.],[0.])[:,0] #(NWAVE)
             BRDF_mat[:,:,:,0] = BRDFx[:,None,None]
 
-        elif Surface.LOWBC in (LowerBoundaryCondition.HAPKE,):  #Anisotropic reflection
+        elif Surface.LOWBC in (LowerBoundaryConditionEnum.HAPKE,):  #Anisotropic reflection
 
             # Create indices for broadcasting
             j, i, k = np.meshgrid(np.arange(Scatter.NMU), np.arange(Scatter.NMU), np.arange(Scatter.NPHI+1), indexing="ij")
@@ -5542,10 +5542,10 @@ def calc_tau_rayleighj(ISPACE,WAVEC,TOTAM):
     NWAVE = len(WAVEC)
     NLAY = len(TOTAM)
 
-    if ISPACE==WaveUnit.Wavenumber_cm:
+    if ISPACE==WaveUnitEnum.Wavenumber_cm:
         LAMBDA = 1./WAVEC * CM_TO_METER  #Wavelength in metres
         x = 1.0/(LAMBDA * 1.0e6)
-    elif ISPACE==WaveUnit.Wavelength_um:
+    elif ISPACE==WaveUnitEnum.Wavelength_um:
         LAMBDA = WAVEC * 1.0e-6 #Wavelength in metres
         x = 1.0/(LAMBDA*1.0e6)
     else:
@@ -5606,10 +5606,10 @@ def calc_tau_rayleighv(ISPACE,WAVEC,TOTAM):
     NWAVE = len(WAVEC)
     NLAY = len(TOTAM)
 
-    if ISPACE==WaveUnit.Wavenumber_cm:
+    if ISPACE==WaveUnitEnum.Wavenumber_cm:
         LAMBDA = 1./WAVEC * CM_TO_MICRON  #Wavelength in microns
         #x = 1.0/(LAMBDA*1.0e6)
-    elif ISPACE == WaveUnit.Wavelength_um:
+    elif ISPACE == WaveUnitEnum.Wavelength_um:
         LAMBDA = WAVEC #Wavelength in microns
     else:
         raise NotImplementedError('calc_tau_rayleighv :: Unknown value for ISPACE')
@@ -5656,10 +5656,10 @@ def calc_tau_rayleighv2(ISPACE,WAVEC,TOTAM):
     NWAVE = len(WAVEC)
     NLAY = len(TOTAM)
 
-    if ISPACE==WaveUnit.Wavenumber_cm:
+    if ISPACE==WaveUnitEnum.Wavenumber_cm:
         LAMBDA = 1./WAVEC * CM_TO_MICRON  #Wavelength in microns
         #x = 1.0/(LAMBDA*1.0e6)
-    elif ISPACE == WaveUnit.Wavelength_um:
+    elif ISPACE == WaveUnitEnum.Wavelength_um:
         LAMBDA = WAVEC #Wavelength in microns
     else:
         raise NotImplementedError('calc_tau_rayleighv2 :: Unknown value for ISPACE')
@@ -5773,9 +5773,9 @@ def calc_tau_rayleighls(ISPACE,WAVEC,ID,ISO,VMR,TOTAM):
     #loschpm3 is molecules per cubic micron at STP
     loschpm3 = 2.687e19 * CUBIC_CM_TO_CUBIC_MICRON
     
-    if ISPACE==WaveUnit.Wavenumber_cm:
+    if ISPACE==WaveUnitEnum.Wavenumber_cm:
         wl = 1./WAVEC * CM_TO_MICRON  #Wavelength in microns
-    elif ISPACE == WaveUnit.Wavelength_um:
+    elif ISPACE == WaveUnitEnum.Wavelength_um:
         wl = WAVEC #Wavelength in microns
     else:
         raise NotImplementedError('calc_tau_rayleighls :: Unknown value for ISPACE')

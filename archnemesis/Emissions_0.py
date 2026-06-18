@@ -20,21 +20,21 @@
 
 
 #from archnemesis import *
-from archnemesis.enums import (
-    WaveUnit,
-    EmissionType,
+from archnemesis.enum import (
+    WaveUnitEnum,
+    EmissionTypeEnum,
 )
 import numpy as np
-import scipy
+#import scipy
 import os
 import os.path
-import archnemesis as ans
-from numba import jit, njit
-from archnemesis.database.datatypes.wave_range import WaveRange
+#import archnemesis as ans
+#from numba import jit, njit
+#from archnemesis.database.datatypes.wave_range import WaveRange
 
 from archnemesis.helpers import h5py_helper, path_redirect
-import matplotlib.pyplot as plt
-from typing import Optional
+#import matplotlib.pyplot as plt
+#from typing import Optional
 
 
 import logging
@@ -114,7 +114,7 @@ class Emissions_0:
         self.NGAS: None | np.ndarray = None 
         self.ID: None | np.ndarray = None  # Array of Gas enum values (NGAS,NEM)
         self.ISO = None       #(NGAS)
-        self.EMTYPE: None | np.ndarray = None  # Array of EmissionType enum values (NEM)
+        self.EMTYPE: None | np.ndarray = None  # Array of EmissionTypeEnum enum values (NEM)
         self._locations = path_redirect.PathRedirectList() #(NEM)
         self.NWAVE = None     
         self.WAVE = None      #(NWAVE)
@@ -130,7 +130,7 @@ class Emissions_0:
         self._locations_initialised = False
         
         # set property values
-        self.ISPACE = WaveUnit.Wavelength_um  # Default value
+        self.ISPACE = WaveUnitEnum.Wavelength_um  # Default value
 
     @property
     def LOCATION(self) -> list[str]:
@@ -150,7 +150,7 @@ class Emissions_0:
             self._locations_initialised = True
 
     @property
-    def EMTYPE(self) -> list[EmissionType]:
+    def EMTYPE(self) -> list[EmissionTypeEnum]:
         return self._iemi
 
     @EMTYPE.setter
@@ -158,15 +158,15 @@ class Emissions_0:
         if value is None:
             self._iemi = None
         else:
-            self._iemi = [EmissionType(v) for v in value]
+            self._iemi = [EmissionTypeEnum(v) for v in value]
 
     @property
-    def ISPACE(self) -> WaveUnit:
+    def ISPACE(self) -> WaveUnitEnum:
         return self._ispace
     
     @ISPACE.setter
     def ISPACE(self, value):
-        self._ispace = WaveUnit(value)
+        self._ispace = WaveUnitEnum(value)
     
     
     ######################################################################################################
@@ -177,9 +177,9 @@ class Emissions_0:
         """   
         # Checking common parameters
         if self.ISPACE is not None:
-            assert isinstance(self.ISPACE, WaveUnit), \
-                'ISPACE must be WaveUnit enum'
-            assert self.ISPACE in (WaveUnit.Wavenumber_cm, WaveUnit.Wavelength_um), \
+            assert isinstance(self.ISPACE, WaveUnitEnum), \
+                'ISPACE must be WaveUnitEnum enum'
+            assert self.ISPACE in (WaveUnitEnum.Wavenumber_cm, WaveUnitEnum.Wavelength_um), \
                 'ISPACE must be Wavenumber_cm or Wavelength_um'
 
         if self.NEM>0:
@@ -469,11 +469,11 @@ class Emissions_0:
 
             dset = h5py_helper.store_data(f, 'EMTYPE', data=self.EMTYPE[iemi])
             dset.attrs['title'] = "Emission type"
-            if self.EMTYPE[iemi]==EmissionType.FLUORESCENCE:
+            if self.EMTYPE[iemi]==EmissionTypeEnum.FLUORESCENCE:
                 dset.attrs['type'] = 'Fluorescent emission'
-            elif self.EMTYPE[iemi]==EmissionType.CHEMICAL:
+            elif self.EMTYPE[iemi]==EmissionTypeEnum.CHEMICAL:
                 dset.attrs['type'] = 'Emission initiated by chemical reaction'
-            elif self.EMTYPE[iemi]==EmissionType.PHOTOLYSIS:
+            elif self.EMTYPE[iemi]==EmissionTypeEnum.PHOTOLYSIS:
                 dset.attrs['type'] = 'Emission initiated by photolysis'
             else:
                 raise ValueError('error :: EMTYPE must be 0 or 1')

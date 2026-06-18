@@ -1,9 +1,9 @@
 
-
-import h5py
-from typing import Callable, Any, Literal, NamedTuple, Self#, Type
+import dataclasses as dc
+from typing import Callable, Any, Literal, NamedTuple, Self, Type
 import textwrap
 
+import h5py
 import numpy as np
 
 import logging
@@ -65,9 +65,9 @@ def ensure_grp(
         name: str, 
         attrs : None | dict[str,Any] = None, 
         **kwargs
-    ) -> h5py.Group:
+) -> h5py.Group:
     """
-    Return `name` sub-group of `grp`, create `name` sub-group if it does not already exist
+        Return `name` sub-group of `grp`, create `name` sub-group if it does not already exist
     """
     create_group_flag = True
     if name in grp.keys():
@@ -93,9 +93,9 @@ def get_dataset(
         defaults : dict[str, Any] = {},
         on_is_not_dataset : Literal['ignore', 'warn','error'] = 'error',
         on_missing : Literal['ignore', 'warn','error'] = 'ignore',
-    ) -> h5py.Dataset:
+) -> h5py.Dataset:
     """
-    Return `name` dataset of `grp` if dataset does not exist, create it with passed arguments
+        Return `name` dataset of `grp` if dataset does not exist, create it with passed arguments
     """
     if name in grp.keys():
         dset = grp[name]
@@ -128,18 +128,18 @@ def ensure_dataset(
         attrs : None | dict[str,Any] = None, 
         extend : None | Literal['stack'] | int = None, 
         **kwargs
-    ) -> h5py.Dataset:
+) -> h5py.Dataset:
     """
-    Return `name` dataset of `grp`, if dataset already exists remove it and re-create it with passed arguments. If `extend` is not None, either stack or extend the data in the dataset.
-    
-    ## ARGUMENTS ##
-        extend : None | Literal['stack'] | int = None
-            Should we extend the dataset instead of overwriting it? 
-            If `extend` == 'stack', will stack along a new 0th axis if existing data and new data 
-            are the same shape, otherwise will assume that the 0th axis is the axis to stack along,
-            and other axes must be the same between old data and new data.
-            If `extend` is an integer, will extend along that axis, shape of old and new data must
-            be the same along other axes.
+        Return `name` dataset of `grp`, if dataset already exists remove it and re-create it with passed arguments. If `extend` is not None, either stack or extend the data in the dataset.
+        
+        ## ARGUMENTS ##
+            extend : None | Literal['stack'] | int = None
+                Should we extend the dataset instead of overwriting it? 
+                If `extend` == 'stack', will stack along a new 0th axis if existing data and new data 
+                are the same shape, otherwise will assume that the 0th axis is the axis to stack along,
+                and other axes must be the same between old data and new data.
+                If `extend` is an integer, will extend along that axis, shape of old and new data must
+                be the same along other axes.
     """
     old_data = None
     del_flag = False
@@ -209,14 +209,14 @@ def retrieve_data(
         item_path : str,
         mutator : Callable[[Any], Any] = lambda x: x, # default is identity function
         default : Any = None,
-    ) -> Any:
+) -> Any:
     """
-    Retrieves `item_path` data from `h5py_file`, passing it through the `mutator` callable as it does so.
-    Makes it easier to ensure we return a certain type from this function but also enables the
-    setting of a `default` value for cases where `item_path` is not present in `h5py_file`.
+        Retrieves `item_path` data from `h5py_file`, passing it through the `mutator` callable as it does so.
+        Makes it easier to ensure we return a certain type from this function but also enables the
+        setting of a `default` value for cases where `item_path` is not present in `h5py_file`.
     """
     if item_path in h5py_file and h5py_file[item_path].shape is not None:
-        return mutator(h5py_file[item_path])
+        return mutator(h5py_file[item_path][tuple()])
     else:
         _lgr.warning(f'When reading file "{h5py_file.filename}", could not find element "{item_path}" setting returned value to "{default}"', stacklevel=2)
         return default
@@ -227,11 +227,11 @@ def store_data(
         item_path : str,
         data : Any,
         dtype = None, # will guess data type
-    ) -> None:
+) -> None:
     r"""
-    Stores `data` at `item_path` in `h5py_file`. Values of "None" create an empty dataset
-    
-    Regex replacement for previous version "(\w*?)\.create_dataset\(('.*?'),\s*data\s*=\s*(.*)\)" -> "h5py_helper.store_data($1, $2, $3)"
+        Stores `data` at `item_path` in `h5py_file`. Values of "None" create an empty dataset
+        
+        Regex replacement for previous version "(\w*?)\.create_dataset\(('.*?'),\s*data\s*=\s*(.*)\)" -> "h5py_helper.store_data($1, $2, $3)"
     """
     #f.create_dataset('Retrieval/Output/OptimalEstimation/NX',data=self.NX)
     
@@ -239,8 +239,11 @@ def store_data(
         dtype = float
         if issubclass(type(data), np.ndarray):
             dtype = data.dtype
-        elif type(data) is int:
+        elif isinstance(data, int):
             dtype = int
+        elif isinstance(data, bool):
+            dtype = bool
+        
     
     if item_path not in h5py_file:
         
@@ -258,6 +261,85 @@ def store_data(
         return h5py_file.create_dataset(item_path, shape=None, dtype=dtype)
 
 
+def read(
+        h5py_file : h5py.File | h5py.Group,
+        obj_type : Type,
+        item_path : str,
+        *,
+        attrs : None | tuple[str,...] = None,
+        mutators : None | dict[str,Callable[[Any],Any]] = None,
+        defaults : None | dict[str,Any] = None,
+) -> Any:
+    """
+        Read an object of type `obj_type` from `h5py_file` by reading all non-callable attributes of `obj` from `h5py_file` at `item_path`
+        
+        ## Arguments ##
+        
+            h5py_file : h5py.File | h5py.Group
+                The HDF5 file or group to read from
+            
+            obj_type : Type
+                The class of object to read.
+            
+            item_path : str
+                The path to the object in the group or file
+            
+            attrs : None | tuple[str,...] = None
+                If not `None` is a list of attributes to read into the object.
+                Otherwise will try to infer attributes.
+            
+            mutators : None | dict[str,Callable[[Any],Any]] = None
+                If not `None` is a dictionary of mutators to pass found values of `attrs`
+                through before assigning to object.
+            
+            defaults : None | dict[st,Any] = None
+                If not `None` should be an dictionar` that has default values for attributes
+                that are not present in the HDF5 file. If `None` will throw an error if attributes are missing.
+    """
+    if attrs is None:
+        if issubclass(obj_type, tuple):
+            if hasattr(obj_type, '_fields'):
+                # `obj_type` is a NamedTuple class
+                attrs = obj_type._fields
+            else:
+                # `obj_type` is a tuple so just yank out values directly
+                pass
+        elif dc.is_dataclass(obj_type):
+            attrs = tuple(x.name for x in dc.fields(obj_type))
+        elif hasattr(obj_type, '__slots__'):
+            # Assume the slots are what we want
+            attrs = obj_type.__slots__
+        else:
+            # we need to be told the attributes
+            raise AttributeError(f'Cannot get attributes of {obj_type} for reading from HDF5 file')
+    
+    obj_kwargs = {}
+    
+    grp = h5py_file[item_path]
+    
+    for attr in attrs:
+        if not attr in grp:
+            if defaults is None:
+                raise KeyError(f'When reading object of type {obj_type} from {h5py_file.filename}::{h5py_file.name}. Item {attr} was not found')
+            elif not attr in defaults:
+                raise AttributeError(f'When reading object of type {obj_type} from {h5py_file.filename}::{h5py_file.name}. Item {attr} was not found and is not present in defaults')
+            else:
+                obj_kwargs[attr] = defaults[attr]
+        else:
+            
+            if grp[attr].shape is None:
+                value = None
+            else:
+                value = grp[attr][tuple()]
+            
+            if mutators is not None and attr in mutators:
+                value = mutators[attr](value)
+            
+            obj_kwargs[attr] = value
+        
+    return obj_type(**obj_kwargs)
+        
+        
 def write(
         h5py_file : h5py.File | h5py.Group,
         obj : Any,
@@ -265,40 +347,40 @@ def write(
         *,
         attrs : None | tuple[str,...] = None,
         metadata : dict[str, dict[str,Any]] = dict(), # Any keys in this that are not in `attrs` that has a 'default' entry in `metadata` will use that value, if they do not have a 'default' entry will throw an error
-    ):
+):
     """
-    Writes `obj` to `h5py_file` by writing all non-callable attributes of `obj` to the `h5py_file` at `item_path`
-    
-    
-    ## Arguments ##
-    
-        attrs : None | tuple[str,...] = None
-            A tuple of attributes of `obj` to be written to the file. If `None` will infer `attrs` from `obj`.
-    
-        metadata : dict[str, dict[str,Any]] = dict()
-            A dictionary of metadata for each attribute, if the 'default' key is present will use that value if `attr` is not present in `attrs`
-            otherwise an `attr` that is not in `attrs` will throw an error. Other keys will be passed to the HDF5 file as attributes for the `attr`
-            being saved.
-            
-            Common keys:
+        Writes `obj` to `h5py_file` by writing all non-callable attributes of `obj` to the `h5py_file` at `item_path`
+        
+        
+        ## Arguments ##
+        
+            attrs : None | tuple[str,...] = None
+                A tuple of attributes of `obj` to be written to the file. If `None` will infer `attrs` from `obj`.
+        
+            metadata : dict[str, dict[str,Any]] = dict()
+                A dictionary of metadata for each attribute, if the 'default' key is present will use that value if `attr` is not present in `attrs`
+                otherwise an `attr` that is not in `attrs` will throw an error. Other keys will be passed to the HDF5 file as attributes for the `attr`
+                being saved.
                 
-                * 'default' - If `attr` is not present in `attrs`, use this value
-                * 'unit' - Unit of `attr`
-                * 'title' - A short descriptive title for `attr`
-                * 'type' - A description of the type of object `attr` represents
-    
-    ## Example ##
-        import h5py_helper
-        from typing import NamedTuple
+                Common keys:
+                    
+                    * 'default' - If `attr` is not present in `attrs`, use this value
+                    * 'unit' - Unit of `attr`
+                    * 'title' - A short descriptive title for `attr`
+                    * 'type' - A description of the type of object `attr` represents
         
-        class Point(NamedTuple):
-            x : float
-            y : float
-            description : str
-        
-        origin = Point(0,0)
-        
-        h5py_helper.write('origin.h5', origin, '/origin', defaults={'description' : origin or a coord system})
+        ## Example ##
+            import h5py_helper
+            from typing import NamedTuple
+            
+            class Point(NamedTuple):
+                x : float
+                y : float
+                description : str
+            
+            origin = Point(0,0)
+            
+            h5py_helper.write('origin.h5', origin, '/origin', defaults={'description' : origin or a coord system})
     """
     
     if attrs is None: # Try and get attributes of `obj` if we are not given them

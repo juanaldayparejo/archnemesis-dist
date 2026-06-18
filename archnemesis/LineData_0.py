@@ -33,7 +33,7 @@ import matplotlib.pyplot as plt
 from archnemesis import Data
 #from archnemesis import *
 import archnemesis as ans
-import archnemesis.enums
+import archnemesis.enum
 
 #import archnemesis.helpers.maths_helper as maths_helper
 #from archnemesis.helpers.io_helper import SimpleProgressTracker
@@ -678,7 +678,7 @@ class LineSetSpecData:
             cls, 
             mol_id : int, 
             iso_id : int, 
-            ambient_gasses : tuple[ans.enums.AmbientGas,...],
+            ambient_gasses : tuple[ans.enum.AmbientGasEnum,...],
             single_iso_line_set_data : LineSetData,
             cache : None | Cache = None,
     ) -> Self:
@@ -1122,7 +1122,7 @@ class PseudoContSpecData:
             cls, 
             mol_id : int, 
             iso_id : int, 
-            ambient_gasses : tuple[ans.enums.AmbientGas,...],
+            ambient_gasses : tuple[ans.enum.AmbientGasEnum,...],
             single_iso_pseudo_continuum_data : PseudoContinuumData,
             cache : None | Cache = None,
     ) -> Self:
@@ -1249,7 +1249,9 @@ class PseudoContSpecData:
             partition_function = partition_function
         )
         
-        ls_idxs = np.digitize(line_set_data.NU, bin_edges, right=False)
+        # NOTE: We need to use bin edges as otherwise there is a degeneracy between things in 0th bin and
+        # things to the left of 0th bin. However, we must then subtract 1 from the index.
+        ls_idxs = np.digitize(line_set_data.NU, bin_edges, right=False) - 1
         ls_mask = (line_strength <= s_max) & (ls_idxs > 0) & (ls_idxs < bin_edges.shape[0])
     
         for i in np.flatnonzero(ls_mask):
@@ -1466,7 +1468,7 @@ class AnsDatabase:
             wn_max : float, # Always wavenumber (cm^{-1})
             s_min : float = -1,
             temperature : float = 0,
-            ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
+            ambient_gasses : tuple[ans.enum.AmbientGasEnum,...] = (ans.enum.AmbientGasEnum.AIR,),
             out : None | list | tuple[list,...] = None,
             refresh : bool = False,
     ) -> tuple[list[tuple[tuple[int, int], LineSetData, PseudoContinuumData]],...] | list[tuple[tuple[int,int], LineSetData, PseudoContinuumData]] | Self:
@@ -1539,7 +1541,7 @@ class AnsDatabase:
             wn_max : float, # Always wavenumber (cm^{-1})
             s_min : float = -1, # 
             temperature : float = 0, # Kelvin
-            ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
+            ambient_gasses : tuple[ans.enum.AmbientGasEnum,...] = (ans.enum.AmbientGasEnum.AIR,),
             refresh : bool = False,
     ) -> tuple[LineSetData, PseudoContinuumData]:
 
@@ -1601,7 +1603,7 @@ class AnsDatabase:
             wn_max : float, # Always wavenumber (cm^{-1})
             s_min : float = -1,
             temperature : float = 0,
-            ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
+            ambient_gasses : tuple[ans.enum.AmbientGasEnum,...] = (ans.enum.AmbientGasEnum.AIR,),
             out : None | list | tuple[list,...] = None,
             refresh : bool = False,
     ) -> tuple[list[tuple[tuple[int,int], LineSetData, PseudoContinuumData, PFList]],...] | list[tuple[tuple[int,int], LineSetData, PseudoContinuumData, PFList]] | Self:
@@ -1673,7 +1675,7 @@ class AnsDatabase:
             wn_max : float, # Always wavenumber (cm^{-1})
             s_min : float = -1,
             temperature : float = 0,
-            ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
+            ambient_gasses : tuple[ans.enum.AmbientGasEnum,...] = (ans.enum.AmbientGasEnum.AIR,),
             refresh : bool = False,
     ) -> tuple[LineSetData, PseudoContinuumData, PFList]:
         ld_instance, pc_instance = self._single_iso_fetch_linedata(
@@ -1697,7 +1699,7 @@ class AnsDatabase:
 
 @dc.dataclass(slots=True)
 class LineDataParams:
-    ambient_gasses : tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,)
+    ambient_gasses : tuple[ans.enum.AmbientGasEnum,...] = (ans.enum.AmbientGasEnum.AIR,)
     wn_min : float = 0.0
     wn_max : float = np.inf
     s_min : float = -1
@@ -1722,7 +1724,7 @@ class LineData_0:
             self,
             ID : int,
             ISO : int = 0,
-            ambient_gasses : ans.enums.AmbientGas | tuple[ans.enums.AmbientGas,...] = (ans.enums.AmbientGas.AIR,),
+            ambient_gasses : ans.enum.AmbientGasEnum | tuple[ans.enum.AmbientGasEnum,...] = (ans.enum.AmbientGasEnum.AIR,),
             LINE_DATABASE : None | str = None,
             PARTITION_FUNCTION_DATABASE : None | str = None,
             CONTINUUM_DATABASE : None | str = None,
@@ -1745,7 +1747,7 @@ class LineData_0:
         self._iso_ids : None | np.ndarray = None
         self._mol_id_tpl : None | tuple[int,...] = None
         self._iso_id_tpl : None | tuple[tuple[int,...],...] = None
-        self._params : LineDataParams = LineDataParams(ambient_gasses=(ambient_gasses,) if isinstance(ambient_gasses, ans.enums.AmbientGas) else ambient_gasses)
+        self._params : LineDataParams = LineDataParams(ambient_gasses=(ambient_gasses,) if isinstance(ambient_gasses, ans.enum.AmbientGasEnum) else ambient_gasses)
         self._params_fetched_lines_last = False
         self._params_fetched_partition_last = False
         self._combined_line_data = None
@@ -1771,6 +1773,18 @@ class LineData_0:
             ')'
         )
         return s
+    
+    def __eq__(self, other : Self) -> bool:
+        """
+        Tests if two LineData_0 instances have approximately
+        the same setup.
+        """
+        _lgr.warn('Comparing LineData_0 instances for equality is not really a good idea. This equality function is here so that we can check that no major information is altered when converting from LEGACY to HDF5 format.')
+        is_equal = isinstance(other, LineData_0)
+        is_equal = is_equal and (self.ID == other.ID)
+        is_equal = is_equal and (self.ISO == other.ISO)
+        is_equal = is_equal and (self._params == other._params)
+        return is_equal
     
     @property
     def ID(self) -> int:
@@ -1892,16 +1906,16 @@ class LineData_0:
             t_req : None | float = None, # Kelvin
             p_req : None | float = None, # Atmospheres
             default_continuum_bin_width : None | float = None,
-            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
+            wave_unit :ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm,
     ) -> Self:
         if vmin is not None:
-            vmin = WavePoint(vmin, wave_unit).as_unit(ans.enums.WaveUnit.Wavenumber_cm).value
+            vmin = WavePoint(vmin, wave_unit).as_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value
         
         if vmax is not None:
-            vmax = WavePoint(vmax, wave_unit).as_unit(ans.enums.WaveUnit.Wavenumber_cm).value
+            vmax = WavePoint(vmax, wave_unit).as_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value
         
         if default_continuum_bin_width is not None:
-            default_continuum_bin_width = WavePoint(default_continuum_bin_width, wave_unit).as_unit(ans.enums.WaveUnit.Wavenumber_cm).value
+            default_continuum_bin_width = WavePoint(default_continuum_bin_width, wave_unit).as_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value
         
         self._set_params_direct(
             wn_min = vmin, 
@@ -1926,7 +1940,7 @@ class LineData_0:
             t_req : None | float = None, # Kelvin
             p_req : None | float = None, # Atmospheres
             default_continuum_bin_width : None | float = None,
-            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm,
+            wave_unit :ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm,
     ) -> Self:
         prev_params = self.get_params()
         
@@ -2039,14 +2053,14 @@ class LineData_0:
             self,
             t_calc : float,
             wave_calc_range : None | tuple[float,float] = None,
-            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm, # unit of `wave_calc_range`
+            wave_unit :ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm, # unit of `wave_calc_range`
             combined_output : bool = False, # if `True` will combine output into a single array instead of splitting by isotopologue
     ) -> tuple[np.ndarray,...]:
         if not self._params_fetched_lines_last:
             self.fetch_linedata()
         
-        if wave_calc_range is not None and wave_unit != ans.enums.WaveUnit.Wavenumber_cm:
-            wn_calc_range = (WavePoint(wave_calc_range[0], wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value, WavePoint(wave_calc_range[1], wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value)
+        if wave_calc_range is not None and wave_unit != ans.enum.WaveUnitEnum.Wavenumber_cm:
+            wn_calc_range = (WavePoint(wave_calc_range[0], wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value, WavePoint(wave_calc_range[1], wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value)
         else:
             wn_calc_range = wave_calc_range
         
@@ -2076,7 +2090,7 @@ class LineData_0:
             p_calc : float,
             amb_frac : float | np.ndarray = 0.5,
             wave_calc_range : None | tuple[float,float] = None,
-            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm, # unit of `wave_calc_range`
+            wave_unit :ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm, # unit of `wave_calc_range`
             combined_output : bool = False, # if `True` will combine output into a single array instead of splitting by isotopologue
     ) -> tuple[np.ndarray,...]:
         if not self._params_fetched_lines_last:
@@ -2088,8 +2102,8 @@ class LineData_0:
         else:
             mol_mix_frac = np.array([1 - sum(amb_frac), *amb_frac], dtype=float)
         
-        if wave_calc_range is not None and wave_unit != ans.enums.WaveUnit.Wavenumber_cm:
-            wn_calc_range = (WavePoint(wave_calc_range[0], wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value, WavePoint(wave_calc_range[1], wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value)
+        if wave_calc_range is not None and wave_unit != ans.enum.WaveUnitEnum.Wavenumber_cm:
+            wn_calc_range = (WavePoint(wave_calc_range[0], wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value, WavePoint(wave_calc_range[1], wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value)
         else:
             wn_calc_range = wave_calc_range
             
@@ -2120,7 +2134,7 @@ class LineData_0:
             self,
             t_calc : float,
             wave_calc_range : None | tuple[float,float] = None,
-            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm, # unit of `wave_calc_range`
+            wave_unit :ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm, # unit of `wave_calc_range`
             combined_output : bool = False, # if `True` will combine output into a single array instead of splitting by isotopologue
     ) -> np.ndarray | tuple[np.ndarray,...]:
         if not self._params_fetched_lines_last:
@@ -2128,8 +2142,8 @@ class LineData_0:
         if not self._params_fetched_partition_last:
             self.fetch_partition_fn()
         
-        if wave_calc_range is not None and wave_unit != ans.enums.WaveUnit.Wavenumber_cm:
-            wn_calc_range = (WavePoint(wave_calc_range[0], wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value, WavePoint(wave_calc_range[1], wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value)
+        if wave_calc_range is not None and wave_unit != ans.enum.WaveUnitEnum.Wavenumber_cm:
+            wn_calc_range = (WavePoint(wave_calc_range[0], wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value, WavePoint(wave_calc_range[1], wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value)
         else:
             wn_calc_range = wave_calc_range
         
@@ -2158,11 +2172,11 @@ class LineData_0:
             amb_frac : float | np.ndarray = 0.5,
             wave_calc_range : None | tuple[float,float] = None,
             isotopic_abundance : None | float | np.ndarray = None,
-            lineshape_fn : Callable[[float,float,float], float] = Data.lineshape.voigt,
+            lineshape_fn : Callable[[float,float,float], float] = ans.lineshape.voigt,
             s_floor : float = 0.0,
             wn_calc_window : float = 25.0, # (cm^{-1})
             wn_approx_window : float = 75.0, # (cm^{-1})
-            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm, # unit of `wave_grid` and `wave_calc_range`
+            wave_unit :ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm, # unit of `wave_grid` and `wave_calc_range`
             
             include_lines : bool = True,
             include_continuum : bool = True,
@@ -2212,11 +2226,11 @@ class LineData_0:
             amb_frac : float | np.ndarray = 0.5,
             wave_calc_range : None | tuple[float,float] = None,
             isotopic_abundance : None | float | np.ndarray = None,
-            lineshape_fn : Callable[[float,float,float], float] = Data.lineshape.voigt,
+            lineshape_fn : Callable[[float,float,float], float] = ans.lineshape.voigt,
             s_floor : float = 0.0, # Minimum line strength to include. NOTE: Is independent of the value in `self._params.s_min`
             wn_calc_window : float = 25.0, # (cm^{-1})
             wn_approx_window : float = 75.0, # (cm^{-1})
-            wave_unit :ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm, # unit of `wave_grid` and `wave_calc_range`
+            wave_unit :ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm, # unit of `wave_grid` and `wave_calc_range`
             
             include_lines : bool = True,
             include_continuum : bool = True,
@@ -2237,15 +2251,15 @@ class LineData_0:
         
         
         # Handle wave units
-        if wave_unit != ans.enums.WaveUnit.Wavenumber_cm:
-            wn_grid = WavePoint(wave_grid, wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value
+        if wave_unit != ans.enum.WaveUnitEnum.Wavenumber_cm:
+            wn_grid = WavePoint(wave_grid, wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value
         else:
             wn_grid = wave_grid
         
         if wave_calc_range is None:
             wn_calc_range = (np.min(wn_grid) - 2*wn_approx_window, np.max(wn_grid) + 2*wn_approx_window)
-        elif wave_unit != ans.enums.WaveUnit.Wavenumber_cm:
-            wn_calc_range = (WavePoint(wave_calc_range[0], wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value, WavePoint(wave_calc_range[1], wave_unit).to_unit(ans.enums.WaveUnit.Wavenumber_cm).value)
+        elif wave_unit != ans.enum.WaveUnitEnum.Wavenumber_cm:
+            wn_calc_range = (WavePoint(wave_calc_range[0], wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value, WavePoint(wave_calc_range[1], wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value)
         
         # Ensure that `wn_grid` is ascending. Flip both `wn_grid` and `out` if `wn_grid` is decending.
         if np.all(wn_grid[:-1] < wn_grid[1:]):

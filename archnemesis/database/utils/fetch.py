@@ -5,7 +5,7 @@ Functions and classes etc. that fetch resources from the web.
 from pathlib import Path
 import urllib
 import ssl
-from typing import Generator, Literal
+from typing import Iterator, Literal
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ def file_in_chunks(
         encoding : str = 'ascii', 
         proxy : None | dict[str,str],
         error_code_action : dict[int,Literal['ignore','warning','error']] = dict()
-) -> Generator[bytes | str]:
+) -> Iterator[bytes | str]:
     """
     Fetch a file from the web and download it in chunks of `chunk_size`
     ## ARGUMENTS ##
@@ -37,8 +37,8 @@ def file_in_chunks(
             `None` or a dictionary detailing proxy mappings
 
     ## RETURNS ##
-        data_generator : Generator[bytes | str]
-            A generator for the data in the file at `url`. If `encoding` is `None`
+        data_iterator : Iterator[bytes | str]
+            An iterator for the data in the file at `url`. If `encoding` is `None`
             will generate `bytes` else will generate `str`.
     """
     req = urllib.request.Request(url)
@@ -137,9 +137,9 @@ def file(
             If `to_fpath` is not `None` will return data from the file at the `url`.
             Otherwise will write the data to a file at `to_fpath` and return `None`.
     """
-    file_chunk_generator = file_in_chunks(url, chunk_size=chunk_size, encoding=encoding, proxy=proxy, error_code_action=error_code_action)
+    file_chunk_iterator = file_in_chunks(url, chunk_size=chunk_size, encoding=encoding, proxy=proxy, error_code_action=error_code_action)
     
-    if file_chunk_generator is None: # The download failed
+    if file_chunk_iterator is None: # The download failed
         return
     
     if encoding is None:
@@ -159,7 +159,7 @@ def file(
             with open(to_fpath, write_mode) as f:
                 if prefix is not None:
                     f.write(prefix)
-                for chunk in file_chunk_generator:
+                for chunk in file_chunk_iterator:
                     f.write(chunk)
         
         except Exception as e:
@@ -177,5 +177,5 @@ def file(
         
     else:
         empty_str = b'' if encoding is None else ''
-        return (empty_str if prefix is None else prefix) + empty_str.join(file_chunk_generator)
+        return (empty_str if prefix is None else prefix) + empty_str.join(file_chunk_iterator)
    

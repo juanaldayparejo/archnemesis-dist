@@ -27,14 +27,14 @@ import scipy
 from numba import jit, njit
 
 #from archnemesis import *
-from archnemesis.enums import (
-    WaveUnit,
-    #SpectraUnit,
-    SpectralCalculationMode,
-    SpectroscopicLineProfile,
-    #Gas
+from archnemesis.enum import (
+    WaveUnitEnum,
+    #SpectraUnitEnum,
+    SpectralCalculationModeEnum,
+    SpectroscopicLineProfileEnum,
+    #GasEnum
 )
-from archnemesis.Data.enum.map import SpectroscopicLineProfileEnum_to_lineshape_fn
+from archnemesis.enum.map import SpectroscopicLineProfileEnum_to_lineshape_fn
 
 #import matplotlib.pyplot as plt
 import archnemesis as ans
@@ -68,10 +68,10 @@ class MolDatabaseSpecification(NamedTuple):
     continuum_dbase : str
 
 class MolLineDataParams(NamedTuple):
-    lineshape : SpectroscopicLineProfile
+    lineshape : SpectroscopicLineProfileEnum
     wn_calc_window : float
     wn_approx_window : float
-    amb_gas : tuple[ans.enums.AmbientGas,...]
+    amb_gas : tuple[ans.enum.AmbientGasEnum,...]
     s_min : float
     s_floor : float
     isotopic_abundance : None | float | np.ndarray
@@ -85,7 +85,7 @@ class Spectroscopy_0:
     def __init__(
             self, 
             RUNNAME: str = '', 
-            ILBL: SpectralCalculationMode = SpectralCalculationMode.LINE_BY_LINE_TABLES, 
+            ILBL: SpectralCalculationModeEnum = SpectralCalculationModeEnum.LINE_BY_LINE_TABLES, 
             NGAS: int = 2, 
             ONLINE: bool = False,
             VREL: float = 25.0,
@@ -171,13 +171,13 @@ class Spectroscopy_0:
 
         # Input parameters with validation
         self.runname = RUNNAME
-        #self.ILBL = SpectralCalculationMode(ILBL) if not isinstance(ILBL, SpectralCalculationMode) else ILBL
+        #self.ILBL = SpectralCalculationModeEnum(ILBL) if not isinstance(ILBL, SpectralCalculationMode) else ILBL
         self.NGAS = NGAS
         self.ONLINE = ONLINE
         self.VREL = VREL
 
         # Attributes with proper typing
-        #self.ISPACE: Optional[WaveUnit] = None
+        #self.ISPACE: Optional[WaveUnitEnum] = None
         self.ID: None | np.ndarray = None  # Array of Gas enum values (NGAS)
         self.ISO = None       #(NGAS)
         self._locations = path_redirect.PathRedirectList() #(NGAS)
@@ -206,7 +206,7 @@ class Spectroscopy_0:
         
         # set property values
         self.ILBL = ILBL
-        self.ISPACE = WaveUnit.Wavenumber_cm  # Default value
+        self.ISPACE = WaveUnitEnum.Wavenumber_cm  # Default value
 
     @property
     def LOCATION(self) -> list[str]:
@@ -229,15 +229,15 @@ class Spectroscopy_0:
         return self.runname
     
     @property
-    def ILBL(self) -> SpectralCalculationMode:
+    def ILBL(self) -> SpectralCalculationModeEnum:
         return self._ilbl
     
     @ILBL.setter
     def ILBL(self, value):
-        self._ilbl = SpectralCalculationMode(value)
+        self._ilbl = SpectralCalculationModeEnum(value)
     
     @property
-    def IPROC(self) -> list[SpectroscopicLineProfile]:
+    def IPROC(self) -> list[SpectroscopicLineProfileEnum]:
         return self._iproc
 
     @IPROC.setter
@@ -245,15 +245,15 @@ class Spectroscopy_0:
         if value is None:
             self._iproc = None
         else:
-            self._iproc = [SpectroscopicLineProfile(v) for v in value]
+            self._iproc = [SpectroscopicLineProfileEnum(v) for v in value]
 
     @property
-    def ISPACE(self) -> WaveUnit:
+    def ISPACE(self) -> WaveUnitEnum:
         return self._ispace
     
     @ISPACE.setter
     def ISPACE(self, value):
-        self._ispace = WaveUnit(value)
+        self._ispace = WaveUnitEnum(value)
     
     
     
@@ -265,13 +265,13 @@ class Spectroscopy_0:
         Subroutine to assess whether the variables of the Spectroscopy class are correct
         """   
         # Checking common parameters
-        assert isinstance(self.ILBL, SpectralCalculationMode), \
+        assert isinstance(self.ILBL, SpectralCalculationModeEnum), \
             'ILBL must be SpectralCalculationMode enum'
 
         if self.ISPACE is not None:
-            assert isinstance(self.ISPACE, WaveUnit), \
-                'ISPACE must be WaveUnit enum'
-            assert self.ISPACE in (WaveUnit.Wavenumber_cm, WaveUnit.Wavelength_um), \
+            assert isinstance(self.ISPACE, WaveUnitEnum), \
+                'ISPACE must be WaveUnitEnum enum'
+            assert self.ISPACE in (WaveUnitEnum.Wavenumber_cm, WaveUnitEnum.Wavelength_um), \
                 'ISPACE must be Wavenumber_cm or Wavelength_um'
 
         assert np.issubdtype(type(self.NGAS), np.integer) == True , \
@@ -292,7 +292,7 @@ class Spectroscopy_0:
             for i in range(self.NGAS):
                 assert isinstance(self.IPROC[i], int), \
                     f'IPROC[{i}] must be an integer'
-                assert isinstance(self.IPROC[i], SpectroscopicLineProfile), \
+                assert isinstance(self.IPROC[i], SpectroscopicLineProfileEnum), \
                     f'IPROC[{i}] must be SpectroscopicLineProfile enum'
 
             assert self.ID is not None , \
@@ -320,7 +320,7 @@ class Spectroscopy_0:
         from archnemesis.Data import gas_info
 
         msg = f'\n#===== SUMMARY =====#\n\tSpectroscopy_0 instance at memory location {id(self)}'
-        if self.ILBL==SpectralCalculationMode.K_TABLES:
+        if self.ILBL==SpectralCalculationModeEnum.K_TABLES:
             msg += f'\n\tCalculation type ILBL ::  {(self.ILBL," (k-distribution)")}'
             msg += f'\n\tNumber of radiatively-active gaseous species ::  {(self.NGAS)}'
             gasname = ['']*self.NGAS
@@ -345,7 +345,7 @@ class Spectroscopy_0:
             msg += f'\n\tNumber of pressure levels ::  {(self.NP)}'
             msg += f"\n\tPressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}"
 
-        elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+        elif self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
             msg += f'\n\tCalculation type ILBL ::  {(self.ILBL," (line-by-line)")}'
             msg += f'\n\tNumber of radiatively-active gaseous species ::  {(self.NGAS)}'
             gasname = ['']*self.NGAS
@@ -366,7 +366,7 @@ class Spectroscopy_0:
             msg += f'\n\tNumber of pressure levels ::  {(self.NP)}'
             msg += f"\n\tPressure range ::  {(self.PRESS.min(),'-',self.PRESS.max())}"
 
-        elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+        elif self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
             msg += f'\n\tCalculation type ILBL ::  {(self.ILBL," (line-by-line runtime)")}'
             msg += f'\n\tNumber of radiatively-active gaseous species ::  {(self.NGAS)}'
             gasname = ['']*self.NGAS
@@ -383,19 +383,7 @@ class Spectroscopy_0:
 
             lineshape = ['']*self.NGAS
             for i in range(self.NGAS):
-                if self.IPROC[i]==0:
-                    lineshape1 = 'VOIGT'
-                elif self.IPROC[i]==1:
-                    lineshape1 = 'SUBLORENTZ_CO2_BROADENING'
-                elif self.IPROC[i]==2:
-                    lineshape1 = 'VANVLECK_WEISSKOPF'
-                elif self.IPROC[i]==4:
-                    lineshape1 = 'LORENTZ'
-                elif self.IPROC[i]==12:
-                    lineshape1 = 'DOPPLER'
-                else:
-                    lineshape1 = 'UNKNOWN'
-                lineshape[i] = lineshape1
+                lineshape[i] = SpectroscopicLineProfileEnum(self.IPROC[i]).name if self.IPROC[i] in SpectroscopicLineProfileEnum else 'UNKNOWN_LINESHAPE'
 
             msg += f'\n\tLine shapes for each gas ::  {(lineshape)}'
         
@@ -424,10 +412,10 @@ class Spectroscopy_0:
         """
         K_array = np.array(K_array)
 
-        if self.ILBL==SpectralCalculationMode.K_TABLES: #K-tables
+        if self.ILBL==SpectralCalculationModeEnum.K_TABLES: #K-tables
             assert K_array.shape == (self.NWAVE, self.NG, self.NP, self.NT, self.NGAS),\
                 'K should be (NWAVE,NG,NP,NT,NGAS) if ILBL=0 (K-tables)'
-        elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+        elif self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES: #LBL-tables
             assert K_array.shape == (self.NWAVE, self.NP, abs(self.NT), self.NGAS),\
                 'K should be (NWAVE,NP,NT,NGAS) if ILBL=2 (LBL-tables)'
         else:
@@ -477,7 +465,7 @@ class Spectroscopy_0:
                     self.NGAS = len(self.LOCATION)
         
         
-        if self.ILBL != SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+        if self.ILBL != SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
             # If tables have already been read, re-read them
             if self.ID is not None:
                 self.read_header()
@@ -519,23 +507,23 @@ class Spectroscopy_0:
 
             dset = h5py_helper.store_data(grp, 'ILBL', int(self.ILBL))
             dset.attrs['title'] = "Spectroscopy calculation type"
-            if self.ILBL==SpectralCalculationMode.K_TABLES:
+            if self.ILBL==SpectralCalculationModeEnum.K_TABLES:
                 dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
-            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            elif self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                 dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
-            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+            elif self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
                 dset.attrs['type'] = 'Line-by-line calculation during runtime'
             else:
                 raise ValueError('error :: ILBL must be 0 or 2')
 
             if self.NGAS>0:
 
-                if((self.ILBL==SpectralCalculationMode.K_TABLES) or (self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES)):
+                if((self.ILBL==SpectralCalculationModeEnum.K_TABLES) or (self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES)):
                     dt = h5py.special_dtype(vlen=str)
                     dset = h5py_helper.store_data(grp, 'LOCATION', self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
                     dset.attrs['title'] = "Location of the pre-tabulated tables"
 
-                if self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+                if self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
 
                     dset = h5py_helper.store_data(grp, 'ID', self.ID)
                     dset.attrs['title'] = "ID of the gaseous species"
@@ -553,9 +541,9 @@ class Spectroscopy_0:
 
                     dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
                     dset.attrs['title'] = "Spectral units"
-                    if self.ISPACE==WaveUnit.Wavenumber_cm:
+                    if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
                         dset.attrs['units'] = 'Wavenumber / cm-1'
-                    elif self.ISPACE==WaveUnit.Wavelength_um:
+                    elif self.ISPACE==WaveUnitEnum.Wavelength_um:
                         dset.attrs['units'] = 'Wavelength / um'
 
                     dset = h5py_helper.store_data(grp, 'WAVE', self.WAVE)
@@ -564,8 +552,61 @@ class Spectroscopy_0:
                         dset.attrs['units'] = 'cm-1'
                     elif self.ISPACE==0:
                         dset.attrs['title'] = "Wavelength array"
-                        dset.attrs['units'] = 'um'        
-
+                        dset.attrs['units'] = 'um'
+                    
+                    mldp_grp = h5py_helper.ensure_grp(grp, 'MolLineDataParams', {'title':'Molecular line data parameters for each gas.'})
+                    for igas in range(self.NGAS):
+                        h5py_helper.write(
+                            mldp_grp, 
+                            self.LINE_DATA_PARAMS[igas], 
+                            f'{igas}',
+                            metadata = {
+                                'lineshape' : {
+                                    'title': 'Lineshape used when computing line absorption',
+                                    'unit' : 'SpectroscopicLineProfileEnum',
+                                },
+                                'wn_calc_window' : {
+                                    'title' : 'Will perform full lineshape calculation within this distance of line center',
+                                    'unit' : 'cm^{-1}',
+                                },
+                                'wn_approx_window' : {
+                                    'title' : 'Will perform approximate lineshape calculation within this distance of line center',
+                                    'unit' : 'cm^{-1}',
+                                },
+                                'amb_gas' : {
+                                    'title' : 'Ambient gasses',
+                                    'unit' : 'AmbientGasEnum',
+                                },
+                                's_min' : {
+                                    'title' : 'Minimum line strength not included in continuum',
+                                    'unit' : 'TODO',
+                                },
+                                's_floor' : {
+                                    'title' : 'Minimum line strength included in calculation of line absorption',
+                                    'unit' : 'TODO',
+                                },
+                                'isotopic_abundance' : {
+                                    'title' : 'If present, abundance of the isotope. If not present (or shape=`None`) then is terrestrial abundance.',
+                                    'unit' : 'NUMBER',
+                                },
+                                'include_pressure_shift' : {
+                                    'title' : 'If "True" will include pressure shift of lines in calculation',
+                                    'type' : 'bool',
+                                },
+                                'include_continuum' : {
+                                    'title' : 'If `True` will include continuum in calculation',
+                                    'type' : 'bool',
+                                },
+                                'include_lines' : {
+                                    'title' : 'If `True` will include lines in calculation',
+                                    'type' : 'bool',
+                                },
+                                'use_cache' : {
+                                    'title' : 'If `True` will use cache to speed up repeated calculations (experimental)',
+                                    'type' : 'bool',
+                                },
+                            }
+                        )
     ######################################################################################################
     def read_hdf5(self,runname,inside_telluric=False):
         """
@@ -589,28 +630,81 @@ class Spectroscopy_0:
                 raise ValueError('error :: Spectroscopy is not defined in HDF5 file')
             else:
                 self.NGAS = h5py_helper.retrieve_data(f, name+'/NGAS', np.int32, default=0)
-                self.ILBL = SpectralCalculationMode(h5py_helper.retrieve_data(f, name+'/ILBL', np.int32))
+                self.ILBL = SpectralCalculationModeEnum(h5py_helper.retrieve_data(f, name+'/ILBL', np.int32))
 
                 if self.NGAS>0:
-                    LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION', default=tuple())
-                    if LOCATION1 is None:
-                        LOCATION1 = []
-                    LOCATION = ['']*self.NGAS
-                    for igas in range(self.NGAS):
-                        LOCATION[igas] = LOCATION1[igas].decode('ascii')
-                    self.LOCATION = LOCATION
+                    if self.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
+                        LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION', default=None)
+                        if LOCATION1 is None:
+                            LOCATION1 = []
+                        else:
+                            assert LOCATION1.shape == (self.NGAS,3), 'error :: LOCATION must be (NGAS,3) for ILBL=1 (LINE_BY_LINE_RUNTIME)'
+                        LOCATION = []
+                        for igas in range(self.NGAS):
+                            LOCATION.append(tuple(x.decode('ascii') for x in LOCATION1[igas]))
+                        self.LOCATION = LOCATION
                     
-                    if self.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
                         self.ID = np.array(f.get(name+'/ID'))
                         self.ISO = np.array(f.get(name+'/ISO'))
                         self.IPROC = np.array(f.get(name+'/IPROC'))
-                        self.ISPACE = h5py_helper.retrieve_data(f, name+'/ISPACE', lambda x:  WaveUnit(np.int32(x)))
+                        self.ISPACE = h5py_helper.retrieve_data(f, name+'/ISPACE', lambda x:  WaveUnitEnum(np.int32(x)))
                         self.WAVE = h5py_helper.retrieve_data(f, name+'/WAVE', np.array)
                         self.NWAVE = len(self.WAVE)
-                        self.NG = 1
-                        self.G_ORD = np.array([0.])
-                        self.DELG = np.array([1.0])
+                        self.NG = None
+                        self.G_ORD = None
+                        self.DELG = None
+                        
+                        self.LINE_DATA_PARAMS = []
+                        for igas in range(self.NGAS):
+                            self.LINE_DATA_PARAMS.append(
+                                h5py_helper.read(
+                                    f, 
+                                    MolLineDataParams,
+                                    f'{name}/MolLineDataParams/{igas}', 
+                                    attrs = None,
+                                    mutators = {
+                                        'lineshape' : lambda x: SpectroscopicLineProfileEnum(x),
+                                        'amb_gas' : lambda x: tuple(ans.enum.AmbientGasEnum(z) for z in x),
+                                        'include_pressure_shift' : lambda x: True if x!=0 else False,
+                                        'include_continuum' : lambda x: True if x!=0 else False,
+                                        'include_lines' : lambda x: True if x!=0 else False,
+                                        'use_cache' : lambda x: True if x!=0 else False,
+                                    },
+                                    defaults = {
+                                        'isotopic_abundance' : None,
+                                    }
+                                )
+                            )
+                        
+                        self.LINE_DATA = []
+                        
+                        assert all(len(self.LINE_DATA_PARAMS[0].amb_gas) == len(x.amb_gas) for x in self.LINE_DATA_PARAMS), "For .lls RUNTIME format. All LINE_DATA instances must have the same number of ambient gasses"
+                        self.N_AMB_GASSES = len(self.LINE_DATA_PARAMS[0].amb_gas)
+                        
+                        for igas in range(self.NGAS):
+                            pf_dbase, ld_dbase, pc_dbase = self.LOCATION[igas]
+                            self.LINE_DATA.append(
+                                ans.LineData_0(
+                                    self.ID[igas], #ID of the gas
+                                    self.ISO[igas], #Isotope ID of the gas
+                                    ambient_gasses = self.LINE_DATA_PARAMS[igas].amb_gas,
+                                    LINE_DATABASE=ld_dbase,
+                                    CONTINUUM_DATABASE=pc_dbase,
+                                    PARTITION_FUNCTION_DATABASE=pf_dbase,
+                                )
+                            )
+                            self.LINE_DATA[igas].fetch_partition_fn() # May as well get this now as we will always want it
+                        
+                        
                     else:
+                        LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION', default=tuple())
+                        if LOCATION1 is None:
+                            LOCATION1 = []
+                        LOCATION = ['']*self.NGAS
+                        for igas in range(self.NGAS):
+                            LOCATION[igas] = LOCATION1[igas].decode('ascii')
+                        self.LOCATION = LOCATION
+                        
                         #Reading the header information
                         self.read_header()
                     
@@ -624,7 +718,7 @@ class Spectroscopy_0:
         """
         
         # Read the RUNTIME version if applicable
-        if self.ILBL == SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+        if self.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
             return self.read_lls_runtime(runname)
         
         # Otherwise read the normal version
@@ -678,63 +772,63 @@ class Spectroscopy_0:
 
     def read_lls_runtime(self, runname):
         """
-        Read the .lls file in RUNTIME format and store the parameters into the Spectroscopy Class
+            Read the .lls file in RUNTIME format and store the parameters into the Spectroscopy Class
 
-        RUNTIME format is as follows:
-        ```
-        WAVE <start> <stop> <step>
-        DBASE_PF <path_to_partiton_function_database_file>
-        DBASE_LD <path_to_line_data_database_file>
-        DBASE_PC <path_to_continuum_data_database_file>
-        LINESHAPE <iproc|lineshape_enum>
-        WN_CALC_WINDOW <float>
-        WN_APPROX_WINDOW <float>
-        AMB_GAS <broad_gas_1> <broad_gas_2> ... <broad_gas_N>
-        S_MIN <float>
-        S_FLOOR <float>
-        INCLUDE_PRESSURE_SHIFT True|False
-        INCLUDE_CONTINUUM True|False
-        INCLUDE_LINES True|False
-        USE_CACHE True|False
-        MOL <gas_1_id> <gas_1_iso_id> [<gas_1_abundance>]
-        MOL <gas_2_id> <gas_2_iso_id> [<gas_2_abundance>]
-        MOL ...
-        MOL <gas_n_id> <gas_n_iso_id> [<gas_n_abundance>]
-        END_BLOCK
-        DBASE_PF <path_to_partiton_function_database_file>
-        DBASE_LD <path_to_line_data_database_file>
-        DBASE_PC <path_to_continuum_data_database_file>
-        MOL <gas_n+1_id> <gas_n+1_iso_id> [<gas_n+1_abundance>]
-        MOL <gas_n+2_id> <gas_n+2_iso_id> [<gas_n+2_abundance>]
-        MOL ...
-        MOL <gas_n+m_id> <gas_n+m_iso_id> [<gas_n+m_abundance>]
-        END_BLOCK
-        ...
-        ```
-        
-        Comments are prefaced by the `#` character. 
-        Lines with no printable characters are ignored.
-        Omitted values take on the same values as the last set value (within a block, or defaults otherwise).
-        I.e. values "flow downwards", so e.g. you only have to set `LINESHAPE` once at the top and all 
-        subsequent `MOL` statements will use the specified `LINESHAPE` until it is set to something else.
-        NOTE: Can only have ONE `WAVE` statement.
-        
-        ### DEFAULTS ###
-            * `DBASE_XX` = Any previous `DBASE_XX` within the block. NOTE: at least one `DBASE_XX` must be defined per block.
-            * `LINESHAPE` = `VOIGT`
-            * `WN_CALC_WINDOW` = 25.0
-            * `WN_APPROX_WINDOW` = 75.0
-            * `AMB_GAS` = `AIR`
-            * `S_MIN` = -1
-            * `S_FLOOR` = 0.0
-            * `INCLUDE_PRESSURE_SHIFT` = `True`
-            * `INCLUDE_CONTINUUM` = `True`
-            * `INCLUDE_LINES` = `True`
-            * `USE_CACHE` = `True`
-            * <gas_n_abundance> = `None`. I.e. Will use terrestrial abundances if not specified.
+            RUNTIME format is as follows:
+            ```
+            WAVE <start> <stop> <step>
+            DBASE_PF <path_to_partiton_function_database_file>
+            DBASE_LD <path_to_line_data_database_file>
+            DBASE_PC <path_to_continuum_data_database_file>
+            LINESHAPE <iproc|lineshape_enum>
+            WN_CALC_WINDOW <float>
+            WN_APPROX_WINDOW <float>
+            AMB_GAS <broad_gas_1> <broad_gas_2> ... <broad_gas_N>
+            S_MIN <float>
+            S_FLOOR <float>
+            INCLUDE_PRESSURE_SHIFT True|False
+            INCLUDE_CONTINUUM True|False
+            INCLUDE_LINES True|False
+            USE_CACHE True|False
+            MOL <gas_1_id> <gas_1_iso_id> [<gas_1_abundance>]
+            MOL <gas_2_id> <gas_2_iso_id> [<gas_2_abundance>]
+            MOL ...
+            MOL <gas_n_id> <gas_n_iso_id> [<gas_n_abundance>]
+            END_BLOCK
+            DBASE_PF <path_to_partiton_function_database_file>
+            DBASE_LD <path_to_line_data_database_file>
+            DBASE_PC <path_to_continuum_data_database_file>
+            MOL <gas_n+1_id> <gas_n+1_iso_id> [<gas_n+1_abundance>]
+            MOL <gas_n+2_id> <gas_n+2_iso_id> [<gas_n+2_abundance>]
+            MOL ...
+            MOL <gas_n+m_id> <gas_n+m_iso_id> [<gas_n+m_abundance>]
+            END_BLOCK
+            ...
+            ```
+            
+            Comments are prefaced by the `#` character. 
+            Lines with no printable characters are ignored.
+            Omitted values take on the same values as the last set value (within a block, or defaults otherwise).
+            I.e. values "flow downwards", so e.g. you only have to set `LINESHAPE` once at the top and all 
+            subsequent `MOL` statements will use the specified `LINESHAPE` until it is set to something else.
+            NOTE: Can only have ONE `WAVE` statement.
+            
+            ### DEFAULTS ###
+                * `DBASE_XX` = Any previous `DBASE_XX` within the block. NOTE: at least one `DBASE_XX` must be defined per block.
+                * `LINESHAPE` = `VOIGT`
+                * `WN_CALC_WINDOW` = 25.0
+                * `WN_APPROX_WINDOW` = 75.0
+                * `AMB_GAS` = `AIR`
+                * `S_MIN` = -1
+                * `S_FLOOR` = 0.0
+                * `INCLUDE_PRESSURE_SHIFT` = `True`
+                * `INCLUDE_CONTINUUM` = `True`
+                * `INCLUDE_LINES` = `True`
+                * `USE_CACHE` = `True`
+                * <gas_n_abundance> = `None`. I.e. Will use terrestrial abundances if not specified.
 
-        @param runname: str
-            Name of the Nemesis run
+            @param runname: str
+                Name of the Nemesis run
         """
         lls_fpath = f"./{runname}.lls"
         
@@ -747,10 +841,10 @@ class Spectroscopy_0:
         current_pf_dbase = None
         current_line_data_dbase = None
         current_continuum_dbase = None
-        current_lineshape = SpectroscopicLineProfile.VOIGT
+        current_lineshape = SpectroscopicLineProfileEnum.VOIGT
         current_wn_calc_window = 25.0
         current_wn_approx_window = 75.0
-        current_amb_gas = [ans.enums.AmbientGas.AIR]
+        current_amb_gas = [ans.enum.AmbientGasEnum.AIR]
         current_s_min = -1
         current_s_floor = 0
         current_include_pressure_shift = True
@@ -770,10 +864,10 @@ class Spectroscopy_0:
                         if _wave_unit is not None:
                             raise RuntimeError('Cannot have more than one WAVE_UNIT entry.')
                         x = aline.split(maxsplit=1)[1]
-                        if x in [x.name for x in ans.enums.WaveUnit.Wavenumber_cm]:
-                            _wave_unit = ans.enums.WaveUnit.Wavenumber_cm[x]
+                        if x in [x.name for x in ans.enum.WaveUnitEnum.Wavenumber_cm]:
+                            _wave_unit = ans.enum.WaveUnitEnum.Wavenumber_cm[x]
                         else:
-                            _wave_unit = ans.enums.WaveUnit.Wavenumber_cm(int(x))
+                            _wave_unit = ans.enum.WaveUnitEnum.Wavenumber_cm(int(x))
                     else:
                         if _wave_spec is not None:
                             raise RuntimeError('Cannot have more than one WAVE entry.')
@@ -792,7 +886,7 @@ class Spectroscopy_0:
                 
                 elif aline.startswith('LINESHAPE'):
                     _x = aline.split(maxsplit=1)[1]
-                    current_lineshape = SpectroscopicLineProfile[_x] if _x in [z.name for z in SpectroscopicLineProfile] else SpectroscopicLineProfile(int(_x))
+                    current_lineshape = SpectroscopicLineProfileEnum[_x] if _x in [z.name for z in SpectroscopicLineProfileEnum] else SpectroscopicLineProfileEnum(int(_x))
                 
                 elif aline.startswith('WN_CALC_WINDOW'):
                     current_wn_calc_window = float(aline.split(maxsplit=1)[1])
@@ -801,7 +895,7 @@ class Spectroscopy_0:
                     current_wn_approx_window = float(aline.split(maxsplit=1)[1])
                 
                 elif aline.startswith('AMB_GAS'):
-                    current_amb_gas = tuple(ans.enums.AmbientGas[x] if x in [y.name for y in ans.enums.AmbientGas] else ans.enums.AmbientGas(int(x)) for x in aline.split()[1:])
+                    current_amb_gas = tuple(ans.enum.AmbientGasEnum[x] if x in [y.name for y in ans.enum.AmbientGasEnum] else ans.enum.AmbientGasEnum(int(x)) for x in aline.split()[1:])
                 
                 elif aline.startswith('S_MIN'):
                     current_s_min = float(aline.split(maxsplit=1)[1])
@@ -924,10 +1018,10 @@ class Spectroscopy_0:
                     current_pf_dbase = None
                     current_line_data_dbase = None
                     current_continuum_dbase = None
-                    current_lineshape = SpectroscopicLineProfile.VOIGT
+                    current_lineshape = SpectroscopicLineProfileEnum.VOIGT
                     current_wn_calc_window = 25.0
                     current_wn_approx_window = 75.0
-                    current_amb_gas = [ans.enums.AmbientGas.AIR]
+                    current_amb_gas = [ans.enum.AmbientGasEnum.AIR]
                     current_s_min = -1
                     current_s_floor = 0
                     current_include_pressure_shift = True
@@ -949,7 +1043,7 @@ class Spectroscopy_0:
             raise RuntimeError('WAVE entry is required in .lls RUNTIME format')
         if _wave_unit is None:
             _lgr.warning('WAVE_UNIT not specified assuming wavenumbers in (cm^{-1})')
-            _wave_unit = ans.enums.WaveUnit.Wavenumber_cm
+            _wave_unit = ans.enum.WaveUnitEnum.Wavenumber_cm
         
         self.WAVE = np.arange(*_wave_spec, dtype=float)
         self.NWAVE = self.WAVE.size
@@ -1058,7 +1152,7 @@ class Spectroscopy_0:
         _lgr.warning(f'{self.NGAS=} {self.LOCATION=}')
         if self.NGAS>0:
 
-            if self.ILBL==SpectralCalculationMode.K_TABLES:
+            if self.ILBL==SpectralCalculationModeEnum.K_TABLES:
 
                 #Getting the extension of the look-up tables to see whether they are in HDF5 or binary formats
                 ext = np.zeros(self.NGAS,dtype='int32')
@@ -1121,7 +1215,7 @@ class Spectroscopy_0:
                     
                     raise ValueError('error in read_header:: HDF5 correlated-k look-up tables have not yet been implemented')
 
-            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+            elif self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
 
                 #Getting the extension of the look-up tables to see whether they are in HDF5 or binary formats
                 ext = np.zeros(self.NGAS,dtype='int32')
@@ -1193,7 +1287,7 @@ class Spectroscopy_0:
                     isoIDlta = np.zeros(self.NGAS,dtype='int')
                     for i in range(self.NGAS):
                         ilbl,wave,npress,ntemp,gasID,isoID,presslevels,templevels = read_header_lta_hdf5(self.LOCATION[i])
-                        if ilbl!=SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                        if ilbl!=SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                             raise ValueError('error :: ILBL in look-up tables must be the same as in Spectroscopy class')
                         nwavelta[i] = len(wave)
                         npresslta[i] = npress
@@ -1246,7 +1340,7 @@ class Spectroscopy_0:
         if self.LOCATION is None:
             raise ValueError('error in Spectroscopy.read_tables() :: LOCATION is not defined')
         
-        if self.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+        if self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
             if not hasattr(self, 'LINE_DATA'):
                 raise AttributeError('Line-by-line RUNTIME calculation requires `LINE_DATA` attribute to already be created when reading tables.')
             
@@ -1286,7 +1380,7 @@ class Spectroscopy_0:
 
         if self.ONLINE==False:
             #Tables must be read and stored on memory
-            if self.ILBL==SpectralCalculationMode.K_TABLES: #K-tables
+            if self.ILBL==SpectralCalculationModeEnum.K_TABLES: #K-tables
 
                 kstore = np.zeros([self.NWAVE,self.NG,self.NP,self.NT,self.NGAS])
                 for igas in range(self.NGAS):
@@ -1296,7 +1390,7 @@ class Spectroscopy_0:
                 self.edit_K(kstore)
 
 
-            elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES: #LBL-tables
+            elif self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES: #LBL-tables
                 kstore = np.zeros([self.NWAVE,self.NP,abs(self.NT),self.NGAS])
                 for igas in range(self.NGAS):
                     _lgr.info(f'Reading table {self.LOCATION[igas]=} {wavemin=} {wavemax=}')
@@ -1328,7 +1422,7 @@ class Spectroscopy_0:
             raise ValueError('error in write_table_hdf5 :: The specified gas is not defined in the Spectroscopy class')
         
         
-        if self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+        if self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
             
             if os.path.exists(filename+'.h5')==True:
                 os.remove(filename+'.h5')
@@ -1338,9 +1432,9 @@ class Spectroscopy_0:
                 #Writing the header information
                 dset = h5py_helper.store_data(f, 'ILBL', data=self.ILBL)
                 dset.attrs['title'] = "Spectroscopy calculation type"
-                if self.ILBL==SpectralCalculationMode.K_TABLES:
+                if self.ILBL==SpectralCalculationModeEnum.K_TABLES:
                     dset.attrs['type'] = 'Correlated-k pre-tabulated look-up tables'
-                elif self.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+                elif self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                     dset.attrs['type'] = 'Line-by-line pre-tabulated look-up tables'
                 else:
                     raise ValueError('error :: ILBL must be 0 or 2')
@@ -2386,7 +2480,7 @@ def read_header_lta_hdf5(filename):
     with h5py.File(filename,'r') as f:
 
         ilbl = h5py_helper.retrieve_data(f, 'ILBL', np.int32)
-        if ilbl==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+        if ilbl==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
             wave = h5py_helper.retrieve_data(f, 'WAVE', np.array)
             npress = h5py_helper.retrieve_data(f, 'NP', np.int32)
             ntemp = h5py_helper.retrieve_data(f, 'NT', np.int32)
@@ -3127,9 +3221,9 @@ def calc_ktable_bin(iwave,Spectroscopy,linedata,self_frac,ispace,lineshape,vrel,
 
             _lgr.info(f'Calculating k-coefficients at p = {pressx} atm and t = {tempx} K')
 
-            if ispace == WaveUnit.Wavenumber_cm:
+            if ispace == WaveUnitEnum.Wavenumber_cm:
                 nus = linedata.line_data.NU
-            elif ispace == WaveUnit.Wavelength_um:
+            elif ispace == WaveUnitEnum.Wavelength_um:
                 nus = 1e4 / linedata.line_data.NU
 
             #Estimating the spacing in the cross section calculations

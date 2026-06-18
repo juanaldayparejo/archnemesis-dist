@@ -7,6 +7,9 @@
 
 from .cfg import logs
 
+from . import enum
+from . import lineshape
+
 from .Spectroscopy_0 import *
 from .Scatter_0 import *
 from .Surface_0 import *
@@ -29,3 +32,4 @@ from .Models import Models
 from .Data import *
 from .Files import *
 from .Retrievals import *
+

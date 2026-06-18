@@ -24,7 +24,7 @@ import h5py
 import matplotlib.pyplot as plt
 
 #from archnemesis import *
-from archnemesis.enums import WaveUnit
+from archnemesis.enum import WaveUnitEnum
 
 from archnemesis.helpers import h5py_helper
 from archnemesis import planck
@@ -92,7 +92,7 @@ class Stellar_0:
         self.SOLEXIST = SOLEXIST
         self.DIST = DIST
         self.RADIUS = RADIUS
-        #self.ISPACE = WaveUnit(ISPACE) if ISPACE is not None and not isinstance(ISPACE, WaveUnit) else ISPACE
+        #self.ISPACE = WaveUnitEnum(ISPACE) if ISPACE is not None and not isinstance(ISPACE, WaveUnitEnum) else ISPACE
         self.NWAVE = NWAVE
 
         # Input the following profiles using the edit_ methods.
@@ -106,16 +106,16 @@ class Stellar_0:
         self._ispace = None
         
         # set property values
-        self.ISPACE = ISPACE if ISPACE is not None else WaveUnit.Wavenumber_cm
+        self.ISPACE = ISPACE if ISPACE is not None else WaveUnitEnum.Wavenumber_cm
     
     
     @property
-    def ISPACE(self) -> WaveUnit:
+    def ISPACE(self) -> WaveUnitEnum:
         return self._ispace
     
     @ISPACE.setter
     def ISPACE(self, value):
-        self._ispace = WaveUnit(value)
+        self._ispace = WaveUnitEnum(value)
 
 
     def assess(self):
@@ -126,10 +126,10 @@ class Stellar_0:
         if self.SOLEXIST is True:
 
             #Checking some common parameters to all cases
-            assert isinstance(self.ISPACE, (int, np.integer, WaveUnit)), \
-                'ISPACE must be int or WaveUnit'
-            assert self.ISPACE in WaveUnit, \
-                f'ISPACE must be one of {tuple(WaveUnit)}'
+            assert isinstance(self.ISPACE, (int, np.integer, WaveUnitEnum)), \
+                'ISPACE must be int or WaveUnitEnum'
+            assert self.ISPACE in WaveUnitEnum, \
+                f'ISPACE must be one of {tuple(WaveUnitEnum)}'
 
             #Checking some common parameters to all cases
             assert np.issubdtype(type(self.DIST), np.float64) == True , \
@@ -208,7 +208,7 @@ class Stellar_0:
                 s = fsol.readline().split()
         
             s = fsol.readline().split()
-            ispace = WaveUnit(int(s[0]))
+            ispace = WaveUnitEnum(int(s[0]))
             s = fsol.readline().split()
             solrad = float(s[0])
             vsol = np.zeros(nvsol)
@@ -236,22 +236,29 @@ class Stellar_0:
             if ('/Stellar' in f)==True:
                 del f['Stellar']   #Deleting the Stellar information that was previously written in the file
 
-            if self.SOLEXIST is True:
-
-                grp = f.create_group("Stellar")
-
-                #Writing the spectral units
-                dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
-                dset.attrs['title'] = "Spectral units"
-                if self.ISPACE == WaveUnit.Wavenumber_cm:
-                    dset.attrs['units'] = 'Wavenumber / cm-1'
-                elif self.ISPACE == WaveUnit.Wavelength_um:
-                    dset.attrs['units'] = 'Wavelength / um'
-
+            grp = f.create_group("Stellar")
+            
+            dset = h5py_helper.store_data(grp, 'SOLEXIST', self.SOLEXIST)
+            dset.attrs['title'] = "Is star used in calculations."
+            dset.attrs['type'] = 'bool'
+                
+            if self.DIST is not None:
                 #Writing the Planet-Star distance
                 dset = h5py_helper.store_data(grp, 'DIST', self.DIST)
                 dset.attrs['title'] = "Planet-Star distance"
                 dset.attrs['units'] = 'Astronomical Units'
+            
+            if self.SOLEXIST is True:
+
+                #Writing the spectral units
+                dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
+                dset.attrs['title'] = "Spectral units"
+                if self.ISPACE == WaveUnitEnum.Wavenumber_cm:
+                    dset.attrs['units'] = 'Wavenumber / cm-1'
+                elif self.ISPACE == WaveUnitEnum.Wavelength_um:
+                    dset.attrs['units'] = 'Wavelength / um'
+
+                
 
                 #Writing the Star radius
                 dset = h5py_helper.store_data(grp, 'RADIUS', self.RADIUS)
@@ -265,17 +272,17 @@ class Stellar_0:
                 #Writing the spectral array
                 dset = h5py_helper.store_data(grp, 'WAVE', self.WAVE)
                 dset.attrs['title'] = "Spectral array"
-                if self.ISPACE == WaveUnit.Wavenumber_cm:
+                if self.ISPACE == WaveUnitEnum.Wavenumber_cm:
                     dset.attrs['units'] = 'Wavenumber / cm-1'
-                elif self.ISPACE == WaveUnit.Wavelength_um:
+                elif self.ISPACE == WaveUnitEnum.Wavelength_um:
                     dset.attrs['units'] = 'Wavelength / um' 
 
                 #Writing the solar spectrum
                 dset = h5py_helper.store_data(grp, 'SOLSPEC', self.SOLSPEC)
                 dset.attrs['title'] = "Stellar power spectrum"
-                if self.ISPACE == WaveUnit.Wavenumber_cm:
+                if self.ISPACE == WaveUnitEnum.Wavenumber_cm:
                     dset.attrs['units'] = 'W (cm-1)-1'
-                elif self.ISPACE == WaveUnit.Wavelength_um:
+                elif self.ISPACE == WaveUnitEnum.Wavelength_um:
                     dset.attrs['units'] = 'W um-1'     
 
 
@@ -285,19 +292,13 @@ class Stellar_0:
         """
 
         with h5py.File(runname+'.h5','r') as f:
-
-            #Checking if Surface exists
-            e = "/Stellar" in f
-            if e is False:
-                self.SOLEXIST = False
-            else:
-                self.SOLEXIST = True
-                self.ISPACE = h5py_helper.retrieve_data(f, 'Stellar/ISPACE', lambda x:  WaveUnit(np.int32(x)))
-                self.DIST = h5py_helper.retrieve_data(f, 'Stellar/DIST', np.float64)
-                self.RADIUS = h5py_helper.retrieve_data(f, 'Stellar/RADIUS', np.float64)
-                self.NWAVE = h5py_helper.retrieve_data(f, 'Stellar/NWAVE', np.int32)
-                self.WAVE = h5py_helper.retrieve_data(f, 'Stellar/WAVE', np.array)
-                self.SOLSPEC = h5py_helper.retrieve_data(f, 'Stellar/SOLSPEC', np.array)
+            self.SOLEXIST = h5py_helper.retrieve_data(f, 'Stellar/SOLEXIST', bool, default=False)
+            self.ISPACE = h5py_helper.retrieve_data(f, 'Stellar/ISPACE', lambda x:WaveUnitEnum(np.int32(x)), default= WaveUnitEnum.Wavenumber_cm)
+            self.DIST = h5py_helper.retrieve_data(f, 'Stellar/DIST', np.float64)
+            self.RADIUS = h5py_helper.retrieve_data(f, 'Stellar/RADIUS', np.float64)
+            self.NWAVE = h5py_helper.retrieve_data(f, 'Stellar/NWAVE', np.int32)
+            self.WAVE = h5py_helper.retrieve_data(f, 'Stellar/WAVE', np.array)
+            self.SOLSPEC = h5py_helper.retrieve_data(f, 'Stellar/SOLSPEC', np.array)
 
 
     def read_sol(self, runname, MakePlot=False):
@@ -332,7 +333,7 @@ class Stellar_0:
             solname = s[0]
 
             s = f.readline().split()
-            ispace = WaveUnit(int(s[0]))
+            ispace = WaveUnitEnum(int(s[0]))
             s = f.readline().split()
             solrad = float(s[0])
             vsol = np.zeros(nvsol)
@@ -365,7 +366,7 @@ class Stellar_0:
                 s = fsol.readline().split()
         
             s = fsol.readline().split()
-            ispace = WaveUnit(int(s[0]))
+            ispace = WaveUnitEnum(int(s[0]))
             s = fsol.readline().split()
             solrad = float(s[0])
             vsol = np.zeros(nvsol)
@@ -448,8 +449,6 @@ class Stellar_0:
         Calculate the stellar luminosity assuming a blackbody spectrum at a given temperature
         """
 
-        from scipy.constants import h, c, k, sigma
-
         #Convert radius to cm
         R_star_cm = self.RADIUS * 1e5
 
@@ -486,9 +485,9 @@ class Stellar_0:
 
 
         if header is None:
-            if self.ISPACE == WaveUnit.Wavenumber_cm:
+            if self.ISPACE == WaveUnitEnum.Wavenumber_cm:
                 header = '# Stellar power in W (cm-1)-1'
-            elif self.ISPACE == WaveUnit.Wavelength_um:
+            elif self.ISPACE == WaveUnitEnum.Wavelength_um:
                 header = '# Stellar power in W um-1' 
         else:
             if header[0]!='#':

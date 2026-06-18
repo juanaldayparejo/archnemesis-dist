@@ -2,7 +2,7 @@ import pytest
 import archnemesis as ans
 import numpy as np
 
-from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum
+from archnemesis.enum import PlanetEnum, AtmosphericProfileFormatEnum
 
 if False:
     print(pytest) # Removes the "unused import" error

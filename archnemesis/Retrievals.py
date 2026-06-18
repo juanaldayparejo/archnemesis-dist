@@ -19,7 +19,7 @@
 
 
 import archnemesis as ans
-from archnemesis.enums import RetrievalStrategy
+from archnemesis.enum import RetrievalStrategyEnum
 import copy
 import time
 import numpy as np
@@ -32,7 +32,7 @@ def retrieval_nemesis(
         runname,
         legacy_files=False,
         NCores=1,
-        retrieval_method : RetrievalStrategy = RetrievalStrategy.Optimal_Estimation,
+        retrieval_method : RetrievalStrategyEnum = RetrievalStrategyEnum.Optimal_Estimation,
         nemesisSO=False,
         nemesisdisc=False,
         nemesisPT=False,
@@ -295,12 +295,12 @@ def retrieval_nemesis(
         ######################################################
         ######################################################
 
-        if retrieval_method == RetrievalStrategy.Optimal_Estimation:
+        if retrieval_method == RetrievalStrategyEnum.Optimal_Estimation:
             OptimalEstimation = ans.coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,\
                                             NITER=Retrieval.NITER,PHILIMIT=Retrieval.PHILIMIT,LIN=Retrieval.LIN,NCores=NCores,
                                             nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
             Retrieval = OptimalEstimation
-        elif retrieval_method == RetrievalStrategy.Nested_Sampling:
+        elif retrieval_method == RetrievalStrategyEnum.Nested_Sampling:
             from archnemesis.NestedSampling_0 import coreretNS
             
             NestedSampling = coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,NS_prefix=NS_prefix,nemesisC=nemesisC)
@@ -315,7 +315,7 @@ def retrieval_nemesis(
     ######################################################
     ######################################################
 
-    if retrieval_method is None or retrieval_method == RetrievalStrategy.Optimal_Estimation:
+    if retrieval_method is None or retrieval_method == RetrievalStrategyEnum.Optimal_Estimation:
         
         if legacy_files is False:
             Retrieval.write_output_hdf5(runname,Variables)
@@ -324,7 +324,7 @@ def retrieval_nemesis(
             Retrieval.write_mre(runname,Variables,Measurement)
             Retrieval.write_raw(runname,Variables,Atmosphere)
             
-    if retrieval_method == RetrievalStrategy.Nested_Sampling:
+    if retrieval_method == RetrievalStrategyEnum.Nested_Sampling:
         Retrieval.make_plots()
 
     #Finishing pogram

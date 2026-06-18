@@ -33,7 +33,7 @@ import matplotlib.pyplot as plt
 
 import archnemesis.Data.constants as const
 from archnemesis.Data.planet_data import planet_info
-from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileType
+from archnemesis.enum import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileTypeEnum
 from archnemesis.helpers import h5py_helper
 
 import logging
@@ -565,7 +565,7 @@ class Atmosphere_0:
     def ipar_to_atm_profile_type(
             self, 
             ipar : int
-        ) -> tuple[AtmosphericProfileType, None|int]:
+        ) -> tuple[AtmosphericProfileTypeEnum, None|int]:
         """
             Decodes `ipar` from a magic number to a profile type and an index of that profile type
             
@@ -580,7 +580,7 @@ class Atmosphere_0:
             
             ## RETURNS ##
             
-                atm_profile_type : AtmosphericProfileType
+                atm_profile_type : AtmosphericProfileTypeEnum
                     An ENUM specifiying the type of the profile.
                 
                 atm_profile_idx : int | None
@@ -596,19 +596,19 @@ class Atmosphere_0:
         _lgr.debug(f'{ipar=}')
         _lgr.debug(f'{self.NVMR=} {self.NDUST=}')
         if ipar >=0 and ipar < self.NVMR:
-            return AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO, ipar
+            return AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO, ipar
         
         if ipar == self.NVMR:
-            return AtmosphericProfileType.TEMPERATURE, 0
+            return AtmosphericProfileTypeEnum.TEMPERATURE, 0
         
         if ipar > self.NVMR and ipar <= self.NVMR+self.NDUST:
-            return AtmosphericProfileType.AEROSOL_DENSITY, ipar - (self.NVMR+1)
+            return AtmosphericProfileTypeEnum.AEROSOL_DENSITY, ipar - (self.NVMR+1)
         
         if ipar == self.NVMR+self.NDUST+1:
-            return AtmosphericProfileType.PARA_H2_FRACTION, None # only ever one of these profiles
+            return AtmosphericProfileTypeEnum.PARA_H2_FRACTION, None # only ever one of these profiles
         
         if ipar == self.NVMR+self.NDUST+2:
-            return AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE, None # only ever one of these profiles
+            return AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE, None # only ever one of these profiles
         
         raise ValueError(f'Atmosphere_0 :: ipar_to_atm_profile_type :: {ipar=} is not a supported value')
 

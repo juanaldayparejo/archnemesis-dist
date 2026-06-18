@@ -10,7 +10,7 @@ from archnemesis.helpers.h5py_helper import VirtualSourceInfo
 
 from archnemesis.database.data_holders.line_data_holder import LineDataHolder
 
-from archnemesis.enums import AmbientGas
+from archnemesis.enum import AmbientGasEnum
 
 from archnemesis.database.filetypes.ans_base import AnsDatabaseFile
 from archnemesis.database.data_layouts.line_data_record_layout import LineDataRecordLayout
@@ -467,7 +467,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 			local_iso_id : int,
 			s_min : float = -1,
 			temperature : float = 0,
-			ambient_gasses : AmbientGas | tuple[AmbientGas] = (AmbientGas.AIR,),
+			ambient_gasses : AmbientGasEnum | tuple[AmbientGasEnum] = (AmbientGasEnum.AIR,),
 			*,
 			iso_keys = (
 				'mol_id',
@@ -494,7 +494,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 	
 		if ambient_gasses is None:
 			ambient_gasses = tuple()
-		elif isinstance(ambient_gasses, AmbientGas):
+		elif isinstance(ambient_gasses, AmbientGasEnum):
 			ambient_gasses = (ambient_gasses,)
 		
 		n_ambient_gasses = len(ambient_gasses)
