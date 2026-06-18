@@ -790,7 +790,7 @@ class Measurement_0:
 
 
                 self.NCONV = h5py_helper.retrieve_data(f, 'Measurement/NCONV', np.array)
-                self.WOFF = h5py_helper.retrieve_data(f, 'Measurement/WOFF', np.float64)
+                self.WOFF = h5py_helper.retrieve_data(f, 'Measurement/WOFF', np.float64, default=0)
                 self.VCONV = h5py_helper.retrieve_data(f, 'Measurement/VCONV', np.array) + self.WOFF
                 self.MEAS = h5py_helper.retrieve_data(f, 'Measurement/MEAS', np.array)
                 self.ERRMEAS = h5py_helper.retrieve_data(f, 'Measurement/ERRMEAS', np.array)
@@ -2176,10 +2176,11 @@ class Measurement_0:
                     raise ValueError('error in lblconv :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
                 SPECONV = np.zeros(self.VCONV.shape)
                 for IG in range(self.NGEOM):
-                    SPECONV[:,IG] = np.interp(self.VCONV[:,IG],wavecorr,ModSpec[:,IG])
+                    SPECONV[:self.NCONV[IG],IG] = np.interp(self.VCONV[:self.NCONV[IG],IG],wavecorr,ModSpec[:,IG])
             else:
                 IG = IGEOM
-                SPECONV = np.interp(self.VCONV[:,IG],wavecorr,ModSpec)
+                SPECONV = np.zeros((self.VCONV.shape[0],))
+                SPECONV[:self.NCONV[IG]] = np.interp(self.VCONV[:self.NCONV[IG],IG],wavecorr,ModSpec)
 
         return SPECONV
 
@@ -2215,6 +2216,7 @@ class Measurement_0:
 
         #Accounting for the Doppler shift that was previously introduced
         NWAVE = len(Wave)
+        print(f'TESTING: {NWAVE=} {ModSpec.shape=} {ModGrad.shape=}')
         wavecorr = self.correct_doppler_shift(Wave)
 
         if self.FWHM>0.0:   #Convolution with ISHAPE
@@ -2259,17 +2261,23 @@ class Measurement_0:
                     raise ValueError('error in lblconvg :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
                 if ModGrad.ndim!=3:
                     raise ValueError('error in lblconvg :: ModGrad must have 3 dimensions (NWAVE,NGEOM,NX)')
-                SPECONV = ModSpec
-                dSPECONV = ModGrad
+                SPECONV = np.zeros((self.VCONV.shape,), dtype=float)
+                dSPECONV = np.zeros((self.VCONV.shape,ModGrad.shape[-1]), dtype=float)
+                for IG in range(self.NGEOM):
+                    SPECONV[:self.NCONV[IG]] = np.interp(self.VCONV[:self.NCONV[IG],IG],wavecorr,ModSpec)
+                    for nx in range(ModGrad.shape[1]):
+                        dSPECONV[:self.NCONV[IG],nx] = np.interp(self.VCONV[:self.NCONV[IG],IG],wavecorr,ModGrad[:,nx])
                 
             else:
                 if ModSpec.ndim!=1:
                     raise ValueError('error in lblconvg :: ModSpec must have 1 dimensions (NWAVE)')
                 if ModGrad.ndim!=2:
                     raise ValueError('error in lblconvg :: ModGrad must have 2 dimensions (NWAVE,NX)')
-
-                SPECONV = ModSpec[:,IGEOM]
-                dSPECONV = ModGrad[:,IGEOM,:]
+                SPECONV = np.zeros((self.VCONV.shape[0],), dtype=float)
+                dSPECONV = np.zeros((self.VCONV.shape[0],ModGrad.shape[-1]), dtype=float)
+                SPECONV[:self.NCONV[IGEOM]] = np.interp(self.VCONV[:self.NCONV[IGEOM],IGEOM],wavecorr,ModSpec)
+                for nx in range(ModGrad.shape[1]):
+                    dSPECONV[:self.NCONV[IGEOM],nx] = np.interp(self.VCONV[:self.NCONV[IGEOM],IGEOM],wavecorr,ModGrad[:,nx])
 
         return SPECONV,dSPECONV
 

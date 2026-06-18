@@ -27,8 +27,8 @@ class PFList:
 				acc[mask] += pf_data(T[mask])
 				n[mask] += 1
 			
-			if np.any(~np.nonzero(n)):
-				raise RuntimeError(f'Partition functions do not completely cover the range of temperatures provided. Missing data for T={T[~np.nonzero(n)]}')
+			if np.any(n==0):
+				raise RuntimeError(f'Partition functions do not completely cover the range of temperatures provided. Missing data for T={T[n==0]}')
 		
 		else:
 			acc = 0

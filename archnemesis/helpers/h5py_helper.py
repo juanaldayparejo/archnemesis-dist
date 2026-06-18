@@ -1,7 +1,7 @@
 
 
 import h5py
-from typing import Callable, Any, Literal, NamedTuple#, Type
+from typing import Callable, Any, Literal, NamedTuple, Self#, Type
 import textwrap
 
 import numpy as np
@@ -16,6 +16,17 @@ class VirtualSourceInfo(NamedTuple):
     src_file : str
     src_grp : str
 
+class VirtualDsetTarget(NamedTuple):
+    file : str # path to file within filesystem
+    path : str # Full path to dataset within HDF5 file
+    shape : tuple[int,...] # numpy shape
+    dtype : np.dtype # numpy dtype
+    attrs : dict[str,Any] = dict() # Dataset attributes
+
+class VirtualGroupTarget(NamedTuple):
+    vdset_targets : list[VirtualDsetTarget]
+    vsub_grps : dict[str, Self]
+    vattrs : dict[str,Any]
 
 class HDF5Printer:
     def __init__(self, mode : Literal['indent', 'full_paths'] = 'indent'):

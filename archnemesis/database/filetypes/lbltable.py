@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     NTEMP = "Number of points in temperature grid"
     NWAVE = "Number of wave points"
 
+BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR : float = 1.0E20
 
 _header_struct = struct.Struct('<2i2f4i')
 
@@ -65,7 +66,7 @@ class LblDataTProfilesAtPressure(NamedTuple):
     wave : np.ndarray[['NWAVE'], float] # in `wave_unit`
     press : np.ndarray[['NPRESS'], float] # bar
     temp : np.ndarray[['NPRESS', 'NTEMP_PER_PRESSURE'], float] # kelvin
-    k : np.ndarray[['NWAVE','NPRESS','NTEMP_PER_PRESSURE'], float] # 1E20 (cm^2), see function `Spectroscopy_0::write_lbltable` for precident
+    k : np.ndarray[['NWAVE','NPRESS','NTEMP_PER_PRESSURE'], float] # (cm^2), see function `Spectroscopy_0::write_lbltable` `Spectroscopy_0::read_lbltable` for converting with 1E20 factor
     
     def write_legacy_header(self, f : str | io.IOBase):
         if not isinstance(f, io.IOBase):
@@ -112,8 +113,7 @@ class LblDataTProfilesAtPressure(NamedTuple):
         print(f'{k_struct=}')
         f.write(
             k_struct.pack(
-                #*(x for x in np.nditer(np.asfortranarray(self.k))) # already multiplied by 1E20 to avoid underflow when saving single precision floats
-                *self.k.flat
+                *(self.k.flat * BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR)
             )
         )
         
@@ -209,7 +209,7 @@ class LblDataTPGrid(NamedTuple):
     wave : np.ndarray[['NWAVE'], float] # wavenumber cm^-1
     press : np.ndarray[['NPRESS'], float] # bar
     temp : np.ndarray[['NTEMP'], float] # Kelvin
-    k : np.ndarray[['NWAVE','NPRESS','NTEMP'], float] # 1E20 (cm^2), see function `Spectroscopy_0::write_lbltable` for precident
+    k : np.ndarray[['NWAVE','NPRESS','NTEMP'], float] # (cm^2), see function `Spectroscopy_0::write_lbltable` `Spectroscopy_0::read_lbltable` for converting with 1E20 factor
 
 
     def write_legacy_header(self, f : str | io.IOBase):
@@ -251,7 +251,7 @@ class LblDataTPGrid(NamedTuple):
         
         f.write(
             k_struct.pack(
-                *(x for x in np.nditer(np.asfortranarray(self.k))) # already multiplied by 1E20 to avoid underflow when saving single precision floats
+                *(self.k.flat * BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR)
             )
         )
 
@@ -378,7 +378,7 @@ def read_legacy(
         buf = f.read(x_struct.size)
         _lgr.debug(f'{f.tell()=}')
         
-        ptk[i] = np.array(x_struct.unpack_from(buf), dtype=float, order='F').reshape(x_shape)
+        ptk[i] = np.array(x_struct.unpack_from(buf), dtype=np.float64, order='F').reshape(x_shape)
     
     # Absorption coefficients start at `hdr.irec0` records into the file. THIS IS NOT THE SAME AS AFTER THE PRESSURE AND TEMPERATURE DATA!!
     current_pos = f.tell()
@@ -392,7 +392,7 @@ def read_legacy(
         f.seek(n_bytes_from_start_of_file_to_abs_coeff_data, 0)
     
     assert ptk[2] is None, 'Nothing should have been stored here before this point'
-    ptk[2] = np.array(k_struct.unpack_from(f.read(k_struct.size)), dtype=float).reshape(k_shape)
+    ptk[2] = (np.array(k_struct.unpack_from(f.read(k_struct.size)), dtype=np.float64).reshape(k_shape) / BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR)
     
     # Check we have read all the data correctly
     current_pos = f.tell()
@@ -402,9 +402,15 @@ def read_legacy(
     if current_pos != end_pos:
         _lgr.warning(f'We have not read all the data from the file, there are {end_pos - current_pos} bytes remaining. Using an alternate method to try and ensure we get the data correctly.')
         f.seek(-k_struct.size, 2) # Assume the coefficients end and the end of the file and go backwards to where they should start
-        ptk[2] = np.array(k_struct.unpack_from(f.read(k_struct.size)), dtype=float).reshape(k_shape)
+        ptk[2] = (np.array(k_struct.unpack_from(f.read(k_struct.size)), dtype=np.float64).reshape(k_shape) / BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR)
     
-    return lbl_data_type(hdr.gas_id, hdr.iso_id, wave_unit, np.linspace(hdr.vmin, hdr.vmin+hdr.delv*hdr.nwave, hdr.nwave, endpoint=False), *ptk)
+    return lbl_data_type(
+        hdr.gas_id, 
+        hdr.iso_id, 
+        wave_unit, 
+        np.linspace(hdr.vmin, hdr.vmin+hdr.delv*hdr.nwave, hdr.nwave, endpoint=False, dtype=np.float64), 
+        *ptk
+    )
     
     
 
