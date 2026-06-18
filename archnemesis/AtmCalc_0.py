@@ -20,7 +20,7 @@
 
 import numpy as np
 
-from archnemesis.enums import ZenithAngleOrigin, PathObserverPointing, PathCalc
+from archnemesis.enum import ZenithAngleOriginEnum, PathObserverPointingEnum, PathCalcEnum
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class AtmCalc_0:
     def __init__(
             self,
             Layer,
-            path_observer_pointing=PathObserverPointing.DISK,
+            path_observer_pointing=PathObserverPointingEnum.DISK,
             #LIMB=False,
             #NADIR=False,
             BOTLAY=0,
@@ -41,9 +41,9 @@ class AtmCalc_0:
             EMISS_ANG=0.0,
             SOL_ANG=0.0,
             AZI_ANG=0.0,
-            IPZEN = ZenithAngleOrigin.BOTTOM,
+            IPZEN = ZenithAngleOriginEnum.BOTTOM,
     
-            path_calc = PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE,
+            path_calc = PathCalcEnum.PLANCK_FUNCTION_AT_BIN_CENTRE,
             
             #WF=False,
             #NETFLUX=False,
@@ -194,15 +194,15 @@ class AtmCalc_0:
         #Checking the geometry of the observation 
         ###########################################
 
-        if self.path_observer_pointing == PathObserverPointing.DISK:
+        if self.path_observer_pointing == PathObserverPointingEnum.DISK:
             self.path_observer_height = np.inf
-            raise NotImplementedError(f'{PathObserverPointing.DISK} is not implemented yet. Intended to be observer pointing towards the disk (i.e. looking down from above). At the moment that case is covered by {PathObserverPointing.LIMB} with `self.ANGLE` set to greater than 90 degrees')
+            raise NotImplementedError(f'{PathObserverPointingEnum.DISK} is not implemented yet. Intended to be observer pointing towards the disk (i.e. looking down from above). At the moment that case is covered by {PathObserverPointingEnum.LIMB} with `self.ANGLE` set to greater than 90 degrees')
             
-        elif self.path_observer_pointing == PathObserverPointing.LIMB:
+        elif self.path_observer_pointing == PathObserverPointingEnum.LIMB:
             self.path_observer_height = np.inf
             self.ANGLE = 90.
         
-        elif self.path_observer_pointing == PathObserverPointing.NADIR:
+        elif self.path_observer_pointing == PathObserverPointingEnum.NADIR:
             if self.EMISS_ANG > 90.:
                 self.ANGLE = 180.0 - self.ANGLE
                 self.path_observer_height = 0.0
@@ -220,70 +220,70 @@ class AtmCalc_0:
         #Checking incompatible flags and resetting them 
         #################################################
 
-        if (PathCalc.THERMAL_EMISSION in self.path_calc 
-                and PathCalc.ABSORBTION in self.path_calc
+        if (PathCalcEnum.THERMAL_EMISSION in self.path_calc 
+                and PathCalcEnum.ABSORBTION in self.path_calc
             ):
-            self.path_calc &= ~PathCalc.ABSORBTION
+            self.path_calc &= ~PathCalcEnum.ABSORBTION
             _lgr.warning(' in AtmCalc_0.py file :: Cannot use absorption for thermal calcs - resetting')
 
-        if (PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL in self.path_calc 
-                and PathCalc.MULTIPLE_SCATTERING in self.path_calc
+        if (PathCalcEnum.SINGLE_SCATTERING_PLANE_PARALLEL in self.path_calc 
+                and PathCalcEnum.MULTIPLE_SCATTERING in self.path_calc
             ):
-            self.path_calc &= ~PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL
+            self.path_calc &= ~PathCalcEnum.SINGLE_SCATTERING_PLANE_PARALLEL
             _lgr.warning(' in AtmCalc_0.py file :: Cannot use SINGLE and SCATTER - resetting')
 
-        if (PathCalc.SINGLE_SCATTERING_SPHERICAL in self.path_calc 
-                and PathCalc.MULTIPLE_SCATTERING in self.path_calc
+        if (PathCalcEnum.SINGLE_SCATTERING_SPHERICAL in self.path_calc 
+                and PathCalcEnum.MULTIPLE_SCATTERING in self.path_calc
             ):
-            self.path_calc &= ~PathCalc.SINGLE_SCATTERING_SPHERICAL
+            self.path_calc &= ~PathCalcEnum.SINGLE_SCATTERING_SPHERICAL
             _lgr.warning(' in AtmCalc_0.py file :: Cannot use SPHSINGLE and SCATTER - resetting')
 
-        if (PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE in self.path_calc 
-                and PathCalc.BROADENING in self.path_calc
+        if (PathCalcEnum.PLANCK_FUNCTION_AT_BIN_CENTRE in self.path_calc 
+                and PathCalcEnum.BROADENING in self.path_calc
             ):
-            self.path_calc &= ~PathCalc.BROADENING
+            self.path_calc &= ~PathCalcEnum.BROADENING
             _lgr.warning(' in AtmCalc_0.py file :: Cannot use BINBB and BROAD - resetting')
 
-        if PathCalc.THERMAL_EMISSION in self.path_calc:
-            if PathCalc.BROADENING in self.path_calc:
-                self.path_calc &= ~PathCalc.BROADENING
+        if PathCalcEnum.THERMAL_EMISSION in self.path_calc:
+            if PathCalcEnum.BROADENING in self.path_calc:
+                self.path_calc &= ~PathCalcEnum.BROADENING
                 _lgr.warning(' in AtmCalc_0.py file :: THERM requires BROAD disabled - resetting')
             
-            if PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE in self.path_calc:
-                self.path_calc &= ~PathCalc.PLANCK_FUNCTION_AT_BIN_CENTRE
+            if PathCalcEnum.PLANCK_FUNCTION_AT_BIN_CENTRE in self.path_calc:
+                self.path_calc &= ~PathCalcEnum.PLANCK_FUNCTION_AT_BIN_CENTRE
                 _lgr.warning(' in AtmCalc_0.py file :: THERM requires BINBB disabled - resetting')
             
-        if (((PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL | PathCalc.SINGLE_SCATTERING_SPHERICAL | PathCalc.MULTIPLE_SCATTERING) & self.path_calc) 
-                and PathCalc.THERMAL_EMISSION in self.path_calc
+        if (((PathCalcEnum.SINGLE_SCATTERING_PLANE_PARALLEL | PathCalcEnum.SINGLE_SCATTERING_SPHERICAL | PathCalcEnum.MULTIPLE_SCATTERING) & self.path_calc) 
+                and PathCalcEnum.THERMAL_EMISSION in self.path_calc
             ):
-            self.path_calc &= ~PathCalc.THERMAL_EMISSION
+            self.path_calc &= ~PathCalcEnum.THERMAL_EMISSION
             _lgr.info('THERM not required. Scattering includes emission')
 
-        if (PathCalc.HEMISPHERE in self.path_calc
-                and PathCalc.THERMAL_EMISSION not in self.path_calc
+        if (PathCalcEnum.HEMISPHERE in self.path_calc
+                and PathCalcEnum.THERMAL_EMISSION not in self.path_calc
             ):
-            self.path_calc |= PathCalc.THERMAL_EMISSION
+            self.path_calc |= PathCalcEnum.THERMAL_EMISSION
             _lgr.warning(' in AtmCalc_0.py file :: HEMISPHERE assumes THERM - resetting')
 
-        if (((PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL | PathCalc.SINGLE_SCATTERING_SPHERICAL | PathCalc.MULTIPLE_SCATTERING) & self.path_calc) 
-                and PathCalc.CURTIS_GODSON in self.path_calc
+        if (((PathCalcEnum.SINGLE_SCATTERING_PLANE_PARALLEL | PathCalcEnum.SINGLE_SCATTERING_SPHERICAL | PathCalcEnum.MULTIPLE_SCATTERING) & self.path_calc) 
+                and PathCalcEnum.CURTIS_GODSON in self.path_calc
             ):
-            self.path_calc &= ~PathCalc.CURTIS_GODSON
+            self.path_calc &= ~PathCalcEnum.CURTIS_GODSON
             _lgr.warning(' in AtmCalc_0.py file :: Cannot use CG and SCATTER - resetting')
 
-        if (PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL | PathCalc.SINGLE_SCATTERING_SPHERICAL | PathCalc.MULTIPLE_SCATTERING) & self.path_calc:
-            if self.path_observer_pointing == PathObserverPointing.LIMB:
-                if PathCalc.SINGLE_SCATTERING_PLANE_PARALLEL in self.path_calc:
+        if (PathCalcEnum.SINGLE_SCATTERING_PLANE_PARALLEL | PathCalcEnum.SINGLE_SCATTERING_SPHERICAL | PathCalcEnum.MULTIPLE_SCATTERING) & self.path_calc:
+            if self.path_observer_pointing == PathObserverPointingEnum.LIMB:
+                if PathCalcEnum.SINGLE_SCATTERING_PLANE_PARALLEL in self.path_calc:
                     raise ValueError('error in AtmCalc_0.py file :: SINGLE and LIMB not catered for')
-                if PathCalc.SINGLE_SCATTERING_SPHERICAL in self.path_calc:
+                if PathCalcEnum.SINGLE_SCATTERING_SPHERICAL in self.path_calc:
                     raise ValueError('error in AtmCalc_0.py file :: SPHSINGLE and LIMB not catered for')  
             else:
                 if self.ANGLE != 0.0:
                     #_lgr.warning(' in AtmCalc_0.py file :: ANGLE must be 0.0 for scattering calculations - resetting')
                     self.ANGLE = 0.0
 
-        if PathCalc.HEMISPHERE in self.path_calc:
-            if self.path_observer_pointing == PathObserverPointing.LIMB:
+        if PathCalcEnum.HEMISPHERE in self.path_calc:
+            if self.path_observer_pointing == PathObserverPointingEnum.LIMB:
                 raise ValueError('error in AtmCalc_0.py file :: cannot do HEMISPHERE and LIMB')  
             else:
                 if self.ANGLE != 0.0:
@@ -295,12 +295,12 @@ class AtmCalc_0:
         #has been defined in another way in the AtmCalc_0.py file
         #######################################################################
 
-        if(self.IPZEN==ZenithAngleOrigin.ALTITUDE_ZERO):
+        if(self.IPZEN==ZenithAngleOriginEnum.ALTITUDE_ZERO):
             #Compute zenith angle of ray at bottom of bottom layer, assuming it
             #has been defined at the 0km level
             z0 = Layer.RADIUS + Layer.BASEH[self.BOTLAY]
             self.ANGLE = np.arcsin(Layer.RADIUS/z0 * np.sin(self.ANGLE/180.*np.pi)) / np.pi * 180.
-        elif(self.IPZEN==ZenithAngleOrigin.TOP):
+        elif(self.IPZEN==ZenithAngleOriginEnum.TOP):
             #Compute zenith angle of ray at bottom of bottom layer, assuming it
             #has been defined at the top of the atmosphere
             z0 = Layer.RADIUS + Layer.BASEH[Layer.NLAY-1] + Layer.DELH[Layer.NLAY-1]
@@ -313,7 +313,7 @@ class AtmCalc_0:
                 self.ANGLE = np.arcsin(z0/(Layer.RADIUS + Layer.BASEH[self.BOTLAY]) * np.sin(self.ANGLE/180.*np.pi)) / np.pi * 180.
             else:
                 #We need to model this ray as a tangent path.
-                self.path_observer_pointing = PathObserverPointing.LIMB
+                self.path_observer_pointing = PathObserverPointingEnum.LIMB
                 self.ANGLE = 90.
 
                 #Find number of bottom layer. Snap to layer with nearest base height
@@ -335,7 +335,7 @@ class AtmCalc_0:
         #######################################################################
 
         #Limb path
-        if self.path_observer_pointing == PathObserverPointing.LIMB:
+        if self.path_observer_pointing == PathObserverPointingEnum.LIMB:
 
             #Calculate the total number of layers to use
             NUSE = int(2*(Layer.NLAY-self.BOTLAY))
@@ -352,7 +352,7 @@ class AtmCalc_0:
                 EMITT[IUSE] = Layer.TEMP[USELAY[IUSE]]
 
         #Nadir path
-        if self.path_observer_pointing == PathObserverPointing.NADIR:
+        if self.path_observer_pointing == PathObserverPointingEnum.NADIR:
 
             #Calculate the total number of layers to use
             NUSE = Layer.NLAY-self.BOTLAY
@@ -403,7 +403,7 @@ class AtmCalc_0:
         #Calculating any Curtis-Godson paths if needed
         #####################################################
 
-        if PathCalc.CURTIS_GODSON in self.path_calc:
+        if PathCalcEnum.CURTIS_GODSON in self.path_calc:
             raise NotImplementedError('error in AtmCalc_0.py file :: Curtis-Godson files are not implemented in the path calculation yet')
 
         #Calculating the calculation type to pass to RADTRANS
@@ -414,33 +414,33 @@ class AtmCalc_0:
 
         self.NPATH = 1
 
-        if PathCalc.WEIGHTING_FUNCTION in self.path_calc:
+        if PathCalcEnum.WEIGHTING_FUNCTION in self.path_calc:
             self.NPATH = NUSE
 
-        if (PathCalc.THERMAL_EMISSION in self.path_calc
-                and PathCalc.BROADENING in self.path_calc
+        if (PathCalcEnum.THERMAL_EMISSION in self.path_calc
+                and PathCalcEnum.BROADENING in self.path_calc
             ):
             self.NPATH = NUSE
 
-        if PathCalc.UPWARD_FLUX in self.path_calc:
+        if PathCalcEnum.UPWARD_FLUX in self.path_calc:
             self.NPATH = NUSE
 
-        if PathCalc.NET_FLUX in self.path_calc:
+        if PathCalcEnum.NET_FLUX in self.path_calc:
             raise ValueError('error :: need to properly define the paths (should be 2*NLAYER for upward and downward flux)')
             self.NPATH = NUSE
 
-        if (PathCalc.UPWARD_FLUX in self.path_calc
-                and PathCalc.MULTIPLE_SCATTERING not in self.path_calc
+        if (PathCalcEnum.UPWARD_FLUX in self.path_calc
+                and PathCalcEnum.MULTIPLE_SCATTERING not in self.path_calc
             ):
             raise ValueError('error in AtmCalc_0.py file :: cannot do upward flux calculation with scattering turned off')
 
-        if (PathCalc.OUTWARD_FLUX in self.path_calc
-                and PathCalc.MULTIPLE_SCATTERING not in self.path_calc
+        if (PathCalcEnum.OUTWARD_FLUX in self.path_calc
+                and PathCalcEnum.MULTIPLE_SCATTERING not in self.path_calc
             ):
             raise ValueError('error in AtmCalc_0.py file :: cannot do outward flux calculation with scattering turned off')
 
-        if (PathCalc.DOWNWARD_FLUX in self.path_calc
-                and PathCalc.MULTIPLE_SCATTERING not in self.path_calc
+        if (PathCalcEnum.DOWNWARD_FLUX in self.path_calc
+                and PathCalcEnum.MULTIPLE_SCATTERING not in self.path_calc
             ):
             raise ValueError('error in AtmCalc_0.py file :: cannot do downward flux calculation with scattering turned off')
 
@@ -451,12 +451,12 @@ class AtmCalc_0:
         
         # [JD] From what I can tell this loop only uses static values, there is
         # no need to loop over the number of paths to create IMOD
-        assert len(PathCalc) <= 32, f'error in AtmCalc_0.py file :: enums.PathCalc must have less than 32 flags to fit into a np.int32, it has {len(~PathCalc(0))}. Either increase the size of the integer type holding them, or reduce the number of flags.'
+        assert len(PathCalcEnum) <= 32, f'error in AtmCalc_0.py file :: PathCalcEnum must have less than 32 flags to fit into a np.int32, it has {len(~PathCalcEnum(0))}. Either increase the size of the integer type holding them, or reduce the number of flags.'
         IMOD = np.full((self.NPATH,), fill_value=self.path_calc, dtype=np.int32)
         
         for j in range(self.NPATH):
             
-            if PathCalc.CURTIS_GODSON in self.path_calc:
+            if PathCalcEnum.CURTIS_GODSON in self.path_calc:
                 raise NotImplementedError('error in AtmCalc_0.py file :: Curtis-Godson files are not implemented in the path calculation yet')
             else:
                 NLAYIN[j] = (j+1) + NUSE - self.NPATH 

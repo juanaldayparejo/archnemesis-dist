@@ -41,20 +41,20 @@ from archnemesis.Models import Models
 from copy import copy
 
 from archnemesis.helpers import h5py_helper
-from archnemesis.enums import (
+from archnemesis.enum import (
     #PlanetEnum, 
     #AtmosphericProfileFormatEnum, 
     #InstrumentLineshape, 
-    LayerType,
-    WaveUnit, 
-    SpectraUnit,
-    SpectralCalculationMode, 
-    LowerBoundaryCondition, 
-    ScatteringCalculationMode, 
-    AerosolPhaseFunctionCalculationMode,
-    ParaH2Ratio, 
-    RayleighScatteringMode,
-    LayerIntegrationScheme,
+    LayerTypeEnum,
+    WaveUnitEnum, 
+    SpectraUnitEnum,
+    SpectralCalculationModeEnum, 
+    LowerBoundaryConditionEnum, 
+    ScatteringCalculationModeEnum, 
+    AerosolPhaseFunctionCalculationModeEnum,
+    ParaH2RatioEnum, 
+    RayleighScatteringModeEnum,
+    LayerIntegrationSchemeEnum,
 )
 
 import logging
@@ -458,15 +458,15 @@ def read_input_files(runname):
 
     Layer = Layer_0(Atm.RADIUS)
     Scatter,Stellar,Surface,Layer = read_set(runname,Layer=Layer)
-    if Layer.LAYTYP==LayerType.BASE_PRESSURE:
+    if Layer.LAYTYP==LayerTypeEnum.BASE_PRESSURE:
         nlay, pbase = read_play()
         Layer.NLAY = nlay
         Layer.P_base = pbase*101325 
-    if Layer.LAYTYP==LayerType.BASE_HEIGHT:
+    if Layer.LAYTYP==LayerTypeEnum.BASE_HEIGHT:
         nlay,hbase = read_hlay()
         Layer.NLAY = nlay
         Layer.H_base = hbase*1.0e3    #Base height of each layer (m)
-    if Layer.LAYTYP not in (LayerType.EQUAL_PRESSURE, LayerType.EQUAL_LOG_PRESSURE, LayerType.EQUAL_HEIGHT, LayerType.EQUAL_PATH_LENGTH, LayerType.BASE_PRESSURE, LayerType.BASE_HEIGHT):
+    if Layer.LAYTYP not in (LayerTypeEnum.EQUAL_PRESSURE, LayerTypeEnum.EQUAL_LOG_PRESSURE, LayerTypeEnum.EQUAL_HEIGHT, LayerTypeEnum.EQUAL_PATH_LENGTH, LayerTypeEnum.BASE_PRESSURE, LayerTypeEnum.BASE_HEIGHT):
         raise ValueError('error in read_input_files :: Need to read the press.lay file but not implemented yet')
     
     Layer.DUST_UNITS_FLAG = Atm.DUST_UNITS_FLAG
@@ -491,7 +491,7 @@ def read_input_files(runname):
         if np.mean(Surface.TSURF)>0.0:
             Surface.GASGIANT=False
             Surface.read_sur(runname) #Emissivity (and albedo for Lambert surface)
-            if Surface.LOWBC==LowerBoundaryCondition.HAPKE: #Hapke surface
+            if Surface.LOWBC==LowerBoundaryConditionEnum.HAPKE: #Hapke surface
                 Surface.read_hap(runname)
         else:
             Surface.GASGIANT=True
@@ -499,20 +499,20 @@ def read_input_files(runname):
         Surface.GASGIANT=True
     
     if Surface.GASGIANT:
-        Surface.LOWBC = LowerBoundaryCondition.THERMAL
+        Surface.LOWBC = LowerBoundaryConditionEnum.THERMAL
         Surface.TSURF = 0.0
         Surface.GALB = 0.0
 
     #Reading Spectroscopy parameters from .lls or .kls files
     ##############################################################
-    if Spec.ILBL==SpectralCalculationMode.K_TABLES:
+    if Spec.ILBL==SpectralCalculationModeEnum.K_TABLES:
         Spec.read_kls(runname)
-    elif Spec.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+    elif Spec.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
         Spec.read_lls(runname)
-    elif Spec.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
+    elif Spec.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
         Spec.read_lls(runname)
     else:
-        raise ValueError('error :: ILBL has to be either SpectralCalculationMode.K_TABLES or SpectralCalculationMode.LINE_BY_LINE_TABLES')
+        raise ValueError('error :: ILBL has to be either SpectralCalculationModeEnum.K_TABLES or SpectralCalculationModeEnum.LINE_BY_LINE_TABLES')
 
     #Reading extinction and scattering cross sections
     #############################################################################
@@ -546,7 +546,7 @@ def read_input_files(runname):
         Measurement.read_fil()
 
     #Reading stellar spectrum if required by Measurement units
-    if Measurement.IFORM in (SpectraUnit.FluxRatio, SpectraUnit.TransitDepth, SpectraUnit.Integrated_spectral_power, SpectraUnit.Atmospheric_transmission):
+    if Measurement.IFORM in (SpectraUnitEnum.FluxRatio, SpectraUnitEnum.TransitDepth, SpectraUnitEnum.Integrated_spectral_power, SpectraUnitEnum.Atmospheric_transmission):
         Stellar.read_sol(runname)
 
     #Initialise CIA class and read files (.cia)
@@ -564,17 +564,17 @@ def read_input_files(runname):
     inormal,iray,ih2o,ich4,io3,inh3,iptf,imie,iuv = read_fla(runname)
 
     if CIA is not None:
-        CIA.INORMAL = ParaH2Ratio(inormal)
+        CIA.INORMAL = ParaH2RatioEnum(inormal)
 
-    Scatter.IRAY = RayleighScatteringMode(iray)
-    Scatter.IMIE = AerosolPhaseFunctionCalculationMode(imie)
+    Scatter.IRAY = RayleighScatteringModeEnum(iray)
+    Scatter.IMIE = AerosolPhaseFunctionCalculationModeEnum(imie)
 
-    if Scatter.ISCAT!=ScatteringCalculationMode.THERMAL_EMISSION:
-        if Scatter.IMIE==AerosolPhaseFunctionCalculationMode.HENYEY_GREENSTEIN:
+    if Scatter.ISCAT!=ScatteringCalculationModeEnum.THERMAL_EMISSION:
+        if Scatter.IMIE==AerosolPhaseFunctionCalculationModeEnum.HENYEY_GREENSTEIN:
             Scatter.read_hgphase()
-        elif Scatter.IMIE==AerosolPhaseFunctionCalculationMode.MIE_THEORY:
+        elif Scatter.IMIE==AerosolPhaseFunctionCalculationModeEnum.MIE_THEORY:
             Scatter.read_phase()
-        elif Scatter.IMIE==AerosolPhaseFunctionCalculationMode.LEGENDRE_POLYNOMIALS:
+        elif Scatter.IMIE==AerosolPhaseFunctionCalculationModeEnum.LEGENDRE_POLYNOMIALS:
             Scatter.read_lpphase()
         else:
             raise ValueError('error :: IMIE must be an integer from 0 to 2')
@@ -1226,9 +1226,9 @@ def read_inp(runname,Measurement=None,Scatter=None,Spectroscopy=None):
     #Opening file
     f = open(runname+'.inp','r')
     tmp = f.readline().split()
-    ispace = WaveUnit(int(tmp[0]))
-    iscat = ScatteringCalculationMode(int(tmp[1]))
-    ilbl = SpectralCalculationMode(int(tmp[2]))
+    ispace = WaveUnitEnum(int(tmp[0]))
+    iscat = ScatteringCalculationModeEnum(int(tmp[1]))
+    ilbl = SpectralCalculationModeEnum(int(tmp[2]))
 
     if Measurement is None:
         Measurement = Measurement_0()
@@ -1260,16 +1260,16 @@ def read_inp(runname,Measurement=None,Scatter=None,Spectroscopy=None):
 
     if iiform == 1:
         tmp = f.readline().split()
-        iform = SpectraUnit(int(tmp[0]))
+        iform = SpectraUnitEnum(int(tmp[0]))
         Measurement.IFORM = iform
     elif iiform == 2:
         tmp = f.readline().split()
-        iform = SpectraUnit(int(tmp[0]))
+        iform = SpectraUnitEnum(int(tmp[0]))
         Measurement.IFORM = iform
         tmp = f.readline().split()
         Measurement.V_DOPPLER = float(tmp[0])
     else:
-        Measurement.IFORM = SpectraUnit.Radiance
+        Measurement.IFORM = SpectraUnitEnum.Radiance
 
     return Measurement, Scatter, Spectroscopy, WOFF, fmerrname, NITER, PHILIMIT, NSPEC, IOFF, LIN
 
@@ -1372,7 +1372,7 @@ def read_set(runname,Layer=None,Surface=None,Stellar=None,Scatter=None):
     if Surface==None:
         Surface = Surface_0()
 
-    Surface.LOWBC = LowerBoundaryCondition(lowbc)
+    Surface.LOWBC = LowerBoundaryConditionEnum(lowbc)
     Surface.GALB = galb
     Surface.TSURF = tsurf
 
@@ -1381,8 +1381,8 @@ def read_set(runname,Layer=None,Surface=None,Stellar=None,Scatter=None):
         Layer = Layer_0()
     
     Layer.LAYHT = layht*1.0e3
-    Layer.LAYTYP = LayerType(laytp)
-    Layer.LAYINT = LayerIntegrationScheme(layint)
+    Layer.LAYTYP = LayerTypeEnum(laytp)
+    Layer.LAYINT = LayerIntegrationSchemeEnum(layint)
     Layer.NLAY = nlayer
 
     return Scatter,Stellar,Surface,Layer
@@ -1432,9 +1432,9 @@ def read_fla(runname):
     #Opening file
     f = open(runname+'.fla','r')
     s = f.readline().split()
-    inormal = ParaH2Ratio(int(s[0]))
+    inormal = ParaH2RatioEnum(int(s[0]))
     s = f.readline().split()
-    iray = RayleighScatteringMode(int(s[0]))
+    iray = RayleighScatteringModeEnum(int(s[0]))
     s = f.readline().split()
     ih2o = int(s[0])
     s = f.readline().split()
@@ -1446,7 +1446,7 @@ def read_fla(runname):
     s = f.readline().split()
     iptf = int(s[0])
     s = f.readline().split()
-    imie = AerosolPhaseFunctionCalculationMode(int(s[0]))
+    imie = AerosolPhaseFunctionCalculationModeEnum(int(s[0]))
     s = f.readline().split()
     iuv = int(s[0])
    

@@ -18,8 +18,8 @@ import archnemesis.Data.constants as const
 from archnemesis.helpers import h5py_helper
 from archnemesis.helpers.maths_helper import ngauss
 from archnemesis.Scatter_0 import kk_new_sub
-from archnemesis.enums import AtmosphericProfileType
-from archnemesis.enums import WaveUnit
+from archnemesis.enum import AtmosphericProfileTypeEnum
+from archnemesis.enum import WaveUnitEnum
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class PreRTModelBase(ModelBase):
             self,
             state_vector_start : int, 
             n_state_vector_entries : int,
-            atm_profile_type : AtmosphericProfileType = AtmosphericProfileType.NOT_PRESENT,
+            atm_profile_type : AtmosphericProfileTypeEnum = AtmosphericProfileTypeEnum.NOT_PRESENT,
             #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         super().__init__(state_vector_start, n_state_vector_entries)
@@ -130,7 +130,7 @@ class TemplatePreRTModel(PreRTModelBase):
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM that tells us what kind of atmospheric profile this model instance represents
             
             # Extra arguments to this method can store constants etc. that the
@@ -214,7 +214,7 @@ class TemplatePreRTModel(PreRTModelBase):
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM of atmospheric profile type we are altering.
             
             atm_profile_idx : int | None,
@@ -464,7 +464,7 @@ class Modelm1(PreRTModelBase):
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
@@ -490,7 +490,7 @@ class Modelm1(PreRTModelBase):
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM of atmospheric profile type we are altering.
             
             atm_profile_idx : int | None,
@@ -515,7 +515,7 @@ class Modelm1(PreRTModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                atm_profile_type :: AtmosphericProfileType
+                atm_profile_type :: AtmosphericProfileTypeEnum
                         ENUM of atmospheric profile type we are altering.
                     
                 atm_profile_idx : int | None
@@ -545,7 +545,7 @@ class Modelm1(PreRTModelBase):
         if npro!=atm.NP:
             raise ValueError('error in model -1 :: Number of levels in atmosphere does not match and profile')
             
-        if atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+        if atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             temp = np.array(atm.DUST)
             temp[:,atm_profile_idx] = xprof
             atm.edit_DUST(temp)
@@ -669,7 +669,7 @@ class Modelm1(PreRTModelBase):
         atm = forward_model.AtmosphereX
         atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
         
-        if atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+        if atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             calculate_fn = lambda *args, **kwargs: Model0.calculate(*args, **kwargs)
         else:
             calculate_fn = lambda *args, **kwargs: self.calculate(*args, **kwargs)
@@ -731,7 +731,7 @@ class Model0(PreRTModelBase):
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
@@ -759,7 +759,7 @@ class Model0(PreRTModelBase):
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM of atmospheric profile type we are altering.
             
             atm_profile_idx : int | None,
@@ -784,7 +784,7 @@ class Model0(PreRTModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                atm_profile_type :: AtmosphericProfileType
+                atm_profile_type :: AtmosphericProfileTypeEnum
                     ENUM of atmospheric profile type we are altering.
                 
                 atm_profile_idx : int | None
@@ -818,27 +818,27 @@ class Model0(PreRTModelBase):
         
         xmap = np.zeros((npro,npro))
         
-        if atm_profile_type == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO:
+        if atm_profile_type == AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO:
             temp = np.array(atm.VMR)
             temp[:,atm_profile_idx] = xprof
             atm.edit_VMR(temp)
             xmap[...] = np.diag(xprof)
         
-        elif atm_profile_type == AtmosphericProfileType.TEMPERATURE:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.TEMPERATURE:
             atm.edit_T(xprof)
             xmap[...] = np.diag(np.ones_like(xprof))
         
-        elif atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             temp = np.array(atm.DUST)
             temp[:,atm_profile_idx] = xprof
             atm.edit_DUST(temp)
             xmap[...] = np.diag(xprof)
         
-        elif atm_profile_type == AtmosphericProfileType.PARA_H2_FRACTION:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.PARA_H2_FRACTION:
             atm.PARAH2(xprof)
             xmap[...] = np.diag(np.ones_like(xprof))
         
-        elif atm_profile_type == AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE:
             atm.FRAC(xprof)
             xmap[...] = np.diag(np.ones_like(xprof))
         
@@ -983,7 +983,7 @@ class Model0(PreRTModelBase):
         atm = forward_model.AtmosphereX
         atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
         
-        if atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+        if atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             calculate_fn = lambda *args, **kwargs: Modelm1.calculate(*args, **kwargs)
         else:
             calculate_fn = lambda *args, **kwargs: self.calculate(*args, **kwargs)
@@ -1019,7 +1019,7 @@ class Model2(PreRTModelBase):
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
@@ -1046,7 +1046,7 @@ class Model2(PreRTModelBase):
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM of atmospheric profile type we are altering.
             
             atm_profile_idx : int | None,
@@ -1071,7 +1071,7 @@ class Model2(PreRTModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                atm_profile_type :: AtmosphericProfileType
+                atm_profile_type :: AtmosphericProfileTypeEnum
                     ENUM of atmospheric profile type we are altering.
                 
                 atm_profile_idx : int | None
@@ -1099,23 +1099,23 @@ class Model2(PreRTModelBase):
 
         xmap = np.zeros((1,atm.NP))
         
-        if atm_profile_type == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO:
+        if atm_profile_type == AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO:
             xmap[0,:] = atm.VMR[:, atm_profile_idx]
             atm.VMR[:, atm_profile_idx] *= scf
         
-        elif atm_profile_type == AtmosphericProfileType.TEMPERATURE:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.TEMPERATURE:
             xmap[0,:] = atm.T
             atm.T *= scf
         
-        elif atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             xmap[0,:] = atm.DUST[:, atm_profile_idx]
             atm.DUST[:, atm_profile_idx] *= scf
         
-        elif atm_profile_type == AtmosphericProfileType.PARA_H2_FRACTION:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.PARA_H2_FRACTION:
             xmap[0,:] = atm.PARAH2
             atm.PARAH2 *= scf
         
-        elif atm_profile_type == AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE:
             xmap[0,:] = atm.FRAC
             atm.FRAC *= scf
         
@@ -1250,7 +1250,7 @@ class Model3(PreRTModelBase):
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
@@ -1277,7 +1277,7 @@ class Model3(PreRTModelBase):
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM of atmospheric profile type we are altering.
             
             atm_profile_idx : int | None,
@@ -1302,7 +1302,7 @@ class Model3(PreRTModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                atm_profile_type :: AtmosphericProfileType
+                atm_profile_type :: AtmosphericProfileTypeEnum
                     ENUM of atmospheric profile type we are altering.
                 
                 atm_profile_idx : int | None
@@ -1329,23 +1329,23 @@ class Model3(PreRTModelBase):
         """
         xmap = np.zeros((1,atm.NP))
         
-        if atm_profile_type == AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO:
+        if atm_profile_type == AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO:
             xmap[0,:] = atm.VMR[:, atm_profile_idx]
             atm.VMR[:, atm_profile_idx] *= scf
         
-        elif atm_profile_type == AtmosphericProfileType.TEMPERATURE:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.TEMPERATURE:
             xmap[0,:] = atm.T
             atm.T *= scf
         
-        elif atm_profile_type == AtmosphericProfileType.AEROSOL_DENSITY:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             xmap[0,:] = atm.DUST[:, atm_profile_idx]
             atm.DUST[:, atm_profile_idx] *= scf
         
-        elif atm_profile_type == AtmosphericProfileType.PARA_H2_FRACTION:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.PARA_H2_FRACTION:
             xmap[0,:] = atm.PARAH2
             atm.PARAH2 *= scf
         
-        elif atm_profile_type == AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE:
+        elif atm_profile_type == AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE:
             xmap[0,:] = atm.FRAC
             atm.FRAC *= scf
         
@@ -1488,7 +1488,7 @@ class Model9(PreRTModelBase):
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
@@ -1516,7 +1516,7 @@ class Model9(PreRTModelBase):
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM of atmospheric profile type we are altering.
             
             atm_profile_idx : int | None,
@@ -1577,7 +1577,7 @@ class Model9(PreRTModelBase):
         
 
 
-        if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
+        if atm_profile_type != AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             _msg = f'Model id={cls.id} is only defined for aerosol profiles.'
             _lgr.error(_msg)
             raise ValueError(_msg)
@@ -1800,7 +1800,7 @@ class Model32(PreRTModelBase):
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
@@ -1829,7 +1829,7 @@ class Model32(PreRTModelBase):
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM of atmospheric profile type we are altering.
             
             atm_profile_idx : int | None,
@@ -1862,7 +1862,7 @@ class Model32(PreRTModelBase):
 
                 atm :: Python class defining the atmosphere
                 
-                atm_profile_type :: AtmosphericProfileType
+                atm_profile_type :: AtmosphericProfileTypeEnum
                     ENUM of atmospheric profile type we are altering.
                 
                 atm_profile_idx : int | None
@@ -1898,7 +1898,7 @@ class Model32(PreRTModelBase):
         _lgr.debug(f'{tau=}')
 
         
-        if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
+        if atm_profile_type != AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             _msg = f'Model id={cls.id} is only defined for aerosol profiles.'
             _lgr.error(_msg)
             raise ValueError(_msg)
@@ -2171,8 +2171,8 @@ class Model32(PreRTModelBase):
         atm = forward_model.AtmosphereX
         atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
         
-        if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
-            _msg = f'Model id={self.id} is only defined for {AtmosphericProfileType.AEROSOL_DENSITY}.'
+        if atm_profile_type != AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
+            _msg = f'Model id={self.id} is only defined for {AtmosphericProfileTypeEnum.AEROSOL_DENSITY}.'
             _lgr.error(_msg)
             raise ValueError(_msg)
             
@@ -2618,7 +2618,7 @@ class Model45(PreRTModelBase):
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
@@ -2647,7 +2647,7 @@ class Model45(PreRTModelBase):
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM of atmospheric profile type we are altering.
             
             atm_profile_idx : int | None,
@@ -2671,7 +2671,7 @@ class Model45(PreRTModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                atm_profile_type :: AtmosphericProfileType
+                atm_profile_type :: AtmosphericProfileTypeEnum
                     ENUM of atmospheric profile type we are altering.
                 
                 atm_profile_idx : int | None
@@ -2703,7 +2703,7 @@ class Model45(PreRTModelBase):
 
         _lgr.debug(f'{atm_profile_type=} {atm_profile_idx=} {tropo=} {humid=} {strato=}')
 
-        if atm_profile_type != AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO:
+        if atm_profile_type != AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO:
             _msg = f'Model id={cls.id} is only defined for gas VMR profiles.'
             _lgr.error(_msg)
             raise ValueError(_msg)
@@ -2876,7 +2876,7 @@ class Model47(PreRTModelBase):
             n_state_vector_entries : int,
             #   Number of parameters for this model stored in the state vector
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
         """
@@ -2905,7 +2905,7 @@ class Model47(PreRTModelBase):
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
-            atm_profile_type : AtmosphericProfileType,
+            atm_profile_type : AtmosphericProfileTypeEnum,
             #   ENUM of atmospheric profile type we are altering.
             
             atm_profile_idx : int | None,
@@ -2935,7 +2935,7 @@ class Model47(PreRTModelBase):
 
                 atm :: Python class defining the atmosphere
                 
-                atm_profile_type :: AtmosphericProfileType
+                atm_profile_type :: AtmosphericProfileTypeEnum
                     ENUM of atmospheric profile type we are altering.
                 
                 atm_profile_idx : int | None
@@ -2966,7 +2966,7 @@ class Model47(PreRTModelBase):
         """
         _lgr.debug(f'{atm_profile_type=} {atm_profile_idx=} {tau=} {pref=} {fwhm=}')
 
-        if atm_profile_type != AtmosphericProfileType.AEROSOL_DENSITY:
+        if atm_profile_type != AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             _msg = f'Model id={cls.id} is only defined for aerosol profiles.'
             _lgr.error(_msg)
             raise ValueError(_msg)
@@ -6720,7 +6720,7 @@ class Model500(PreRTModelBase):
 
         icia = forward_model.Variables.VARIDENT[ivar,1]
 
-        if forward_model.Measurement.ISPACE == WaveUnit.Wavelength_um:
+        if forward_model.Measurement.ISPACE == WaveUnitEnum.Wavelength_um:
             vlo = 1e4/(forward_model.SpectroscopyX.WAVE.max())
             vhi = 1e4/(forward_model.SpectroscopyX.WAVE.min())
         else:
@@ -6920,9 +6920,6 @@ class Model556(PreRTModelBase):
             MODIFICATION HISTORY : Juan Alday (15/02/2023)
 
         """
-
-        hpre = Atmosphere.H
-        ppre = Atmosphere.P
     
         _lgr.info(f'Calculating model 556 with radius_scaling_factor={radius_scaling_factor}')
         Atmosphere.PLANET_RADIUS = Atmosphere.PLANET_RADIUS * radius_scaling_factor

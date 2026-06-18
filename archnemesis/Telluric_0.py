@@ -26,7 +26,7 @@ import numpy as np
 import h5py
 
 import archnemesis.Data.constants as const
-from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnit, SpectralCalculationMode
+from archnemesis.enum import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnitEnum, SpectralCalculationModeEnum
 import archnemesis.helpers.h5py_helper as h5py_helper
 
 import logging
@@ -429,7 +429,7 @@ class Telluric_0:
         Scatter.SOL_ANG = 0.
         Scatter.AZI_ANG = 0.
         Measurement = Measurement_0()
-        Measurement.IFORM = SpectraUnit.Radiance
+        Measurement.IFORM = SpectraUnitEnum.Radiance
         
         #Calculating the path
         FM = ForwardModel_0(Spectroscopy=self.Spectroscopy,Atmosphere=self.Atmosphere)
@@ -442,7 +442,7 @@ class Telluric_0:
         
         #Calculating the optical depth along the line-of-sight
         ########################################################################################################
-        if self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
+        if self.Spectroscopy.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:  #LBL-table
 
             #Calculating the cross sections for each gas in each layer
             k = self.Spectroscopy.calc_klbl(len(tlay),play/101325.,tlay,WAVECALC=self.Spectroscopy.WAVE)
@@ -463,7 +463,7 @@ class Telluric_0:
             #Removing necessary data to save memory
             del k
 
-        elif self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:  #Line-by-line
+        elif self.Spectroscopy.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:  #Line-by-line
 
             self_frac = np.mean((Layer.PP.T / Layer.PRESS),axis=1) #(NGAS) average volume mixing ratio of each gas
             self_fracx = np.zeros(self.Spectroscopy.NGAS)
@@ -492,7 +492,7 @@ class Telluric_0:
             #Combining the gaseous opacity in each self.LayerX
             TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
 
-        elif self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:    #K-table
+        elif self.Spectroscopy.ILBL==SpectralCalculationModeEnum.K_TABLES:    #K-table
             
             #Calculating the k-coefficients for each gas in each layer
             k_gas = self.Spectroscopy.calc_k(len(tlay),play/101325.,tlay,WAVECALC=self.Spectroscopy.WAVE) # (NWAVE,NG,NLAY,NGAS)

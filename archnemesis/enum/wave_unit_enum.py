@@ -1,6 +1,6 @@
 from enum import IntEnum
 
-class WaveUnit(IntEnum):
+class WaveUnitEnum(IntEnum):
     """
     Defines values for 'ISPACE'
     """

@@ -1,6 +1,6 @@
 from enum import IntEnum
 
-class ParaH2Ratio(IntEnum):
+class ParaH2RatioEnum(IntEnum):
     """
     Defines values for 'INORMAL' and elements of 'INORMALT', the para-hydrogen ratio in the atmosphere.
     """

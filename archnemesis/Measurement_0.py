@@ -31,7 +31,7 @@ import matplotlib as matplotlib
 from numba import jit
 
 from archnemesis.helpers import h5py_helper
-from archnemesis.enums import InstrumentLineshape, WaveUnit, SpectraUnit
+from archnemesis.enum import InstrumentLineshapeEnum, WaveUnitEnum, SpectraUnitEnum
 from archnemesis import gauss_lobatto
 
 
@@ -232,9 +232,9 @@ class Measurement_0:
             runname='', 
             NGEOM=1, 
             FWHM=0.0, 
-            ISHAPE=InstrumentLineshape.Gaussian, 
-            IFORM=SpectraUnit.Radiance, 
-            ISPACE=WaveUnit.Wavenumber_cm, 
+            ISHAPE=InstrumentLineshapeEnum.Gaussian, 
+            IFORM=SpectraUnitEnum.Radiance, 
+            ISPACE=WaveUnitEnum.Wavenumber_cm, 
             LATITUDE=0.0, 
             LONGITUDE=0.0, 
             V_DOPPLER=0.0, 
@@ -302,28 +302,28 @@ class Measurement_0:
         self.IFORM = IFORM
     
     @property
-    def ISHAPE(self) -> InstrumentLineshape:
+    def ISHAPE(self) -> InstrumentLineshapeEnum:
         return self._ishape
     
     @ISHAPE.setter
     def ISHAPE(self, value):
-        self._ishape = InstrumentLineshape(value)
+        self._ishape = InstrumentLineshapeEnum(value)
     
     @property
-    def ISPACE(self) -> WaveUnit:
+    def ISPACE(self) -> WaveUnitEnum:
         return self._ispace
     
     @ISPACE.setter
     def ISPACE(self, value):
-        self._ispace = WaveUnit(value)
+        self._ispace = WaveUnitEnum(value)
     
     @property
-    def IFORM(self) -> SpectraUnit:
+    def IFORM(self) -> SpectraUnitEnum:
         return self._iform
     
     @IFORM.setter
     def IFORM(self, value):
-        self._iform = SpectraUnit(value)
+        self._iform = SpectraUnitEnum(value)
 
     #################################################################################################################
 
@@ -336,22 +336,22 @@ class Measurement_0:
         assert isinstance(self.NGEOM, (int, np.integer)), 'NGEOM must be int'
         assert self.NGEOM > 0, 'NGEOM must be >0'
         
-        assert isinstance(self.IFORM, (int, np.integer, SpectraUnit)), 'IFORM must be int'
-        assert self.IFORM >= SpectraUnit.Radiance, 'IFORM must be >=0 and <=6'
-        assert self.IFORM <= SpectraUnit.Integrated_radiance, 'IFORM must be >=0 and <=6'
+        assert isinstance(self.IFORM, (int, np.integer, SpectraUnitEnum)), 'IFORM must be int'
+        assert self.IFORM >= SpectraUnitEnum.Radiance, 'IFORM must be >=0 and <=6'
+        assert self.IFORM <= SpectraUnitEnum.Integrated_radiance, 'IFORM must be >=0 and <=6'
             
-        if self.IFORM == SpectraUnit.Normalised_radiance:
+        if self.IFORM == SpectraUnitEnum.Normalised_radiance:
             assert isinstance(self.VNORM, float), 'VNORM must be float if IFORM=5'
             for i in range(self.NGEOM):
                 assert self.VNORM >= self.VCONV[0:self.NCONV[i]].min(), 'VNORM must be >= min(VCONV)'
                 assert self.VNORM <= self.VCONV[0:self.NCONV[i]].max(), 'VNORM must be <= max(VCONV)'
 
-        if self.IFORM == SpectraUnit.Integrated_radiance:
+        if self.IFORM == SpectraUnitEnum.Integrated_radiance:
             assert self.FWHM < 0.0, 'FWHM must be <0 if IFORM=6 (Integrated radiance over filter function)'
 
-        assert isinstance(self.ISPACE, (int, np.integer, WaveUnit)), 'ISPACE must be int'
-        assert self.ISPACE >= WaveUnit.Wavenumber_cm, 'ISPACE must be >=0 and <=1'
-        assert self.ISPACE <= WaveUnit.Wavelength_um, 'ISPACE must be >=0 and <=1'
+        assert isinstance(self.ISPACE, (int, np.integer, WaveUnitEnum)), 'ISPACE must be int'
+        assert self.ISPACE >= WaveUnitEnum.Wavenumber_cm, 'ISPACE must be >=0 and <=1'
+        assert self.ISPACE <= WaveUnitEnum.Wavelength_um, 'ISPACE must be >=0 and <=1'
         
         assert isinstance(self.FWHM, float), 'FWHM must be float'
         assert isinstance(self.V_DOPPLER, float), 'V_DOPPLER must be float'
@@ -375,7 +375,7 @@ class Measurement_0:
             assert self.AZI_ANG.shape == (self.NGEOM,self.NAV.max()), 'AZI_ANG must have size (NGEOM,NAV)'
 
         if self.FWHM > 0.0: #Analytical instrument lineshape
-            assert isinstance(self.ISHAPE, (int, np.integer, InstrumentLineshape)), 'ISHAPE must be int'
+            assert isinstance(self.ISHAPE, (int, np.integer, InstrumentLineshapeEnum)), 'ISHAPE must be int'
         elif self.FWHM == 0.0: # Lineshape baked into K-tables
             pass
         elif self.FWHM < 0.0: # lineshape described by files
@@ -414,7 +414,7 @@ class Measurement_0:
         if self.FWHM > 0.0:
             _lgr.info(f"Spectral resolution of the measurement (FWHM) ::  {(self.FWHM)}")
         elif self.FWHM < 0.0:
-            if self.IFORM == SpectraUnit.Integrated_radiance:
+            if self.IFORM == SpectraUnitEnum.Integrated_radiance:
                 _lgr.info('Filter functions defined in .fil file')
             else:
                 _lgr.info('Instrument line shape defined in .fil file')
@@ -423,8 +423,8 @@ class Measurement_0:
 
         wavelength_unit = 'um'
         wavenumber_unit = 'cm^-1'
-        to_wavelength = (lambda x: x) if self.ISPACE==WaveUnit.Wavelength_um else (lambda x: 1E4/x)
-        to_wavenumber = (lambda x: x) if self.ISPACE==WaveUnit.Wavenumber_cm else (lambda x: 1E4/x)
+        to_wavelength = (lambda x: x) if self.ISPACE==WaveUnitEnum.Wavelength_um else (lambda x: 1E4/x)
+        to_wavenumber = (lambda x: x) if self.ISPACE==WaveUnitEnum.Wavenumber_cm else (lambda x: 1E4/x)
         wavenumber_str = lambda x: str(to_wavenumber(x))+' '+wavenumber_unit
         wavelength_str = lambda x: str(to_wavelength(x))+' '+wavelength_unit
 
@@ -516,55 +516,55 @@ class Measurement_0:
             #Writing the spectral units
             dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
             dset.attrs['title'] = "Spectral units"
-            if self.ISPACE==WaveUnit.Wavenumber_cm:
+            if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
-            elif self.ISPACE==WaveUnit.Wavelength_um:
+            elif self.ISPACE==WaveUnitEnum.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um'
 
             #Writing the measurement units
             dset = h5py_helper.store_data(grp, 'IFORM', int(self.IFORM))
             dset.attrs['title'] = "Measurement units"
             
-            if self.ISPACE==WaveUnit.Wavenumber_cm:  #Wavenumber space
-                if self.IFORM==SpectraUnit.Radiance:
+            if self.ISPACE==WaveUnitEnum.Wavenumber_cm:  #Wavenumber space
+                if self.IFORM==SpectraUnitEnum.Radiance:
                     lunit = 'Radiance / W cm-2 sr-1 (cm-1)-1'
-                elif self.IFORM==SpectraUnit.FluxRatio:
+                elif self.IFORM==SpectraUnitEnum.FluxRatio:
                     lunit = 'Secondary transit depth (Fplanet/Fstar) / Dimensionless'
-                elif self.IFORM==SpectraUnit.TransitDepth:
+                elif self.IFORM==SpectraUnitEnum.TransitDepth:
                     lunit = 'Primary transit depth (100*Aplanet/Astar) / Dimensionless'
-                elif self.IFORM==SpectraUnit.Integrated_spectral_power:
+                elif self.IFORM==SpectraUnitEnum.Integrated_spectral_power:
                     lunit = 'Integrated spectral power of planet / W (cm-1)-1'
-                elif self.IFORM==SpectraUnit.Atmospheric_transmission:
+                elif self.IFORM==SpectraUnitEnum.Atmospheric_transmission:
                     lunit = 'Atmospheric transmission multiplied by solar flux / W cm-2 (cm-1)-1'
-                elif self.IFORM==SpectraUnit.Normalised_radiance:
+                elif self.IFORM==SpectraUnitEnum.Normalised_radiance:
                     lunit = 'Spectra normalised to VNORM'
-                elif self.IFORM==SpectraUnit.Integrated_radiance:
+                elif self.IFORM==SpectraUnitEnum.Integrated_radiance:
                     lunit = 'Integrated radiance over filter function / W cm-2 sr-1'
 
-            elif self.ISPACE==WaveUnit.Wavelength_um:  #Wavelength space
-                if self.IFORM==SpectraUnit.Radiance:
+            elif self.ISPACE==WaveUnitEnum.Wavelength_um:  #Wavelength space
+                if self.IFORM==SpectraUnitEnum.Radiance:
                     lunit = 'Radiance / W cm-2 sr-1 um-1'
-                elif self.IFORM==SpectraUnit.FluxRatio:
+                elif self.IFORM==SpectraUnitEnum.FluxRatio:
                     lunit = 'Secondary transit depth (Fplanet/Fstar) / Dimensionless'
-                elif self.IFORM==SpectraUnit.TransitDepth:
+                elif self.IFORM==SpectraUnitEnum.TransitDepth:
                     lunit = 'Primary transit depth (100*Aplanet/Astar) / Dimensionless'
-                elif self.IFORM==SpectraUnit.Integrated_spectral_power:
+                elif self.IFORM==SpectraUnitEnum.Integrated_spectral_power:
                     lunit = 'Integrated spectral power of planet / W um-1'
-                elif self.IFORM==SpectraUnit.Atmospheric_transmission:
+                elif self.IFORM==SpectraUnitEnum.Atmospheric_transmission:
                     lunit = 'Atmospheric transmission multiplied by solar flux / W cm-2 um-1'
-                elif self.IFORM==SpectraUnit.Normalised_radiance:
+                elif self.IFORM==SpectraUnitEnum.Normalised_radiance:
                     lunit = 'Spectra normalised to VNORM'
-                elif self.IFORM==SpectraUnit.Integrated_radiance:
+                elif self.IFORM==SpectraUnitEnum.Integrated_radiance:
                     lunit = 'Integrated radiance over filter function / W cm-2 sr-1'
                     
             dset.attrs['units'] = lunit
             
-            if self.IFORM==SpectraUnit.Normalised_radiance:
+            if self.IFORM==SpectraUnitEnum.Normalised_radiance:
                 dset = h5py_helper.store_data(grp, 'VNORM', self.VNORM)
-                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
                     dset.attrs['title'] = "Wavenumber for normalisation"
                     dset.attrs['units'] = 'cm-1'
-                elif self.ISPACE==WaveUnit.Wavelength_um:
+                elif self.ISPACE==WaveUnitEnum.Wavelength_um:
                     dset.attrs['title'] = "Wavelength for normalisation"
                     dset.attrs['units'] = 'um'
 
@@ -619,9 +619,9 @@ class Measurement_0:
 
             dset = h5py_helper.store_data(grp, 'VCONV', self.VCONV)
             dset.attrs['title'] = "Spectral bins"
-            if self.ISPACE==WaveUnit.Wavenumber_cm:
+            if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
                 dset.attrs['units'] = 'Wavenumber / cm-1'
-            elif self.ISPACE==WaveUnit.Wavelength_um:
+            elif self.ISPACE==WaveUnitEnum.Wavelength_um:
                 dset.attrs['units'] = 'Wavelength / um'
 
             dset = h5py_helper.store_data(grp, 'MEAS', self.MEAS)
@@ -635,24 +635,24 @@ class Measurement_0:
             if self.FWHM > 0.0:
                 dset = h5py_helper.store_data(grp, 'ISHAPE', int(self.ISHAPE))
                 dset.attrs['title'] = "Instrument lineshape"
-                if self.ISHAPE==InstrumentLineshape.Square:
+                if self.ISHAPE==InstrumentLineshapeEnum.Square:
                     lils = 'Square function'
-                elif self.ISHAPE==InstrumentLineshape.Triangular:
+                elif self.ISHAPE==InstrumentLineshapeEnum.Triangular:
                     lils = 'Triangular function'
-                elif self.ISHAPE==InstrumentLineshape.Gaussian:
+                elif self.ISHAPE==InstrumentLineshapeEnum.Gaussian:
                     lils = 'Gaussian function'
-                elif self.ISHAPE==InstrumentLineshape.Hamming:
+                elif self.ISHAPE==InstrumentLineshapeEnum.Hamming:
                     lils = 'Hamming function'
-                elif self.ISHAPE==InstrumentLineshape.Hanning:
+                elif self.ISHAPE==InstrumentLineshapeEnum.Hanning:
                     lils = 'Hanning function'
                 dset.attrs['type'] = lils
 
             dset = h5py_helper.store_data(grp, 'FWHM', self.FWHM)
             dset.attrs['title'] = "FWHM of instrument lineshape"
             if self.FWHM > 0.0:
-                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
                     dset.attrs['units'] = 'Wavenumber / cm-1'
-                elif self.ISPACE==WaveUnit.Wavelength_um:
+                elif self.ISPACE==WaveUnitEnum.Wavelength_um:
                     dset.attrs['units'] = 'Wavelength / um'
                 dset.attrs['type'] = 'Analytical lineshape ('+lils+')'
             elif self.FWHM==0.0:
@@ -664,11 +664,11 @@ class Measurement_0:
                 dset = h5py_helper.store_data(grp, 'NFIL', self.NFIL)
                 dset.attrs['title'] = "Number of points required to define the ILS in each spectral bin"
 
-                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
                     dset = h5py_helper.store_data(grp, 'VFIL', self.VFIL)
                     dset.attrs['title'] = "Wavenumber of the points required to define the ILS in each spectral bin"
                     dset.attrs['unit'] = "Wavenumber / cm-1"
-                elif self.ISPACE==WaveUnit.Wavelength_um:
+                elif self.ISPACE==WaveUnitEnum.Wavelength_um:
                     dset = h5py_helper.store_data(grp, 'VFIL', self.VFIL)
                     dset.attrs['title'] = "Wavelength of the points required to define the ILS in each spectral bin"
                     dset.attrs['unit'] = "Wavelength / um"
@@ -679,11 +679,11 @@ class Measurement_0:
 
             if self.VFMERR is not None:
                 
-                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
                     dset = h5py_helper.store_data(grp, 'VFMERR', self.VFMERR)
                     dset.attrs['title'] = "Wavenumber of the points at which the forward modelling error is defined"
                     dset.attrs['unit'] = "Wavenumber / cm-1"
-                elif self.ISPACE==WaveUnit.Wavelength_um:
+                elif self.ISPACE==WaveUnitEnum.Wavelength_um:
                     dset = h5py_helper.store_data(grp, 'VFMERR', self.VFMERR)
                     dset.attrs['title'] = "Wavelength of the points at which the forward modelling error is defined"
                     dset.attrs['unit'] = "Wavelength / um"
@@ -697,7 +697,7 @@ class Measurement_0:
                 dset = h5py_helper.store_data(grp, 'NORDERS_AOTF', self.NORDERS_AOTF)
                 dset.attrs['title'] = "Number of diffraction orders to combine on measurement"
 
-                if self.ISPACE==WaveUnit.Wavenumber_cm:
+                if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
                     
                     dset = h5py_helper.store_data(grp, 'VCONV_AOTF', self.VCONV_AOTF)
                     dset.attrs['title'] = "Convolution wavenumbers for each of the diffraction orders"
@@ -719,7 +719,7 @@ class Measurement_0:
                         dset.attrs['title'] = "ILS in each spectral bin"
                         dset.attrs['unit'] = ""
                         
-                if self.ISPACE==WaveUnit.Wavelength_um:
+                if self.ISPACE==WaveUnitEnum.Wavelength_um:
                     
                     dset = h5py_helper.store_data(grp, 'VCONV_AOTF', self.VCONV_AOTF)
                     dset.attrs['title'] = "Convolution wavelengths for each of the diffraction orders"
@@ -759,8 +759,8 @@ class Measurement_0:
             else:
 
                 self.NGEOM = h5py_helper.retrieve_data(f, 'Measurement/NGEOM', np.int32)
-                self.ISPACE = h5py_helper.retrieve_data(f, 'Measurement/ISPACE', lambda x:  WaveUnit(np.int32(x)))
-                self.IFORM = h5py_helper.retrieve_data(f, 'Measurement/IFORM', lambda x:  SpectraUnit(np.int32(x)))
+                self.ISPACE = h5py_helper.retrieve_data(f, 'Measurement/ISPACE', lambda x:  WaveUnitEnum(np.int32(x)))
+                self.IFORM = h5py_helper.retrieve_data(f, 'Measurement/IFORM', lambda x:  SpectraUnitEnum(np.int32(x)))
                 self.LATITUDE = h5py_helper.retrieve_data(f, 'Measurement/LATITUDE', np.float64)
                 self.LONGITUDE = h5py_helper.retrieve_data(f, 'Measurement/LONGITUDE', np.float64)
                 self.SUBOBS_LAT = h5py_helper.retrieve_data(f, 'Measurement/SUBOBS_LAT', np.float64)
@@ -771,7 +771,7 @@ class Measurement_0:
                 self.WGEOM = h5py_helper.retrieve_data(f, 'Measurement/WGEOM', np.array)
                 self.EMISS_ANG = h5py_helper.retrieve_data(f, 'Measurement/EMISS_ANG', np.array)
                 
-                if self.IFORM==SpectraUnit.Normalised_radiance:
+                if self.IFORM==SpectraUnitEnum.Normalised_radiance:
                     if 'Measurement/VNORM' in f:
                         self.VNORM = h5py_helper.retrieve_data(f, 'Measurement/VNORM', np.float64)
                 
@@ -797,7 +797,7 @@ class Measurement_0:
 
                 self.FWHM = h5py_helper.retrieve_data(f, 'Measurement/FWHM', np.float64)
                 if self.FWHM > 0.0:
-                    self.ISHAPE = h5py_helper.retrieve_data(f, 'Measurement/ISHAPE', lambda x:  InstrumentLineshape(np.int32(x)))
+                    self.ISHAPE = h5py_helper.retrieve_data(f, 'Measurement/ISHAPE', lambda x:  InstrumentLineshapeEnum(np.int32(x)))
                 elif self.FWHM < 0.0:
                     self.NFIL = h5py_helper.retrieve_data(f, 'Measurement/NFIL', np.array)
                     self.VFIL = h5py_helper.retrieve_data(f, 'Measurement/VFIL', np.array)
@@ -1049,7 +1049,7 @@ class Measurement_0:
         with open(self.runname+'.sha','r') as f:
             s = f.readline().split()
         lineshape = int(s[0])
-        self.ISHAPE = InstrumentLineshape(lineshape)
+        self.ISHAPE = InstrumentLineshapeEnum(lineshape)
         self.build_ils()
 
     #################################################################################################################
@@ -1982,13 +1982,13 @@ class Measurement_0:
         if self.FWHM>0.0:
 
             #Calculating the limits defining the ILS
-            if self.ISHAPE==InstrumentLineshape.Square:   #Square lineshape
+            if self.ISHAPE==InstrumentLineshapeEnum.Square:   #Square lineshape
                 dv = 0.5*self.FWHM
-            elif self.ISHAPE==InstrumentLineshape.Triangular: #Triangular
+            elif self.ISHAPE==InstrumentLineshapeEnum.Triangular: #Triangular
                 dv = self.FWHM
-            elif self.ISHAPE==InstrumentLineshape.Gaussian: #Gaussian
+            elif self.ISHAPE==InstrumentLineshapeEnum.Gaussian: #Gaussian
                 dv = 3.* 0.5 * self.FWHM / np.sqrt(np.log(2.0))
-            elif self.ISHAPE==InstrumentLineshape.Hamming: 
+            elif self.ISHAPE==InstrumentLineshapeEnum.Hamming: 
                 dv = self.FWHM
             else: 
                 raise ValueError('error in build_ils :: ishape not included yet in function')
@@ -1999,23 +1999,25 @@ class Measurement_0:
             ils = np.zeros(nwave)
             
             #Defining the ILS
-            if self.ISHAPE==InstrumentLineshape.Square:   #Square lineshape
+            if self.ISHAPE==InstrumentLineshapeEnum.Square:   #Square lineshape
                 ils[:] = 1.0    
-            elif self.ISHAPE==InstrumentLineshape.Triangular: #Triangular
+            elif self.ISHAPE==InstrumentLineshapeEnum.Triangular: #Triangular
                 ils[:] = 1.0 - np.abs(vwave)/self.FWHM
-            elif self.ISHAPE==InstrumentLineshape.Gaussian: #Gaussian
+            elif self.ISHAPE==InstrumentLineshapeEnum.Gaussian: #Gaussian
                 sig = 0.5 * self.FWHM / np.sqrt(np.log(2.0))
                 ils[:] = np.exp(-((vwave)/sig)**2)
-            elif self.ISHAPE==InstrumentLineshape.Hamming:
-                a = 0.907/self.FWHM
-                k = vwave                
-                numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi *  a * k)                    
-                denominator = (1 - 4 * a**2 * k**2) * (2* np.pi * a * k) 
+            elif self.ISHAPE==InstrumentLineshapeEnum.Hamming:
+                # At the moment this is not actually used anywhere
+                #a = 0.907/self.FWHM
+                #k = vwave
+                #numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi *  a * k)
+                #denominator = (1 - 4 * a**2 * k**2) * (2* np.pi * a * k) 
 
-                if a != 0.0:
-                    f1 = numerator / denominator
-                else:
-                    f1 = a * 1.08                   
+                #if a != 0.0:
+                #    f1 = numerator / denominator
+                #else:
+                #    f1 = a * 1.08
+                pass
 
             # Normalize kernel area to 1
             ils_sum = ils.sum()
@@ -2054,13 +2056,13 @@ class Measurement_0:
 
         if self.FWHM>0.0:
 
-            if self.ISHAPE==InstrumentLineshape.Square:
+            if self.ISHAPE==InstrumentLineshapeEnum.Square:
                 dv = 0.5*self.FWHM
-            elif self.ISHAPE==InstrumentLineshape.Triangular:
+            elif self.ISHAPE==InstrumentLineshapeEnum.Triangular:
                 dv = self.FWHM
-            elif self.ISHAPE==InstrumentLineshape.Gaussian:
+            elif self.ISHAPE==InstrumentLineshapeEnum.Gaussian:
                 dv = 3.* 0.5 * self.FWHM / np.sqrt(np.log(2.0))
-            elif self.ISHAPE==InstrumentLineshape.Hamming:
+            elif self.ISHAPE==InstrumentLineshapeEnum.Hamming:
                 dv = self.FWHM
             else:
                 dv = 3.*self.FWHM
@@ -2808,10 +2810,10 @@ class Measurement_0:
         
         c = 299792458.0   #Speed of light (m/s)
         
-        if self.ISPACE==WaveUnit.Wavenumber_cm:
+        if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
             #Wavenumber (cm-1)
             wave_shift = self.V_DOPPLER*1.0e3 / c * wave
-        elif self.ISPACE==WaveUnit.Wavelength_um:
+        elif self.ISPACE==WaveUnitEnum.Wavelength_um:
             #Wavelength (um)
             wave_shift = -self.V_DOPPLER*1.0e3 / c * wave
         
@@ -2835,10 +2837,10 @@ class Measurement_0:
         
         c = 299792458.0   #Speed of light (m/s)
         
-        if self.ISPACE==WaveUnit.Wavenumber_cm:
+        if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
             #Wavenumber (cm-1)
             wave_0 = wave / (1.0-self.V_DOPPLER*1.0e3 / c)
-        elif self.ISPACE==WaveUnit.Wavelength_um:
+        elif self.ISPACE==WaveUnitEnum.Wavelength_um:
             #Wavelength (um)
             wave_0 = wave / (1.0+self.V_DOPPLER*1.0e3 / c)
         
@@ -2862,10 +2864,10 @@ class Measurement_0:
         
         c = 299792458.0   #Speed of light (m/s)
         
-        if self.ISPACE==WaveUnit.Wavenumber_cm:
+        if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
             #Wavenumber (cm-1)
             wave = wave_0 * (1.0-self.V_DOPPLER*1.0e3 / c)
-        elif self.ISPACE==WaveUnit.Wavelength_um:
+        elif self.ISPACE==WaveUnitEnum.Wavelength_um:
             #Wavelength (um)
             wave = wave_0 * (1.0+self.V_DOPPLER*1.0e3 / c)
         
@@ -2880,11 +2882,11 @@ class Measurement_0:
 
         fig,ax1 = plt.subplots(1,1,figsize=(10,4))
 
-        if self.ISPACE==WaveUnit.Wavenumber_cm:
+        if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
             xlabel=r'Wavenumber (cm$^{-1}$)'
             xsymbol = r'$\nu$'
             xunit = r'cm$^{-1}$'
-        elif self.ISPACE==WaveUnit.Wavelength_um:
+        elif self.ISPACE==WaveUnitEnum.Wavelength_um:
             xlabel=r'Wavelength ($\mu$m)'
             xsymbol = r'$\lambda$'
             xunit = r'$\mu$m'
@@ -2916,11 +2918,11 @@ class Measurement_0:
 
         fig,ax1 = plt.subplots(1,1,figsize=(10,4))
 
-        if self.ISPACE==WaveUnit.Wavenumber_cm:
+        if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
             xlabel=r'Wavenumber (cm$^{-1}$)'
             xsymbol = r'$\nu$'
             xunit = r'cm$^{-1}$'
-        elif self.ISPACE==WaveUnit.Wavelength_um:
+        elif self.ISPACE==WaveUnitEnum.Wavelength_um:
             xlabel=r'Wavelength ($\mu$m)'
             xsymbol = r'$\lambda$'
             xunit = r'$\mu$m'
@@ -3377,17 +3379,17 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
     for j in range(nconv):
         yfwhm = fwhm
         vcen = vconv[j]
-        if ishape==InstrumentLineshape.Square:
+        if ishape==InstrumentLineshapeEnum.Square:
             v1 = vcen-0.5*yfwhm
             v2 = v1 + yfwhm
-        elif ishape==InstrumentLineshape.Triangular:
+        elif ishape==InstrumentLineshapeEnum.Triangular:
             v1 = vcen-yfwhm
             v2 = vcen+yfwhm
-        elif ishape==InstrumentLineshape.Gaussian:
+        elif ishape==InstrumentLineshapeEnum.Gaussian:
             sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
             v1 = vcen - 3.*sig
             v2 = vcen + 3.*sig
-        elif ishape==InstrumentLineshape.Hamming:
+        elif ishape==InstrumentLineshapeEnum.Hamming:
             v1 = vcen - 1.1*yfwhm
             v2 = vcen - 1.1*yfwhm
         else:
@@ -3402,16 +3404,16 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
         np1 = len(inwave)
         for i in range(np1):
             f1=0.0
-            if ishape==InstrumentLineshape.Square:
+            if ishape==InstrumentLineshapeEnum.Square:
                 #Square instrument lineshape
                 f1=1.0
-            elif ishape==InstrumentLineshape.Triangular:
+            elif ishape==InstrumentLineshapeEnum.Triangular:
                 #Triangular instrument shape
                 f1=1.0 - abs(vwave[inwave[i]] - vcen)/yfwhm
-            elif ishape==InstrumentLineshape.Gaussian:
+            elif ishape==InstrumentLineshapeEnum.Gaussian:
                 #Gaussian instrument shape
                 f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
-            elif ishape==InstrumentLineshape.Hamming:
+            elif ishape==InstrumentLineshapeEnum.Hamming:
                 a = 0.907/yfwhm
                 k = vwave[inwave[i]] - vcen
                 numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi *  a * k)
@@ -3491,17 +3493,17 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
             for j in range(nconv):
                 yfwhm = fwhm
                 vcen = vconv[j]
-                if ishape==InstrumentLineshape.Square:
+                if ishape==InstrumentLineshapeEnum.Square:
                     v1 = vcen-0.5*yfwhm
                     v2 = v1 + yfwhm
-                elif ishape==InstrumentLineshape.Triangular:
+                elif ishape==InstrumentLineshapeEnum.Triangular:
                     v1 = vcen-yfwhm
                     v2 = vcen+yfwhm
-                elif ishape==InstrumentLineshape.Gaussian:
+                elif ishape==InstrumentLineshapeEnum.Gaussian:
                     sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
                     v1 = vcen - 3.*sig
                     v2 = vcen + 3.*sig
-                elif ishape==InstrumentLineshape.Hamming:
+                elif ishape==InstrumentLineshapeEnum.Hamming:
                     v1 = vcen - yfwhm
                     v2 = vcen - yfwhm
                 else:
@@ -3515,16 +3517,16 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
                 np1 = len(inwave)
                 for i in range(np1):
                     f1=0.0
-                    if ishape==InstrumentLineshape.Square:
+                    if ishape==InstrumentLineshapeEnum.Square:
                         #Square instrument lineshape
                         f1=1.0
-                    elif ishape==InstrumentLineshape.Triangular:
+                    elif ishape==InstrumentLineshapeEnum.Triangular:
                         #Triangular instrument shape
                         f1=1.0 - abs(vwave[inwave[i]] - vcen)/yfwhm
-                    elif ishape==InstrumentLineshape.Gaussian:
+                    elif ishape==InstrumentLineshapeEnum.Gaussian:
                         #Gaussian instrument shape
                         f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
-                    elif ishape==InstrumentLineshape.Hamming:
+                    elif ishape==InstrumentLineshapeEnum.Hamming:
                         a = 0.907/yfwhm
                         k = vwave[inwave[i]] - vcen
                         numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi * a * k)                
@@ -3737,17 +3739,17 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
         for j in range(nconv):
             yfwhm = fwhm
             vcen = vconv[j]
-            if ishape==InstrumentLineshape.Square:
+            if ishape==InstrumentLineshapeEnum.Square:
                 v1 = vcen-0.5*yfwhm
                 v2 = v1 + yfwhm
-            elif ishape==InstrumentLineshape.Triangular:
+            elif ishape==InstrumentLineshapeEnum.Triangular:
                 v1 = vcen-yfwhm
                 v2 = vcen+yfwhm
-            elif ishape==InstrumentLineshape.Gaussian:
+            elif ishape==InstrumentLineshapeEnum.Gaussian:
                 sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
                 v1 = vcen - 3.*sig
                 v2 = vcen + 3.*sig
-            elif ishape==InstrumentLineshape.Hamming:
+            elif ishape==InstrumentLineshapeEnum.Hamming:
                 v1 = vcen - yfwhm
                 v2 = vcen - yfwhm
             else:
@@ -3761,16 +3763,16 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
             np1 = len(inwave)
             for i in range(np1):
                 f1=0.0
-                if ishape==InstrumentLineshape.Square:
+                if ishape==InstrumentLineshapeEnum.Square:
                     #Square instrument lineshape
                     f1=1.0
-                elif ishape==InstrumentLineshape.Triangular:
+                elif ishape==InstrumentLineshapeEnum.Triangular:
                     #Triangular instrument shape
                     f1=1.0 - abs(vwave[inwave[i]] - vcen)/yfwhm
-                elif ishape==InstrumentLineshape.Gaussian:
+                elif ishape==InstrumentLineshapeEnum.Gaussian:
                     #Gaussian instrument shape
                     f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
-                elif ishape==InstrumentLineshape.Hamming:
+                elif ishape==InstrumentLineshapeEnum.Hamming:
                     a = 0.907/yfwhm
                     k = vwave[inwave[i]] - vcen
                     numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi * a * k)                
@@ -3850,17 +3852,17 @@ def lblconvg(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
         for j in range(nconv):
             yfwhm = fwhm
             vcen = vconv[j]
-            if ishape==InstrumentLineshape.Square:
+            if ishape==InstrumentLineshapeEnum.Square:
                 v1 = vcen-0.5*yfwhm
                 v2 = v1 + yfwhm
-            elif ishape==InstrumentLineshape.Triangular:
+            elif ishape==InstrumentLineshapeEnum.Triangular:
                 v1 = vcen-yfwhm
                 v2 = vcen+yfwhm
-            elif ishape==InstrumentLineshape.Gaussian:
+            elif ishape==InstrumentLineshapeEnum.Gaussian:
                 sig = 0.5*yfwhm/np.sqrt( np.log(2.0)  )
                 v1 = vcen - 3.*sig
                 v2 = vcen + 3.*sig
-            elif ishape==InstrumentLineshape.Hamming:
+            elif ishape==InstrumentLineshapeEnum.Hamming:
                 v1 = vcen - yfwhm
                 v2 = vcen + yfwhm
             else:
@@ -3874,16 +3876,16 @@ def lblconvg(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
             np1 = len(inwave)
             for i in range(np1):
                 f1=0.0
-                if ishape==InstrumentLineshape.Square:
+                if ishape==InstrumentLineshapeEnum.Square:
                     #Square instrument lineshape
                     f1=1.0
-                elif ishape==InstrumentLineshape.Triangular:
+                elif ishape==InstrumentLineshapeEnum.Triangular:
                     #Triangular instrument shape
                     f1=1.0 - abs(vwave[inwave[i]] - vcen)/yfwhm
-                elif ishape==InstrumentLineshape.Gaussian:
+                elif ishape==InstrumentLineshapeEnum.Gaussian:
                     #Gaussian instrument shape
                     f1 = np.exp(-((vwave[inwave[i]]-vcen)/sig)**2.0)
-                elif ishape==InstrumentLineshape.Hamming:
+                elif ishape==InstrumentLineshapeEnum.Hamming:
                     a = 0.907/yfwhm
                     k = vwave[inwave[i]] - vcen
                     numerator = a * (1.08 - (0.64 * a**2 * k**2)) * np.sin(2 * np.pi *  a * k)                
@@ -4115,7 +4117,6 @@ def integrate_filter(nwave,vwave,y,nconv,vconv,nfil,vfil,afil):
             v2 = vfil[nfil[j]-1,j]
             #Find relevant points in tabulated files
             inwave = np.where( (vwave>=v1) & (vwave<=v2) )[0]
-            np1 = len(inwave)
             
             #Interpolating the filter function at the calculation wavenumbers
             afil_interp = np.interp(vwave[inwave],vfil[0:nfil[j],j],afil[0:nfil[j],j])
@@ -4537,12 +4538,12 @@ def generate_angles_exoplanet(phase,rho,alpha):
     ### calculate azimuth angle
     # Rotate frame clockwise by phi_point about z (v_point is now x-axis)
     v_star_1=rotatez(v_star,-phi_point)
-    v_point_1=rotatez(v_point,-phi_point)
+    #v_point_1=rotatez(v_point,-phi_point)
     v_observer_1=rotatez(v_observer,-phi_point)
 
     # Rotate frame clockwise by theta_point about y (v_point is now z-axis )
     v1B=rotatey(v_star_1,-theta_point)
-    v2B=rotatey(v_point_1,-theta_point)
+    #v2B=rotatey(v_point_1,-theta_point)
     v3B=rotatey(v_observer_1,-theta_point)
 
     # thetsolB=np.arccos(v1B[2])

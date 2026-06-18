@@ -52,7 +52,7 @@ def test_lbl_calculation():
             p_calc = press,
             amb_frac = 0.028,
             wave_unit = Spectroscopy.ISPACE,
-            lineshape_fn = ans.Data.lineshape.voigt,
+            lineshape_fn = ans.lineshape.voigt,
             wn_calc_window = 25.0, # (cm^{-1})
             wn_approx_window = 75.0, # (cm^{-1})
     )

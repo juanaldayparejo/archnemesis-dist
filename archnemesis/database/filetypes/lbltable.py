@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-import archnemesis.enums
+import archnemesis.enum
 import archnemesis as ans
 from archnemesis.database.datatypes.wave_point import WavePoint
 from archnemesis.database.datatypes.gas_descriptor import RadtranGasDescriptor
@@ -62,7 +62,7 @@ class LblDataTProfilesAtPressure(NamedTuple):
     """
     gas_id : int # RADTRAN
     iso_id : int # RADTRAN
-    wave_unit : ans.enums.WaveUnit # ENUM value
+    wave_unit : ans.enum.WaveUnitEnum # ENUM value
     wave : np.ndarray[['NWAVE'], float] # in `wave_unit`
     press : np.ndarray[['NPRESS'], float] # bar
     temp : np.ndarray[['NPRESS', 'NTEMP_PER_PRESSURE'], float] # kelvin
@@ -120,7 +120,7 @@ class LblDataTProfilesAtPressure(NamedTuple):
         _lgr.info(f'Written {self.__class__.__name__} to {f.name}')
         return
     
-    def plot(self, wave_unit : None | ans.enums.WaveUnit = None, z_logscale=True):
+    def plot(self, wave_unit : None | ans.enum.WaveUnitEnum = None, z_logscale=True):
         """
         Show a map of `k` (color axis) vs pressure (y-axis) and wave (x-axis) for each temperature 
         profile. Also plots the temperature profile as a red-line on a shared y-axis.
@@ -162,20 +162,20 @@ class LblDataTProfilesAtPressure(NamedTuple):
             cax = div.append_axes('right', size=0.05, pad=0.0)
             fig.colorbar(im, cax=cax, orientation='vertical')
             
-            if wave_points.unit == ans.enums.WaveUnit.Wavenumber_cm:
+            if wave_points.unit == ans.enum.WaveUnitEnum.Wavenumber_cm:
                 ax[i].set_xlabel('Wavenumber ($cm^{-1}$)')
                 if z_logscale:
                     cax.set_ylabel('log[Absorption Coefficient] log(cm$^{-2}$ / $cm^{-1}$)')
                 else:
                     cax.set_ylabel('Absorption Coefficient] (cm$^{-2}$ / $cm^{-1}$)')
-            elif wave_points.unit == ans.enums.WaveUnit.Wavelength_um:
+            elif wave_points.unit == ans.enum.WaveUnitEnum.Wavelength_um:
                 ax[i].set_xlabel(r'Wavelength ($\mu$m)')
                 if z_logscale:
                     cax.set_ylabel(r'log[Absorption Coefficient] log(cm$^{-2}$ / $\mu$m)')
                 else:
                     cax.set_ylabel(r'Absorption Coefficient (cm$^{-2}$ / $\mu$m)')
             else:
-                raise RuntimeError(f'Unknown {wave_unit}. Should be one of {ans.enums.WaveUnit.values()}')
+                raise RuntimeError(f'Unknown {wave_unit}. Should be one of {ans.enum.WaveUnitEnum.values()}')
             
             
             
@@ -205,7 +205,7 @@ class LblDataTPGrid(NamedTuple):
     """
     gas_id : int # RADTRAN
     iso_id : int # RADTRAN
-    wave_unit : ans.enums.WaveUnit # ENUM value
+    wave_unit : ans.enum.WaveUnitEnum # ENUM value
     wave : np.ndarray[['NWAVE'], float] # wavenumber cm^-1
     press : np.ndarray[['NPRESS'], float] # bar
     temp : np.ndarray[['NTEMP'], float] # Kelvin
@@ -255,7 +255,7 @@ class LblDataTPGrid(NamedTuple):
             )
         )
 
-    def plot(self, wave_unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavelength_um):
+    def plot(self, wave_unit : ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavelength_um):
         """
         Show a map of `k` (color axis) vs pressure (y-axis) and wave (x-axis) for each temperature
         point on the grid.
@@ -286,12 +286,12 @@ class LblDataTPGrid(NamedTuple):
                 np.log(self.k[:,:,i].T)
             )
             
-            if wave_points.unit == ans.enums.WaveUnit.Wavenumber_cm:
+            if wave_points.unit == ans.enum.WaveUnitEnum.Wavenumber_cm:
                 ax[i].set_xlabel('Wavenumber ($cm^{-1}$)')
-            elif wave_points.unit == ans.enums.WaveUnit.Wavelength_um:
+            elif wave_points.unit == ans.enum.WaveUnitEnum.Wavelength_um:
                 ax[i].set_xlabel(r'Wavelength ($\mu$m)')
             else:
-                raise RuntimeError(f'Unknown {wave_unit}. Should be one of {ans.enums.WaveUnit.values()}')
+                raise RuntimeError(f'Unknown {wave_unit}. Should be one of {ans.enum.WaveUnitEnum.values()}')
             
             ax[i].set_xlabel('Wavenumber ($cm^{-1}$)')
             ax[i].set_ylabel('Pressure (atm)')
@@ -312,7 +312,7 @@ def read_legacy_header(f : str | io.IOBase) -> LblHeader:
 
 def read_legacy(
         f : str | IOBase, 
-        wave_unit : None | ans.enums.WaveUnit =  None,
+        wave_unit : None | ans.enum.WaveUnitEnum =  None,
         fortran_record_byte_size = 4, # number of bytes in a fortran record, normally 4
 ) -> LblDataTProfilesAtPressure | LblDataTPGrid:
     """
@@ -325,7 +325,7 @@ def read_legacy(
         f : str | IOBase
             Filename or FileLike object for table to read.
         
-        wave_unit : None | ans.enums.WaveUnit
+        wave_unit : None | ans.enum.WaveUnitEnum
             Unit of wave data in file,. If None will infer from value of `LblHeader.vmin`; < 100 -> Wavelength_um, >= 100 -> Wavenumber_cm.
     
     ## RETURNS ##
@@ -344,9 +344,9 @@ def read_legacy(
     
     if wave_unit is None:
         if hdr.vmin < 100:
-            wave_unit = ans.enums.WaveUnit.Wavelength_um
+            wave_unit = ans.enum.WaveUnitEnum.Wavelength_um
         else:
-            wave_unit = ans.enums.WaveUnit.Wavenumber_um
+            wave_unit = ans.enum.WaveUnitEnum.Wavenumber_um
         _lgr.warning(f'No `wave_unit` parameter given to {__name__}.read_legacy(...). Assuming "{wave_unit.name}" based off `LblHeader.vmin` = {hdr.vmin}')
     
     ptk = [

@@ -6,40 +6,40 @@ from typing import Callable
 import archnemesis.lineshape as lineshape
 
 # Import ENUM that chooses lineshape function
-from archnemesis.enums import SpectroscopicLineProfile
+from archnemesis.enum import SpectroscopicLineProfileEnum
 
 
 def SpectroscopicLineProfileEnum_to_lineshape_fn(
-        enum : SpectroscopicLineProfile,
+        enum : SpectroscopicLineProfileEnum,
 ) -> Callable:
     """
     Performs mapping between `SpectroscopicLineProfile` and lineshape functions
     """
-    if enum == SpectroscopicLineProfile.VOIGT:
+    if enum == SpectroscopicLineProfileEnum.VOIGT:
         lineshape_fn = lineshape.voigt
     
-    elif enum == SpectroscopicLineProfile.SUBLORENTZ_CO2_BROADENING:
-        raise NotImplementedError(f'Lineshape function for {SpectroscopicLineProfile(enum)} is not implemented yet')
+    elif enum == SpectroscopicLineProfileEnum.SUBLORENTZ_CO2_BROADENING:
+        raise NotImplementedError(f'Lineshape function for {SpectroscopicLineProfileEnum(enum)} is not implemented yet')
     
-    elif enum == SpectroscopicLineProfile.VANVLECK_WEISSKOPF:
-        raise NotImplementedError(f'Lineshape function for {SpectroscopicLineProfile(enum)} is not implemented yet')
+    elif enum == SpectroscopicLineProfileEnum.VANVLECK_WEISSKOPF:
+        raise NotImplementedError(f'Lineshape function for {SpectroscopicLineProfileEnum(enum)} is not implemented yet')
     
-    elif enum == SpectroscopicLineProfile.ROSENKRANTZ_BENREUVEN_FARIR:
-        raise NotImplementedError(f'Lineshape function for {SpectroscopicLineProfile(enum)} is not implemented yet')
+    elif enum == SpectroscopicLineProfileEnum.ROSENKRANTZ_BENREUVEN_FARIR:
+        raise NotImplementedError(f'Lineshape function for {SpectroscopicLineProfileEnum(enum)} is not implemented yet')
     
-    elif enum == SpectroscopicLineProfile.LORENTZ:
+    elif enum == SpectroscopicLineProfileEnum.LORENTZ:
         lineshape_fn = lineshape.lorentz
     
-    elif enum == SpectroscopicLineProfile.LEVY1994:
-        raise NotImplementedError(f'Lineshape function for {SpectroscopicLineProfile(enum)} is not implemented yet')
+    elif enum == SpectroscopicLineProfileEnum.LEVY1994:
+        raise NotImplementedError(f'Lineshape function for {SpectroscopicLineProfileEnum(enum)} is not implemented yet')
     
-    elif enum == SpectroscopicLineProfile.ROSENKRANTZ_BENREUVEN:
-        raise NotImplementedError(f'Lineshape function for {SpectroscopicLineProfile(enum)} is not implemented yet')
+    elif enum == SpectroscopicLineProfileEnum.ROSENKRANTZ_BENREUVEN:
+        raise NotImplementedError(f'Lineshape function for {SpectroscopicLineProfileEnum(enum)} is not implemented yet')
     
-    elif enum == SpectroscopicLineProfile.SUBLORENTZ_CO2_BROADENING_VENUS:
+    elif enum == SpectroscopicLineProfileEnum.SUBLORENTZ_CO2_BROADENING_VENUS:
         lineshape_fn = lineshape.tonkov96_sublorentz_CO2_venus
     
-    elif enum == SpectroscopicLineProfile.DOPPLER:
+    elif enum == SpectroscopicLineProfileEnum.DOPPLER:
         lineshape_fn = lineshape.gaussian
     
     else:
