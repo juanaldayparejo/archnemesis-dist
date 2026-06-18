@@ -1249,7 +1249,9 @@ class PseudoContSpecData:
             partition_function = partition_function
         )
         
-        ls_idxs = np.digitize(line_set_data.NU, bin_edges, right=False)
+        # NOTE: We need to use bin edges as otherwise there is a degeneracy between things in 0th bin and
+        # things to the left of 0th bin. However, we must then subtract 1 from the index.
+        ls_idxs = np.digitize(line_set_data.NU, bin_edges, right=False) - 1
         ls_mask = (line_strength <= s_max) & (ls_idxs > 0) & (ls_idxs < bin_edges.shape[0])
     
         for i in np.flatnonzero(ls_mask):
