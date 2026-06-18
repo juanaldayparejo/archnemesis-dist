@@ -1212,65 +1212,56 @@ def read_inp(runname,Measurement=None,Scatter=None,Spectroscopy=None):
 
     from archnemesis import Scatter_0, Measurement_0, Spectroscopy_0
 
-    #Getting number of lines 
-    nlines = file_lines(runname+'.inp')
-    if nlines < 7:
-        raise RuntimeError(f"Not enough lines when reading {runname}.inp")
-    elif nlines == 7:
-        iiform = 0
-    elif nlines == 8:
-        iiform = 1
-    elif nlines > 8:
-        iiform = 2
-
-    #Opening file
-    f = open(runname+'.inp','r')
-    tmp = f.readline().split()
-    ispace = WaveUnitEnum(int(tmp[0]))
-    iscat = ScatteringCalculationModeEnum(int(tmp[1]))
-    ilbl = SpectralCalculationModeEnum(int(tmp[2]))
-
+    # Set defaults
     if Measurement is None:
         Measurement = Measurement_0()
-    Measurement.ISPACE = ispace
 
     if Scatter is None:
         Scatter = Scatter_0()
-    Scatter.ISPACE = ispace
-    Scatter.ISCAT = iscat
 
     if Spectroscopy==None:
         Spectroscopy = Spectroscopy_0(RUNNAME=runname)
+
+    get_n_values = lambda s, typ, n: typ(s.split(maxsplit=n)[0]) if n == 1 else map(typ, s.split(maxsplit=n)[:n])
+
+    iform = SpectraUnitEnum.Radiance
+    v_doppler = 0.0
+
+    # Read in complete "*.inp" file
+    fpath = f'{runname}.inp'
+    with open(fpath, 'r') as f:
+        lines = f.readlines()
+
+    # Get number of lines
+    nlines = len(lines)
+    
+    # Parse lines in "*.inp" file
+    ispace, iscat, ilbl = get_n_values(lines[0], int, 3)
+    WOFF                = get_n_values(lines[1], float, 1)
+    fmerrname           = get_n_values(lines[2], str, 1)
+    NITER               = get_n_values(lines[3], int, 1)
+    PHILIMIT            = get_n_values(lines[4], float, 1)
+    NSPEC, IOFF         = get_n_values(lines[5], int, 2)
+    LIN                 = get_n_values(lines[6], int, 1)
+    
+    if nlines > 7:
+        iform = SpectraUnitEnum(get_n_values(lines[7], int, 1))
+    
+    if nlines > 8:
+        v_doppler = get_n_values(lines[8], float, 1)
+    
+    if nlines > 9:
+        raise RuntimeWarning(f"ARCHNEMESIS input file '{fpath}' has more than 9 lines, but a maximum of 9 lines are expected. Extra lines will be ignored.")
+    
+    # Assign values to parameters
+    Measurement.ISPACE = ispace
+    Measurement.IFORM = iform
+    Measurement.V_DOPPLER = v_doppler
+    
+    Scatter.ISPACE = ispace
+    Scatter.ISCAT = iscat
     Spectroscopy.ILBL = ilbl
-
-    tmp = f.readline().split()
-    WOFF = float(tmp[0])
-    fmerrname = str(f.readline().split()[0])
-    tmp = f.readline().split()
-    NITER = int(tmp[0])
-    tmp = f.readline().split()
-    PHILIMIT = float(tmp[0])
-
-    tmp = f.readline().split()
-    NSPEC = int(tmp[0])
-    IOFF = int(tmp[1])
-
-    tmp = f.readline().split()
-    LIN = int(tmp[0])
-
-    if iiform == 1:
-        tmp = f.readline().split()
-        iform = SpectraUnitEnum(int(tmp[0]))
-        Measurement.IFORM = iform
-    elif iiform == 2:
-        tmp = f.readline().split()
-        iform = SpectraUnitEnum(int(tmp[0]))
-        Measurement.IFORM = iform
-        tmp = f.readline().split()
-        Measurement.V_DOPPLER = float(tmp[0])
-    else:
-        Measurement.IFORM = SpectraUnitEnum.Radiance
-
+    
     return Measurement, Scatter, Spectroscopy, WOFF, fmerrname, NITER, PHILIMIT, NSPEC, IOFF, LIN
 
 ###############################################################################################
