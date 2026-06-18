@@ -453,7 +453,7 @@ class Telluric_0:
                 igas = np.where( (self.Atmosphere.ID==self.Spectroscopy.ID[i]) & (self.Atmosphere.ISO==self.Spectroscopy.ISO[i]) )[0][0]
 
                 #Calculating vertical column density in each layer
-                VLOSDENS = amounts[igas,:] * 1.0e-4 * 1.0e-20   #cm-2
+                VLOSDENS = amounts[igas,:] * 1.0e-4   #cm-2
 
                 #Calculating vertical opacity for each gas in each layer
                 TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
@@ -501,7 +501,7 @@ class Telluric_0:
             #utotl = np.zeros(len(tlay))
             for i in range(self.Spectroscopy.NGAS):
                 igas = np.where( (self.Atmosphere.ID==self.Spectroscopy.ID[i]) & (self.Atmosphere.ISO==self.Spectroscopy.ISO[i]) )[0][0]
-                f_gas[i,:] = amounts[igas,:] * 1.0e-4 * 1.0e-20  #Vertical column density of the radiatively active gases in cm-2
+                f_gas[i,:] = amounts[igas,:] * 1.0e-4  #Vertical column density of the radiatively active gases in cm-2
 
             #Combining the k-distributions of the different gases in each layer
             k_layer = k_overlap(self.Spectroscopy.DELG,k_gas,f_gas)

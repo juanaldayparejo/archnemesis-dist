@@ -17,25 +17,34 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import os
+
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
 
 ARCHNEMESIS_PATH_PLACEHOLDER='ARCHNEMESIS_PATH/'
 
 def archnemesis_path():
     import os
-    nemesis_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../')
+    nemesis_path = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)),'../../'))
     return nemesis_path
 
 def archnemesis_resolve_path(path : str):
     if path.startswith(ARCHNEMESIS_PATH_PLACEHOLDER):
-        return archnemesis_path() + path[len(ARCHNEMESIS_PATH_PLACEHOLDER):]
+        n = len(ARCHNEMESIS_PATH_PLACEHOLDER)
+        while path[n] == os.sep:
+            n += 1
+        return os.path.normpath(os.path.join(archnemesis_path(), path[n:]))
     else:
         return path
 
 def archnemesis_indirect_path(path : str):
-    if path.startswith(archnemesis_path()):
-        return ARCHNEMESIS_PATH_PLACEHOLDER + path[len(archnemesis_path()):]
+    ans_path = archnemesis_path()
+    if path.startswith(ans_path):
+        n = len(ans_path)
+        while path[n] == os.sep:
+            n += 1
+        return os.path.join(ARCHNEMESIS_PATH_PLACEHOLDER, path[n:])
     else:
         return path

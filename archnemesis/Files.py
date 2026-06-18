@@ -507,6 +507,8 @@ def read_input_files(runname):
     ##############################################################
     if Spec.ILBL==SpectralCalculationMode.K_TABLES:
         Spec.read_kls(runname)
+    elif Spec.ILBL==SpectralCalculationMode.LINE_BY_LINE_RUNTIME:
+        Spec.read_lls(runname)
     elif Spec.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:
         Spec.read_lls(runname)
     else:

@@ -1105,7 +1105,7 @@ class Scatter_0:
         phase = self.calc_phase(Theta,self.WAVE)
         
         #Integrating phase function
-        total = 2 * np.pi * np.trapz(phase, -np.cos(Theta/180.*np.pi),axis=1)
+        total = 2 * np.pi * np.trapezoid(phase, -np.cos(Theta/180.*np.pi),axis=1)
         
         _lgr.info('Normalisation of phase function should be 1.0')
         _lgr.info(f'Minimum integral of phase function is  {(total.min())}')
@@ -1344,7 +1344,7 @@ class Scatter_0:
         phas[iord,:] = phas[:,:]
         
         #Checking that the normalisation is correct (should be 1)    
-        total = 2 * np.pi * np.trapz(phas, -np.cos(self.THETA/180.*np.pi),axis=1)
+        total = 2 * np.pi * np.trapezoid(phas, -np.cos(self.THETA/180.*np.pi),axis=1)
         _lgr.info('Normalisation of phase function should be 1.0')
         _lgr.info(f'Minimum integral of phase function is {total.min()}')
         _lgr.info(f'Maximum integral of phase function is {total.max()}')

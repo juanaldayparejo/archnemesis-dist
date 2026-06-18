@@ -2,6 +2,8 @@
 
 from typing import Self, Iterator
 
+import numpy as np
+
 from .gas_descriptor import RadtranGasDescriptor
 from archnemesis import Data
 
@@ -15,7 +17,7 @@ class GasIsotopes:
         Stored using radtran ID mappings internally
         """
         if rt_gas_id is not None:
-            if type(rt_iso_ids) is int:
+            if isinstance(rt_iso_ids, (int,np.integer)):
                 if rt_iso_ids == 0:
                     rt_iso_ids = tuple(i+1 for i in range(Data.gas_data.count_isotopes(rt_gas_id)))
                 else:

@@ -226,7 +226,55 @@ class AnsPartitionFunctionDataFile(AnsDatabaseFile):
 		
 		return
 	
+	@staticmethod
+	def _get_null_data() -> PFList:
+		return PFList()
 	
+	
+	def get_data_from_iso_grp(
+			self,
+			iso_grp,
+	) -> PFList:
+		pf_list = PFList()
+			
+		for pf_data_grp_name, pf_data_grp in iso_grp.items():
+			if not pf_data_grp_name.startswith('pf_data_') or not isinstance(pf_data_grp, h5py.Group):
+				continue # is not a `pf_data_` group so skip it.
+			
+			try:
+				pf_type = h5py_helper.get_dataset(
+					pf_data_grp, 
+					'partition_function_type', 
+					defaults=dict(shape=tuple(), dtype='T', attrs={'description' : "Describes how the partition function is specified"}),
+					on_is_not_dataset = 'error',
+					on_missing = 'error',
+				).asstr()[tuple()]
+			except (TypeError, KeyError) as e:
+				raise ValueError(f'Partition function data group "{pf_data_grp.name}" in HDF5 file "{pf_data_grp.file.filename}" must have a "partition_function_type" dataset.') from e
+			
+			pf_data_type_names = [typ.__name__ for typ in self.pf_data_types]
+			
+			if pf_type in pf_data_type_names:
+				typ = self.pf_data_types[pf_data_type_names.index(pf_type)]
+				pf_data = typ(
+					**dict(
+						(
+							field.name,
+							h5py_helper.get_dataset(
+								pf_data_grp, 
+								field.name, 
+								on_is_not_dataset='error', 
+								on_missing='error'
+							)[tuple()]
+						) for field in dc.fields(typ) if not field.name.startswith('_')
+					)
+				)
+			else:
+				raise ValueError(f'`pf_type`="{pf_type}" must be one of {pf_data_type_names}.')
+			
+			#print(f'DEBUG : {pf_data=}')
+			pf_list.append(pf_data)
+		return pf_list
 	
 	def get_data(
 			self,
@@ -266,47 +314,9 @@ class AnsPartitionFunctionDataFile(AnsDatabaseFile):
 						raise KeyError(f'HDF5 file "{self._file_hdl.file.filename}" does not have a "partition_function/{mol_name}/{local_iso_id}" group')
 			iso_grp = mol_grp[str(local_iso_id)]
 			
-			pf_list = PFList()
 			
-			for pf_data_grp_name, pf_data_grp in iso_grp.items():
-				if not pf_data_grp_name.startswith('pf_data_') or not isinstance(pf_data_grp, h5py.Group):
-					continue # is not a `pf_data_` group so skip it.
 				
-				try:
-					pf_type = h5py_helper.get_dataset(
-						pf_data_grp, 
-						'partition_function_type', 
-						defaults=dict(shape=tuple(), dtype='T', attrs={'description' : "Describes how the partition function is specified"}),
-						on_is_not_dataset = 'error',
-						on_missing = 'error',
-					).asstr()[tuple()]
-				except (TypeError, KeyError) as e:
-					raise ValueError(f'Partition function data group "{pf_data_grp.name}" in HDF5 file "{pf_data_grp.file.filename}" must have a "partition_function_type" dataset.') from e
-				
-				pf_data_type_names = [typ.__name__ for typ in self.pf_data_types]
-				
-				if pf_type in pf_data_type_names:
-					typ = self.pf_data_types[pf_data_type_names.index(pf_type)]
-					pf_data = typ(
-						**dict(
-							(
-								field.name,
-								h5py_helper.get_dataset(
-									pf_data_grp, 
-									field.name, 
-									on_is_not_dataset='error', 
-									on_missing='error'
-								)[tuple()]
-							) for field in dc.fields(typ) if not field.name.startswith('_')
-						)
-					)
-				else:
-					raise ValueError(f'`pf_type`="{pf_type}" must be one of {pf_data_type_names}.')
-				
-				#print(f'DEBUG : {pf_data=}')
-				pf_list.append(pf_data)
-				
-			return pf_list
+			return self.get_data_from_iso_grp(iso_grp)
 			
 			
 			
