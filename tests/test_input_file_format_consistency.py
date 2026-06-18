@@ -13,7 +13,7 @@ _lgr.setLevel(logging.INFO)
 
 """
 How to stop `pytest` being annoying and capturing all output like an annoying thing:
-` pytest ./tests/test_input_file_format_consistency.py -k test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters -s --log-cli-level=INFO --show-capture=no`
+` pytest ./tests/test_input_file_format_consistency.py -k test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters -s --log-cli-level=INFO --show-capture=no --tb=short`
 """
 
 if False:
@@ -72,6 +72,8 @@ def ensure_equal_value(a, b):
     elif issubclass(type(a),Iterable) and (type(a) is not str):
         return all(ensure_equal_value(x,y) for x,y in zip(a,b))
     else:
+        #print(f'{a=}')
+        #print(f'{b=}')
         return a == b
 
 
@@ -97,6 +99,15 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters():
     
     """
     starting_dir = os.getcwd()
+    
+    DEBUG_ONLY_USE_THESE_FOLDERS = None # Set to `None` when not debugging, otherwise should be a list of only the folders and runnames we want to check
+    #DEBUG_ONLY_USE_THESE_FOLDERS = [
+        #(os.path.join(ans.archnemesis_path(), './tests/files/Jupiter_CIRS_nadir_thermal_emission_runtime_line_by_line'), 'cirstest'),
+        #(os.path.join(ans.archnemesis_path(), './tests/files/Titan_aveFOV'), 'ch3cn'),
+    #]
+    
+    all_folders_with_legacy_input_files = []
+    
     example_dir = os.path.join(ans.archnemesis_path(), './docs/examples')
     
     examples_to_ignore = {
@@ -104,165 +115,184 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters():
         'retrieval_Jupiter_Tprofile' : 'ktable files not availble'
     }
     
-    for example_path in os.listdir(example_dir):
-        if example_path in examples_to_ignore:
-            _lgr.info(f'Ignoring example "{example_path}". Reason: {examples_to_ignore[example_path]}')
-            continue
-            
-        current_example_dir = os.path.join(example_dir, example_path)
-        _lgr.info(f'Looking for example with LEGACY input files at {current_example_dir}')
-        if not os.path.isdir(current_example_dir): # skip files, only enter directories
-            continue
-        
-        # Check we have LEGACY input files to do our test with
-        
-        runname = None
-        for fpath in os.listdir(current_example_dir):
-            if fpath.endswith('.inp'):
-                runname = fpath[:-4]
-                break
-        
-        # Change directory to example directory if we have a runname, otherwise continue searching
-        if runname is not None:
-            os.chdir(current_example_dir)
-        else:
-            continue
-        
-        
-        # We are going to overwrite any h5_file that is already
-        # present, therefore ensure we back up and restore any
-        # h5 files that already exist
-        h5_filename = runname+'.h5'
-        backup_h5_filename = h5_filename+'.bak'
-        if os.path.exists(runname+'.h5'):
-            delete_h5_at_end = False
-            restore_backed_up_h5_at_end = True
-            shutil.move(h5_filename, backup_h5_filename)
-            
-        else:
-            delete_h5_at_end=True
-            restore_backed_up_h5_at_end = False
-        
-        
-        # NOTE: We have put the test in a "try, finally" block
-        # this is because we want to make sure we delete any
-        # *.h5 files that were created so we don't pollute the file system.
-        
-        try:
-            ###### PERFORM TEST ######
-            _lgr.info('#'*40)
-            _lgr.info(f'In directory "{current_example_dir}", performing input file format consistency test...')
-        
-            # Read LEGACY format
-            _lgr.info('Reading LEGACY format')
-            Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
-            
-            # Write to HDF5 format
-            _lgr.info('Writing HDF5 format')
-            for item in (Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Retrieval):#,Variables):
-                if hasattr(item, 'write_hdf5'):
-                    item.write_hdf5(runname)
-                elif hasattr(item, 'write_input_hdf5'):
-                    item.write_input_hdf5(runname)
-                else:
-                    raise RuntimeError(f'For example at "{current_example_dir}", class "{type(item)}" does not have an attribute like "write{{_input,_}}hdf5", cannot continue writing new style file.')
-
-            # Read HDF5 format
-            _lgr.info('Reading HDF5 format')
-            Atmosphere_,Measurement_,Spectroscopy_,Scatter_,Stellar_,Surface_,CIA_,Layer_,Variables_,Retrieval_,Telluric_ = ans.Files.read_input_files_hdf5(runname)
-
-            _lgr.info('Comparing parameters between LEGACY and HDF5')
-            # Define the pairs of instances we want to compare
-            pairs = (
-                (Atmosphere, Atmosphere_),
-                (Measurement, Measurement_),
-                (Spectroscopy, Spectroscopy_),
-                (Scatter, Scatter_),
-                (Stellar, Stellar_),
-                (Surface, Surface_),
-                (CIA, CIA_),
-                (Layer, Layer_),
-                (Variables, Variables_),
-                (Retrieval, Retrieval_),
-                #(Telluric, Telluric_)
-            )
-
-            # Loop over instances and compare their ALL_CAPS attributes
-            for old_format, new_format in pairs:
-                _lgr.info(f'\nTesting integrity of {old_format.__class__.__name__}')
-                # assume that everything in all caps should be identical
-                of_attrs = tuple(item for item in filter(lambda x: x.isupper(), old_format.__dict__.keys()))
-                nf_attrs = tuple(item for item in filter(lambda x: x.isupper(), new_format.__dict__.keys()))
-
-                assert len(of_attrs) == len(nf_attrs), f'For example at "{current_example_dir}", class must have same number of attributes regardless of input format'
+    test_files_dir = os.path.join(ans.archnemesis_path(), './tests/files')
+    tests_files_to_ignore = {
+        'Makephase' : 'Does not have ArchNemesis legacy input files',
+        'Mars_solar_occultation' : 'Does not have an ArchNemesis legacy input files',
+        'linedata' : 'Does not have an ArchNemesis legacy input files',
+    }
+    
+    def add_to_all_folders_with_legacy_input_files(dir, dirs_to_ignore):
+        for path in os.listdir(dir):
+            if path in dirs_to_ignore:
+                _lgr.info(f'Ignoring example "{path}". Reason: {dirs_to_ignore[path]}')
+                continue
                 
-                _lgr.info(f'{of_attrs=}')
-                _lgr.info(f'{nf_attrs=}')
-                assert all(x==y for x,y in zip(of_attrs, nf_attrs)), f"For example at '{current_example_dir}', class must have same attribute names regardless of input format"
-
-                for k in of_attrs:
-                    _lgr.info(f'Testing attribute {old_format.__class__.__name__}.{k}:')
-                    o_attr = getattr(old_format, k)
-                    n_attr = getattr(new_format, k)
-
-                    # Special cases
-                    if f'{old_format.__class__.__name__}.{k}' == 'Atmosphere_0.DUST_UNITS_FLAG':
-                        # HDF5 always uses number density (m^-3), indicated by 'None'
-                        # Legacy always uses mass density (g cm^-3) indicated by a numpy array of -1 values.
-                        assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
-                        continue
-                    if f'{old_format.__class__.__name__}.{k}' == 'Layer_0.DUST_UNITS_FLAG':
-                        # HDF5 always uses number density (m^-3), indicated by 'None'
-                        # Legacy always uses mass density (g cm^-3) indicated by a numpy array of -1 values.
-                        assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
-                        continue
-                    if f'{old_format.__class__.__name__}.{k}' == 'Spectroscopy_0.RUNNAME':
-                        # HDF5 files do not use this parameter
-                        continue
-                    if f'{old_format.__class__.__name__}.{k}' == 'CIA_0.CIATABLE':
-                        if (o_attr != n_attr):
-                            if o_attr.endswith('.tab') and n_attr.endswith('.h5'):
-                                assert o_attr[:-4] == n_attr[:-3], f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, different CIATABLE values must only be due to altering format from '.tab' to '.h5'"
-                                continue
-                        assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, mismatched CIATABLE values '{o_attr}' vs '{n_attr}' not allowed except for format change"
-                    
-                    (
-                        are_types_same, 
-                        casting_rules_compared,
-                        is_fwd_safe_casting_possible, 
-                        is_bkwd_safe_casting_possible, 
-                        is_fwd_samekind_casting_possible, 
-                        is_bkwd_samekind_casting_possible
-                    ) = ensure_equal_type(o_attr, n_attr)
-
-                    if are_types_same:
-                        pass # this is fine
-                    elif (not are_types_same) and casting_rules_compared:
-                        # Need to know how casting rules fail
-                        if is_fwd_safe_casting_possible and is_bkwd_safe_casting_possible:
-                            pass
-                        elif is_fwd_samekind_casting_possible and is_bkwd_samekind_casting_possible:
-                            msg = f"Types change when using different input format. They are the same kind, but safe casting is not always possible {type(o_attr)} and {type(n_attr)}"
-                            _lgr.info(f'WARNING: {msg}')
-                            #raise RuntimeWarning(msg)
-                        else:
-                            assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class must have attributes that are at least the same kind of type regardless of input format"
-                    else:
-                        # types are not the same and we didn't compare casting rules
-                        assert False, f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class attributes must have identical types if they are not numerical regardless of input format"
-                    
-                    #_lgr.info(f'\t{o_attr} == {n_attr}')            
-                    assert ensure_equal_value(o_attr, n_attr), f"For example at '{current_example_dir}' attribute {old_format.__class__.__name__}.{k}, class must have same values regardless of input format: {o_attr} != {n_attr}"
-
-            ###### END TEST ######
-        finally:
-            # Delete any created '*.h5' file
-            if delete_h5_at_end:
-                os.remove(h5_filename)
-            if restore_backed_up_h5_at_end:
-                os.remove(h5_filename)
-                shutil.move(backup_h5_filename, h5_filename)
+            current_dir = os.path.join(dir, path)
+            _lgr.info(f'Looking for example with LEGACY input files at {current_dir}')
+            if not os.path.isdir(current_dir): # skip files, only enter directories
+                continue
             
+            runname = None
+            for fpath in os.listdir(current_dir):
+                if fpath.endswith('.inp'):
+                    runname = fpath[:-4]
+                    break
+            
+            if runname is not None:
+                all_folders_with_legacy_input_files.append((current_dir, runname))
+    
+    add_to_all_folders_with_legacy_input_files(example_dir, examples_to_ignore)
+    add_to_all_folders_with_legacy_input_files(test_files_dir, tests_files_to_ignore)
+    
+    if DEBUG_ONLY_USE_THESE_FOLDERS is not None:
+        all_folders_with_legacy_input_files = DEBUG_ONLY_USE_THESE_FOLDERS
+    
+    for current_dir, runname in all_folders_with_legacy_input_files:
+        try:
+            _lgr.info(f'Changing directory to "{current_dir}"')
+            os.chdir(current_dir)
+                
+            
+            # We are going to overwrite any h5_file that is already
+            # present, therefore ensure we back up and restore any
+            # h5 files that already exist
+            h5_filename = runname+'.h5'
+            backup_h5_filename = h5_filename+'.bak'
+            if os.path.exists(runname+'.h5'):
+                delete_h5_at_end = False
+                restore_backed_up_h5_at_end = True
+                shutil.move(h5_filename, backup_h5_filename)
+                
+            else:
+                delete_h5_at_end=True
+                restore_backed_up_h5_at_end = False
+            
+            
+            # NOTE: We have put the test in a "try, finally" block
+            # this is because we want to make sure we delete any
+            # *.h5 files that were created so we don't pollute the file system.
+            
+            try:
+                ###### PERFORM TEST ######
+                _lgr.info('#'*40)
+                _lgr.info(f'In directory "{current_dir}", performing input file format consistency test...')
+            
+                # Read LEGACY format
+                _lgr.info('Reading LEGACY format')
+                Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
+                
+                # Write to HDF5 format
+                _lgr.info('Writing HDF5 format')
+                for item in (Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Retrieval):#,Variables):
+                    if hasattr(item, 'write_hdf5'):
+                        item.write_hdf5(runname)
+                    elif hasattr(item, 'write_input_hdf5'):
+                        item.write_input_hdf5(runname)
+                    else:
+                        raise RuntimeError(f'For input files at "{current_dir}", class "{type(item)}" does not have an attribute like "write{{_input,_}}hdf5", cannot continue writing new style file.')
+
+                # Read HDF5 format
+                _lgr.info('Reading HDF5 format')
+                Atmosphere_,Measurement_,Spectroscopy_,Scatter_,Stellar_,Surface_,CIA_,Layer_,Variables_,Retrieval_,Telluric_ = ans.Files.read_input_files_hdf5(runname)
+
+                _lgr.info('Comparing parameters between LEGACY and HDF5')
+                # Define the pairs of instances we want to compare
+                pairs = (
+                    (Atmosphere, Atmosphere_),
+                    (Measurement, Measurement_),
+                    (Spectroscopy, Spectroscopy_),
+                    (Scatter, Scatter_),
+                    (Stellar, Stellar_),
+                    (Surface, Surface_),
+                    (CIA, CIA_),
+                    (Layer, Layer_),
+                    (Variables, Variables_),
+                    (Retrieval, Retrieval_),
+                    #(Telluric, Telluric_)
+                )
+
+                # Loop over instances and compare their ALL_CAPS attributes
+                for old_format, new_format in pairs:
+                    _lgr.info(f'\nTesting integrity of {old_format.__class__.__name__}')
+                    # assume that everything in all caps should be identical
+                    of_attrs = tuple(item for item in filter(lambda x: x.isupper(), old_format.__dict__.keys()))
+                    nf_attrs = tuple(item for item in filter(lambda x: x.isupper(), new_format.__dict__.keys()))
+
+                    assert len(of_attrs) == len(nf_attrs), f'For input files at "{current_dir}", class must have same number of attributes regardless of input format'
+                    
+                    _lgr.info(f'{of_attrs=}')
+                    _lgr.info(f'{nf_attrs=}')
+                    assert all(x==y for x,y in zip(of_attrs, nf_attrs)), f"For input files at '{current_dir}', class must have same attribute names regardless of input format"
+
+                    for k in of_attrs:
+                        _lgr.info(f'Testing attribute {old_format.__class__.__name__}.{k}:')
+                        o_attr = getattr(old_format, k)
+                        n_attr = getattr(new_format, k)
+
+                        # Special cases
+                        if f'{old_format.__class__.__name__}.{k}' == 'Atmosphere_0.DUST_UNITS_FLAG':
+                            # HDF5 always uses number density (m^-3), indicated by 'None'
+                            # Legacy always uses mass density (g cm^-3) indicated by a numpy array of -1 values.
+                            assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
+                            continue
+                        if f'{old_format.__class__.__name__}.{k}' == 'Layer_0.DUST_UNITS_FLAG':
+                            # HDF5 always uses number density (m^-3), indicated by 'None'
+                            # Legacy always uses mass density (g cm^-3) indicated by a numpy array of -1 values.
+                            assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
+                            continue
+                        if f'{old_format.__class__.__name__}.{k}' == 'Spectroscopy_0.RUNNAME':
+                            # HDF5 files do not use this parameter
+                            continue
+                        if f'{old_format.__class__.__name__}.{k}' == 'CIA_0.CIATABLE':
+                            if (o_attr != n_attr):
+                                if o_attr.endswith('.tab') and n_attr.endswith('.h5'):
+                                    assert o_attr[:-4] == n_attr[:-3], f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, different CIATABLE values must only be due to altering format from '.tab' to '.h5'"
+                                    continue
+                            assert False, f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, mismatched CIATABLE values '{o_attr}' vs '{n_attr}' not allowed except for format change"
+                        
+                        (
+                            are_types_same, 
+                            casting_rules_compared,
+                            is_fwd_safe_casting_possible, 
+                            is_bkwd_safe_casting_possible, 
+                            is_fwd_samekind_casting_possible, 
+                            is_bkwd_samekind_casting_possible
+                        ) = ensure_equal_type(o_attr, n_attr)
+
+                        if are_types_same:
+                            pass # this is fine
+                        elif (not are_types_same) and casting_rules_compared:
+                            # Need to know how casting rules fail
+                            if is_fwd_safe_casting_possible and is_bkwd_safe_casting_possible:
+                                pass
+                            elif is_fwd_samekind_casting_possible and is_bkwd_samekind_casting_possible:
+                                msg = f"Types change when using different input format. They are the same kind, but safe casting is not always possible {type(o_attr)} and {type(n_attr)}"
+                                _lgr.info(f'WARNING: {msg}')
+                                #raise RuntimeWarning(msg)
+                            else:
+                                assert False, f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, class must have attributes that are at least the same kind of type regardless of input format"
+                        else:
+                            # types are not the same and we didn't compare casting rules
+                            assert False, f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, class attributes must have identical types if they are not numerical regardless of input format"
+
+                        #_lgr.info(f'\t{o_attr} == {n_attr}')            
+                        assert ensure_equal_value(o_attr, n_attr), f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, class must have same values regardless of input format: {o_attr} != {n_attr}"
+
+                ###### END TEST ######
+            except:
+                raise
+            finally:
+            #else:
+                # Delete any created '*.h5' file
+                if delete_h5_at_end:
+                    os.remove(h5_filename)
+                if restore_backed_up_h5_at_end:
+                    os.remove(h5_filename)
+                    shutil.move(backup_h5_filename, h5_filename)
+                
+                
+        finally:
             # Change back to starting directory after test has completed
             os.chdir(starting_dir)
 

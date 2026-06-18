@@ -383,19 +383,7 @@ class Spectroscopy_0:
 
             lineshape = ['']*self.NGAS
             for i in range(self.NGAS):
-                if self.IPROC[i]==0:
-                    lineshape1 = 'VOIGT'
-                elif self.IPROC[i]==1:
-                    lineshape1 = 'SUBLORENTZ_CO2_BROADENING'
-                elif self.IPROC[i]==2:
-                    lineshape1 = 'VANVLECK_WEISSKOPF'
-                elif self.IPROC[i]==4:
-                    lineshape1 = 'LORENTZ'
-                elif self.IPROC[i]==12:
-                    lineshape1 = 'DOPPLER'
-                else:
-                    lineshape1 = 'UNKNOWN'
-                lineshape[i] = lineshape1
+                lineshape[i] = SpectroscopicLineProfileEnum(self.IPROC[i]).name if self.IPROC[i] in SpectroscopicLineProfileEnum else 'UNKNOWN_LINESHAPE'
 
             msg += f'\n\tLine shapes for each gas ::  {(lineshape)}'
         
@@ -564,8 +552,61 @@ class Spectroscopy_0:
                         dset.attrs['units'] = 'cm-1'
                     elif self.ISPACE==0:
                         dset.attrs['title'] = "Wavelength array"
-                        dset.attrs['units'] = 'um'        
-
+                        dset.attrs['units'] = 'um'
+                    
+                    mldp_grp = h5py_helper.ensure_grp(grp, 'MolLineDataParams', {'title':'Molecular line data parameters for each gas.'})
+                    for igas in range(self.NGAS):
+                        h5py_helper.write(
+                            mldp_grp, 
+                            self.LINE_DATA_PARAMS[igas], 
+                            f'{igas}',
+                            metadata = {
+                                'lineshape' : {
+                                    'title': 'Lineshape used when computing line absorption',
+                                    'unit' : 'SpectroscopicLineProfileEnum',
+                                },
+                                'wn_calc_window' : {
+                                    'title' : 'Will perform full lineshape calculation within this distance of line center',
+                                    'unit' : 'cm^{-1}',
+                                },
+                                'wn_approx_window' : {
+                                    'title' : 'Will perform approximate lineshape calculation within this distance of line center',
+                                    'unit' : 'cm^{-1}',
+                                },
+                                'amb_gas' : {
+                                    'title' : 'Ambient gasses',
+                                    'unit' : 'AmbientGasEnum',
+                                },
+                                's_min' : {
+                                    'title' : 'Minimum line strength not included in continuum',
+                                    'unit' : 'TODO',
+                                },
+                                's_floor' : {
+                                    'title' : 'Minimum line strength included in calculation of line absorption',
+                                    'unit' : 'TODO',
+                                },
+                                'isotopic_abundance' : {
+                                    'title' : 'If present, abundance of the isotope. If not present (or shape=`None`) then is terrestrial abundance.',
+                                    'unit' : 'NUMBER',
+                                },
+                                'include_pressure_shift' : {
+                                    'title' : 'If "True" will include pressure shift of lines in calculation',
+                                    'type' : 'bool',
+                                },
+                                'include_continuum' : {
+                                    'title' : 'If `True` will include continuum in calculation',
+                                    'type' : 'bool',
+                                },
+                                'include_lines' : {
+                                    'title' : 'If `True` will include lines in calculation',
+                                    'type' : 'bool',
+                                },
+                                'use_cache' : {
+                                    'title' : 'If `True` will use cache to speed up repeated calculations (experimental)',
+                                    'type' : 'bool',
+                                },
+                            }
+                        )
     ######################################################################################################
     def read_hdf5(self,runname,inside_telluric=False):
         """
@@ -592,25 +633,78 @@ class Spectroscopy_0:
                 self.ILBL = SpectralCalculationModeEnum(h5py_helper.retrieve_data(f, name+'/ILBL', np.int32))
 
                 if self.NGAS>0:
-                    LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION', default=tuple())
-                    if LOCATION1 is None:
-                        LOCATION1 = []
-                    LOCATION = ['']*self.NGAS
-                    for igas in range(self.NGAS):
-                        LOCATION[igas] = LOCATION1[igas].decode('ascii')
-                    self.LOCATION = LOCATION
-                    
                     if self.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
+                        LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION', default=None)
+                        if LOCATION1 is None:
+                            LOCATION1 = []
+                        else:
+                            assert LOCATION1.shape == (self.NGAS,3), 'error :: LOCATION must be (NGAS,3) for ILBL=1 (LINE_BY_LINE_RUNTIME)'
+                        LOCATION = []
+                        for igas in range(self.NGAS):
+                            LOCATION.append(tuple(x.decode('ascii') for x in LOCATION1[igas]))
+                        self.LOCATION = LOCATION
+                    
                         self.ID = np.array(f.get(name+'/ID'))
                         self.ISO = np.array(f.get(name+'/ISO'))
                         self.IPROC = np.array(f.get(name+'/IPROC'))
                         self.ISPACE = h5py_helper.retrieve_data(f, name+'/ISPACE', lambda x:  WaveUnitEnum(np.int32(x)))
                         self.WAVE = h5py_helper.retrieve_data(f, name+'/WAVE', np.array)
                         self.NWAVE = len(self.WAVE)
-                        self.NG = 1
-                        self.G_ORD = np.array([0.])
-                        self.DELG = np.array([1.0])
+                        self.NG = None
+                        self.G_ORD = None
+                        self.DELG = None
+                        
+                        self.LINE_DATA_PARAMS = []
+                        for igas in range(self.NGAS):
+                            self.LINE_DATA_PARAMS.append(
+                                h5py_helper.read(
+                                    f, 
+                                    MolLineDataParams,
+                                    f'{name}/MolLineDataParams/{igas}', 
+                                    attrs = None,
+                                    mutators = {
+                                        'lineshape' : lambda x: SpectroscopicLineProfileEnum(x),
+                                        'amb_gas' : lambda x: tuple(ans.enum.AmbientGasEnum(z) for z in x),
+                                        'include_pressure_shift' : lambda x: True if x!=0 else False,
+                                        'include_continuum' : lambda x: True if x!=0 else False,
+                                        'include_lines' : lambda x: True if x!=0 else False,
+                                        'use_cache' : lambda x: True if x!=0 else False,
+                                    },
+                                    defaults = {
+                                        'isotopic_abundance' : None,
+                                    }
+                                )
+                            )
+                        
+                        self.LINE_DATA = []
+                        
+                        assert all(len(self.LINE_DATA_PARAMS[0].amb_gas) == len(x.amb_gas) for x in self.LINE_DATA_PARAMS), "For .lls RUNTIME format. All LINE_DATA instances must have the same number of ambient gasses"
+                        self.N_AMB_GASSES = len(self.LINE_DATA_PARAMS[0].amb_gas)
+                        
+                        for igas in range(self.NGAS):
+                            pf_dbase, ld_dbase, pc_dbase = self.LOCATION[igas]
+                            self.LINE_DATA.append(
+                                ans.LineData_0(
+                                    self.ID[igas], #ID of the gas
+                                    self.ISO[igas], #Isotope ID of the gas
+                                    ambient_gasses = self.LINE_DATA_PARAMS[igas].amb_gas,
+                                    LINE_DATABASE=ld_dbase,
+                                    CONTINUUM_DATABASE=pc_dbase,
+                                    PARTITION_FUNCTION_DATABASE=pf_dbase,
+                                )
+                            )
+                            self.LINE_DATA[igas].fetch_partition_fn() # May as well get this now as we will always want it
+                        
+                        
                     else:
+                        LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION', default=tuple())
+                        if LOCATION1 is None:
+                            LOCATION1 = []
+                        LOCATION = ['']*self.NGAS
+                        for igas in range(self.NGAS):
+                            LOCATION[igas] = LOCATION1[igas].decode('ascii')
+                        self.LOCATION = LOCATION
+                        
                         #Reading the header information
                         self.read_header()
                     
@@ -678,63 +772,63 @@ class Spectroscopy_0:
 
     def read_lls_runtime(self, runname):
         """
-        Read the .lls file in RUNTIME format and store the parameters into the Spectroscopy Class
+            Read the .lls file in RUNTIME format and store the parameters into the Spectroscopy Class
 
-        RUNTIME format is as follows:
-        ```
-        WAVE <start> <stop> <step>
-        DBASE_PF <path_to_partiton_function_database_file>
-        DBASE_LD <path_to_line_data_database_file>
-        DBASE_PC <path_to_continuum_data_database_file>
-        LINESHAPE <iproc|lineshape_enum>
-        WN_CALC_WINDOW <float>
-        WN_APPROX_WINDOW <float>
-        AMB_GAS <broad_gas_1> <broad_gas_2> ... <broad_gas_N>
-        S_MIN <float>
-        S_FLOOR <float>
-        INCLUDE_PRESSURE_SHIFT True|False
-        INCLUDE_CONTINUUM True|False
-        INCLUDE_LINES True|False
-        USE_CACHE True|False
-        MOL <gas_1_id> <gas_1_iso_id> [<gas_1_abundance>]
-        MOL <gas_2_id> <gas_2_iso_id> [<gas_2_abundance>]
-        MOL ...
-        MOL <gas_n_id> <gas_n_iso_id> [<gas_n_abundance>]
-        END_BLOCK
-        DBASE_PF <path_to_partiton_function_database_file>
-        DBASE_LD <path_to_line_data_database_file>
-        DBASE_PC <path_to_continuum_data_database_file>
-        MOL <gas_n+1_id> <gas_n+1_iso_id> [<gas_n+1_abundance>]
-        MOL <gas_n+2_id> <gas_n+2_iso_id> [<gas_n+2_abundance>]
-        MOL ...
-        MOL <gas_n+m_id> <gas_n+m_iso_id> [<gas_n+m_abundance>]
-        END_BLOCK
-        ...
-        ```
-        
-        Comments are prefaced by the `#` character. 
-        Lines with no printable characters are ignored.
-        Omitted values take on the same values as the last set value (within a block, or defaults otherwise).
-        I.e. values "flow downwards", so e.g. you only have to set `LINESHAPE` once at the top and all 
-        subsequent `MOL` statements will use the specified `LINESHAPE` until it is set to something else.
-        NOTE: Can only have ONE `WAVE` statement.
-        
-        ### DEFAULTS ###
-            * `DBASE_XX` = Any previous `DBASE_XX` within the block. NOTE: at least one `DBASE_XX` must be defined per block.
-            * `LINESHAPE` = `VOIGT`
-            * `WN_CALC_WINDOW` = 25.0
-            * `WN_APPROX_WINDOW` = 75.0
-            * `AMB_GAS` = `AIR`
-            * `S_MIN` = -1
-            * `S_FLOOR` = 0.0
-            * `INCLUDE_PRESSURE_SHIFT` = `True`
-            * `INCLUDE_CONTINUUM` = `True`
-            * `INCLUDE_LINES` = `True`
-            * `USE_CACHE` = `True`
-            * <gas_n_abundance> = `None`. I.e. Will use terrestrial abundances if not specified.
+            RUNTIME format is as follows:
+            ```
+            WAVE <start> <stop> <step>
+            DBASE_PF <path_to_partiton_function_database_file>
+            DBASE_LD <path_to_line_data_database_file>
+            DBASE_PC <path_to_continuum_data_database_file>
+            LINESHAPE <iproc|lineshape_enum>
+            WN_CALC_WINDOW <float>
+            WN_APPROX_WINDOW <float>
+            AMB_GAS <broad_gas_1> <broad_gas_2> ... <broad_gas_N>
+            S_MIN <float>
+            S_FLOOR <float>
+            INCLUDE_PRESSURE_SHIFT True|False
+            INCLUDE_CONTINUUM True|False
+            INCLUDE_LINES True|False
+            USE_CACHE True|False
+            MOL <gas_1_id> <gas_1_iso_id> [<gas_1_abundance>]
+            MOL <gas_2_id> <gas_2_iso_id> [<gas_2_abundance>]
+            MOL ...
+            MOL <gas_n_id> <gas_n_iso_id> [<gas_n_abundance>]
+            END_BLOCK
+            DBASE_PF <path_to_partiton_function_database_file>
+            DBASE_LD <path_to_line_data_database_file>
+            DBASE_PC <path_to_continuum_data_database_file>
+            MOL <gas_n+1_id> <gas_n+1_iso_id> [<gas_n+1_abundance>]
+            MOL <gas_n+2_id> <gas_n+2_iso_id> [<gas_n+2_abundance>]
+            MOL ...
+            MOL <gas_n+m_id> <gas_n+m_iso_id> [<gas_n+m_abundance>]
+            END_BLOCK
+            ...
+            ```
+            
+            Comments are prefaced by the `#` character. 
+            Lines with no printable characters are ignored.
+            Omitted values take on the same values as the last set value (within a block, or defaults otherwise).
+            I.e. values "flow downwards", so e.g. you only have to set `LINESHAPE` once at the top and all 
+            subsequent `MOL` statements will use the specified `LINESHAPE` until it is set to something else.
+            NOTE: Can only have ONE `WAVE` statement.
+            
+            ### DEFAULTS ###
+                * `DBASE_XX` = Any previous `DBASE_XX` within the block. NOTE: at least one `DBASE_XX` must be defined per block.
+                * `LINESHAPE` = `VOIGT`
+                * `WN_CALC_WINDOW` = 25.0
+                * `WN_APPROX_WINDOW` = 75.0
+                * `AMB_GAS` = `AIR`
+                * `S_MIN` = -1
+                * `S_FLOOR` = 0.0
+                * `INCLUDE_PRESSURE_SHIFT` = `True`
+                * `INCLUDE_CONTINUUM` = `True`
+                * `INCLUDE_LINES` = `True`
+                * `USE_CACHE` = `True`
+                * <gas_n_abundance> = `None`. I.e. Will use terrestrial abundances if not specified.
 
-        @param runname: str
-            Name of the Nemesis run
+            @param runname: str
+                Name of the Nemesis run
         """
         lls_fpath = f"./{runname}.lls"
         

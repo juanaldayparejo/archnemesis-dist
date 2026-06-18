@@ -460,10 +460,10 @@ class ForwardModel_0:
         from copy import deepcopy
         
         #Errors and checks
-        if self.Atmosphere.NLOCATIONS!=1:
+        if self.Atmosphere.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
             
-        if self.Surface.NLOCATIONS!=1:
+        if self.Surface.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
 
         self.check_gas_spec_atm()
@@ -628,10 +628,10 @@ class ForwardModel_0:
         from copy import deepcopy
         
         #Errors and checks
-        if self.Atmosphere.NLOCATIONS!=1:
+        if self.Atmosphere.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
             
-        if self.Surface.NLOCATIONS!=1:
+        if self.Surface.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
 
         self.check_gas_spec_atm()
@@ -1628,10 +1628,10 @@ class ForwardModel_0:
         from copy import deepcopy
         
         #Errors and checks
-        if self.Atmosphere.NLOCATIONS!=1:
+        if self.Atmosphere.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
             
-        if self.Surface.NLOCATIONS!=1:
+        if self.Surface.NLOCATIONS > 1:
             raise ValueError('error in nemesisfm :: archNEMESIS has not been setup for dealing with multiple locations yet')
 
         self.check_gas_spec_atm()
@@ -1740,10 +1740,10 @@ class ForwardModel_0:
         from copy import deepcopy
         
         #Errors and checks
-        if self.Atmosphere.NLOCATIONS!=1:
+        if self.Atmosphere.NLOCATIONS > 1:
             raise ValueError('error in nemesisdiscfmg :: archNEMESIS has not been setup for dealing with multiple locations yet')
             
-        if self.Surface.NLOCATIONS!=1:
+        if self.Surface.NLOCATIONS > 1:
             raise ValueError('error in nemesisdiscfmg :: archNEMESIS has not been setup for dealing with multiple locations yet')
 
         self.check_gas_spec_atm()

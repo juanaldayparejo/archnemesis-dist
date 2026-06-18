@@ -1373,7 +1373,7 @@ def read_set(runname,Layer=None,Surface=None,Stellar=None,Scatter=None):
         Surface = Surface_0()
 
     Surface.LOWBC = LowerBoundaryConditionEnum(lowbc)
-    Surface.GALB = galb
+    Surface.GALB = galb if Surface.LOWBC == LowerBoundaryConditionEnum.LAMBERTIAN else -1.0
     Surface.TSURF = tsurf
 
     #Creating or updating Layer class

@@ -236,9 +236,19 @@ class Stellar_0:
             if ('/Stellar' in f)==True:
                 del f['Stellar']   #Deleting the Stellar information that was previously written in the file
 
+            grp = f.create_group("Stellar")
+            
+            dset = h5py_helper.store_data(grp, 'SOLEXIST', self.SOLEXIST)
+            dset.attrs['title'] = "Is star used in calculations."
+            dset.attrs['type'] = 'bool'
+                
+            if self.DIST is not None:
+                #Writing the Planet-Star distance
+                dset = h5py_helper.store_data(grp, 'DIST', self.DIST)
+                dset.attrs['title'] = "Planet-Star distance"
+                dset.attrs['units'] = 'Astronomical Units'
+            
             if self.SOLEXIST is True:
-
-                grp = f.create_group("Stellar")
 
                 #Writing the spectral units
                 dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
@@ -248,10 +258,7 @@ class Stellar_0:
                 elif self.ISPACE == WaveUnitEnum.Wavelength_um:
                     dset.attrs['units'] = 'Wavelength / um'
 
-                #Writing the Planet-Star distance
-                dset = h5py_helper.store_data(grp, 'DIST', self.DIST)
-                dset.attrs['title'] = "Planet-Star distance"
-                dset.attrs['units'] = 'Astronomical Units'
+                
 
                 #Writing the Star radius
                 dset = h5py_helper.store_data(grp, 'RADIUS', self.RADIUS)
@@ -285,19 +292,13 @@ class Stellar_0:
         """
 
         with h5py.File(runname+'.h5','r') as f:
-
-            #Checking if Surface exists
-            e = "/Stellar" in f
-            if e is False:
-                self.SOLEXIST = False
-            else:
-                self.SOLEXIST = True
-                self.ISPACE = h5py_helper.retrieve_data(f, 'Stellar/ISPACE', lambda x:  WaveUnitEnum(np.int32(x)))
-                self.DIST = h5py_helper.retrieve_data(f, 'Stellar/DIST', np.float64)
-                self.RADIUS = h5py_helper.retrieve_data(f, 'Stellar/RADIUS', np.float64)
-                self.NWAVE = h5py_helper.retrieve_data(f, 'Stellar/NWAVE', np.int32)
-                self.WAVE = h5py_helper.retrieve_data(f, 'Stellar/WAVE', np.array)
-                self.SOLSPEC = h5py_helper.retrieve_data(f, 'Stellar/SOLSPEC', np.array)
+            self.SOLEXIST = h5py_helper.retrieve_data(f, 'Stellar/SOLEXIST', bool, default=False)
+            self.ISPACE = h5py_helper.retrieve_data(f, 'Stellar/ISPACE', lambda x:WaveUnitEnum(np.int32(x)), default= WaveUnitEnum.Wavenumber_cm)
+            self.DIST = h5py_helper.retrieve_data(f, 'Stellar/DIST', np.float64)
+            self.RADIUS = h5py_helper.retrieve_data(f, 'Stellar/RADIUS', np.float64)
+            self.NWAVE = h5py_helper.retrieve_data(f, 'Stellar/NWAVE', np.int32)
+            self.WAVE = h5py_helper.retrieve_data(f, 'Stellar/WAVE', np.array)
+            self.SOLSPEC = h5py_helper.retrieve_data(f, 'Stellar/SOLSPEC', np.array)
 
 
     def read_sol(self, runname, MakePlot=False):

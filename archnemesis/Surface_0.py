@@ -47,7 +47,15 @@ Created on Tue Jul 22 17:27:12 2021
 
 class Surface_0:
 
-    def __init__(self, GASGIANT=False, ISPACE=WaveUnitEnum.Wavenumber_cm, LOWBC=LowerBoundaryConditionEnum.LAMBERTIAN, GALB=-1.0, NEM=2, NLOCATIONS=1):
+    def __init__(
+            self, 
+            GASGIANT=False, 
+            ISPACE=WaveUnitEnum.Wavenumber_cm, 
+            LOWBC=LowerBoundaryConditionEnum.LAMBERTIAN, 
+            GALB=-1.0, 
+            NEM=2, 
+            NLOCATIONS=0
+    ):
 
         """
         Inputs
@@ -252,19 +260,24 @@ class Surface_0:
             assert self.ISPACE in WaveUnitEnum, f'ISPACE must be one of {tuple(WaveUnitEnum)}'
 
             #Determining sizes based on the number of surface locations
-            if self.NLOCATIONS<=0:
-                raise ValueError('error :: NLOCATIONS must be greater than 0')
-
-            elif self.NLOCATIONS==1:
-
-                assert np.issubdtype(type(self.TSURF), np.float64) == True , \
-                    'TSURF must be float'
-                assert np.issubdtype(type(self.LATITUDE), np.float64) == True , \
-                    'LATITUDE must be float'
-                assert abs(self.LATITUDE) < 90.0 , \
-                    'LATITUDE must be within -90 to 90 degrees'
-                assert np.issubdtype(type(self.LONGITUDE), np.float64) == True , \
-                    'LONGITUDE must be float'
+            if self.NLOCATIONS < 0:
+                raise ValueError('error :: NLOCATIONS must be 0 or greater.')
+                
+            elif self.NLOCATIONS in (0,1):
+                
+                assert np.issubdtype(type(self.TSURF), np.float64) == True, f"TSURF must be a float {self.TSURF=}"
+                
+                if self.NLOCATIONS == 0:
+                    assert self.LATITUDE is None, "No locations, therefore LATITUDE must be `None`"
+                    assert self.LONGITUDE is None, "No locations, therefore LONGITUDE must be `None`"
+                
+                elif self.NLOCATIONS==1:
+                    assert np.issubdtype(type(self.LATITUDE), np.float64) == True , \
+                        f'LATITUDE must be float {self.LATITUDE=}'
+                    assert abs(self.LATITUDE) < 90.0 , \
+                        f'LATITUDE must be within -90 to 90 degrees {self.LATITUDE=}'
+                    assert np.issubdtype(type(self.LONGITUDE), np.float64) == True , \
+                        f'LONGITUDE must be float {self.LONGITUDE=}'
 
                 assert len(self.EMISSIVITY) == self.NEM , \
                     'EMISSIVITY must have size (NEM)'
@@ -504,7 +517,7 @@ class Surface_0:
 
                 self.VEM = h5py_helper.retrieve_data(f, 'Surface/VEM', np.array)
                 self.NEM = len(self.VEM)
-                if self.NLOCATIONS==1:
+                if self.NLOCATIONS in (0,1):
                     self.TSURF = h5py_helper.retrieve_data(f, 'Surface/TSURF', np.float64)
                     self.LATITUDE = h5py_helper.retrieve_data(f, 'Surface/LATITUDE', np.float64)
                     self.LONGITUDE = h5py_helper.retrieve_data(f, 'Surface/LONGITUDE', np.float64)

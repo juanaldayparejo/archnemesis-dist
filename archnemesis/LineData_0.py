@@ -1772,6 +1772,18 @@ class LineData_0:
         )
         return s
     
+    def __eq__(self, other : Self) -> bool:
+        """
+        Tests if two LineData_0 instances have approximately
+        the same setup.
+        """
+        _lgr.warn('Comparing LineData_0 instances for equality is not really a good idea. This equality function is here so that we can check that no major information is altered when converting from LEGACY to HDF5 format.')
+        is_equal = isinstance(other, LineData_0)
+        is_equal = is_equal and (self.ID == other.ID)
+        is_equal = is_equal and (self.ISO == other.ISO)
+        is_equal = is_equal and (self._params == other._params)
+        return is_equal
+    
     @property
     def ID(self) -> int:
         return self._ID
