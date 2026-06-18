@@ -20,6 +20,7 @@
 
 import archnemesis as ans
 from archnemesis.enums import RetrievalStrategy
+import copy
 import time
 import numpy as np
 
@@ -37,7 +38,7 @@ def retrieval_nemesis(
         nemesisPT=False,
         nemesisC=False,
         NS_prefix='chains/'
-    ):
+):
     
     """
         FUNCTION NAME : retrieval_nemesis()
@@ -90,149 +91,222 @@ def retrieval_nemesis(
 
     ######################################################
     ######################################################
-    #    USE INFORMATION FROM PREVIOUS RETRIEVALS 
+    #    RUN FORWARD MODEL ONLY IF NITER < 0
     ######################################################
     ######################################################
-
-    if Retrieval.LIN>0:
-
-        #Reading .pre file
-        Variables_prev = ans.Files.read_pre(runname)
+    if Retrieval.NITER <= 0:
+        _lgr.info('Only running forward model as NITER <= 0')
         
-        if Retrieval.LIN==1:
-            
-            _lgr.info('lin=1 :: Using information from previous retrieval to update parameters in reference classes and calculate the error from the previous covariance matrix in new measurement')
-            
-            #Calculating forward model
-            FM_prev = ans.ForwardModel_0(Atmosphere=Atmosphere,Measurement=Measurement,Spectroscopy=Spectroscopy,Scatter=Scatter,Stellar=Stellar,Surface=Surface,CIA=CIA,Layer=Layer,Variables=Variables_prev,Telluric=Telluric)
-            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
-            
-            #Calculating forward modelling error
-            SF = KK @ Variables_prev.SA @ KK.T
+        retrieval_method = None
+        
+        forward_model_instance = ans.ForwardModel_0(
+            Atmosphere=Atmosphere,
+            Measurement=Measurement,
+            Spectroscopy=Spectroscopy,
+            Scatter=Scatter,
+            Stellar=Stellar,
+            Surface=Surface,
+            CIA=CIA,
+            Layer=Layer,
+            Variables=Variables,
+            Telluric=Telluric
+        )
+        
+        if Retrieval.LIN == 0:
+            _lgr.info('Using APRIORI values for forward model run as LIN == 0')
+            forward_model_instance.Variables = copy.deepcopy(forward_model_instance.Variables) # copy this or we wil alter Variables via reference
+            forward_model_instance.Variables.XN = Variables.XA
+            forward_model_instance.Variables.SX = Variables.SA
+        elif Retrieval.LIN > 0:
+            _lgr.info('Using previously computed values for forward model run as LIN == 1')
+            if legacy_files:
+                forward_model_instance.Variables = ans.Files.read_pre(runname)
+            else:
+                pass # self.Variables already has the previous retrievals values stored in it's attributes if using HDF5 input files
+        else:
+            raise RuntimeError('Cannot have LIN < 0')
+        
+        modelled_spectra = forward_model_instance.nemesisfm()
+        
+        # Only the Atmosphere component has profiles, so update that one
+        Atmosphere = forward_model_instance.AtmosphereX
+        
+        # Update the other parts with computed values
+        Layer = forward_model_instance.LayerX
+        Spectroscopy = forward_model_instance.SpectroscopyX
+        Measurement.edit_SPECMOD(modelled_spectra)
+        
+        # Set retrieval result to the forward model result
+        Retrieval.NY = Measurement.NY
+        Retrieval.NX = len(Variables.XN)
+        
+        Retrieval.edit_Y(Measurement.Y)
+        Retrieval.edit_SE(Measurement.SE)
+        Retrieval.edit_XN(Variables.XN)
+        Retrieval.edit_SA(Variables.SA)
+        Retrieval.edit_XA(Variables.XA)
+        
+        Retrieval.edit_KK(np.full((Retrieval.NY, Retrieval.NX), fill_value=np.nan))
+        Retrieval.DD = np.full((Retrieval.NX, Retrieval.NY), fill_value=np.nan)
+        Retrieval.AA = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
+        Retrieval.SM = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
+        Retrieval.SN = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
+        Retrieval.ST = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
+        
+        if Measurement.SPECMOD is not None:
+            if Retrieval.YN is None:
+                Retrieval.YN = np.zeros((Retrieval.NY,),float)
+            ik=0
+            for igeom in range(Measurement.NGEOM):
+                Retrieval.YN[ik:ik+Measurement.NCONV[igeom]] = Measurement.SPECMOD[0:Measurement.NCONV[igeom],igeom]
+    
+    else: # Perform a full retrieval, not just the forward model
 
-            #Adding forward model error to the new measurement error
-            Measurement.SE += SF
+        ######################################################
+        ######################################################
+        #    USE INFORMATION FROM PREVIOUS RETRIEVALS 
+        ######################################################
+        ######################################################
 
-            #Updating reference classes with the ones from the forward model class, which have been updated using the previous retrievals
-            #Note we do not update the measurement class as that was different in the previous retrieval
-            Atmosphere = FM_prev.AtmosphereX
-            Spectroscopy = FM_prev.SpectroscopyX
-            Scatter = FM_prev.ScatterX
-            Stellar = FM_prev.StellarX
-            Surface = FM_prev.SurfaceX
-            CIA = FM_prev.CIAX
-            Layer = FM_prev.LayerX
+        if Retrieval.LIN>0:
 
-        elif Retrieval.LIN==2:
-            
-            _lgr.info('lin=2 :: Using information from previous retrieval to update a priori covariance matrix')
-            
             #Reading .pre file
             Variables_prev = ans.Files.read_pre(runname)
             
-            ix1 = 0
-            for ivar1 in range(Variables.NVAR):
+            if Retrieval.LIN==1:
                 
-                ix2 = 0
-                for ivar2 in range(Variables_prev.NVAR):
-                    
-                    if np.all(Variables.VARIDENT[ivar1, :] == Variables_prev.VARIDENT[ivar2, :]):
-                        _lgr.info('Updating variable '+str(Variables.VARIDENT[ivar1,:]))
-                        
-                        #update things
-                        sa_prev = Variables_prev.SA[ix2:ix2+Variables_prev.NXVAR[ivar2],ix2:ix2+Variables_prev.NXVAR[ivar2]]
-                        xn_prev = Variables_prev.XN[ix2:ix2+Variables_prev.NXVAR[ivar2]]
-                        
-                        Variables.SA[ix1:ix1+Variables.NXVAR[ivar1],ix1:ix1+Variables.NXVAR[ivar1]] = sa_prev
-                        Variables.XN[ix1:ix1+Variables.NXVAR[ivar1]] = xn_prev
-                        Variables.XA[ix1:ix1+Variables.NXVAR[ivar1]] = xn_prev
-
-                    ix2 += Variables_prev.NXVAR[ivar2]
-                ix1 += Variables.NXVAR[ivar1]
-                    
-        elif Retrieval.LIN==3:   
-
-            _lgr.info('lin=3 :: Using information from previous retrieval to update a priori covariance matrix and calculate the new forward model error')
-            
-            #Reading .pre file
-            Variables_prev = ans.Files.read_pre(runname)
-            
-            #First of all, we update the state vector of the new retrieval with the one from the previous retrieval
-            ix1 = 0
-            for ivar1 in range(Variables.NVAR):
+                _lgr.info('lin=1 :: Using information from previous retrieval to update parameters in reference classes and calculate the error from the previous covariance matrix in new measurement')
                 
-                ix2 = 0
-                for ivar2 in range(Variables_prev.NVAR):
-                    
-                    if np.all(Variables.VARIDENT[ivar1, :] == Variables_prev.VARIDENT[ivar2, :]):
-                        _lgr.info('Updating variable '+str(Variables.VARIDENT[ivar1,:]))
-                        
-                        #update things
-                        sa_prev = Variables_prev.SA[ix2:ix2+Variables_prev.NXVAR[ivar2],ix2:ix2+Variables_prev.NXVAR[ivar2]]
-                        xn_prev = Variables_prev.XN[ix2:ix2+Variables_prev.NXVAR[ivar2]]
-                        
-                        Variables.SA[ix1:ix1+Variables.NXVAR[ivar1],ix1:ix1+Variables.NXVAR[ivar1]] = sa_prev
-                        Variables.XN[ix1:ix1+Variables.NXVAR[ivar1]] = xn_prev
-                        Variables.XA[ix1:ix1+Variables.NXVAR[ivar1]] = xn_prev
-
-                    ix2 += Variables_prev.NXVAR[ivar2]
-                ix1 += Variables.NXVAR[ivar1]
-
-            #Now we calculate the forward model error from the previous retrieval
-            FM_prev = ans.ForwardModel_0(Atmosphere=Atmosphere,Measurement=Measurement,Spectroscopy=Spectroscopy,Scatter=Scatter,Stellar=Stellar,Surface=Surface,CIA=CIA,Layer=Layer,Variables=Variables_prev,Telluric=Telluric)
-            YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
-            
-            #We do not want to include the forward model error from variables that are retrieved again now
-            ix1 = 0
-            for ivar1 in range(Variables.NVAR):
+                #Calculating forward model
+                FM_prev = ans.ForwardModel_0(Atmosphere=Atmosphere,Measurement=Measurement,Spectroscopy=Spectroscopy,Scatter=Scatter,Stellar=Stellar,Surface=Surface,CIA=CIA,Layer=Layer,Variables=Variables_prev,Telluric=Telluric)
+                YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
                 
-                ix2 = 0
-                for ivar2 in range(Variables_prev.NVAR):
+                #Calculating forward modelling error
+                SF = KK @ Variables_prev.SA @ KK.T
+
+                #Adding forward model error to the new measurement error
+                Measurement.SE += SF
+
+                #Updating reference classes with the ones from the forward model class, which have been updated using the previous retrievals
+                #Note we do not update the measurement class as that was different in the previous retrieval
+                Atmosphere = FM_prev.AtmosphereX
+                Spectroscopy = FM_prev.SpectroscopyX
+                Scatter = FM_prev.ScatterX
+                Stellar = FM_prev.StellarX
+                Surface = FM_prev.SurfaceX
+                CIA = FM_prev.CIAX
+                Layer = FM_prev.LayerX
+
+            elif Retrieval.LIN==2:
+                
+                _lgr.info('lin=2 :: Using information from previous retrieval to update a priori covariance matrix')
+                
+                #Reading .pre file
+                Variables_prev = ans.Files.read_pre(runname)
+                
+                ix1 = 0
+                for ivar1 in range(Variables.NVAR):
                     
-                    if np.all(Variables.VARIDENT[ivar1, :] == Variables_prev.VARIDENT[ivar2, :]):
+                    ix2 = 0
+                    for ivar2 in range(Variables_prev.NVAR):
                         
-                        _lgr.info('Removing forward model error contribution from variable '+str(Variables.VARIDENT[ivar1,:]))
+                        if np.all(Variables.VARIDENT[ivar1, :] == Variables_prev.VARIDENT[ivar2, :]):
+                            _lgr.info('Updating variable '+str(Variables.VARIDENT[ivar1,:]))
+                            
+                            #update things
+                            sa_prev = Variables_prev.SA[ix2:ix2+Variables_prev.NXVAR[ivar2],ix2:ix2+Variables_prev.NXVAR[ivar2]]
+                            xn_prev = Variables_prev.XN[ix2:ix2+Variables_prev.NXVAR[ivar2]]
+                            
+                            Variables.SA[ix1:ix1+Variables.NXVAR[ivar1],ix1:ix1+Variables.NXVAR[ivar1]] = sa_prev
+                            Variables.XN[ix1:ix1+Variables.NXVAR[ivar1]] = xn_prev
+                            Variables.XA[ix1:ix1+Variables.NXVAR[ivar1]] = xn_prev
+
+                        ix2 += Variables_prev.NXVAR[ivar2]
+                    ix1 += Variables.NXVAR[ivar1]
                         
-                        #Removing contribution from KK
-                        KK[:,ix2:ix2+Variables_prev.NXVAR[ivar2]] = 0.0
+            elif Retrieval.LIN==3:   
+
+                _lgr.info('lin=3 :: Using information from previous retrieval to update a priori covariance matrix and calculate the new forward model error')
+                
+                #Reading .pre file
+                Variables_prev = ans.Files.read_pre(runname)
+                
+                #First of all, we update the state vector of the new retrieval with the one from the previous retrieval
+                ix1 = 0
+                for ivar1 in range(Variables.NVAR):
+                    
+                    ix2 = 0
+                    for ivar2 in range(Variables_prev.NVAR):
+                        
+                        if np.all(Variables.VARIDENT[ivar1, :] == Variables_prev.VARIDENT[ivar2, :]):
+                            _lgr.info('Updating variable '+str(Variables.VARIDENT[ivar1,:]))
+                            
+                            #update things
+                            sa_prev = Variables_prev.SA[ix2:ix2+Variables_prev.NXVAR[ivar2],ix2:ix2+Variables_prev.NXVAR[ivar2]]
+                            xn_prev = Variables_prev.XN[ix2:ix2+Variables_prev.NXVAR[ivar2]]
+                            
+                            Variables.SA[ix1:ix1+Variables.NXVAR[ivar1],ix1:ix1+Variables.NXVAR[ivar1]] = sa_prev
+                            Variables.XN[ix1:ix1+Variables.NXVAR[ivar1]] = xn_prev
+                            Variables.XA[ix1:ix1+Variables.NXVAR[ivar1]] = xn_prev
+
+                        ix2 += Variables_prev.NXVAR[ivar2]
+                    ix1 += Variables.NXVAR[ivar1]
+
+                #Now we calculate the forward model error from the previous retrieval
+                FM_prev = ans.ForwardModel_0(Atmosphere=Atmosphere,Measurement=Measurement,Spectroscopy=Spectroscopy,Scatter=Scatter,Stellar=Stellar,Surface=Surface,CIA=CIA,Layer=Layer,Variables=Variables_prev,Telluric=Telluric)
+                YN,KK = FM_prev.jacobian_nemesis(NCores=NCores,nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
+                
+                #We do not want to include the forward model error from variables that are retrieved again now
+                ix1 = 0
+                for ivar1 in range(Variables.NVAR):
+                    
+                    ix2 = 0
+                    for ivar2 in range(Variables_prev.NVAR):
+                        
+                        if np.all(Variables.VARIDENT[ivar1, :] == Variables_prev.VARIDENT[ivar2, :]):
+                            
+                            _lgr.info('Removing forward model error contribution from variable '+str(Variables.VARIDENT[ivar1,:]))
+                            
+                            #Removing contribution from KK
+                            KK[:,ix2:ix2+Variables_prev.NXVAR[ivar2]] = 0.0
+                
+                        ix2 += Variables_prev.NXVAR[ivar2]
+                    ix1 += Variables.NXVAR[ivar1]
+                
+                #Calculating forward modelling error
+                SF = KK @ Variables_prev.SA @ KK.T
+
+                #Adding forward model error to the new measurement error
+                Measurement.SE += SF
+
+                #Updating reference classes with the ones from the forward model class, which have been updated using the previous retrievals
+                #Note we do not update the measurement class as that was different in the previous retrieval
+                Atmosphere = FM_prev.AtmosphereX
+                Spectroscopy = FM_prev.SpectroscopyX
+                Scatter = FM_prev.ScatterX
+                Stellar = FM_prev.StellarX
+                Surface = FM_prev.SurfaceX
+                CIA = FM_prev.CIAX
+                Layer = FM_prev.LayerX
+
+        ######################################################
+        ######################################################
+        #      RUN THE RETRIEVAL USING ANY APPROACH
+        ######################################################
+        ######################################################
+
+        if retrieval_method == RetrievalStrategy.Optimal_Estimation:
+            OptimalEstimation = ans.coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,\
+                                            NITER=Retrieval.NITER,PHILIMIT=Retrieval.PHILIMIT,LIN=Retrieval.LIN,NCores=NCores,
+                                            nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
+            Retrieval = OptimalEstimation
+        elif retrieval_method == RetrievalStrategy.Nested_Sampling:
+            from archnemesis.NestedSampling_0 import coreretNS
             
-                    ix2 += Variables_prev.NXVAR[ivar2]
-                ix1 += Variables.NXVAR[ivar1]
-            
-            #Calculating forward modelling error
-            SF = KK @ Variables_prev.SA @ KK.T
-
-            #Adding forward model error to the new measurement error
-            Measurement.SE += SF
-
-            #Updating reference classes with the ones from the forward model class, which have been updated using the previous retrievals
-            #Note we do not update the measurement class as that was different in the previous retrieval
-            Atmosphere = FM_prev.AtmosphereX
-            Spectroscopy = FM_prev.SpectroscopyX
-            Scatter = FM_prev.ScatterX
-            Stellar = FM_prev.StellarX
-            Surface = FM_prev.SurfaceX
-            CIA = FM_prev.CIAX
-            Layer = FM_prev.LayerX
-
-    ######################################################
-    ######################################################
-    #      RUN THE RETRIEVAL USING ANY APPROACH
-    ######################################################
-    ######################################################
-
-    if retrieval_method == RetrievalStrategy.Optimal_Estimation:
-        OptimalEstimation = ans.coreretOE(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,\
-                                          NITER=Retrieval.NITER,PHILIMIT=Retrieval.PHILIMIT,LIN=Retrieval.LIN,NCores=NCores,
-                                          nemesisSO=nemesisSO,nemesisdisc=nemesisdisc,nemesisPT=nemesisPT,nemesisC=nemesisC)
-        Retrieval = OptimalEstimation
-    elif retrieval_method == RetrievalStrategy.Nested_Sampling:
-        from archnemesis.NestedSampling_0 import coreretNS
-        
-        NestedSampling = coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,NS_prefix=NS_prefix,nemesisC=nemesisC)
-        Retrieval = NestedSampling
-    else:
-        raise ValueError('error in retrieval_nemesis :: Retrieval scheme has not been implemented yet')
+            NestedSampling = coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,NS_prefix=NS_prefix,nemesisC=nemesisC)
+            Retrieval = NestedSampling
+        else:
+            raise ValueError('error in retrieval_nemesis :: Retrieval scheme has not been implemented yet')
 
 
     ######################################################
@@ -241,7 +315,7 @@ def retrieval_nemesis(
     ######################################################
     ######################################################
 
-    if retrieval_method == RetrievalStrategy.Optimal_Estimation:
+    if retrieval_method is None or retrieval_method == RetrievalStrategy.Optimal_Estimation:
         
         if legacy_files is False:
             Retrieval.write_output_hdf5(runname,Variables)

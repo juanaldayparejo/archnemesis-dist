@@ -193,11 +193,12 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters():
                 # assume that everything in all caps should be identical
                 of_attrs = tuple(item for item in filter(lambda x: x.isupper(), old_format.__dict__.keys()))
                 nf_attrs = tuple(item for item in filter(lambda x: x.isupper(), new_format.__dict__.keys()))
-
-                assert len(of_attrs) == len(nf_attrs), f'For example at "{current_example_dir}", class must have same number of attributes regardless of input format'
                 
                 _lgr.info(f'{of_attrs=}')
                 _lgr.info(f'{nf_attrs=}')
+
+                assert len(of_attrs) == len(nf_attrs), f'For example at "{current_example_dir}", class must have same number of attributes regardless of input format'
+
                 assert all(x==y for x,y in zip(of_attrs, nf_attrs)), f"For example at '{current_example_dir}', class must have same attribute names regardless of input format"
 
                 for k in of_attrs:
