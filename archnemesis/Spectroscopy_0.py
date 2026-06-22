@@ -43,6 +43,8 @@ import archnemesis as ans
 from archnemesis.helpers import h5py_helper, path_redirect
 #import matplotlib.pyplot as plt
 
+from archnemesis.Data.path_data import archnemesis_path 
+
 
 import logging
 _lgr = logging.getLogger(__name__)
@@ -59,6 +61,9 @@ State Vector Class.
 """
 
 BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR : float = 1.0E20
+
+#Setting a default path for the partition function database (TIPS2025)
+default_pf_base = archnemesis_path()+'/archnemesis/Data/partition_functions/tips2025.h5'
 
 class MolDatabaseSpecification(NamedTuple):
     mol_id : int
@@ -79,6 +84,7 @@ class MolLineDataParams(NamedTuple):
     include_continuum : bool = True
     include_lines : bool = True
     use_cache : bool = True
+
 
 class Spectroscopy_0:
 
@@ -114,8 +120,12 @@ class Spectroscopy_0:
             Isotope ID for each gas, default 0 for all isotopes in terrestrial relative abundance
         @param LOCATION: 1D array,
             List of strings indicating where the .lta or .kta tables are stored for each of the gases
-            If ILBL = 1 it means we are calculating the cross sections at runtime. In that case, LOCATION indicates
-            the location of the ANS_DATABASE files to use in the following order (partition_fn, line_data, continuum)
+        @param LOCATION_LD: 1D array,
+            If ILBL = 1, List of strings indicating the paths to the line databases to use
+        @param LOCATION_PF: 1D array,
+            If ILBL = 1, List of strings indicating the paths to the partition function database to use
+        @param LOCATION_CD: 1D array,
+            If ILBL = 1, List of strings indicating the paths to the continuum database to use
         @param IPROC: 1D array,
             If ILBL=1, then IPROC indicates the line profile to use for each gas:
                 (0 - VOIGT) Voigt profile
@@ -182,6 +192,9 @@ class Spectroscopy_0:
         self.ID: None | np.ndarray = None  # Array of Gas enum values (NGAS)
         self.ISO = None       #(NGAS)
         self._locations = path_redirect.PathRedirectList() #(NGAS)
+        self._locations_ld = path_redirect.PathRedirectList() #(NGAS)
+        self._locations_pf = path_redirect.PathRedirectList() #(NGAS)
+        self._locations_cd = path_redirect.PathRedirectList() #(NGAS)
         self.IPROC = None     #(NGAS)
         self.SELF_FRAC = None #(NGAS)
         self.NWAVE = None     
@@ -202,6 +215,9 @@ class Spectroscopy_0:
         self._ispace = None
         self._iproc = None
         self._locations_initialised = False
+        self._locations_ld_initialised = False
+        self._locations_pf_initialised = False
+        self._locations_cd_initialised = False
         
         # set property values
         self.ILBL = ILBL
@@ -221,6 +237,51 @@ class Spectroscopy_0:
         else:
             self._locations._raw_paths = [x for x in value]
             self._locations_initialised = True
+
+    @property
+    def LOCATION_LD(self) -> list[str]:
+        # NOTE: paths are stored as strings so we should be able to use `str.startswith(...)` to match them up.
+        if not self._locations_ld_initialised:
+            return None
+        return self._locations_ld
+    
+    @LOCATION_LD.setter
+    def LOCATION_LD(self, value) -> None:
+        if value is None:
+            self._locations_ld_initialised = False
+        else:
+            self._locations_ld._raw_paths = [x for x in value]
+            self._locations_ld_initialised = True
+
+    @property
+    def LOCATION_PF(self) -> list[str]:
+        # NOTE: paths are stored as strings so we should be able to use `str.startswith(...)` to match them up.
+        if not self._locations_pf_initialised:
+            return None
+        return self._locations_pf
+    
+    @LOCATION_PF.setter
+    def LOCATION_PF(self, value) -> None:
+        if value is None:
+            self._locations_pf_initialised = False
+        else:
+            self._locations_pf._raw_paths = [x for x in value]
+            self._locations_pf_initialised = True
+
+    @property
+    def LOCATION_CD(self) -> list[str]:
+        # NOTE: paths are stored as strings so we should be able to use `str.startswith(...)` to match them up.
+        if not self._locations_cd_initialised:
+            return None
+        return self._locations_cd
+    
+    @LOCATION_CD.setter
+    def LOCATION_CD(self, value) -> None:
+        if value is None:
+            self._locations_cd_initialised = False
+        else:
+            self._locations_cd._raw_paths = [x for x in value]
+            self._locations_cd_initialised = True
 
     @property
     def RUNNAME(self):
@@ -277,9 +338,20 @@ class Spectroscopy_0:
         assert self.NGAS >= 0 , \
             'NGAS must be >=0'
 
-        if self.NGAS>0:
-            assert len(self.LOCATION) == self.NGAS , \
-                'LOCATION must have size (NGAS)'
+        #Checking that LOCATION exists if we use k-tables or lbl-tables
+        if self.ILBL != 1:
+            if self.NGAS>0:
+                assert len(self.LOCATION) == self.NGAS , \
+                    'LOCATION must have size (NGAS)'
+        #If ILBL = 1, then we need to defined LOCATION_LD, LOCATION_PF, LOCATION_CD
+        else:
+            if self.NGAS>0:
+                assert len(self.LOCATION_LD) == self.NGAS , \
+                    'LOCATION_LD must have size (NGAS)'
+                assert len(self.LOCATION_PF) == self.NGAS , \
+                    'LOCATION_PF must have size (NGAS)'
+                assert len(self.LOCATION_CD) == self.NGAS , \
+                    'LOCATION_CD must have size (NGAS)'
 
         if self.ILBL == 1:
 
@@ -299,12 +371,12 @@ class Spectroscopy_0:
             assert self.ISPACE is not None, \
                 'ISPACE must be defined when ILBL=1'
             
-            x = getattr(self, 'LINE_DATA', None)
-            assert x is not None, \
-                "LINE_DATA must be defined when ILBL=1"
-            assert len(x) == self.NGAS, \
-                "LINE_DATA must have size (NGAS)"
-            
+            #x = getattr(self, 'LINE_DATA', None)
+            #assert x is not None, \
+            #    "LINE_DATA must be defined when ILBL=1"
+            #assert len(x) == self.NGAS, \
+            #    "LINE_DATA must have size (NGAS)"
+
             x = getattr(self, 'LINE_DATA_PARAMS', None)
             assert x is not None, \
                 "LINE_DATA_PARAMS must be defined when ILBL=1"
@@ -521,8 +593,8 @@ class Spectroscopy_0:
             mol_id : int,
             iso_id : int,
             waves : np.ndarray,
-            fpath_pf : str, 
             fpath_ld : str, 
+            fpath_pf : str | str = default_pf_base,
             fpath_pc : str | None = None,
             wave_unit : ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm,
             mol_line_data_params : MolLineDataParams = MolLineDataParams(),
@@ -544,16 +616,24 @@ class Spectroscopy_0:
         self.G_ORD = None
         self.DELG = None
         
-        if self.LOCATION is None:
-            self.LOCATION = []
-        self.LOCATION.append(
-            (
-                fpath_ld,
-                fpath_pf,
-                fpath_pc if fpath_pc is not None else fpath_ld,
-            )
-        )
-        
+        #Path to the LINE DATABASE
+        if self.LOCATION_LD is None:
+            self.LOCATION_LD = []
+        self.LOCATION_LD.append(fpath_ld)
+
+        #Path to the PARTITION FUNCTION DATABASE
+        if self.LOCATION_PF is None:
+            self.LOCATION_PF = []
+        self.LOCATION_PF.append(fpath_pf)
+
+        #Path to the PSEUDO-CONTINUUM DATABASE
+        if self.LOCATION_CD is None:
+            self.LOCATION_CD = []
+        if fpath_pc is None:
+            self.LOCATION_CD.append(fpath_ld)
+        else:
+            self.LOCATION_CD.append(fpath_pc)
+
         if getattr(self, 'LINE_DATA_PARAMS', None) is None:
             self.LINE_DATA_PARAMS = []
         
@@ -640,8 +720,17 @@ class Spectroscopy_0:
                     dset.attrs['title'] = "Isotope ID of the gaseous species"
 
                     dt = h5py.special_dtype(vlen=str)
-                    dset = h5py_helper.store_data(grp, 'LOCATION', self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
-                    dset.attrs['title'] = "Location of the database files in the following order (partition_fn, line_data, continuum)"
+                    dset = h5py_helper.store_data(grp, 'LOCATION_LD', self._locations_ld._raw_paths,dtype=dt) # do not save the redirected paths.
+                    dset.attrs['title'] = "Location of the line database files for each gas"
+
+                    dt = h5py.special_dtype(vlen=str)
+                    dset = h5py_helper.store_data(grp, 'LOCATION_PF', self._locations_pf._raw_paths,dtype=dt) # do not save the redirected paths.
+                    dset.attrs['title'] = "Location of the partition function database files for each gas"
+
+                    dt = h5py.special_dtype(vlen=str)
+                    dset = h5py_helper.store_data(grp, 'LOCATION_CD', self._locations_cd._raw_paths,dtype=dt) # do not save the redirected paths.
+                    dset.attrs['title'] = "Location of the pseudo-continuum database files for each gas"
+
 
                     dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
                     dset.attrs['title'] = "Spectral units"
@@ -739,19 +828,47 @@ class Spectroscopy_0:
                 self.ILBL = SpectralCalculationModeEnum(h5py_helper.retrieve_data(f, name+'/ILBL', np.int32))
 
                 if self.NGAS>0:
+
                     if self.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
-                        LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION', default=None)
-                        if LOCATION1 is None:
-                            LOCATION1 = []
+
+                        LOCATION_LD1 = h5py_helper.retrieve_data(f, name+'/LOCATION_LD', default=None)
+                        if LOCATION_LD1 is None:
+                            LOCATION_LD1 = []
                         else:
-                            assert LOCATION1.shape == (self.NGAS,3), 'error :: LOCATION must be (NGAS,3) for ILBL=1 (LINE_BY_LINE_RUNTIME)'
-                        LOCATION = []
+                            assert LOCATION_LD1.shape == (self.NGAS), 'error :: LOCATION_LD must be (NGAS) for ILBL=1 (LINE_BY_LINE_RUNTIME)'
+                        LOCATION_LD = []
                         for igas in range(self.NGAS):
-                            LOCATION.append(tuple(x.decode('ascii') for x in LOCATION1[igas]))
-                        self.LOCATION = LOCATION
-                    
-                        self.ID = np.array(f.get(name+'/ID'))
-                        self.ISO = np.array(f.get(name+'/ISO'))
+                            LOCATION_LD.append(LOCATION_LD1[igas].decode('ascii'))
+                        self.LOCATION_LD = LOCATION_LD
+
+                        LOCATION_PF1 = h5py_helper.retrieve_data(f, name+'/LOCATION_PF', default=None)
+                        if LOCATION_PF1 is None:
+                            LOCATION_PF = []
+                            for igas in range(self.NGAS):
+                                LOCATION_PF.append(default_pf_base)
+                        else:
+                            assert LOCATION_PF1.shape == (self.NGAS), 'error :: LOCATION_PF must be (NGAS) for ILBL=1 (LINE_BY_LINE_RUNTIME)'
+                            LOCATION_PF = []
+                            for igas in range(self.NGAS):
+                                LOCATION_PF.append(LOCATION_PF1[igas].decode('ascii'))
+                        self.LOCATION_PF = LOCATION_PF
+
+
+                        LOCATION_CD1 = h5py_helper.retrieve_data(f, name+'/LOCATION_CD', default=None)
+                        if LOCATION_CD1 is None:
+                            LOCATION_CD = []
+                            for igas in range(self.NGAS):
+                                LOCATION_CD.append(self.LOCATION_LD[igas])
+                        else:
+                            assert LOCATION_CD1.shape == (self.NGAS), 'error :: LOCATION_CD must be (NGAS) for ILBL=1 (LINE_BY_LINE_RUNTIME)'
+                            LOCATION_CD = []
+                            for igas in range(self.NGAS):
+                                LOCATION_CD.append(LOCATION_CD1[igas].decode('ascii'))
+                        self.LOCATION_CD = LOCATION_CD
+
+
+                        self.ID = np.array(f.get(name+'/ID'),dtype="int32")
+                        self.ISO = np.array(f.get(name+'/ISO'),dtype="int32")
                         self.ISPACE = h5py_helper.retrieve_data(f, name+'/ISPACE', lambda x:  WaveUnitEnum(np.int32(x)))
                         self.WAVE = h5py_helper.retrieve_data(f, name+'/WAVE', np.array)
                         self.NWAVE = len(self.WAVE)
@@ -785,9 +902,9 @@ class Spectroscopy_0:
                         self.N_AMB_GASSES = len(self.LINE_DATA_PARAMS[0].amb_gas)
                         
                         self.LINE_DATA = []
-                        
+
                         for igas in range(self.NGAS):
-                            pf_dbase, ld_dbase, pc_dbase = self.LOCATION[igas]
+                            pf_dbase, ld_dbase, pc_dbase = self.LOCATION_PF[igas], self.LOCATION_LD[igas], self.LOCATION_CD[igas]
                             self.LINE_DATA.append(
                                 ans.LineData_0(
                                     self.ID[igas], #ID of the gas
@@ -1125,8 +1242,8 @@ class Spectroscopy_0:
                 mol_id = mol_dbs.mol_id,
                 iso_id = mol_dbs.iso_id,
                 waves = waves ,
-                fpath_pf = ans.Data.path_data.archnemesis_resolve_path(mol_dbs.pf_dbase), 
                 fpath_ld = ans.Data.path_data.archnemesis_resolve_path(mol_dbs.line_data_dbase), 
+                fpath_pf = ans.Data.path_data.archnemesis_resolve_path(mol_dbs.pf_dbase), 
                 fpath_pc = ans.Data.path_data.archnemesis_resolve_path(mol_dbs.continuum_dbase),
                 wave_unit = _wave_unit,
                 mol_line_data_params = mol_ldp,
@@ -1996,12 +2113,12 @@ class Spectroscopy_0:
         for igas in range(self.NGAS):
             
             _lgr.info(f'{self.LINE_DATA[igas]=}')
-
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
 
-            #store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
+            store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
             line_data_params = self.LINE_DATA_PARAMS[igas]
             lineshape_fn = SpectroscopicLineProfileEnum_to_lineshape_fn(line_data_params.lineshape)
+
             for ipoint in range(npoints):
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
@@ -2024,7 +2141,7 @@ class Spectroscopy_0:
                     include_pressure_shift=line_data_params.include_pressure_shift, # whether to include pressure shift in the line positions
                     use_cache = line_data_params.use_cache,
                     
-                    store = store,
+                    store = None,
                     out = k[:,ipoint,igas],
                 )
 
