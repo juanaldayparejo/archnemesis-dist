@@ -15,6 +15,9 @@ class PathRedirectList:
 					return self._path_redirects[k]+path[len(k):]
 			return path
 	
+	def append(self, value : str | tuple[str,...]):
+		self._raw_paths.append(value)
+	
 	def __getitem__(self, i):
 		return self._get_redirected_path(self._raw_paths[i])
 	

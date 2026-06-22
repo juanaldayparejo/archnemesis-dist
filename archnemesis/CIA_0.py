@@ -262,8 +262,8 @@ class CIA_0:
             if e==False:
                 raise ValueError('error :: CIA is not defined in HDF5 file')
             else:
-                self.CIADATA = f['CIA/CIADATA'][0].decode('ascii')
-                self.CIATABLE = f['CIA/CIATABLE'][0].decode('ascii')
+                self.CIADATA = f['CIA/CIADATA'][tuple()].decode('ascii')
+                self.CIATABLE = f['CIA/CIATABLE'][tuple()].decode('ascii')
                 self.INORMAL = h5py_helper.retrieve_data(f, 'CIA/INORMAL', lambda x:  ParaH2RatioEnum(np.int32(x)))
     
         # Resolve archnemesis path if it has been indirected
@@ -292,32 +292,29 @@ class CIA_0:
                 del f['CIA']   #Deleting the Spectroscopy information that was previously written in the file
 
             grp = f.create_group("CIA")
+            print(f'{grp.file.filename=}')
 
             #Writing the necessary flags
             dset = h5py_helper.store_data(grp, 'INORMAL', int(self.INORMAL))
             dset.attrs['title'] = "Flag indicating whether the ortho/para-H2 ratio is in equilibrium (0 for 1:1) or normal (1 for 3:1)"
             
             #Write the directory where CIA tables are stored
-            dt = h5py.special_dtype(vlen=str)
-            CIADATA = ['']*1
-            
             # Indirect the archnemesis path so it works on other systems
-            CIADATA[0] = archnemesis_indirect_path(self.CIADATA)
-            
-            dset = h5py_helper.store_data(grp, 'CIADATA', CIADATA,dtype=dt)
+            dset = h5py_helper.store_data(grp, 'CIADATA', archnemesis_indirect_path(self.CIADATA))
             dset.attrs['title'] = "Path to directory where CIA table is stored"
             
             # Convert CIATABLE to HDF5 format if we do not have an HDF5 format of this table
             CIATABLE_str = self.CIATABLE
             if CIATABLE_str.endswith('.tab'):
                 CIATABLE_str = CIATABLE_str[:-4]+'.h5'
-            
-            if not os.path.exists(self.CIADATA+CIATABLE_str):
-                self.write_ciatable_hdf5(self.CIADATA+CIATABLE_str)
+
+            ciatable_h5_path = os.path.normpath(os.path.join(self.CIADATA, CIATABLE_str))
+            print(f'{ciatable_h5_path=}')
+            if not os.path.exists(ciatable_h5_path):
+                self.write_ciatable_hdf5(ciatable_h5_path)
             
             # Write the name of the CIATABLE
-            CIATABLE = [CIATABLE_str]
-            dset = h5py_helper.store_data(grp, 'CIATABLE', CIATABLE,dtype=dt)
+            dset = h5py_helper.store_data(grp, 'CIATABLE', CIATABLE_str)
             dset.attrs['title'] = "Name of the CIA table file"
         
         

@@ -1371,7 +1371,7 @@ class AnsDatabase:
     """
     LINE_DATABASE : str
     PARTITION_FUNCTION_DATABASE : str
-    CONTINUUM_DATABASE : str | None = None
+    CONTINUUM_DATABASE : str | None = None # If `None` will use the same file as `LINE_DATABASE`
     cache : None | Cache = _MODULE_CACHE
     
     # private attrs
@@ -1388,7 +1388,7 @@ class AnsDatabase:
             
         self._ans_line_data_file = AnsLineDataFile(self.LINE_DATABASE)
         self._ans_partition_fn_file = AnsPartitionFunctionDataFile(self.PARTITION_FUNCTION_DATABASE)
-        self._ans_pseudo_continuum_file = None if self.CONTINUUM_DATABASE is None else AnsPseudoContinuumFile(self.CONTINUUM_DATABASE)
+        self._ans_pseudo_continuum_file = AnsPseudoContinuumFile(self.LINE_DATABASE if self.CONTINUUM_DATABASE is None else self.CONTINUUM_DATABASE)
     
     
     def fetch_partition_fn(
@@ -1740,7 +1740,7 @@ class LineData_0:
             ambient_gasses : ans.enum.AmbientGasEnum | tuple[ans.enum.AmbientGasEnum,...] = (ans.enum.AmbientGasEnum.AIR,),
             LINE_DATABASE : None | str = None,
             PARTITION_FUNCTION_DATABASE : None | str = archnemesis_path()+'/archnemesis/Data/partition_functions/tips2025.h5',
-            CONTINUUM_DATABASE : None | str = None,
+            CONTINUUM_DATABASE : None | str = None, # If `None` will use the same file as `LINE_DATABASE`
             cache : None | Cache = _MODULE_CACHE,
     ):
         if LINE_DATABASE is None:

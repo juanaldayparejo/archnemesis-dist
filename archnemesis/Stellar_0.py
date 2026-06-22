@@ -188,12 +188,13 @@ class Stellar_0:
         if solfile is not None:
 
             #Reading the solar spectrum file
+            solpath = os.path.join(self.STELLARDATA, solfile)
 
-            nlines = file_lines(self.STELLARDATA+solfile)
+            nlines = file_lines(solpath)
 
             #Reading buffer
             ibuff = 0
-            with open(self.STELLARDATA+solfile,'r') as fsol:
+            with open(solpath,'r') as fsol:
                 for curline in fsol:
                     if curline.startswith("#"):
                         ibuff = ibuff + 1
@@ -203,7 +204,7 @@ class Stellar_0:
             nvsol = nlines - ibuff - 2
             
             #Reading file
-            fsol = open(self.STELLARDATA+solfile,'r')
+            fsol = open(solpath,'r')
             for i in range(ibuff):
                 s = fsol.readline().split()
         

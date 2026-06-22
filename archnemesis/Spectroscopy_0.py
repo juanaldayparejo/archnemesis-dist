@@ -68,17 +68,17 @@ class MolDatabaseSpecification(NamedTuple):
     continuum_dbase : str
 
 class MolLineDataParams(NamedTuple):
-    lineshape : SpectroscopicLineProfileEnum
-    wn_calc_window : float
-    wn_approx_window : float
-    amb_gas : tuple[ans.enum.AmbientGasEnum,...]
-    s_min : float
-    s_floor : float
-    isotopic_abundance : None | float | np.ndarray
-    include_pressure_shift : bool
-    include_continuum : bool
-    include_lines : bool
-    use_cache : bool
+    lineshape : SpectroscopicLineProfileEnum = SpectroscopicLineProfileEnum.VOIGT
+    wn_calc_window : float = 25.0
+    wn_approx_window : float = 75.0
+    amb_gas : tuple[ans.enum.AmbientGasEnum,...] = (ans.enum.AmbientGasEnum.AIR,),
+    s_min : float = -1.0,
+    s_floor : float = 0.0,
+    isotopic_abundance : None | float | np.ndarray = None
+    include_pressure_shift : bool = True
+    include_continuum : bool = True
+    include_lines : bool = True
+    use_cache : bool = True
 
 class Spectroscopy_0:
 
@@ -86,7 +86,7 @@ class Spectroscopy_0:
             self, 
             RUNNAME: str = '', 
             ILBL: SpectralCalculationModeEnum = SpectralCalculationModeEnum.LINE_BY_LINE_TABLES, 
-            NGAS: int = 2, 
+            #NGAS: int = 0, 
             ONLINE: bool = False,
             VREL: float = 25.0,
         ):
@@ -172,7 +172,8 @@ class Spectroscopy_0:
         # Input parameters with validation
         self.runname = RUNNAME
         #self.ILBL = SpectralCalculationModeEnum(ILBL) if not isinstance(ILBL, SpectralCalculationMode) else ILBL
-        self.NGAS = NGAS
+        #self.NGAS = NGAS
+        self.NGAS = 0
         self.ONLINE = ONLINE
         self.VREL = VREL
 
@@ -181,7 +182,6 @@ class Spectroscopy_0:
         self.ID: None | np.ndarray = None  # Array of Gas enum values (NGAS)
         self.ISO = None       #(NGAS)
         self._locations = path_redirect.PathRedirectList() #(NGAS)
-        self._locations_pf = path_redirect.PathRedirectList() #(NGAS)
         self.IPROC = None     #(NGAS)
         self.SELF_FRAC = None #(NGAS)
         self.NWAVE = None     
@@ -202,7 +202,6 @@ class Spectroscopy_0:
         self._ispace = None
         self._iproc = None
         self._locations_initialised = False
-        self._locations_pf_initialised = False
         
         # set property values
         self.ILBL = ILBL
@@ -214,7 +213,6 @@ class Spectroscopy_0:
         if not self._locations_initialised:
             return None
         return self._locations
-
 
     @LOCATION.setter
     def LOCATION(self, value) -> None:
@@ -285,16 +283,6 @@ class Spectroscopy_0:
 
         if self.ILBL == 1:
 
-            assert self.IPROC is not None , \
-                'IPROC must be set when ILBL=1'
-            assert len(self.IPROC) == self.NGAS , \
-                'IPROC must have size (NGAS)'
-            for i in range(self.NGAS):
-                assert isinstance(self.IPROC[i], int), \
-                    f'IPROC[{i}] must be an integer'
-                assert isinstance(self.IPROC[i], SpectroscopicLineProfileEnum), \
-                    f'IPROC[{i}] must be SpectroscopicLineProfile enum'
-
             assert self.ID is not None , \
                 'ID must be defined when ILBL=1'
             assert len(self.ID) == self.NGAS , \
@@ -310,6 +298,18 @@ class Spectroscopy_0:
             
             assert self.ISPACE is not None, \
                 'ISPACE must be defined when ILBL=1'
+            
+            x = getattr(self, 'LINE_DATA', None)
+            assert x is not None, \
+                "LINE_DATA must be defined when ILBL=1"
+            assert len(x) == self.NGAS, \
+                "LINE_DATA must have size (NGAS)"
+            
+            x = getattr(self, 'LINE_DATA_PARAMS', None)
+            assert x is not None, \
+                "LINE_DATA_PARAMS must be defined when ILBL=1"
+            assert len(x) == self.NGAS, \
+                "LINE_DATA_PARAMS must have size (NGAS)"
 
     ######################################################################################################
     def summary_info(self):
@@ -435,45 +435,153 @@ class Spectroscopy_0:
         
         return self
 
-    def add_table_location(self, *new_locations : str, reject_duplicates : bool = True) -> None:
-        """
-        Adds the location of a table to this class, will not add the same table twice.
-        """
-        
-        for new_location in new_locations:
-            _lgr.debug(f'Adding table location {new_location=}')
-            if self.LOCATION is None or self.NGAS is None:
-                _lgr.error('Spectroscopy_0 instance cannot add a table location before it has been fully initialised. Run one of the following routines first: `self.read_hdf5(...)`, `self.read_lls(...)`, `self.read_kls(...)`.')
-                return
-            
-            add_new_loc_flag = True
-            
-            # Check that the new_location is not already in our list of locations
-            if reject_duplicates:
-                for location in self.LOCATION:
-                    if os.path.samefile(self._locations._get_redirected_path(new_location), location): # NOTE: must apply redirects here as well otherwise we will be comparing the wrong files
-                        _lgr.warning(f'Spectral table file "{new_location}" is the same file as "{location}". Spectroscopy_0 instance will not add the same file twice as the data is already included')
-                        add_new_loc_flag = False
-            
-            if add_new_loc_flag:
-                self.LOCATION.append(new_location)
-                self.NGAS = len(self.LOCATION)
-                _lgr.info(f'Added new table location "{new_location}" to the Spectroscopy_0 instance. To make this change permanent do one of the following: [LEGACY INPUT] add the string to "{self.runname}.lls" or "{self.runname}.kls"; [HDF5 INPUT] run the snippet `spectroscopy.write_hdf5(spectroscopy.runname)` where `spectroscopy` is this Spectroscopy_0 instance.')
-            else:
-                if self.NGAS != len(self.LOCATION):
-                    _lgr.warning(f'Table file "{new_location}" was not added due to the above reason. However, the number of active gasses ({self.NGAS}) does not match the number of table locations ({len(self.LOCATION)}), whereas it is expected that they should. Updating the number of active gasses to be the same as the number of table locations...')
-                    self.NGAS = len(self.LOCATION)
-        
-        
-        if self.ILBL != SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
-            # If tables have already been read, re-read them
-            if self.ID is not None:
-                self.read_header()
-        else:
-            _lgr.info(f'{self.ILBL=}, not reading any header information.')
-        
-        return
+    def _set_once(self, attr : str, value):
+        x = getattr(self, attr)
+        if x is None:
+            setattr(self, attr, value)
+        elif isinstance(x, np.ndarray):
+            if np.any(x != value):
+                raise ValueError(f'Spectroscopy_0 instance cannot set attrbute `{attr}` to a different value than what it was initially set to. Initial value: {x}, new value: {value}')
+        elif (x != value):
+            raise ValueError(f'Spectroscopy_0 instance cannot set attrbute `{attr}` to a different value than what it was initially set to. Initial value: {x}, new value: {value}')
 
+    def _append_to(self, attr : str, value, dtype):
+        x = getattr(self, attr)
+        if x is None:
+            setattr(self, attr, np.array([value], dtype=dtype))
+        else:
+            setattr(self, attr, np.append(x, [value]))
+
+    def add_line_by_line_table(self, fpath : str) -> None:
+        if self.ILBL != SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
+            raise AttributeError(f"To add line-by-line table information, `Spectroscopy_0` instance must have ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES. However, {self.ILBL=}")
+    
+        nwave,vmin,delv,npress,ntemp,gasID,isoID,presslevels,templevels = read_ltahead(fpath)
+        
+        if self.LOCATION is None:
+            self.LOCATION = []
+        self.LOCATION.append(fpath)
+
+        self.ID = np.array([gasID],dtype=int) if self.ID is None else np.append(self.ID, [gasID])
+        self.ISO = np.array([isoID],dtype=int) if self.ISO is None else np.append(self.ISO, [isoID])
+        
+        self._set_once('NWAVE', nwave)
+        self._set_once('NP', npress)
+        self._set_once('NT', ntemp)
+        
+        #assert np.all(self.NWAVE == self.NWAVE[0]), 'error :: Number of wavenumbers in all .lta files must be the same'
+        #assert np.all(self.NP == self.NP[0]), 'error :: Number of pressure levels in all .lta files must be the same'
+        #assert np.all(self.NT == self.NT[0]), 'error :: Number of temperature levels in all .lta files must be the same'
+        
+        self._set_once('NG', 1)
+        self._set_once('G_ORD', np.array([0.0]))
+        self._set_once('DELG', np.array([1.0]))
+        self._set_once('PRESS', presslevels)
+        self._set_once('TEMP', templevels)
+        
+        vmax = vmin + delv * (nwave-1)
+        wavelta = np.linspace(vmin,vmax,nwave)
+        self._set_once('WAVE', wavelta)
+        
+        self.NGAS += 1
+    
+    def add_k_table(self, fpath : str) -> None:
+        if self.ILBL != SpectralCalculationModeEnum.K_TABLES:
+            raise AttributeError(f"To add k-table information, `Spectroscopy_0` instance must have ILBL == SpectralCalculationModeEnum.K_TABLES. However, {self.ILBL=}")
+    
+        nwave,wavekta,fwhmk,npress,ntemp,ng,gasID,isoID,g_ord,del_g,presslevels,templevels = read_ktahead(fpath)
+        
+        if self.LOCATION is None:
+            self.LOCATION = []
+        self.LOCATION.append(fpath)
+
+        self.ID = np.array([gasID],dtype=int) if self.ID is None else np.append(self.ID, [gasID])
+        self.ISO = np.array([isoID],dtype=int) if self.ISO is None else np.append(self.ISO, [isoID])
+        
+        self._set_once('NWAVE', nwave)
+        self._set_once('NP', npress)
+        self._set_once('NT', ntemp)
+        
+        #assert np.all(self.NWAVE == self.NWAVE[0]), 'error :: Number of wavenumbers in all .lta files must be the same'
+        #assert np.all(self.NP == self.NP[0]), 'error :: Number of pressure levels in all .lta files must be the same'
+        #assert np.all(self.NT == self.NT[0]), 'error :: Number of temperature levels in all .lta files must be the same'
+        
+        self._set_once('NG', ng)
+        self._set_once('G_ORD', g_ord)
+        self._set_once('DELG', del_g)
+        self._set_once('FWHM', fwhmk)
+        self._set_once('PRESS', presslevels)
+        self._set_once('TEMP', templevels)
+        self._set_once('WAVE', wavekta)
+        
+        self.NGAS += 1
+    
+    def add_line_by_line_runtime(
+            self, 
+            mol_id : int,
+            iso_id : int,
+            waves : np.ndarray,
+            fpath_pf : str, 
+            fpath_ld : str, 
+            fpath_pc : str | None = None,
+            wave_unit : ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm,
+            mol_line_data_params : MolLineDataParams = MolLineDataParams(),
+    ) -> None:
+        if self.ILBL != SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
+            raise AttributeError(f"To add line-by-line runtime information, `Spectroscopy_0` instance must have ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME. However, {self.ILBL=}")
+    
+        self.ID = np.array([mol_id],dtype=int) if self.ID is None else np.append(self.ID, [mol_id])
+        self.ISO = np.array([iso_id],dtype=int) if self.ISO is None else np.append(self.ISO, [iso_id])
+        
+        assert np.issubdtype(self.ID.dtype, np.int64), f"Spectroscopy_0.ID attribute must be an array of 64 bit intergers, but has {self.ID.dtype=}"
+        assert np.issubdtype(self.ISO.dtype, np.int64), f"Spectroscopy_0.ISO attribute must be an array of 64 bit intergers, but has {self.ISO.dtype=}"
+        
+        self._set_once('NWAVE', waves.size)
+        self._set_once('WAVE', waves)
+        self._set_once('ISPACE', wave_unit)
+        
+        self.NG = None
+        self.G_ORD = None
+        self.DELG = None
+        
+        if self.LOCATION is None:
+            self.LOCATION = []
+        self.LOCATION.append(
+            (
+                fpath_ld,
+                fpath_pf,
+                fpath_pc if fpath_pc is not None else fpath_ld,
+            )
+        )
+        
+        if getattr(self, 'LINE_DATA_PARAMS', None) is None:
+            self.LINE_DATA_PARAMS = []
+        
+        self.LINE_DATA_PARAMS.append(
+            mol_line_data_params
+        )
+        
+        assert all(len(self.LINE_DATA_PARAMS[0].amb_gas) == len(x.amb_gas) for x in self.LINE_DATA_PARAMS), "For .lls RUNTIME format. All LINE_DATA instances must have the same number of ambient gasses"
+        self.N_AMB_GASSES = len(self.LINE_DATA_PARAMS[0].amb_gas)
+        
+        if getattr(self, 'LINE_DATA', None) is None:
+            self.LINE_DATA = []
+        
+        self.LINE_DATA.append(
+            ans.LineData_0(
+                mol_id, #ID of the gas
+                int(iso_id), #Isotope ID of the gas
+                ambient_gasses = mol_line_data_params.amb_gas,
+                LINE_DATABASE=fpath_ld,
+                CONTINUUM_DATABASE=fpath_pc,
+                PARTITION_FUNCTION_DATABASE=fpath_pf,
+            )
+        )
+        
+        self.LINE_DATA[-1].fetch_partition_fn() # May as well do this now
+        
+        self.NGAS += 1
+    
     def write_hdf5(self, runname, inside_telluric=False):
         """
         Write the information about the k-tables or lbl-tables into the HDF5 file
@@ -535,10 +643,6 @@ class Spectroscopy_0:
                     dset = h5py_helper.store_data(grp, 'LOCATION', self._locations._raw_paths,dtype=dt) # do not save the redirected paths.
                     dset.attrs['title'] = "Location of the database files in the following order (partition_fn, line_data, continuum)"
 
-                    dset = h5py_helper.store_data(grp, 'IPROC', self.IPROC)
-                    dset.attrs['title'] = "Line profile to use for each gas"
-                    dset.attrs['description'] = "0: VOIGT; 1: SUBLORENTZ_CO2_BROADENING; 2: VANVLECK_WEISSKOPF; 4: LORENTZ; 12: DOPPLER"
-
                     dset = h5py_helper.store_data(grp, 'ISPACE', int(self.ISPACE))
                     dset.attrs['title'] = "Spectral units"
                     if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
@@ -564,6 +668,7 @@ class Spectroscopy_0:
                                 'lineshape' : {
                                     'title': 'Lineshape used when computing line absorption',
                                     'unit' : 'SpectroscopicLineProfileEnum',
+                                    'description' : "0: VOIGT; 1: SUBLORENTZ_CO2_BROADENING; 2: VANVLECK_WEISSKOPF; 4: LORENTZ; 12: DOPPLER",
                                 },
                                 'wn_calc_window' : {
                                     'title' : 'Will perform full lineshape calculation within this distance of line center',
@@ -607,6 +712,7 @@ class Spectroscopy_0:
                                 },
                             }
                         )
+    
     ######################################################################################################
     def read_hdf5(self,runname,inside_telluric=False):
         """
@@ -646,7 +752,6 @@ class Spectroscopy_0:
                     
                         self.ID = np.array(f.get(name+'/ID'))
                         self.ISO = np.array(f.get(name+'/ISO'))
-                        self.IPROC = np.array(f.get(name+'/IPROC'))
                         self.ISPACE = h5py_helper.retrieve_data(f, name+'/ISPACE', lambda x:  WaveUnitEnum(np.int32(x)))
                         self.WAVE = h5py_helper.retrieve_data(f, name+'/WAVE', np.array)
                         self.NWAVE = len(self.WAVE)
@@ -676,10 +781,10 @@ class Spectroscopy_0:
                                 )
                             )
                         
-                        self.LINE_DATA = []
-                        
-                        assert all(len(self.LINE_DATA_PARAMS[0].amb_gas) == len(x.amb_gas) for x in self.LINE_DATA_PARAMS), "For .lls RUNTIME format. All LINE_DATA instances must have the same number of ambient gasses"
+                        assert all(len(self.LINE_DATA_PARAMS[0].amb_gas) == len(x.amb_gas) for x in self.LINE_DATA_PARAMS), "For LINE_BY_LINE_RUNTIME. All LINE_DATA instances must have the same number of ambient gasses"
                         self.N_AMB_GASSES = len(self.LINE_DATA_PARAMS[0].amb_gas)
+                        
+                        self.LINE_DATA = []
                         
                         for igas in range(self.NGAS):
                             pf_dbase, ld_dbase, pc_dbase = self.LOCATION[igas]
@@ -730,45 +835,10 @@ class Spectroscopy_0:
         for i in range(ngasact):
             s = f.readline().split()
             strlta[i] = s[0]
-
-        self.NGAS = ngasact
-        self.LOCATION = strlta
-
-        #Now reading the head of the binary files included in the .lls file
-        nwavelta = np.zeros([ngasact],dtype='int')
-        npresslta = np.zeros([ngasact],dtype='int')
-        ntemplta = np.zeros([ngasact],dtype='int')
-        gasIDlta = np.zeros([ngasact],dtype='int')
-        isoIDlta = np.zeros([ngasact],dtype='int')
-        for i in range(ngasact):
-            nwave,vmin,delv,npress,ntemp,gasID,isoID,presslevels,templevels = read_ltahead(strlta[i])
-            nwavelta[i] = nwave
-            npresslta[i] = npress
-            ntemplta[i] = ntemp
-            gasIDlta[i] = gasID
-            isoIDlta[i] = isoID
-
-        if len(np.unique(nwavelta)) != 1:
-            raise ValueError('error :: Number of wavenumbers in all .lta files must be the same')
-        if len(np.unique(npresslta)) != 1:
-            raise ValueError('error :: Number of pressure levels in all .lta files must be the same')
-        if len(np.unique(ntemplta)) != 1:
-            raise ValueError('error :: Number of temperature levels in all .lta files must be the same')
-
-        self.ID = gasIDlta
-        self.ISO = isoIDlta
-        self.NP = npress
-        self.NG = 1
-        self.G_ORD = np.array([0.])
-        self.DELG = np.array([1.0])
-        self.NT = ntemp
-        self.PRESS = presslevels
-        self.TEMP = templevels
-        self.NWAVE = nwave
-
-        vmax = vmin + delv * (nwave-1)
-        wavelta = np.linspace(vmin,vmax,nwave)
-        self.WAVE = wavelta
+        
+        for fpath in strlta:
+            self.add_line_by_line_table(fpath)
+        return
 
     def read_lls_runtime(self, runname):
         """
@@ -966,7 +1036,7 @@ class Spectroscopy_0:
                         raise RuntimeError(f'RUNTIME format .lls file "{lls_fpath}", `MOL` keyword must have 2 or 3 arguments `<mol_id> <iso_id> [<abundance>]')
                     
                     mol_id = mol_id if ((mol_id := ans.Data.gas_data.gas_id.get(parts[1], None)) is not None) else int(parts[1])
-                    iso_id = parts[2]
+                    iso_id = int(parts[2])
                     
                     if len(parts) >= 4:
                         abundance = float(parts[4]) if len(parts) == 4 else np.array([float(x) for x in parts[4:]], dtype=float)
@@ -979,9 +1049,9 @@ class Spectroscopy_0:
                     if current_dbase is None:
                         raise RuntimeError(f'RUNTIME format .lls file "{lls_fpath}" must have at least one path to a database file')
                     
-                    print(f'TESTING: {aline=}')
-                    print(f'TESTING: {parts=}')
-                    print(f'TESTING: {mol_id=} {iso_id=} {abundance=}')
+                    #print(f'TESTING: {aline=}')
+                    #print(f'TESTING: {parts=}')
+                    #print(f'TESTING: {mol_id=} {iso_id=} {abundance=}')
                     
                     # Add `mol_descriptor` to list of known molecules
                     mol_dbase_specs.append(
@@ -1045,40 +1115,22 @@ class Spectroscopy_0:
             _lgr.warning('WAVE_UNIT not specified assuming wavenumbers in (cm^{-1})')
             _wave_unit = ans.enum.WaveUnitEnum.Wavenumber_cm
         
-        self.WAVE = np.arange(*_wave_spec, dtype=float)
-        self.NWAVE = self.WAVE.size
-        self.ISPACE = _wave_unit
+        waves = np.arange(*_wave_spec, dtype=float)
         
-        self.ID = np.array([x.mol_id for x in mol_dbase_specs], dtype=int)
-        self.ISO = np.array([x.iso_id for x in mol_dbase_specs], dtype=int)
-        self.NGAS = self.ID.size
-        self.LOCATION = [
-            (
-                ans.Data.path_data.archnemesis_resolve_path(x.pf_dbase), 
-                ans.Data.path_data.archnemesis_resolve_path(x.line_data_dbase), 
-                ans.Data.path_data.archnemesis_resolve_path(x.continuum_dbase),
-            ) for x in mol_dbase_specs
-        ]
-        self.LINE_DATA_PARAMS = mol_linedata_params
-        self.IPROC = [x.lineshape for x in mol_linedata_params]
-        self.LINE_DATA = []
-        
-        assert all(len(self.LINE_DATA_PARAMS[0].amb_gas) == len(x.amb_gas) for x in self.LINE_DATA_PARAMS), "For .lls RUNTIME format. All LINE_DATA instances must have the same number of ambient gasses"
-        self.N_AMB_GASSES = len(self.LINE_DATA_PARAMS[0].amb_gas)
-        
-        for igas in range(len(self.ID)):
-            pf_dbase, ld_dbase, pc_dbase = self.LOCATION[igas]
-            self.LINE_DATA.append(
-                ans.LineData_0(
-                    self.ID[igas], #ID of the gas
-                    self.ISO[igas], #Isotope ID of the gas
-                    ambient_gasses = self.LINE_DATA_PARAMS[igas].amb_gas,
-                    LINE_DATABASE=ld_dbase,
-                    CONTINUUM_DATABASE=pc_dbase,
-                    PARTITION_FUNCTION_DATABASE=pf_dbase,
-                )
+        for i in range(len(mol_dbase_specs)):
+            mol_dbs = mol_dbase_specs[i]
+            mol_ldp = mol_linedata_params[i]
+            
+            self.add_line_by_line_runtime(
+                mol_id = mol_dbs.mol_id,
+                iso_id = mol_dbs.iso_id,
+                waves = waves ,
+                fpath_pf = ans.Data.path_data.archnemesis_resolve_path(mol_dbs.pf_dbase), 
+                fpath_ld = ans.Data.path_data.archnemesis_resolve_path(mol_dbs.line_data_dbase), 
+                fpath_pc = ans.Data.path_data.archnemesis_resolve_path(mol_dbs.continuum_dbase),
+                wave_unit = _wave_unit,
+                mol_line_data_params = mol_ldp,
             )
-            self.LINE_DATA[igas].fetch_partition_fn() # May as well get this now as we will always want it
         
         return
 
@@ -1090,9 +1142,7 @@ class Spectroscopy_0:
         @param runname: str
             Name of the Nemesis run
         """
-
-        from archnemesis import read_ktahead
-
+        
         ngasact = len(open(runname+'.kls').readlines(  ))
 
         #Opening file
@@ -1102,46 +1152,8 @@ class Spectroscopy_0:
             s = f.readline().split()
             strkta[i] = s[0]
 
-        self.NGAS = ngasact
-        self.LOCATION = strkta
-
-        #Now reading the head of the binary files included in the .kta file
-        nwavekta = np.zeros([ngasact],dtype='int')
-        npresskta = np.zeros([ngasact],dtype='int')
-        ntempkta = np.zeros([ngasact],dtype='int')
-        ngkta = np.zeros([ngasact],dtype='int')
-        gasIDkta = np.zeros([ngasact],dtype='int')
-        isoIDkta = np.zeros([ngasact],dtype='int')
-        for i in range(ngasact):
-            nwave,wavekta,fwhmk,npress,ntemp,ng,gasID,isoID,g_ord,del_g,presslevels,templevels = read_ktahead(strkta[i])
-            nwavekta[i] = nwave
-            npresskta[i] = npress
-            ntempkta[i] = ntemp
-            ngkta[i] = ng
-            gasIDkta[i] = gasID
-            isoIDkta[i] = isoID
-
-        if len(np.unique(nwavekta)) != 1:
-            raise ValueError('error :: Number of wavenumbers in all .kta files must be the same')
-        if len(np.unique(npresskta)) != 1:
-            raise ValueError('error :: Number of pressure levels in all .kta files must be the same')
-        if len(np.unique(ntempkta)) != 1:
-            raise ValueError('error :: Number of temperature levels in all .kta files must be the same')
-        if len(np.unique(ngkta)) != 1:
-            raise ValueError('error :: Number of g-ordinates in all .kta files must be the same')
-
-        self.ID = gasIDkta
-        self.ISO = isoIDkta
-        self.NP = npress
-        self.NT = ntemp
-        self.PRESS = presslevels
-        self.TEMP = templevels
-        self.NWAVE = nwave
-        self.NG = ng
-        self.DELG = del_g
-        self.G_ORD = g_ord
-        self.FWHM = fwhmk
-        self.WAVE = wavekta
+        for fpath in strkta:
+            self.add_k_table(fpath)
 
     ######################################################################################################
     def read_header(self):
@@ -1848,27 +1860,29 @@ class Spectroscopy_0:
         #Calculating the line-by-line cross sections for each gas and each p-T point
         k = np.zeros((nwave, npoints, self.NGAS))
         dkdt = np.zeros((nwave, npoints, self.NGAS))
+        k1 = np.empty((k.shape[0],), dtype=float)
+        store = np.empty((4, max(x.max_lines_or_bins for x in self.LINE_DATA)), dtype=float)
         for igas in range(self.NGAS):
 
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
-            lineshape = SpectroscopicLineProfileEnum_to_lineshape_fn(self.IPROC[igas])
             
-            store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
-            k1 = np.empty((k.shape[0],), dtype=float)
+            #store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
+            k1.fill(0.0)
             
             line_data_params = self.LINE_DATA_PARAMS[igas]
+            lineshape_fn = SpectroscopicLineProfileEnum_to_lineshape_fn(line_data_params.lineshape) # lineshape function to use
             
             for ipoint in range(npoints):
 
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
-
+                
                 self.LINE_DATA[igas].add_monochromatic_absorption(
                     wave_grid=wave,             # wavenumbers or wavelengths
                     t_calc=t_l,               # kelvin
                     p_calc=p_l,              # Atmospheres
                     wave_unit=self.ISPACE,  # unit of `waves` argument
-                    lineshape_fn=lineshape, # lineshape function to use
+                    lineshape_fn=lineshape_fn, # lineshape function to use
                     amb_frac = amb_frac[igas] if amb_frac.ndim == 2 else amb_frac,
                     
                     isotopic_abundance = line_data_params.isotopic_abundance,
@@ -1889,7 +1903,7 @@ class Spectroscopy_0:
                     wave_grid=wave,             # wavenumbers or wavelengths
                     t_calc=t_l+5.0,               # kelvin
                     p_calc=p_l,              # Atmospheres
-                    lineshape_fn=lineshape, # lineshape function to use
+                    lineshape_fn=lineshape_fn, # lineshape function to use
                     wave_unit=self.ISPACE,  # unit of `waves` argument
                     amb_frac = amb_frac[igas] if amb_frac.ndim == 2 else amb_frac,
                     
@@ -1978,15 +1992,16 @@ class Spectroscopy_0:
 
         #Calculating the line-by-line cross sections for each gas and each p-T point
         k = np.zeros((nwave, npoints, self.NGAS))
+        store = np.empty((4, max(x.max_lines_or_bins for x in self.LINE_DATA)), dtype=float)
         for igas in range(self.NGAS):
             
             _lgr.info(f'{self.LINE_DATA[igas]=}')
 
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
-            lineshape = SpectroscopicLineProfileEnum_to_lineshape_fn(self.IPROC[igas])
 
-            store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
+            #store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
             line_data_params = self.LINE_DATA_PARAMS[igas]
+            lineshape_fn = SpectroscopicLineProfileEnum_to_lineshape_fn(line_data_params.lineshape)
             for ipoint in range(npoints):
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
@@ -1996,7 +2011,7 @@ class Spectroscopy_0:
                     t_calc=t_l,               # kelvin
                     p_calc=p_l,              # Atmospheres
                     wave_unit=self.ISPACE,  # unit of `waves` argument
-                    lineshape_fn=lineshape, # lineshape function to use
+                    lineshape_fn=lineshape_fn, # lineshape function to use
                     amb_frac = amb_frac[igas] if amb_frac.ndim == 2 else amb_frac,
                     
                     isotopic_abundance = line_data_params.isotopic_abundance,

@@ -1,4 +1,5 @@
 import os
+#from pathlib import Path
 from collections.abc import Iterable
 import shutil
 
@@ -191,7 +192,7 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters():
                         item.write_input_hdf5(runname)
                     else:
                         raise RuntimeError(f'For input files at "{current_dir}", class "{type(item)}" does not have an attribute like "write{{_input,_}}hdf5", cannot continue writing new style file.')
-
+                    
                 # Read HDF5 format
                 _lgr.info('Reading HDF5 format')
                 Atmosphere_,Measurement_,Spectroscopy_,Scatter_,Stellar_,Surface_,CIA_,Layer_,Variables_,Retrieval_,Telluric_ = ans.Files.read_input_files_hdf5(runname)
