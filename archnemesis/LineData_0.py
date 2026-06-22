@@ -56,8 +56,8 @@ from archnemesis.database.filetypes.ans_pseudo_continuum_file import AnsPseudoCo
 # Logging
 import logging
 _lgr = logging.getLogger(__name__)
-#_lgr.setLevel(logging.INFO)
-_lgr.setLevel(logging.DEBUG)
+_lgr.setLevel(logging.INFO)
+#_lgr.setLevel(logging.DEBUG)
 
 if TYPE_CHECKING:
     NWAVE = "Number of wave points"
