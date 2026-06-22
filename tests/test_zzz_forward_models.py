@@ -307,24 +307,6 @@ def test_thermal_emission_realtime_line_by_line():
         plt.legend()
         
         plt.show()
-    
-    # Show cache behaviour
-    if False:
-        line_data = ForwardModel.SpectroscopyX.LINE_DATA[0] # They all share a cache
-        if line_data is not None:
-            print(f'{line_data.cache.cache_performance_str()}')
-            if False:
-                print('')
-                print('## START CACHE HITS ##')
-                for x in line_data.cache.TESTING_CACHE_HITS:
-                    print(f'\t{x}')
-                print('## END CACHE HITS ##')
-                print('')
-                print('## START CACHE MISSES ##')
-                for x in line_data.cache.TESTING_CACHE_MISSES:
-                    print(f'\t{x}')
-                print('## END CACHE MISSES ##')
-    
 
     # Perform comparison
     assert (1-cirsrad_frac_out_of_tolerance) >= required_frac_within_tolerance, (

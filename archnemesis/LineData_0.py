@@ -618,9 +618,6 @@ class Cache:
         self.n_cache_miss : int = 0
         self._n_max_per_bucket = n_max_per_bucket
         self._buckets = dict()
-        
-        self.TESTING_CACHE_HITS = []
-        self.TESTING_CACHE_MISSES = []
     
     def cache_performance_str(self):
         n_cache_req = self.n_cache_hit + self.n_cache_miss
@@ -631,16 +628,13 @@ class Cache:
         if found_bucket is None:
             self._buckets[bucket] = CachePriorityDataHolder(self._n_max_per_bucket)
             self.n_cache_miss += 1
-            self.TESTING_CACHE_MISSES.append((bucket, identity))
             return None
         
         result = found_bucket.get(identity, default=default)
         if result is None:
             self.n_cache_miss += 1
-            self.TESTING_CACHE_MISSES.append((bucket, identity))
         else:
             self.n_cache_hit += 1
-            self.TESTING_CACHE_HITS.append((bucket, identity))
             _lgr.debug(f'CACHE HIT:: {bucket=} {identity=}')
         
         return result
