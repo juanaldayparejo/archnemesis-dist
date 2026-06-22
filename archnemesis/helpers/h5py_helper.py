@@ -239,10 +239,12 @@ def store_data(
         dtype = float
         if issubclass(type(data), np.ndarray):
             dtype = data.dtype
-        elif isinstance(data, int):
+        elif isinstance(data, (int, np.integer)):
             dtype = int
-        elif isinstance(data, bool):
+        elif isinstance(data, (bool, np.bool_)):
             dtype = bool
+        elif isinstance(data, (str, np.str_, np.dtype('T').type)):
+            dtype = h5py.string_dtype()
         
     
     if item_path not in h5py_file:
@@ -254,7 +256,7 @@ def store_data(
     
     if data is not None:
         dset = h5py_file[item_path]
-        dset[...] = data
+        dset[tuple()] = data
         return dset
     else:
         del h5py_file[item_path]
