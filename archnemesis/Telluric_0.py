@@ -465,18 +465,20 @@ class Telluric_0:
 
         elif self.Spectroscopy.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:  #Line-by-line
 
+            igas = np.empty((self.Spectroscopy.NGAS,), dtype=int)
+            for i, (mol_id, iso_id) in enumerate(zip(self.Spectroscopy.ID,self.Spectroscopy.ISO)):
+                igas[i] = self.Atmosphere.locate_gas(mol_id, iso_id)
+            
             self_frac = np.mean((Layer.PP.T / Layer.PRESS),axis=1) #(NGAS) average volume mixing ratio of each gas
-            self_fracx = np.zeros(self.Spectroscopy.NGAS)
-            for i in range(self.Spectroscopy.NGAS):
-                igas = self.Atmosphere.locate_gas(self.Spectroscopy.ID[i],self.Spectroscopy.ISO[i])
-                self_fracx[i] = self_frac[igas]
+            amb_frac = np.ones((self.Spectroscopy.NGAS,1), dtype=float)
+            amb_frac[:,0] = 1.0 - self_frac[igas]
 
             #Converting IDs into list
             self.Spectroscopy.ID = np.atleast_1d(self.Spectroscopy.ID).astype(int).tolist()
             self.Spectroscopy.ISO = np.atleast_1d(self.Spectroscopy.ISO).astype(int).tolist()
 
             #Calculating the absorption cross sections
-            k = self.Spectroscopy.calc_klbl_online(len(tlay),play/101325.,tlay,self_frac=self_fracx,wave=None,add_pressure_shift=True)
+            k = self.Spectroscopy.calc_klbl_online(len(tlay),play/101325.,tlay,amb_frac=amb_frac,wave=None)
 
             #Calculating the optical depths
             TAUGAS = np.zeros((self.Spectroscopy.NWAVE,self.Spectroscopy.NG,len(tlay),self.Spectroscopy.NGAS))  #Vertical opacity of each gas in each layer
