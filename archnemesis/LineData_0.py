@@ -56,8 +56,8 @@ from archnemesis.database.filetypes.ans_pseudo_continuum_file import AnsPseudoCo
 # Logging
 import logging
 _lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.INFO)
-#_lgr.setLevel(logging.DEBUG)
+#_lgr.setLevel(logging.INFO)
+_lgr.setLevel(logging.DEBUG)
 
 if TYPE_CHECKING:
     NWAVE = "Number of wave points"
@@ -1376,7 +1376,7 @@ class AnsDatabase:
     LINE_DATABASE : str
     PARTITION_FUNCTION_DATABASE : str
     CONTINUUM_DATABASE : str | None = None
-    cache : Cache = _MODULE_CACHE
+    cache : None | Cache = _MODULE_CACHE
     
     # private attrs
     _ans_line_data_file : AnsLineDataFile = None
@@ -1448,15 +1448,21 @@ class AnsDatabase:
             iso_id : int,
             refresh : bool = False,
     ) -> PFList:
-        pf_cache_bucket = self.PARTITION_FUNCTION_DATABASE
-        pf_cache_identity = (mol_id, iso_id)
-        
-        pf_instance = self.cache.get(pf_cache_bucket, pf_cache_identity, None)
+        pf_instance = None
+        if self.cache is not None:
+            pf_cache_bucket = self.PARTITION_FUNCTION_DATABASE
+            pf_cache_identity = (mol_id, iso_id)
+            
+            pf_instance = self.cache.get(pf_cache_bucket, pf_cache_identity, None)
         #print(f'{pf_instance=}')
+        
         if refresh or pf_instance is None:
             #print('Must get data')
             pf_instance = self._ans_partition_fn_file.get_data(RadtranGasDescriptor(mol_id,iso_id).gas_name, iso_id)
-            self.cache.set(pf_cache_bucket, pf_cache_identity, pf_instance)
+            
+            if self.cache is not None:
+                self.cache.set(pf_cache_bucket, pf_cache_identity, pf_instance)
+        
         return pf_instance
     
     
@@ -1545,11 +1551,15 @@ class AnsDatabase:
             refresh : bool = False,
     ) -> tuple[LineSetData, PseudoContinuumData]:
 
-        # build data group
-        ld_cache_bucket = self.LINE_DATABASE
-        ld_cache_identity = (mol_id, iso_id, s_min, temperature, *ambient_gasses)
+        ld_instance = None
         
-        ld_instance = self.cache.get(ld_cache_bucket, ld_cache_identity, None)
+        if self.cache is not None:
+            # build data group
+            ld_cache_bucket = self.LINE_DATABASE
+            ld_cache_identity = (mol_id, iso_id, s_min, temperature, *ambient_gasses)
+            
+            ld_instance = self.cache.get(ld_cache_bucket, ld_cache_identity, None)
+        
         if refresh or ld_instance is None or not wn_range_is_within((wn_min, wn_max), ld_instance.req_wn_range):
             # Get line set data. Returned `ls_instance.s_min` should be less than or equal to `s_min`, but accept larger values if no smaller ones are available
             ld_instance = self._ans_line_data_file.get_data(
@@ -1560,12 +1570,14 @@ class AnsDatabase:
                 temperature = temperature,
                 requested_wn_range = (wn_min, wn_max),
             )
-            self.cache.set(ld_cache_bucket, ld_cache_identity, ld_instance)
+            
+            if self.cache is not None:
+                self.cache.set(ld_cache_bucket, ld_cache_identity, ld_instance)
     
-            if wn_min == 0:
-                wn_min = np.min(ld_instance.nu)
-            if wn_max == np.inf:
-                wn_max = np.max(ld_instance.nu)
+        if wn_min == 0:
+            wn_min = np.min(ld_instance.nu)
+        if wn_max == np.inf:
+            wn_max = np.max(ld_instance.nu)
     
         if self._ans_pseudo_continuum_file is None:
             pc_instance = AnsPseudoContinuumFile._get_null_data(
@@ -1576,10 +1588,14 @@ class AnsDatabase:
                 len(ambient_gasses),
             )
         else:
-            pc_cache_bucket = self.CONTINUUM_DATABASE
-            pc_cache_identity = (mol_id, iso_id, ld_instance.s_min, ld_instance.t_ref, *ambient_gasses)
-        
-            pc_instance = self.cache.get(pc_cache_bucket, pc_cache_identity, None)
+            pc_instance = None
+            
+            if self.cache is not None:
+                pc_cache_bucket = self.CONTINUUM_DATABASE
+                pc_cache_identity = (mol_id, iso_id, ld_instance.s_min, ld_instance.t_ref, *ambient_gasses)
+            
+                pc_instance = self.cache.get(pc_cache_bucket, pc_cache_identity, None)
+            
             if refresh or pc_instance is None or not wn_range_is_within((wn_min, wn_max), pc_instance.req_wn_range):
                 # Get continuum data. `pc_instance.s_min` should be less than or equal to `s_min`, if not satisfied return null data
                 pc_instance = self._ans_pseudo_continuum_file.get_data(
@@ -1591,7 +1607,8 @@ class AnsDatabase:
                         requested_wn_range = (wn_min, wn_max),
                     )
                 _lgr.debug(f'{pc_instance=}')
-                self.cache.set(pc_cache_bucket, pc_cache_identity, pc_instance)
+                if self.cache is not None:
+                    self.cache.set(pc_cache_bucket, pc_cache_identity, pc_instance)
         
         return ld_instance, pc_instance
     
@@ -1739,7 +1756,7 @@ class LineData_0:
         # Private attrs
         self._ID : int = INVALID_MOLECULE_ID
         self._ISO = None
-        self._ans_database : AnsDatabase = AnsDatabase(LINE_DATABASE, PARTITION_FUNCTION_DATABASE, CONTINUUM_DATABASE)
+        self._ans_database : AnsDatabase = AnsDatabase(LINE_DATABASE, PARTITION_FUNCTION_DATABASE, CONTINUUM_DATABASE, cache=cache)
         self._rt_gas_descs : None | tuple[RadtranGasDescriptor,...] = None 
         self._default_iso_abundances : None | np.ndarray = None,
         self._n_isos : None | int = None
@@ -1977,10 +1994,12 @@ class LineData_0:
         
         self.fetch_partition_fn(refresh=refresh)
     
-        #print(f'{self._params=}')
-        #print(f'{self.mol_ids=}')
-        #print(f'{self.iso_ids=}')
-
+        _lgr.debug(f'{self._params=}')
+        _lgr.debug(f'{self.mol_ids=}')
+        _lgr.debug(f'{self.iso_ids=}')
+        _lgr.debug(f'{self.cache=}')
+        
+        
         retrieved_from_cache = False # Flag
         
         if self.cache is not None:
