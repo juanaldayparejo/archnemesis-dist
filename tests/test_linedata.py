@@ -44,21 +44,20 @@ def test_lbl_calculation():
     temp = Spectroscopy.TEMP[itemp] ; press = Spectroscopy.PRESS[ipress]
     expected = Spectroscopy.K[:,ipress,itemp,0]
 
-    # NOTE: Need to know the exact values that the expected data was calculated
-    #       with. At the moment. I am guessing with `amb_frac`, `wn_calc_window`, `wn_approx_window`.
     k = LineData.add_monochromatic_absorption(
             wave_grid = Spectroscopy.WAVE,
             t_calc = temp,
             p_calc = press,
-            amb_frac = 0.028,
+            amb_frac = 1.0,
             wave_unit = Spectroscopy.ISPACE,
             lineshape_fn = ans.lineshape.voigt,
             wn_calc_window = 25.0, # (cm^{-1})
-            wn_approx_window = 75.0, # (cm^{-1})
+            wn_approx_window = 25.0, # (cm^{-1})
+            include_pressure_shift = False
     )
     
-    atol = np.quantile(expected, 0.5) * 1E-1 # Numpy default value is 1E-8 which is too large for small values
-    rtol = 0.5
+    atol = np.quantile(expected, 0.25) * 1E-1 # Numpy default value is 1E-8 which is too large for small values
+    rtol = 0.4
     
     if False: # Extra diagnostics. To use, just set `if False:` to `if True:`
         import matplotlib.pyplot as plt
@@ -70,7 +69,7 @@ def test_lbl_calculation():
         residual_pos = residual[residual>0]
         residual_neg = residual[residual<0]
         
-        plt.figure()
+        fig1 = plt.figure()
         plt.fill_between(Spectroscopy.WAVE, expected_tol_minus, expected_tol_plus, alpha=0.1, color='blue', label='Valid expected region')
         plt.plot(Spectroscopy.WAVE, expected, alpha=0.6, color='tab:blue', ls='--', label='expected')
         plt.plot(Spectroscopy.WAVE, k, alpha=0.6, color='tab:orange', ls=':', label='calculated {k}')
@@ -80,7 +79,7 @@ def test_lbl_calculation():
         plt.ylabel('LOG Absorption Coefficient (1 / [molec cm^{-2}])')
         plt.yscale('log')
         
-        plt.figure()
+        fig2 = plt.figure()
         plt.fill_between(Spectroscopy.WAVE, -tol, tol, alpha=0.1, color='blue', label='Valid expected region')
         plt.plot(Spectroscopy.WAVE, residual, alpha=0.6, color='tab:red', ls='-', label='residual {k-expected}')
         plt.legend()
@@ -88,7 +87,7 @@ def test_lbl_calculation():
         plt.xlabel('Wavenumber (cm^{-1})')
         plt.ylabel('Residual Absorption Coefficient (1 / [molec cm^{-2}])')
         
-        plt.figure()
+        fig3 = plt.figure()
         plt.fill_between(Spectroscopy.WAVE, 0, tol, alpha=0.1, color='blue', label='Valid expected region')
         plt.plot(Spectroscopy.WAVE[residual>0], residual_pos, alpha=1, color='tab:red', ls='none', marker='.', markersize=2, markeredgecolor='none', label='positive residual {k-expected}')
         plt.plot(Spectroscopy.WAVE[residual<0], -1*residual_neg, alpha=1, color='tab:purple', ls='none', marker='.', markersize=2, markeredgecolor='none', label='negative residual {k-expected}')
@@ -98,7 +97,7 @@ def test_lbl_calculation():
         plt.ylabel('Magnitude of Residual Absorption Coefficient (1 / [molec cm^{-2}])')
         plt.yscale('log')
         
-        plt.figure()
+        fig4 = plt.figure()
         plt.fill_between(Spectroscopy.WAVE, -tol/expected, +tol/expected, alpha=0.1, color='blue', label='Valid expected region')
         plt.plot(Spectroscopy.WAVE, residual / expected, alpha=0.6, color='tab:red', ls='-', label='fractional residual {(k-expected)/expected}')
         plt.legend()
@@ -107,6 +106,10 @@ def test_lbl_calculation():
         plt.ylabel('Fractional Residual of Absorption Coefficient (RATIO)')
         
         plt.show()
+        fig1.savefig('comparison.png', dpi=300, bbox_inches='tight')
+        fig2.savefig('residual.png', dpi=300, bbox_inches='tight')
+        fig3.savefig('residual_magnitude.png', dpi=300, bbox_inches='tight')
+        fig4.savefig('fractional_residual.png', dpi=300, bbox_inches='tight')
 
     assert np.allclose(k, expected, atol=atol, rtol=rtol)
     

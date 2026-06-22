@@ -103,11 +103,11 @@ class AnsLineDataFile(AnsDatabaseFile):
 				target_grp = x_grp[s_path]
 				for mol_grp_name, mol_grp in target_grp.items():
 					for iso_grp_name, iso_grp in mol_grp.items():
-						print(f'{mol_grp_name=} {iso_grp_name=}')
+						#print(f'{mol_grp_name=} {iso_grp_name=}')
 						
 						iso_grp_src_list = []
 						for leaf_grp_name, leaf_grp in iso_grp.items():
-							print(f'{leaf_grp_name=}')
+							#print(f'{leaf_grp_name=}')
 							if leaf_grp_name.startswith(self.leaf_group_prefix) and isinstance(leaf_grp, h5py.Group):
 								iso_grp_src_list.append(
 									(
@@ -435,6 +435,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 			x_grp, # group to search within, often ".../mol/iso/leaf_group_XXXX"
 			on_missing_broadener : Literal['ignore', 'warn', 'error'] = 'error',
 	) -> h5py.Group:
+
 		if 'broadeners' not in x_grp:
 			match on_missing_broadener:
 				case 'ignore':
@@ -444,7 +445,9 @@ class AnsLineDataFile(AnsDatabaseFile):
 					return None
 				case _:
 					raise KeyError(f'HDF5 file "{x_grp.file.filename}" does not have a "{x_grp.name}/broadeners" group')
-	
+
+		return x_grp['broadeners']
+
 	def _get_single_broadener_grp(
 			self,
 			x_grp, # group to search within, often ".../mol/iso/leaf_group_XXXX/broadeners"
@@ -460,6 +463,9 @@ class AnsLineDataFile(AnsDatabaseFile):
 					return None
 				case _:
 					raise KeyError(f'HDF5 file "{x_grp.file.filename}" does not have a "{x_grp}/{ambient_gas_name}" group')
+		
+		return x_grp[ambient_gas_name] 
+
 
 	def get_data(
 			self, 
@@ -490,7 +496,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 			on_missing_iso : Literal['ignore', 'warn', 'error'] = 'warn',
 			on_missing_broadener : Literal['ignore', 'warn', 'error'] = 'error',
 	) -> LineSetData:
-		print('AnsLineDataFile::get_data(...)')
+		#print('AnsLineDataFile::get_data(...)')
 	
 		if ambient_gasses is None:
 			ambient_gasses = tuple()
@@ -501,7 +507,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 		
 		line_fields_to_populate = tuple(x for x in LineSetData._fields if x in LineDataRecordLayout.attrs())
 		broadener_felds_to_populate = tuple(x for x in LineSetData._fields if x in LineBroadenerRecordLayout.attrs())
-		
+
 		with self.open('r'):
 			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_target, on_missing_mol, on_missing_iso)
 			if iso_grp is None:
@@ -512,7 +518,7 @@ class AnsLineDataFile(AnsDatabaseFile):
 			mask = None
 			
 			target_line_set_params = (s_min, temperature)
-			print(f'AnsLineDataFile :: {target_line_set_params=}')
+			#print(f'AnsLineDataFile :: {target_line_set_params=}')
 			
 			leaf_grp_name, leaf_grp, leaf_grp_parameters = self._select_best_leaf_grp_for_parameters(
 				*target_line_set_params,
@@ -524,9 +530,6 @@ class AnsLineDataFile(AnsDatabaseFile):
 				n_lines = np.count_nonzero(mask)
 				#print(f'{mol_name=} {local_iso_id=} {n_lines=}')
 				if n_lines > 0:
-					#print(f'{leaf_grp_parameters=}')
-					#print(f'{line_fields_to_populate=}')
-					#print(f'{broadener_felds_to_populate=}')
 					result = LineSetData(
 						leaf_grp_parameters[0],
 						leaf_grp_parameters[1],
@@ -535,8 +538,9 @@ class AnsLineDataFile(AnsDatabaseFile):
 						*(leaf_grp[x][mask] for x in line_fields_to_populate),
 						*(np.empty((n_lines, n_ambient_gasses), dtype=LineBroadenerRecordLayout.type(x)) for x in broadener_felds_to_populate)
 					)
-					
+
 					b_grp = self._get_broadeners_grp(leaf_grp, on_missing_broadener)
+
 					if b_grp is None:
 						for name in broadener_felds_to_populate:
 							getattr(result, name).fill(self.default_broadening_values[name])

@@ -165,6 +165,7 @@ def lorentz_width(
     """
     Computes Half-width-half-maximum (HWHM) of pressure broadening component
     """
+
     for i in prange(broadening_params.shape[1]):
         gamma_combined = 0
         for j in prange(mol_mix_frac.shape[0]):
@@ -820,7 +821,7 @@ class LineSetSpecData:
         wn_calc_window : float = 25.0, # (cm^{-1})
         wn_approx_window : float = 75.0, # (cm^{-1})
         wn_calc_range : None | tuple[float,float] = None,
-        include_pressure_shift : bool = False,
+        include_pressure_shift : bool = True,
         use_cache : bool = True,
     ) -> np.ndarray:
         if out is None:
@@ -2199,7 +2200,7 @@ class LineData_0:
             
             include_lines : bool = True,
             include_continuum : bool = True,
-            include_pressure_shift : bool = False,
+            include_pressure_shift : bool = True,
             combined_output : bool = True,
             use_cache : bool = True,
     ) -> np.ndarray:
@@ -2253,7 +2254,7 @@ class LineData_0:
             
             include_lines : bool = True,
             include_continuum : bool = True,
-            include_pressure_shift : bool = False,
+            include_pressure_shift : bool = True,
             use_cache : bool = True,
     ) -> np.ndarray:
         
@@ -2269,12 +2270,13 @@ class LineData_0:
             store = np.empty((4, self.max_lines_or_bins), dtype=float)
         
         
-        # Handle wave units
+        #Converting spectral array to wavenumbers in cm-1
         if wave_unit != ans.enum.WaveUnitEnum.Wavenumber_cm:
             wn_grid = WavePoint(wave_grid, wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value
         else:
             wn_grid = wave_grid
         
+        #Calculating the spectral range required to perform the calculations
         if wave_calc_range is None:
             wn_calc_range = (np.min(wn_grid) - 2*wn_approx_window, np.max(wn_grid) + 2*wn_approx_window)
         elif wave_unit != ans.enum.WaveUnitEnum.Wavenumber_cm:
@@ -2288,7 +2290,7 @@ class LineData_0:
         else:
             raise RuntimeError('`wave_grid` passed to LineData_0::monochromatic_absorption(...) must be either ascending or decending.')
         
-        # create array that holds mixing fractions for self as well as ambient gasses
+        #Calculating the relative abundances of self and ambient gases
         if isinstance(amb_frac, float):
             mol_mix_frac = np.array([1-amb_frac, amb_frac], dtype=float)
         else:
@@ -2305,6 +2307,7 @@ class LineData_0:
         else:
             assert self.n_isos == isotopic_abundance.shape[0], "If provided, there must be an isotopic abundance for each isotopologue in the LineData_0 instance"
         
+        #Debugging statements
         if _lgr.level <= logging.DEBUG:
             msg = '## ARGUMENTS ##' +'\n\t'.join((
                 f'{wave_grid=}',
@@ -2326,7 +2329,7 @@ class LineData_0:
             )) + '##-----------##'
             _lgr.debug(msg)
         
-        
+        #Defining the array where the results will be stored
         if out.ndim >= 2:
             out_line_set_abs = out[0]
             out_continuum_abs = out[1]
@@ -2336,8 +2339,14 @@ class LineData_0:
         
         # Loop over all line data and add monochromatic absorption to `out`
         for i, (iso_line_data, iso_continuum_data) in enumerate(zip(self.line_data, self.continuum_data)):
+
+
             _lgr.debug(f'{i=} {iso_line_data._data.shape=} iso_continuum_data._data.shape={iso_continuum_data._data.shape if iso_continuum_data is not None else "None"}')
             
+            #Defining the characteristics of the output array
+            #   If 1 dimension will add all absorption to same array.  (NWAVE)
+            #   If 2 will split line absorption and continuum absorption.  (2,NWAVE)
+            #   If 3 will split line absorption and continuum absorption, and split by isotopologue. (2,NISO,NWAVE)
             if out.ndim < 3:
                 out_line_set_abs_i = out_line_set_abs
                 out_continuum_abs_i = out_continuum_abs
@@ -2348,6 +2357,8 @@ class LineData_0:
             else:
                 raise RuntimeError(f'`out` must have 1, 2 or 3 dimensions ({out.ndim=}). If 1 dimension will add all absorption to same array. If 2 will split line absorption and continuum absorption. If 3 will split line absorption and continuum absorption, and split by isotopologue.')
             
+            #Performing the line-by-line spectroscopic calculations
+            #This is the formulation from HITRAN
             if include_lines:
                 iso_line_data.add_monochromatic_absorption(
                     wn_grid, #[N_waves]
@@ -2369,6 +2380,9 @@ class LineData_0:
                     use_cache=use_cache,
                 )
             
+            #Including pseudo-continuum absorption from superposition of weak lines
+            #This is the formulation from Irwin+19
+            #Here, however, the pseudo-continuum is often pre-computed in the HDF5 database
             if include_continuum:
                 _lgr.debug(f'{iso_continuum_data=}')
                 iso_continuum_data.add_monochromatic_absorption(
@@ -2390,10 +2404,182 @@ class LineData_0:
                     use_cache=use_cache,
                 )
             
-        
         return result # This should be a view of `out`
 
     def plot_linedata(
+            self, 
+            logscale : bool = True, 
+            scatter_style_kw : dict[str,Any] = {},
+            line_style_kw : dict[str,Any] = {},
+            ax_style_kw : dict[str,Any] = {},
+            legend_style_kw : dict[str,Any] = {},
+    ) -> None:
+        """
+        Create diagnostic plots of the line data.
+        
+        ## ARGUMENTS ##
+        
+            smin : float = 1E-32
+                Minimum line strength to plot.
+                
+            logscale : bool = True
+                If True, the y-axis will be in logarithmic scale, else will be linear.
+            
+            scatter_style_kw : dict[str,Any] = {}
+                Dictionary to pass to scatter plots that will set style parameters (e.g. `s` for size, `edgecolor`, `linewidth`,...)
+                
+            ax_style_kw : dict[str,Any] = {},
+                Dictionary to pass to axes that will set style parameters (e.g. `facecolor`,...)
+                
+            legend_style_kw : dict[str,Any] = {},
+                Dictionary to pass to legend that will set style parameters (e.g. `fontsize`, `title_fontsize`, ...)
+        """
+        
+        if self.line_data is None:
+            raise RuntimeError(f'No line data ready in {self}')
+        
+        scatter_style_defaults = dict(
+            s = 2,
+            marker='.',
+            edgecolor = 'none',
+            alpha=0.6,
+        )
+        scatter_style_defaults.update(scatter_style_kw)
+        
+        line_style_defaults = dict(
+            linewidth=1,
+            alpha=0.5,
+        )
+        line_style_defaults.update(line_style_kw)
+        
+        ax_style_defaults = dict(
+            facecolor='#F8F8F8'
+        )
+        ax_style_defaults.update(ax_style_kw)
+        
+        legend_style_defaults = dict(
+            fontsize = 10,
+            title_fontsize=12
+        )
+        legend_style_defaults.update(legend_style_kw)
+        
+        f, ax_array = plt.subplots(
+            self.n_isos+1,1, 
+            figsize=(12,4*(self.n_isos+1)), 
+            gridspec_kw={'hspace':0.3},
+            squeeze=False
+        )
+        ax_array = ax_array.flatten()
+        
+        combined_ax = ax_array[0]
+        combined_ax.set_title('Line data for '+ans.Data.gas_data.id_to_name(self.ID,self.ISO))
+        
+        line_strengths_max = 0.0
+        line_strengths_min = np.inf
+        
+        for i, iso_line_data in enumerate(self.line_data):
+
+            if iso_line_data.has_data:
+                ls_max = iso_line_data.SW.max()
+                ls_min = iso_line_data.SW[iso_line_data.SW>0].min()
+                line_no_data_str = ''
+            else:
+                ls_max = 0
+                ls_min = np.inf
+                line_no_data_str = ''
+                        
+            line_strengths_max = ls_max if ls_max > line_strengths_max else line_strengths_max
+            line_strengths_min = ls_min if ((ls_min < line_strengths_min) and (ls_min > 0)) else line_strengths_min
+            
+            try:
+                gas_name_latex = ans.Data.gas_data.molecule_to_latex(iso_line_data.rt_gas_desc.isotope_name)
+            except KeyError:
+                gas_name_latex = r'\text{UNKNOWN GAS ISOTOPE}'
+            
+            # Combined plot, all isotopes on one figure, coloured by isotope
+            combined_ax.scatter(
+                iso_line_data.NU,
+                iso_line_data.SW,
+                label=f'${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){line_no_data_str}',
+                zorder = i,
+                **scatter_style_defaults
+            )
+                    
+        lgnd = combined_ax.legend(
+            loc='upper left', 
+            bbox_to_anchor=(1.01, 1.05),  # Shift legend to the right
+            title='Isotope', 
+            **legend_style_defaults
+        )
+        for hdl in lgnd.legend_handles:
+            if isinstance(hdl, mpl.collections.PathCollection):
+                hdl.set_sizes([50.0])
+            else:
+                pass
+        
+        if np.isinf(line_strengths_min):
+            line_strengths_min = 1E-25
+        if line_strengths_max == 0:
+            line_strengths_max = 1E-15
+        
+        if logscale:
+            combined_ax.set_yscale('log')
+            combined_ax.set_ylim(line_strengths_min, line_strengths_max * 10)
+        
+        combined_ax.set_xlabel('Wavenumber (cm$^{-1}$)')
+        combined_ax.set_ylabel('Line strength (cm$^{-1}$ / (molec cm$^{-2}$))')
+        combined_ax.set(**ax_style_defaults)
+    
+        for i, iso_line_data in enumerate(self.line_data):
+            ax = ax_array[i+1]
+            
+            try:
+                gas_name_latex = ans.Data.gas_data.molecule_to_latex(iso_line_data.rt_gas_desc.isotope_name)
+            except KeyError:
+                gas_name_latex = r'\text{UNKNOWN GAS ISOTOPE}'
+            
+            
+            if iso_line_data.has_data:
+                line_no_data_str = ''
+            else:
+                line_no_data_str = ' [NO LINE DATA]'
+            
+            ax.set_title(
+                f'Line data ${gas_name_latex}$ (ID={int(iso_line_data.rt_gas_desc.gas_id)}, ISO={iso_line_data.rt_gas_desc.iso_id}){line_no_data_str}'
+                )
+            
+            
+            # Plots for specific isotopes, coloured by lower energy state
+            
+            p1 = ax.scatter(
+                iso_line_data.NU,
+                iso_line_data.SW,
+                c = iso_line_data.ELOWER,
+                cmap = 'turbo',
+                vmin = 0,
+                **scatter_style_defaults
+            )
+                        
+            # Create a colourbar axes on the right side of ax.
+            x_pad = 0.01
+            x0, y0, w, h = ax.get_position().bounds
+            x1 = x0+w+x_pad
+            cax = f.add_axes([x1,y0,0.25*(1-x1),h])
+            cbar = plt.colorbar(p1, cax=cax)
+            cbar.set_label('Lower state energy (cm$^{-1}$)')
+        
+            if logscale:
+                ax.set_yscale('log')
+                ax.set_ylim(line_strengths_min, line_strengths_max * 10)
+            ax.set_xlabel('Wavenumber (cm$^{-1}$)')
+            ax.set_ylabel('Line strength (cm$^{-1}$ / (molec cm$^{-2}$))')
+            ax.set(**ax_style_defaults)
+
+        plt.tight_layout()
+
+
+
+    def plot_continuumdata(
             self, 
             logscale : bool = True, 
             scatter_style_kw : dict[str,Any] = {},
@@ -2604,12 +2790,6 @@ class LineData_0:
             ax.set_xlabel('Wavenumber (cm$^{-1}$)')
             ax.set_ylabel('Line strength (cm$^{-1}$ / (molec cm$^{-2}$))')
             ax.set(**ax_style_defaults)
-
-
-
-
-
-
 
 
 
