@@ -905,18 +905,18 @@ class Spectroscopy_0:
 
                         for igas in range(self.NGAS):
                             pf_dbase, ld_dbase, pc_dbase = self.LOCATION_PF[igas], self.LOCATION_LD[igas], self.LOCATION_CD[igas]
+
                             self.LINE_DATA.append(
                                 ans.LineData_0(
                                     self.ID[igas], #ID of the gas
                                     self.ISO[igas], #Isotope ID of the gas
                                     ambient_gasses = self.LINE_DATA_PARAMS[igas].amb_gas,
                                     LINE_DATABASE=ld_dbase,
-                                    CONTINUUM_DATABASE=pc_dbase,
+                                    CONTINUUM_DATABASE=None,   #Setting to None until error in LineData is fixed
                                     PARTITION_FUNCTION_DATABASE=pf_dbase,
                                 )
                             )
                             self.LINE_DATA[igas].fetch_partition_fn() # May as well get this now as we will always want it
-                        
                         
                     else:
                         LOCATION1 = h5py_helper.retrieve_data(f, name+'/LOCATION', default=tuple())
@@ -1466,10 +1466,8 @@ class Spectroscopy_0:
         
         _lgr.info('Reading tables')
         
-        if self.LOCATION is None:
-            raise ValueError('error in Spectroscopy.read_tables() :: LOCATION is not defined')
-        
         if self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
+
             if not hasattr(self, 'LINE_DATA'):
                 raise AttributeError('Line-by-line RUNTIME calculation requires `LINE_DATA` attribute to already be created when reading tables.')
             
@@ -1479,18 +1477,19 @@ class Spectroscopy_0:
             self.DELG = np.array([1.0])
             
             for igas in range(len(self.ID)):
-                _lgr.info(f'Reading table {self.LOCATION[igas]=} {wavemin=} {wavemax=}')
+                _lgr.info(f'Reading table {self.LOCATION_LD[igas]=} {wavemin=} {wavemax=}')
                 self.LINE_DATA[igas].set_params(
                     vmin = wavemin, 
                     vmax = wavemax,
+                    wave_unit = self.ISPACE,
                     s_min = self.LINE_DATA_PARAMS[igas].s_min,
-                )
-                self.LINE_DATA[igas].fetch_linedata()
-            
+                ).fetch_linedata()
+
             return
         
-        
-            
+        if self.LOCATION is None:
+            raise ValueError('error in Spectroscopy.read_tables() :: LOCATION is not defined')
+
         if self.WAVE is None:
             #In this case the headers have not been read so we need to read them
             self.read_header()
@@ -2106,16 +2105,13 @@ class Spectroscopy_0:
         assert np.all(np.sum(amb_frac, axis=-1) >= 0), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
         assert np.all(np.sum(amb_frac, axis=-1) <= 1), f"amb_frac must sum to between 0 and 1 for all gasses {np.sum(amb_frac, axis=0)=}"
             
-
         #Calculating the line-by-line cross sections for each gas and each p-T point
         k = np.zeros((nwave, npoints, self.NGAS))
-        store = np.empty((4, max(x.max_lines_or_bins for x in self.LINE_DATA)), dtype=float)
         for igas in range(self.NGAS):
             
             _lgr.info(f'{self.LINE_DATA[igas]=}')
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
 
-            store = np.empty((4, self.LINE_DATA[igas].max_lines_or_bins), dtype=float)
             line_data_params = self.LINE_DATA_PARAMS[igas]
             lineshape_fn = SpectroscopicLineProfileEnum_to_lineshape_fn(line_data_params.lineshape)
 
