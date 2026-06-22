@@ -52,6 +52,7 @@ from archnemesis.database.filetypes.ans_line_data_file import AnsLineDataFile
 from archnemesis.database.filetypes.ans_partition_fn_data_file import AnsPartitionFunctionDataFile
 from archnemesis.database.filetypes.ans_pseudo_continuum_file import AnsPseudoContinuumFile
 
+from archnemesis.Data.path_data import archnemesis_path 
 
 # Logging
 import logging
@@ -1727,7 +1728,7 @@ class LineData_0:
             ISO : int = 0,
             ambient_gasses : ans.enum.AmbientGasEnum | tuple[ans.enum.AmbientGasEnum,...] = (ans.enum.AmbientGasEnum.AIR,),
             LINE_DATABASE : None | str = None,
-            PARTITION_FUNCTION_DATABASE : None | str = None,
+            PARTITION_FUNCTION_DATABASE : None | str = archnemesis_path()+'/archnemesis/Data/partition_functions/tips2025.h5',
             CONTINUUM_DATABASE : None | str = None,
             cache : None | Cache = _MODULE_CACHE,
     ):
