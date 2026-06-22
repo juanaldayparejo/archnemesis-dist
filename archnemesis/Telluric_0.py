@@ -317,7 +317,7 @@ class Telluric_0:
         #Reading the VMRs for CH4,CO2,CO and N2O
         ############################################################################################
         
-        Atmosphere_CIRC = Atmosphere_0(runname=archnemesis_path()+'archnemesis/Data/reference_profiles/earth_circ_case1')
+        Atmosphere_CIRC = Atmosphere_0(runname=archnemesis_path()+'/archnemesis/Data/reference_profiles/earth_circ_case1')
         Atmosphere_CIRC.read_ref()
         
         ico2 = np.where(Atmosphere_CIRC.ID==2)[0][0]
@@ -387,7 +387,7 @@ class Telluric_0:
         #Reading the VMRs for CH4,CO2,CO and N2O
         ############################################################################################
         
-        Atmosphere_CIRC = Atmosphere_0(runname=archnemesis_path()+'archnemesis/Data/reference_profiles/earth_circ_case1')
+        Atmosphere_CIRC = Atmosphere_0(runname=archnemesis_path()+'/archnemesis/Data/reference_profiles/earth_circ_case1')
         Atmosphere_CIRC.read_ref()
         
         self.Atmosphere = Atmosphere_CIRC
