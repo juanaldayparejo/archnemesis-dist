@@ -486,7 +486,7 @@ class Telluric_0:
                 IGAS = self.Atmosphere.locate_gas(self.Spectroscopy.ID[i],self.Spectroscopy.ISO[i])
 
                 #Calculating vertical column density in each self.LayerX
-                VLOSDENS = Layer.AMOUNT[:,IGAS].T * 1.0e-24   #m-2
+                VLOSDENS = Layer.AMOUNT[:,IGAS].T * 1.0e-4   #m-2
 
                 #Calculating vertical opacity for each gas in each self.LayerX
                 TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
