@@ -655,6 +655,7 @@ class Spectroscopy_0:
                 LINE_DATABASE=fpath_ld,
                 CONTINUUM_DATABASE=fpath_pc,
                 PARTITION_FUNCTION_DATABASE=fpath_pf,
+                #cache=None,
             )
         )
         
@@ -912,8 +913,9 @@ class Spectroscopy_0:
                                     self.ISO[igas], #Isotope ID of the gas
                                     ambient_gasses = self.LINE_DATA_PARAMS[igas].amb_gas,
                                     LINE_DATABASE=ld_dbase,
-                                    CONTINUUM_DATABASE=None,   #Setting to None until error in LineData is fixed
+                                    CONTINUUM_DATABASE=pc_dbase,   #Setting to None until error in LineData is fixed
                                     PARTITION_FUNCTION_DATABASE=pf_dbase,
+                                    #cache=None,
                                 )
                             )
                             self.LINE_DATA[igas].fetch_partition_fn() # May as well get this now as we will always want it
@@ -2079,16 +2081,16 @@ class Spectroscopy_0:
 
         """
         
-        _lgr.info(f'{npoints=}')
-        _lgr.info(f'{press=}')
-        _lgr.info(f'{temp=}')
-        _lgr.info(f'{amb_frac=}')
-        _lgr.info(f'{wave=}')
+        _lgr.debug(f'{npoints=}')
+        _lgr.debug(f'{press=}')
+        _lgr.debug(f'{temp=}')
+        _lgr.debug(f'{amb_frac=}')
+        _lgr.debug(f'{wave=}')
         
-        _lgr.info(f'{self.ID=}')
-        _lgr.info(f'{self.ISO=}')
-        _lgr.info(f'{len(self.LINE_DATA)=}')
-        _lgr.info(f'{self.NGAS=}')
+        _lgr.debug(f'{self.ID=}')
+        _lgr.debug(f'{self.ISO=}')
+        _lgr.debug(f'{len(self.LINE_DATA)=}')
+        _lgr.debug(f'{self.NGAS=}')
 
         #Defining the wavelengths at which to calculate the cross sections
         if wave is None:
@@ -2109,7 +2111,7 @@ class Spectroscopy_0:
         k = np.zeros((nwave, npoints, self.NGAS))
         for igas in range(self.NGAS):
             
-            _lgr.info(f'{self.LINE_DATA[igas]=}')
+            _lgr.debug(f'{self.LINE_DATA[igas]=}')
             _lgr.info(f'Gas {self.ID[igas]}, Isotope {self.ISO[igas]} - Calculating line-by-line cross sections at runtime...')
 
             line_data_params = self.LINE_DATA_PARAMS[igas]
@@ -2119,11 +2121,11 @@ class Spectroscopy_0:
                 p_l = press[ipoint]
                 t_l = temp[ipoint]
 
-                self.LINE_DATA[igas].add_monochromatic_absorption(
-                    wave_grid=wave,             # wavenumbers or wavelengths
-                    t_calc=t_l,               # kelvin
-                    p_calc=p_l,              # Atmospheres
-                    wave_unit=self.ISPACE,  # unit of `waves` argument
+                k[:,ipoint,igas]= self.LINE_DATA[igas].calculate_monochromatic_absorption(
+                    wave_grid=wave,            # wavenumbers or wavelengths
+                    t_calc=t_l,                # kelvin
+                    p_calc=p_l,                # Atmospheres
+                    wave_unit=self.ISPACE,     # unit of `waves` argument
                     lineshape_fn=lineshape_fn, # lineshape function to use
                     amb_frac = amb_frac[igas] if amb_frac.ndim == 2 else amb_frac,
                     
@@ -2136,9 +2138,6 @@ class Spectroscopy_0:
                     include_continuum = line_data_params.include_continuum,
                     include_pressure_shift=line_data_params.include_pressure_shift, # whether to include pressure shift in the line positions
                     use_cache = line_data_params.use_cache,
-                    
-                    store = None,
-                    out = k[:,ipoint,igas],
                 )
 
         return k
