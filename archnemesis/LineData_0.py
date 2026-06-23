@@ -787,6 +787,13 @@ class LineSetSpecData:
         """
         return self._data[8:]
     
+    @property
+    def ALL_BROADENING_PARAMS(self):
+        """
+        (gamma, n, delta) for "self" and each ambient gas
+        """
+        return self._data[5:]
+    
     def cache_identity(self):
         return (
             self.s_min,
@@ -831,7 +838,7 @@ class LineSetSpecData:
             wn_grid.flags.writeable = False
             mol_mix_frac.flags.writeable = False
             
-            result_bucket = 'add_monochromatic_absorption'
+            result_bucket = (self.__class__.__name__, 'add_monochromatic_absorption')
             result_identity = (
                 self.cache_identity(),
                 hash(bytes(wn_grid.data)),
@@ -904,7 +911,7 @@ class LineSetSpecData:
         result = None
         
         if use_cache:
-            result_bucket = 'get_line_strength'
+            result_bucket = (self.__class__.__name__, 'get_line_strength')
             result_identity = (wn_calc_range, t_calc, self.cache_identity())
             result = self._result_cache.get(result_bucket, result_identity, None)
         
@@ -940,7 +947,7 @@ class LineSetSpecData:
         result = None
         
         if use_cache:
-            result_bucket = 'get_doppler_width'
+            result_bucket = (self.__class__.__name__, 'get_doppler_width')
             result_identity = ( wn_calc_range, t_calc, self.cache_identity())
             result = self._result_cache.get(result_bucket, result_identity, None)
         
@@ -976,7 +983,7 @@ class LineSetSpecData:
         result = None
         
         if use_cache:
-            result_bucket = 'get_lorentz_width'
+            result_bucket = (self.__class__.__name__, 'get_lorentz_width')
             result_identity = ( wn_calc_range, t_calc, p_calc, *mol_mix_frac, self.cache_identity())
             result = self._result_cache.get(result_bucket, result_identity, None)
         
@@ -985,9 +992,9 @@ class LineSetSpecData:
             
             if wn_calc_range is not None:
                 wn_mask = wn_calc_range[0] <= self.NU & self.NU <= wn_calc_range[1]
-                data = self._data[5:,wn_mask]
+                data = self.ALL_BROADENING_PARAMS[:,wn_mask]
             else:
-                data = self._data[5:]
+                data = self.ALL_BROADENING_PARAMS
             
             lorentz_width(
                 self.t_ref / t_calc,
@@ -1050,7 +1057,6 @@ class CombinedLineSetSpecData:
         instance = cls(len(ld_list), _id_data=id_data, _data = data)
         
         return instance
-        
     
     @property
     def ID(self):
@@ -1196,12 +1202,26 @@ class PseudoContSpecData:
         return self._data[3]
     
     @property
+    def WAVE_AND_LINE_DATA(self):
+        """
+        (wn_bin_center, wn_bin_width, line_strength_sum, lsw_mean_lower_state_energy)
+        """
+        return self._data[:4]
+    
+    @property
     def SELF_BROADENING_LSW_PARAMS(self):
         return self._data[4:7]
     
     @property
     def FOREIGN_BROADENING_LSW_PARAMS(self):
         return self._data[7:]
+    
+    @property
+    def ALL_BROADENING_LSW_PARAMS(self):
+        """
+            (gamma, n, delta) for "self" and ambient gasses
+        """
+        return self._data[4:]
     
     @property
     def has_data(self):
@@ -1302,7 +1322,7 @@ class PseudoContSpecData:
             wn_grid.flags.writeable = False
             mol_mix_frac.flags.writeable = False
             
-            result_bucket = 'add_monochromatic_absorption'
+            result_bucket = (self.__class__.__name__, 'add_monochromatic_absorption')
             result_identity = (
                 self.cache_identity(),
                 hash(bytes(wn_grid.data)),
@@ -1347,8 +1367,8 @@ class PseudoContSpecData:
             isotopic_abundance,
             self._molecular_mass,
             mol_mix_frac,
-            self._data[4:, wn_mask], # self and non-self broadening
-            *self._data[:4, wn_mask],
+            self.ALL_BROADENING_LSW_PARAMS[:, wn_mask], # self and non-self broadening
+            *self.WAVE_AND_LINE_DATA[:, wn_mask],
             out = out,
             
             store = store,
@@ -1446,7 +1466,7 @@ class AnsDatabase:
     ) -> PFList:
         pf_instance = None
         if self.cache is not None:
-            pf_cache_bucket = self.PARTITION_FUNCTION_DATABASE
+            pf_cache_bucket = (self.PARTITION_FUNCTION_DATABASE, 'partition_function')
             pf_cache_identity = (mol_id, iso_id)
             
             pf_instance = self.cache.get(pf_cache_bucket, pf_cache_identity, None)
@@ -1551,7 +1571,7 @@ class AnsDatabase:
         
         if self.cache is not None:
             # build data group
-            ld_cache_bucket = self.LINE_DATABASE
+            ld_cache_bucket = (self.LINE_DATABASE, 'line_data')
             ld_cache_identity = (mol_id, iso_id, s_min, temperature, *ambient_gasses)
             
             ld_instance = self.cache.get(ld_cache_bucket, ld_cache_identity, None)
@@ -1587,7 +1607,7 @@ class AnsDatabase:
             pc_instance = None
             
             if self.cache is not None:
-                pc_cache_bucket = self.CONTINUUM_DATABASE
+                pc_cache_bucket = (self.CONTINUUM_DATABASE, 'pseudo_continuum')
                 pc_cache_identity = (mol_id, iso_id, ld_instance.s_min, ld_instance.t_ref, *ambient_gasses)
             
                 pc_instance = self.cache.get(pc_cache_bucket, pc_cache_identity, None)
