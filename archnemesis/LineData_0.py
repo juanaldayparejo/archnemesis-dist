@@ -205,6 +205,7 @@ def line_strength(
 ):
     boltz_const_factor = Data.constants.c2_cgs * (t_calc - t_ref)/(t_calc*t_ref)
     for i in prange(nu.shape[0]):
+        
         out[i] = (
             sw[i]
             * ((1 - np.exp(-Data.constants.c2_cgs * nu[i] / t_calc)) / stimulated_emission_at_t_ref[i]) # stimulated_emission
@@ -424,7 +425,7 @@ def add_pseudo_continuum_monochromatic_spectrum(
             k = n_neighbour_bins + delta_k
             ii = i + delta_k
         
-            if 0 <= ii and ii < wn_bin_centers.shape[0]:
+            if 0 <= ii and ii < wn_bin_centers.shape[0] and lineshape_sum != 0:
                 store_x[ii] += strength_sum[i] * store_y[k] / lineshape_sum
     
     for i in range(wn_bin_centers.shape[0]):
@@ -497,7 +498,7 @@ def add_pseudo_continuum_monochromatic_absorption(
         n_neighbour_bins : int = 3,
 ):
     if store is None:
-        store = np.empty((3,wn_bin_centers.shape[0]), dtype=float)
+        store = np.zeros((3,wn_bin_centers.shape[0]), dtype=float)
     if store_x is None:
         store_x = np.zeros((wn_bin_centers.shape[0],), dtype=float)
     if store_y is None:
@@ -1159,7 +1160,7 @@ class PseudoContSpecData:
             + pseudo_continuum_data.line_strength_weighted_gamma_amb.shape[1]*3 # (lsw_gamma_amb, lsw_n_amb, lsw_delta_amb) for x ambient gasses
         )
         if self._data is None or self._data.shape != (m,n):
-            self._data = np.empty((m,n), dtype=float)
+            self._data = np.zeros((m,n), dtype=float)
         
         self.WN_BIN_CENTER[...] = pseudo_continuum_data.wn_bin_center
         self.WN_BIN_WIDTH[...] = pseudo_continuum_data.wn_bin_width
@@ -1268,15 +1269,19 @@ class PseudoContSpecData:
         # NOTE: We need to use bin edges as otherwise there is a degeneracy between things in 0th bin and
         # things to the left of 0th bin. However, we must then subtract 1 from the index.
         ls_idxs = np.digitize(line_set_data.NU, bin_edges, right=False) - 1
-        ls_mask = (line_strength <= s_max) & (ls_idxs > 0) & (ls_idxs < bin_edges.shape[0])
+        ls_mask = (line_strength <= s_max) & (ls_idxs > 0) & (ls_idxs < (self._data.shape[1]))
     
         for i in np.flatnonzero(ls_mask):
             self.LINE_STRENGTH_SUM[ls_idxs[i]] += line_strength[i]
-            self.LSW_MEAN_LOWER_STATE_ENERGY[ls_idxs[i]] += line_set_data.ELOWER[i]
-            self.SELF_BROADENING_LSW_PARAMS[:,ls_idxs[i]] += line_set_data.SELF_BROADENING_PARAMS[:,i]
-            self.FOREIGN_BROADENING_LSW_PARAMS[:,ls_idxs[i]] += line_set_data.FOREIGN_BROADENING_PARAMS[:,i]
+            self.LSW_MEAN_LOWER_STATE_ENERGY[ls_idxs[i]] += (line_set_data.ELOWER[i]*line_strength[i])
+            self.SELF_BROADENING_LSW_PARAMS[:,ls_idxs[i]] += (line_set_data.SELF_BROADENING_PARAMS[:,i]*line_strength[i])
+            self.FOREIGN_BROADENING_LSW_PARAMS[:,ls_idxs[i]] += (line_set_data.FOREIGN_BROADENING_PARAMS[:,i]*line_strength[i])
         
-        self._data[3:] /= self._data[2:3] # divide by line strength sum to get "line strength weighted means" again
+        zero_mask = self._data[2]==0
+        self._data[3:, ~zero_mask] /= self._data[2:3, ~zero_mask] # divide by line strength sum to get "line strength weighted means" again
+        self._data[3:, zero_mask] = 0.0
+        
+        
         self.s_min = s_max
         
         self._data.flags.writeable=False
@@ -1284,6 +1289,8 @@ class PseudoContSpecData:
         
         line_set_data.remove_lines(ls_mask)
         line_set_data.s_min = s_max
+        
+        assert not np.any(np.isnan(self._data)), "No data should be NAN when adding lines to PseudoContSpecData"
     
     def add_monochromatic_absorption(
         self,
@@ -1343,7 +1350,7 @@ class PseudoContSpecData:
         
         
         if store is None:
-            store = np.empty((3,self.WN_BIN_WIDTH.shape[0]), dtype=float)
+            store = np.zeros((3,self.WN_BIN_WIDTH.shape[0]), dtype=float)
         if store_x is None:
             store_x = np.zeros((self.WN_BIN_WIDTH.shape[0],), dtype=float)
         if store_y is None:
@@ -1619,6 +1626,7 @@ class AnsDatabase:
                         local_iso_id = iso_id,
                         temperature = ld_instance.t_ref, # try to match temperature to `ld_instance` if possible
                         s_max = ld_instance.s_min if s_min <= 0 else s_min, # in special cases, match to `ld_instance`, otherwise use passed value
+                        s_max_null = ld_instance.s_min, # always match to `ld_instance` when returning null data
                         ambient_gasses = ambient_gasses,
                         requested_wn_range = (wn_min, wn_max),
                     )
@@ -2061,12 +2069,18 @@ class LineData_0:
             # as any instance of LineData_0 only everh as one molecule
             
             for i, ((mol_id, iso_id), line_data, cont_data) in enumerate(id_line_cont_triplet):
+                #print(f'DEBUG: {i=} {mol_id=} {iso_id=} {line_data.s_min=} {cont_data.s_max=}')
+                
                 self.line_data[i] = LineSetSpecData.create_from(mol_id, iso_id, self._params.ambient_gasses, line_data, cache=self.cache)
                 self.continuum_data[i] = PseudoContSpecData.create_from(mol_id, iso_id, self._params.ambient_gasses, cont_data, cache=self.cache)
+        
+                #print(f'DEBUG: {self._params.s_min=} {self.line_data[i].s_min=} {self.continuum_data[i].s_min=}')
         
                 # If we need to, add more lines into the continuum so that we always have the requested `s_min` for both the line set data and continuum data.
                 if (self._params.s_min > self.line_data[i].s_min):
                     if (self._params.s_min > self.continuum_data[i].s_min):
+                        #print('DEBUG: Adding lines')
+                        
                         self.continuum_data[i].add_lines(
                             self.line_data[i],
                             self.partition_fn_data[i],
@@ -2217,13 +2231,11 @@ class LineData_0:
             include_continuum : bool = True,
             include_pressure_shift : bool = True,
             combined_output : bool = True,
+            each_iso_output : bool = False,
             use_cache : bool = True,
     ) -> np.ndarray:
     
-        if not combined_output:
-            out = np.zeros((2,self.n_isos, wave_grid.shape[0]), dtype=float)
-        else:
-            out = np.zeros((wave_grid.shape[0],), dtype=float)
+        out = np.zeros((2,self.n_isos, wave_grid.shape[0]), dtype=float)
     
         self.add_monochromatic_absorption(
             wave_grid = wave_grid,
@@ -2243,10 +2255,11 @@ class LineData_0:
             out = out,
         )
         
-        if not combined_output:
-            return np.sum(out, axis=0)
-        else:
-            return out
+        if not each_iso_output:
+            out = np.sum(out, axis=1)
+        if combined_output:
+            out = np.sum(out, axis=0)
+        return out
 
     def add_monochromatic_absorption(
             self,
@@ -2282,7 +2295,7 @@ class LineData_0:
             result = out[...]
         
         if store is None:
-            store = np.empty((4, self.max_lines_or_bins), dtype=float)
+            store = np.zeros((4, self.max_lines_or_bins), dtype=float)
         
         
         #Converting spectral array to wavenumbers in cm-1
@@ -2366,7 +2379,7 @@ class LineData_0:
                 out_line_set_abs_i = out_line_set_abs
                 out_continuum_abs_i = out_continuum_abs
             elif out.ndim == 3:
-                assert out.shape[2] == len(self.line_data), f'`out` must have 1, 2 or 3 dimensions ({out.ndim=}). If 1 dimension will add all absorption to same array. If 2 will split line absorption and continuum absorption. If 3 will split line absorption and continuum absorption, and split by isotopologue and therefore must have out.shape[1] == number of isotopoluges ({out.shape[1]=}) ({len(self.line_data)})'
+                assert out.shape[1] == len(self.line_data), f'`out` must have 1, 2 or 3 dimensions ({out.ndim=}). If 1 dimension will add all absorption to same array. If 2 will split line absorption and continuum absorption. If 3 will split line absorption and continuum absorption, and split by isotopologue and therefore must have out.shape[1] == number of isotopoluges ({out.shape=}) ({len(self.line_data)})'
                 out_line_set_abs_i = out_line_set_abs[i]
                 out_continuum_abs_i = out_continuum_abs[i]
             else:
@@ -2591,8 +2604,6 @@ class LineData_0:
             ax.set(**ax_style_defaults)
 
         plt.tight_layout()
-
-
 
     def plot_continuumdata(
             self, 
