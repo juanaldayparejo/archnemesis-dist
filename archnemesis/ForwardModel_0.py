@@ -894,7 +894,9 @@ class ForwardModel_0:
                     SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
                 elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                     SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
-                
+                elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME: #LBL-runtime calculations
+                    SPECONV = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+
                 #Applying AOTF weights to combine the different diffraction orders
                 SPECONV_combined += (SPECONV * self.MeasurementX.TRANS_AOTF[:,:,iorder])
 
@@ -965,7 +967,9 @@ class ForwardModel_0:
                 SPECONV = self.MeasurementX.conv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
             elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                 SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
-            
+            elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME: #LBL-runtime calculations
+                SPECONV = self.Measurement.lblconv(self.SpectroscopyX.WAVE,SPECMOD,IGEOM='All')
+
             dSPECONV = np.zeros([self.MeasurementX.NCONV.max(),self.MeasurementX.NGEOM,self.Variables.NX])
 
             #Applying any changes to the spectra required by the state vector
@@ -1128,6 +1132,8 @@ class ForwardModel_0:
                     SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
                 elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
                     SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+                elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
+                    SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
 
                 #Calculating the gradients of any parameterisations involving the convolution
                 dSPECONV = self.subspeconv(self.SpectroscopyX.WAVE,SPECMOD,dSPECONV)
@@ -1230,6 +1236,8 @@ class ForwardModel_0:
             if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES:
                 SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
             elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
+                SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
+            elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
                 SPECONV,dSPECONV = self.MeasurementX.lblconvg(self.SpectroscopyX.WAVE,SPECMOD,dSPECMOD,IGEOM='All')
 
             #Calculating the gradients of any parameterisations involving the convolution
