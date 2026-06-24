@@ -94,7 +94,6 @@ class Spectroscopy_0:
             ILBL: SpectralCalculationModeEnum = SpectralCalculationModeEnum.LINE_BY_LINE_TABLES, 
             #NGAS: int = 0, 
             ONLINE: bool = False,
-            VREL: float = 25.0,
         ):
 
         """
@@ -120,24 +119,6 @@ class Spectroscopy_0:
             Isotope ID for each gas, default 0 for all isotopes in terrestrial relative abundance
         @param LOCATION: 1D array,
             List of strings indicating where the .lta or .kta tables are stored for each of the gases
-        @param LOCATION_LD: 1D array,
-            If ILBL = 1, List of strings indicating the paths to the line databases to use
-        @param LOCATION_PF: 1D array,
-            If ILBL = 1, List of strings indicating the paths to the partition function database to use
-        @param LOCATION_CD: 1D array,
-            If ILBL = 1, List of strings indicating the paths to the continuum database to use
-        @param IPROC: 1D array,
-            If ILBL=1, then IPROC indicates the line profile to use for each gas:
-                (0 - VOIGT) Voigt profile
-                (1 - SUBLORENTZ_CO2_BROADENING) Assume Sub-Lorentzian line broadening (CO2) 
-                (2 - VANVLECK_WEISSKOPF) VanVleck-Weisskopf lineshape (far-IR) 
-                (4 - LORENTZ) Lorentz profile
-                (7 - SUBLORENTZ_CO2_BROADENING_VENUS) CO2 sub
-                (12 - DOPPLER) Doppler profile
-        @param VREL: real,
-            If ILBL=1, then VREL indicates the spectral window to use around each line for the line-by-line calculation (cm-1)
-        @param SELF_FRAC: 1D array,
-            If ILBL=1, then SELF_FRAC indicates the fraction of self-broadening to use for each gas (between 0 and 1, where 0 is completely foreign-broadened and 1 is completely self-broadened)
         @param NWAVE: int,
             Number of wavelengths included in the K-tables or LBL-tables
         @param WAVE: 1D array,
@@ -158,9 +139,29 @@ class Spectroscopy_0:
             Intervals of g-ordinates
         @param FWHM: real,
             Full-width at half maximum (only in case of K-tables)
+
+
+        @param LOCATION_LD: 1D array,
+            If ILBL = 1, List of strings indicating the paths to the line databases to use
+        @param LOCATION_PF: 1D array,
+            If ILBL = 1, List of strings indicating the paths to the partition function database to use
+        @param LOCATION_CD: 1D array,
+            If ILBL = 1, List of strings indicating the paths to the continuum database to use
+        @param LINE_DATA_PARAMS: 1D array of tuples
+            IF ILBL = 1, Dictionary including the information required to calculate the absorption cross sections for each gas. The information to include is:
+                - lineshape : Integer indicating the lineshape to use (enum is SpectroscopicLineProfileEnum) (default is VOIGT lineshape).
+                - wn_calc_window : Wavenumber region around a line where the line calculations are performed (default = 25 cm-1).
+                - wn_approx_window : Wavenumber region around a line up to which an approximation for the wings are included (default = 75 cm-1).
+                - amb_gas : List of ambient gases (default = [ans.enum.AmbientGasEnum.AIR]),
+                - s_min : float = -1.0,
+                - s_floor : float = 0.0,
+                - isotopic_abundance : If not None, abundance of each isotope to calculate the overall absorption by the gas (default = None, which uses standard isotopic abundances in the RADTRAN dictionary)
+                - include_pressure_shift : If True, it applies the pressure-induced shift in the position of the lines (default = True)
+                - include_continuum : If True, it applies a pseudo-continuum from weak lines (default = True)
+                - include_lines : If True, it adds the absorption from the lines (default = True)
+                - use_cache : If True, the calculations are optimised using a cache (default = True)
+
         
-
-
         Methods
         -------
         Spectroscopy_0.edit_WAVE()
@@ -185,7 +186,6 @@ class Spectroscopy_0:
         #self.NGAS = NGAS
         self.NGAS = 0
         self.ONLINE = ONLINE
-        self.VREL = VREL
 
         # Attributes with proper typing
         #self.ISPACE: Optional[WaveUnitEnum] = None
@@ -195,8 +195,6 @@ class Spectroscopy_0:
         self._locations_ld = path_redirect.PathRedirectList() #(NGAS)
         self._locations_pf = path_redirect.PathRedirectList() #(NGAS)
         self._locations_cd = path_redirect.PathRedirectList() #(NGAS)
-        self.IPROC = None     #(NGAS)
-        self.SELF_FRAC = None #(NGAS)
         self.NWAVE = None     
         self.WAVE = None      #(NWAVE)
         self.NP = None
@@ -3126,11 +3124,14 @@ def calc_lbltable(outname,                       #Name of the output .lta file
                   npress,p0,pn,                  #Pressure grid
                   ntemp,t0,tn,                   #Temperature grid
                   ispace,nwave,wavemin,delwave,  #Wavenumber grid
-                  iproc,                         #Lineshape
-                  vrel,                          #Wavenumber window 
+                  iproc,                         #Lineshape identifier
+                  wn_calc_window,                #Wavenumber calculation window (cm-1)
+                  wn_approx_window,              #Wavenumber window at which an approximation for the wings is applied (cm-1)
                   self_frac,                     #Self-broadening fraction
-                  database,                      #Database
-                  add_pressure_shift=True,       #Flag to include pressure shift in the waveumbers
+                  line_database,                 #Database
+                  pf_database=default_pf_base,   #Partition function database (default = TIPS2025)
+                  cont_database=None,            #Pseudo-continuum database (If not None, it will use the same as the line_database)
+                  include_pressure_shift=True,   #Flag to include pressure shift in the waveumbers
 ):
     """
     Calculate a line-by-line look-up table for a given gas
@@ -3163,22 +3164,54 @@ def calc_lbltable(outname,                       #Name of the output .lta file
     @param delwave: float
         Wavenumber/wavelength step (cm-1/um)
     @param iproc: int
-        Lineshape processing mode (see Nemesis manual)
-    @param vrel: float
+        Lineshape identifier (see possible cases in SpectroscopicLineProfileEnum)
+    @param wn_calc_window: float
         Wavenumber window for lineshape calculation (cm-1)
+    @param wn_calc_window: float
+        Wavenumber window for lineshape wing approximation (cm-1)
     @param self_frac: float
         Self-broadening fraction (0 - complete self-broadening, 1 - complete air broadening)
-    @param database: str
+    @param line_database: str
         Path to archnemesis spectroscopic database to use ('HITRAN','GEISA', etc.)
-
+    @param pf_database: str
+        Path to archnemesis partition function database (default = TIPS2025)
+    @param cont_database: str
+        Path to archnemesis pseudo-continuum database (default = None). If None, it is assumed
+        it is the same as the line_database
+    @param include_pressure_shift: bool
+        If True, include pressure shift in the waveumber of the lines
     """
 
     #Initialising spectroscopy class
-    Spectroscopy  = ans.Spectroscopy_0()
-    Spectroscopy.NGAS = 1
-    Spectroscopy.ID = [gasID]
-    Spectroscopy.ISO = [isoID]
-    Spectroscopy.LOCATION = [database]
+    Spectroscopy  = ans.Spectroscopy_0(ILBL=1)
+    Spectroscopy.NGAS = 0
+
+    #Calculating spectral points
+    wavemax = wavemin + delwave * (nwave - 1)
+    waves = np.linspace( wavemin , wavemax , nwave )
+
+    #Defining line data parameters
+    line_data_params = ans.MolLineDataParams(
+        lineshape=iproc,
+        wn_calc_window=wn_calc_window,
+        wn_approx_window=wn_approx_window,
+        include_pressure_shift=include_pressure_shift,
+        s_min=1.0e-50,
+        s_floor=0.0,
+        amb_gas=[ans.enum.AmbientGasEnum.AIR],
+    )
+
+    #Editing class
+    Spectroscopy.add_line_by_line_runtime(
+            mol_id=gasID,
+            iso_id=isoID,
+            waves=waves,
+            fpath_ld=line_database, 
+            fpath_pf=pf_database,
+            fpath_pc=cont_database,
+            wave_unit=ispace,
+            mol_line_data_params=line_data_params,
+    )
 
     #Calculating the pressure grid
     presslevels = np.linspace( np.log(p0) , np.log(pn), npress )
@@ -3190,22 +3223,20 @@ def calc_lbltable(outname,                       #Name of the output .lta file
     Spectroscopy.NT = ntemp
     Spectroscopy.TEMP = templevels
 
-    #Calculating the spectral grid
-    wavemax = wavemin + delwave * (nwave - 1)
-    wave = np.linspace( wavemin , wavemax , nwave )
-    Spectroscopy.NWAVE = nwave
-    Spectroscopy.WAVE = wave
-
-    #Other parameters
-    Spectroscopy.IPROC = np.array([iproc],dtype="int32")
-    Spectroscopy.VREL = vrel
-
     Spectroscopy.assess()
+
+    #Fetching line data
+    Spectroscopy.read_tables(wavemin, wavemax)
+
 
     k = np.zeros((Spectroscopy.NWAVE, Spectroscopy.NP, Spectroscopy.NT, Spectroscopy.NGAS))
     for i in range(Spectroscopy.NP):
         pressx = np.ones(Spectroscopy.NT) * Spectroscopy.PRESS[i]
-        k[:,i,:,0] = Spectroscopy.calc_klbl_online(Spectroscopy.NT,pressx,Spectroscopy.TEMP,self_frac=self_frac,add_pressure_shift=add_pressure_shift)[:,:,0]
+        k[:,i,:,0] = Spectroscopy.calc_klbl_online(
+            Spectroscopy.NT,
+            pressx,
+            Spectroscopy.TEMP,
+            amb_frac=1.-self_frac)[:,:,0]
 
     #Writing the look-up table
     write_lbltable(outname,npress,ntemp,gasID,isoID,Spectroscopy.PRESS,Spectroscopy.TEMP,nwave,wavemin,delwave,k,DOUBLE=False)
