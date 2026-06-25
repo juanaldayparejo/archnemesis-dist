@@ -260,7 +260,7 @@ def add_line_set_monochromatic_spectrum(
                 out[j] += factor * strength[i] * lineshape_fn(wn_delta, alpha_d[i], gamma_l[i])
             else:
                 # 1/x**2 approximation
-                out[j] += factor * strength[i] * line_approx_const / (wn_delta * wn_delta)
+                out[j] += factor * strength[i] * line_approx_const * wn_calc_window_max**2. / (wn_delta * wn_delta)
     
     return
 
