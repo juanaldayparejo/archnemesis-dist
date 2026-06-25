@@ -106,7 +106,7 @@ If archNEMESIS has been significant in your research, we suggest citing the foll
 Revision history
 -----------------------------
 
-- 1.1.0 (25 June, 2026)
+- `1.1.0 <https://doi.org/10.5281/zenodo.20841873>`_ (25 June, 2026)
    - Option for custom planet parameters.
    - Calculations for selection averaging points for disc-averaged measurements.
    - Implementation of special forward model for primary transit observations of exoplanets.

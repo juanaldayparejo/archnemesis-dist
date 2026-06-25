@@ -100,7 +100,7 @@ Please note: This is a research software package maintained as time allows. Whil
 
 ## Revision history
 
-- 1.1.0 (25 June, 2026)
+- [1.1.0](https://doi.org/10.5281/zenodo.20841873) (25 June, 2026)
    - Option for custom planet parameters.
    - Calculations for selection averaging points for disc-averaged measurements.
    - Implementation of special forward model for primary transit observations of exoplanets.
