@@ -7,7 +7,7 @@
 =========================
 
 .. image:: https://img.shields.io/badge/version-v1.1.0-red
-  :target: https://doi.org/10.5281/zenodo.17948742
+  :target: https://doi.org/10.5281/zenodo.20841873
 
 .. image:: https://img.shields.io/badge/readthedocs-latest-blue
    :target: https://archnemesis.readthedocs.io
