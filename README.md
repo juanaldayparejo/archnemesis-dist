@@ -94,7 +94,7 @@ If you have questions, suggestions, or encounter issues, you can:
 - Open an issue on the [GitHub Issues page](https://github.com/juanaldayparejo/archnemesis-dist/issues)
 - Ask questions on the [GitHub Discussions tab](https://github.com/juanaldayparejo/archnemesis-dist/discussions)
 - Join our [Discord](https://discord.gg/Te43qbrVFK) channel.
-- Contact the maintainer via email: juan.alday@open.ac.uk
+- Contact the maintainer via email: jalday@iaa.es
 
 Please note: This is a research software package maintained as time allows. While we aim to respond in a timely manner (i.e., within a week), we cannot guarantee a fixed response time.
 
