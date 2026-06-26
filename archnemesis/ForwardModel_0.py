@@ -3818,19 +3818,23 @@ class ForwardModel_0:
 
             elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:    #Online calculation of the line-by-line opacity
                 
-                igas = np.empty((self.SpectroscopyX.NGAS,), dtype=int)
-                for i, (mol_id, iso_id) in enumerate(zip(self.SpectroscopyX.ID,self.SpectroscopyX.ISO)):
-                    igas[i] = self.AtmosphereX.locate_gas(mol_id, iso_id)
-                
-                self_frac = np.mean((self.LayerX.PP.T / self.LayerX.PRESS),axis=1) #(NGAS) average volume mixing ratio of each gas
+                #Calculating the amount of self and foreign broadening
+                ave_vmr = np.mean((self.LayerX.PP.T / self.LayerX.PRESS),axis=1) #(NGAS) average volume mixing ratio of each gas
                 amb_frac = np.ones((self.SpectroscopyX.NGAS,1), dtype=float)
-                amb_frac[:,0] = 1.0 - self_frac[igas]
+                for igas in range(self.SpectroscopyX.NGAS):
+                    igas_all_isotopes = np.where( self.AtmosphereX.ID==self.SpectroscopyX.ID[igas] )[0]
+                    self_frac = np.sum(ave_vmr[igas_all_isotopes])
+                    amb_frac[igas,0] = 1.0 - self_frac
 
                 #Calculating the absorption cross sections
                 if return_grad:
                     k,dkdT = self.SpectroscopyX.calc_klblg_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,amb_frac=amb_frac)
                 else:
                     k = self.SpectroscopyX.calc_klbl_online(self.LayerX.NLAY,self.LayerX.PRESS/ATM_TO_PASCAL,self.LayerX.TEMP,amb_frac=amb_frac)
+
+                igas = np.empty((self.SpectroscopyX.NGAS,), dtype=int)
+                for i, (mol_id, iso_id) in enumerate(zip(self.SpectroscopyX.ID,self.SpectroscopyX.ISO)):
+                    igas[i] = self.AtmosphereX.locate_gas(mol_id, iso_id)
 
                 #Calculating vertical column density in each self.LayerX
                 VLOSDENS = self.LayerX.AMOUNT * SQ_CM_TO_SQ_METER   #m-2

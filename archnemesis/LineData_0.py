@@ -167,11 +167,23 @@ def lorentz_width(
     Computes Half-width-half-maximum (HWHM) of pressure broadening component
     """
 
+    #NOTE : This version considers both n_self and n_air. While there is nothing wrong with it in principle,
+    #        it is not how it is implemented in NEMESIS
     for i in prange(broadening_params.shape[1]):
         gamma_combined = 0
         for j in prange(mol_mix_frac.shape[0]):
             gamma_combined += (t_ratio**broadening_params[3*j+1,i])*broadening_params[3*j,i] * mol_mix_frac[j] * p_ratio
         out[i] = gamma_combined
+
+    #NOTE : This version considers n_air only. This is how NEMESIS implements it
+    #for i in prange(broadening_params.shape[1]):
+    #    gamma_combined = 0
+    #    for j in prange(mol_mix_frac.shape[0]):
+    #        if j==0:
+    #            gamma_combined += (t_ratio**broadening_params[3*(j+1)+1,i])*broadening_params[3*j,i] * mol_mix_frac[j] * p_ratio
+    #        else:
+    #            gamma_combined += (t_ratio**broadening_params[3*j+1,i])*broadening_params[3*j,i] * mol_mix_frac[j] * p_ratio
+    #    out[i] = gamma_combined
 
 @njit(parallel=False, cache=MODULE_NUMBA_CACHE)
 def line_shift(
@@ -2327,14 +2339,18 @@ class LineData_0:
         assert mol_mix_frac.shape[0] == len(self._params.ambient_gasses)+1, "LineData_0::add_monochromatic_absorption(...) `amb_frac` must have enough entries for each ambient gas"
         
         # Ensure isotopic abundances are arrays of correct length
-        if isotopic_abundance is None:
-            isotopic_abundance = self.default_iso_abundances
-        elif isinstance(isotopic_abundance, float):
-            assert self.n_isos == 1, "If provided, there must be an isotopic abundance for each isotopologue in the LineData_0 instance"
-            isotopic_abundance = np.array([isotopic_abundance], dtype=float)
+        # Isotopic abundances are only applied if the gas is a mixture of isotopes (ISO=0)
+        if self.ISO == 0:
+            if isotopic_abundance is None:
+                isotopic_abundance = self.default_iso_abundances
+            elif isinstance(isotopic_abundance, float):
+                assert self.n_isos == 1, "If provided, there must be an isotopic abundance for each isotopologue in the LineData_0 instance"
+                isotopic_abundance = np.array([isotopic_abundance], dtype=float)
+            else:
+                assert self.n_isos == isotopic_abundance.shape[0], "If provided, there must be an isotopic abundance for each isotopologue in the LineData_0 instance"
         else:
-            assert self.n_isos == isotopic_abundance.shape[0], "If provided, there must be an isotopic abundance for each isotopologue in the LineData_0 instance"
-        
+            isotopic_abundance = [1.]
+
         #Debugging statements
         if _lgr.level <= logging.DEBUG:
             msg = '## ARGUMENTS ##' +'\n\t'.join((
