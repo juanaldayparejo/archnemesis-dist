@@ -1290,7 +1290,7 @@ class Model1(PreRTModelBase):
         xdeep = xn_params[0] ; fsh = xn_params[1]
         
         #Modifying Atmosphere based on model parameters
-        atm, xmap = self.calculate(
+        atm, xmap1 = self.calculate(
             atm, 
             atm_profile_type,
             atm_profile_idx,
