@@ -994,7 +994,7 @@ class Model0(PreRTModelBase):
             atm,
             atm_profile_type,
             atm_profile_idx,
-            xn_params
+            *xn_params
         )
 
         _lgr.debug('Result calculated, setting values...')
