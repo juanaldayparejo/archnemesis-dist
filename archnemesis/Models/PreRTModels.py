@@ -1790,9 +1790,9 @@ class Model4(PreRTModelBase):
         # names and ordering when they are passed to the `self.calculate(...)` 
         # class method.
         self.parameters = (
-            ModelParameter('PKNEE', slice(0,1), 'Knee pressure'),
-            ModelParameter('ABU_DEEP', slice(1,2), 'Deep abundance'),
-            ModelParameter('FSH', slice(2,3), 'Fractional scale height'),
+            ModelParameter('ABU_DEEP', slice(0,1), 'Deep abundance'),
+            ModelParameter('FSH', slice(1,2), 'Fractional scale height'),
+            ModelParameter('PKNEE', slice(2,3), 'Knee pressure (atm)'),
         )
         
         return
@@ -2000,7 +2000,7 @@ class Model4(PreRTModelBase):
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
         assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
 
-        return cls(ix_0, ix-ix_0, pknee)
+        return cls(ix_0, ix-ix_0)
 
     @classmethod
     def from_bookmark(
