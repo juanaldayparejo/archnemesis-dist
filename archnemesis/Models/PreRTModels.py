@@ -798,7 +798,7 @@ class Model0(PreRTModelBase):
 
                 atm :: Updated atmospheric class
                 xmap(npro,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
-                                                 elements in state vector
+                                                 model parameters
 
             CALLING SEQUENCE:
 
@@ -820,7 +820,8 @@ class Model0(PreRTModelBase):
             temp = np.array(atm.VMR)
             temp[:,atm_profile_idx] = xprof
             atm.edit_VMR(temp)
-            xmap[...] = np.diag(xprof)
+            #xmap[...] = np.diag(xprof) #This is for parameters carried in logspace, but we account that in subprofretg, here it is linear
+            xmap[...] = np.diag(np.ones_like(xprof))
         
         elif atm_profile_type == AtmosphericProfileTypeEnum.TEMPERATURE:
             atm.edit_T(xprof)
@@ -830,7 +831,7 @@ class Model0(PreRTModelBase):
             temp = np.array(atm.DUST)
             temp[:,atm_profile_idx] = xprof
             atm.edit_DUST(temp)
-            xmap[...] = np.diag(xprof)
+            xmap[...] = np.diag(np.ones_like(xprof))
         
         elif atm_profile_type == AtmosphericProfileTypeEnum.PARA_H2_FRACTION:
             atm.PARAH2(xprof)
@@ -981,6 +982,8 @@ class Model0(PreRTModelBase):
         atm = forward_model.AtmosphereX
         atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
         
+        xn_params = self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+
         if atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             calculate_fn = lambda *args, **kwargs: Modelm1.calculate(*args, **kwargs)
         else:
@@ -991,11 +994,16 @@ class Model0(PreRTModelBase):
             atm,
             atm_profile_type,
             atm_profile_idx,
-            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+            xn_params
         )
-        
+
         _lgr.debug('Result calculated, setting values...')
         
+        #Calculating derivatives of the atmospheric profile with respect to the state vector
+        for i in range(self.n_state_vector_entries):
+            if forward_model.Variables.LX[self.state_vector_start+i] == 1: #If carried in log space, then the derivative is multiplied by the value of the profile at that level
+                xmap1[i,:] = xmap1[i,:] * xn_params[i]
+
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
         
@@ -1096,8 +1104,8 @@ class Model1(PreRTModelBase):
         
         xfac = (1.0 - FSH) / FSH
 
-        # New gradient correction if fsh is held as logs
-        dxfac = -1.0 / FSH
+        #d(xfac)/d(FSH)
+        dxfac = -1.0 / FSH**2.
 
         #Finding the knee altitude 
         pknee_pa = PKNEE * 101325.   #Calculating knee pressure in Pa
@@ -1120,11 +1128,7 @@ class Model1(PreRTModelBase):
             if atm.P[j]>=pknee_pa:
 
                 xprof[j] = ABU_DEEP
-
-                if atm_profile_type == AtmosphericProfileTypeEnum.TEMPERATURE:
-                    xmap[0,j] = 1.0
-                else:
-                    xmap[0,j] = xprof[j]
+                xmap[0,j] = 1.0
 
             else:
 
@@ -1287,6 +1291,11 @@ class Model1(PreRTModelBase):
             fsh
         )
         
+        #Calculating derivatives of the atmospheric profile with respect to the state vector
+        for i in range(self.n_state_vector_entries):
+            if forward_model.Variables.LX[self.state_vector_start+i] == 1: #If carried in log space, then the derivative is multiplied by the value of the parameter
+                xmap1[i,:] = xmap1[i,:] * xn_params[i]
+
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
 
@@ -1834,20 +1843,16 @@ class Model4(PreRTModelBase):
 
                 atm :: Updated atmospheric class
                 xmap(mparam,npro) :: Matrix of relating funtional derivatives to 
-                                                 elements in state vector
+                                                 the model parameters
 
-            CALLING SEQUENCE:
-
-                atm,xmap = model62(atm,p1,p2,p3,t0,alpha1,alpha2)
-
-            MODIFICATION HISTORY : Juan Alday (18/12/2025)
+            MODIFICATION HISTORY : Juan Alday (03/07/2026)
 
         """        
         
         xfac = (1.0 - FSH) / FSH
 
-        # New gradient correction if fsh is held as logs
-        dxfac = -1.0 / FSH
+        #d(xfac)/d(FSH)
+        dxfac = -1.0 / FSH**2.
 
         #Finding the knee altitude 
         pknee_pa = PKNEE * 101325.   #Calculating knee pressure in Pa
@@ -1870,11 +1875,7 @@ class Model4(PreRTModelBase):
             if atm.P[j]>=pknee_pa:
 
                 xprof[j] = ABU_DEEP
-
-                if atm_profile_type == AtmosphericProfileTypeEnum.TEMPERATURE:
-                    xmap[0,j] = 1.0
-                else:
-                    xmap[0,j] = xprof[j]
+                xmap[0,j] = 1.0
 
             else:
 
@@ -1900,8 +1901,9 @@ class Model4(PreRTModelBase):
 
                 #Functional derivative of PKNEE
                 if jfsh == 0:
-                    xmap[2,j] = 101325. * pknee_pa * (xfac / atm.P[j]) * xprof[j-1] * np.exp(-delh * xfac / scale[j])
-                xmap[2,j] = xmap[1,j-1] * np.exp(-delh * xfac / scale[j])
+                    xmap[2,j] = (-xfac / (atm.P[j] / 101325.)) * xprof[j-1] * np.exp(-delh * xfac / scale[j])
+                
+                xmap[2,j] = xmap[2,j] + xmap[2,j-1] * np.exp(-delh * xfac / scale[j])
 
                 jfsh = 1
 
@@ -2026,7 +2028,7 @@ class Model4(PreRTModelBase):
             ivar : int,
             xmap : np.ndarray,
         ) -> None:
-        #Model 1. profile held as deep amount, fsh and knee pressure  
+        #Model 4. profile held as deep amount, fsh and knee pressure  
         #***************************************************************
 
         atm = forward_model.AtmosphereX
@@ -2048,6 +2050,12 @@ class Model4(PreRTModelBase):
             fsh
         )
         
+        #Calculating derivatives of the atmospheric profile with respect to the state vector
+        #(i.e., correcting if they are carried in log space in the state vector)
+        for i in range(self.n_state_vector_entries):
+            if forward_model.Variables.LX[self.state_vector_start+i] == 1: #If carried in log space, then the derivative is multiplied by the value of the parameter
+                xmap1[i,:] = xmap1[i,:] * xn_params[i]
+
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
 
@@ -2468,8 +2476,8 @@ class Model20(PreRTModelBase):
         
         xfac = (1.0 - FSH) / FSH
 
-        # New gradient correction if fsh is held as logs
-        dxfac = -1.0 / FSH
+        #d(xfac)/d(FSH)
+        dxfac = -1.0 / FSH**2.
 
         #Finding the knee altitude 
         pknee_pa = PKNEE * 101325.   #Calculating knee pressure in Pa
@@ -2493,11 +2501,7 @@ class Model20(PreRTModelBase):
             if atm.P[j]>=pknee_pa:
 
                 xprof[j] = ABU_DEEP
-
-                if atm_profile_type == AtmosphericProfileTypeEnum.TEMPERATURE:
-                    xmap[0,j] = 1.0
-                else:
-                    xmap[0,j] = xprof[j]
+                xmap[0,j] = 1.0
 
             else:
 
@@ -2666,6 +2670,12 @@ class Model20(PreRTModelBase):
             xdeep, 
             fsh
         )
+
+        #Calculating derivatives of the atmospheric profile with respect to the state vector
+        #(i.e., correcting if they are carried in log space in the state vector)
+        for i in range(self.n_state_vector_entries):
+            if forward_model.Variables.LX[self.state_vector_start+i] == 1: #If carried in log space, then the derivative is multiplied by the value of the parameter
+                xmap1[i,:] = xmap1[i,:] * xn_params[i]
         
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
