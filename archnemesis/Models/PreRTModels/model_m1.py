@@ -128,7 +128,7 @@ class Modelm1(PreRTModelBase):
         
         npro = len(xprof)
         if npro!=atm.NP:
-            raise ValueError('error in model -1 :: Number of levels in atmosphere does not match and profile')
+            raise ValueError('error in model -1 :: Number of levels in atmosphere does not match the passed profile')
             
         if atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             temp = np.array(atm.DUST)

@@ -5,7 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
-from .model_m1 import Modelm1
 from ..ModelParameter import ModelParameter
 
 from archnemesis.enum import AtmosphericProfileTypeEnum
@@ -134,7 +133,7 @@ class Model0(PreRTModelBase):
 
         npro = len(xprof)
         if npro!=atm.NP:
-            raise ValueError('error in model 0 :: Number of levels in atmosphere does not match and profile')
+            raise ValueError('error in model 0 :: Number of levels in atmosphere does not match the passed profile')
         
         xmap = np.zeros((npro,npro))
         
@@ -303,20 +302,12 @@ class Model0(PreRTModelBase):
         atm = forward_model.AtmosphereX
         atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
         
-        if atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
-            calculate_fn = lambda *args, **kwargs: Modelm1.calculate(*args, **kwargs)
-        else:
-            calculate_fn = lambda *args, **kwargs: self.calculate(*args, **kwargs)
-        
-        _lgr.debug(f'Distributing to callable {calculate_fn}')
-        atm, xmap1 = calculate_fn(
+        atm, xmap1 = self.calculate(
             atm,
             atm_profile_type,
             atm_profile_idx,
             *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
         )
-        
-        _lgr.debug('Result calculated, setting values...')
         
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1

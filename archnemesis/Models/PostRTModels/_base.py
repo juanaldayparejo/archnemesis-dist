@@ -4,7 +4,7 @@ import abc
 
 import numpy as np
 
-from .ModelBase import ModelBase
+from ..ModelBase import ModelBase
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 

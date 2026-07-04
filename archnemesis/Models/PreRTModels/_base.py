@@ -4,15 +4,8 @@ import abc
 
 import numpy as np
 
-from .ModelBase import ModelBase
-#from .ModelParameter import ModelParameter
-
-#import archnemesis.Data.constants as const
-#from archnemesis.helpers import h5py_helper
-#from archnemesis.helpers.maths_helper import ngauss
-#from archnemesis.Scatter_0 import kk_new_sub
+from ..ModelBase import ModelBase
 from archnemesis.enum import AtmosphericProfileTypeEnum
-#from archnemesis.enum import WaveUnitEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -22,10 +15,7 @@ if TYPE_CHECKING:
     # the problem is that importing Variables_0 or ForwardModel_0 creates a circular import
     # this actually means that I should possibly redesign how those work to avoid circular imports
     # but that is outside the scope of what I want to accomplish here
-    #from archnemesis.Variables_0 import Variables_0
     from archnemesis.ForwardModel_0 import ForwardModel_0
-    #from archnemesis.Scatter_0 import Scatter_0
-    #from archnemesis.Atmosphere_0 import Atmosphere_0
     
     nx = 'number of elements in state vector'
     m = 'an undetermined number, but probably less than "nx"'
