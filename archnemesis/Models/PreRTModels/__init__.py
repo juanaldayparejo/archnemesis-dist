@@ -7,9 +7,12 @@ Contains models that alter the forward model before radiative transfer is calcul
 
 from .model_m1 import Modelm1
 from .model_0 import Model0
+from .model_1 import Model1
 from .model_2 import Model2
 from .model_3 import Model3
+from .model_4 import Model4
 from .model_9 import Model9
+from .model_20 import Model20
 from .model_32 import Model32
 from .model_43 import Model43
 from .model_45 import Model45

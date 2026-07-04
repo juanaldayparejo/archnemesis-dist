@@ -119,7 +119,7 @@ class Model0(PreRTModelBase):
 
                 atm :: Updated atmospheric class
                 xmap(npro,ngas+2+ncont,npro) :: Matrix of relating funtional derivatives to 
-                                                 elements in state vector
+                                                model parameters.
 
             CALLING SEQUENCE:
 
@@ -135,31 +135,26 @@ class Model0(PreRTModelBase):
         if npro!=atm.NP:
             raise ValueError('error in model 0 :: Number of levels in atmosphere does not match the passed profile')
         
-        xmap = np.zeros((npro,npro))
+        xmap = np.diag(np.ones_like(xprof)) # This is always true. NOTE: Logged profiles are handled in `calculate_from_subprofretg`
         
         if atm_profile_type == AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO:
             temp = np.array(atm.VMR)
             temp[:,atm_profile_idx] = xprof
             atm.edit_VMR(temp)
-            xmap[...] = np.diag(xprof)
         
         elif atm_profile_type == AtmosphericProfileTypeEnum.TEMPERATURE:
             atm.edit_T(xprof)
-            xmap[...] = np.diag(np.ones_like(xprof))
         
         elif atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             temp = np.array(atm.DUST)
             temp[:,atm_profile_idx] = xprof
             atm.edit_DUST(temp)
-            xmap[...] = np.diag(xprof)
         
         elif atm_profile_type == AtmosphericProfileTypeEnum.PARA_H2_FRACTION:
             atm.PARAH2(xprof)
-            xmap[...] = np.diag(np.ones_like(xprof))
         
         elif atm_profile_type == AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE:
             atm.FRAC(xprof)
-            xmap[...] = np.diag(np.ones_like(xprof))
         
         else:
             raise ValueError(f'{cls.__name__} id {cls.id} has unknown atmospheric profile type {atm_profile_type}')
@@ -302,12 +297,19 @@ class Model0(PreRTModelBase):
         atm = forward_model.AtmosphereX
         atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
         
+        xn_params = self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        
         atm, xmap1 = self.calculate(
             atm,
             atm_profile_type,
             atm_profile_idx,
-            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+            *xn_params,
         )
+        
+        #Calculating derivatives of the atmospheric profile with respect to the state vector
+        for i in range(self.n_state_vector_entries):
+            if forward_model.Variables.LX[self.state_vector_start+i] == 1: #If carried in log space, then the derivative is multiplied by the value of the profile at that level
+                xmap1[i,:] = xmap1[i,:] * xn_params[i]
         
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
