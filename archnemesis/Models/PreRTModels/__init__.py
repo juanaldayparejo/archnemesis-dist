@@ -1,3 +1,7 @@
+"""
+Contains models that alter the forward model before radiative transfer is calculated
+"""
+
 
 # flake8: noqa # Turn off flake8 checking for this file
 
