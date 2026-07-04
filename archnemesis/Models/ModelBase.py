@@ -12,7 +12,7 @@ from archnemesis.helpers.io_helper import OutWidth
 from .ModelParameterEntry import ModelParameterEntry
 from .ModelParameter import ModelParameter
 
-
+from .log import _lgr
 
 if TYPE_CHECKING:
     # NOTE: This is just here to make 'flake8' play nice with the type hints
@@ -32,10 +32,6 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
-import logging
-_lgr = logging.getLogger(__name__)
-#_lgr.setLevel(logging.DEBUG)
-_lgr.setLevel(logging.INFO)
 
 
 

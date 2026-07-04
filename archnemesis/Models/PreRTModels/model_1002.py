@@ -6,10 +6,7 @@ import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
 
-import logging
-_lgr = logging.getLogger(__name__)
-#_lgr.setLevel(logging.DEBUG)
-_lgr.setLevel(logging.INFO)
+from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
 
 if TYPE_CHECKING:

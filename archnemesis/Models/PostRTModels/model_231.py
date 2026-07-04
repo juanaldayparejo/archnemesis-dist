@@ -7,10 +7,7 @@ import numpy as np
 from ._base import PostRTModelBase
 from ..ModelParameter import ModelParameter
 
-import logging
-_lgr = logging.getLogger(__name__)
-#_lgr.setLevel(logging.DEBUG)
-_lgr.setLevel(logging.INFO)
+from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
 if TYPE_CHECKING:
     # NOTE: This is just here to make 'flake8' play nice with the type hints
