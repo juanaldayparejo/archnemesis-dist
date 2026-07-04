@@ -7,7 +7,7 @@ from archnemesis.Data.isotope_data import standard_isotope_aliases
 
 
 def parse_html_float(items):
-	print(f'{items=}')
+	#print(f'{items=}')
 	if items[0].endswith('\xa0×\xa010'):
 		x = float(items[0][:len('\xa0×\xa010')])
 	else:
@@ -19,7 +19,7 @@ def parse_html_float(items):
 
 
 def html_to_molecular_formula(html_content_or_tag : Tag | list[NavigableString|Tag]) -> str:
-	print(f'{html_content_or_tag=}')
+	#print(f'{html_content_or_tag=}')
 	# Turn all of the content into a standard form, then read as string
 	if isinstance(html_content_or_tag, Tag):
 		html_content = html_content_or_tag.content
@@ -30,7 +30,7 @@ def html_to_molecular_formula(html_content_or_tag : Tag | list[NavigableString|T
 	within_mol_def = False
 	
 	for item in html_content:
-		print(f'DEBUG : {type(item)=} {item=}')
+		#print(f'DEBUG : {type(item)=} {item=}')
 		if isinstance(item, Tag):
 			if item.name == 'sup':
 				if item.text.endswith('+') or item.text.endswith('-'):
@@ -46,7 +46,7 @@ def html_to_molecular_formula(html_content_or_tag : Tag | list[NavigableString|T
 					
 			if item.name == 'sub':
 				if not within_mol_def:
-					print(f'DEBUG : {formula=}')
+					#print(f'DEBUG : {formula=}')
 					raise RuntimeError('Must be within mol def when encountering subscript')
 				else:
 					formula.append(f'{item.text}')
@@ -82,7 +82,7 @@ def html_to_isotopologue_formula(html_content_or_tag : Tag | list[NavigableStrin
 	
 	expect = 'nucleon_number'
 	for item in html_content:
-		print(f'DEBUG : {type(item)=} {item=}')
+		#print(f'DEBUG : {type(item)=} {item=}')
 		if isinstance(item, Tag):
 			if item.name == 'sup':
 				if item.text.endswith('+') or item.text.endswith('-'):
@@ -119,7 +119,7 @@ def html_to_isotopologue_formula(html_content_or_tag : Tag | list[NavigableStrin
 				else:
 					names[-1] += char
 			for name in names:
-				print(f'DEBUG : {within_iso_def=} {expect=} {name}')
+				#print(f'DEBUG : {within_iso_def=} {expect=} {name}')
 				if expect != 'atom_name' and within_iso_def:
 					formula.append(f')({standard_isotope_aliases[name]}')
 					within_iso_def = True

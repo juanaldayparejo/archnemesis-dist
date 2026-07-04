@@ -497,6 +497,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			local_iso_id : int,
 			temperature : float,
 			s_max : float,
+			s_max_null : float = 0.0,
 			ambient_gasses : AmbientGasEnum | tuple[AmbientGasEnum] = AmbientGasEnum.AIR,
 			requested_wn_range : tuple[float,float] = (0, np.inf),
 			wn_bin_upper_edge_eta : float = 1E-9,
@@ -513,6 +514,9 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			local_iso_id - ID of isotope (RADTRAN ISO ID) in context of parent molecule
 			temperature - Temperature to get data for (Kelvin), want to select the pseudo-continuum where `min(t_cont - temperature) and (temperature < t_cont)`. 
 			s_max - Maximum line strength included in pesudo-continuum. Should match exactly with line data otherwise will miss or double-count lines.
+			        Note: Lower values than associated `LineData` are acceptable as long as any "Extra" lines are added to the continuum, but larger
+			        values will always cause double counting.
+			s_max_null - When NULL data is returned, use this value of `s_max` instead of passed value.
 			ambient_gasses - Tuple of ambient gasses to get broadening data for
 			wn_mask_fn - Callable that selects desired wavenumbers (cm^{-1})
 			wn_bin_upper_edge_eta -  When testing bin inclusion via `wn_mask_fn`, add this value to the upper edge of a bin to model "less-than" behaviour.
@@ -541,7 +545,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 		with self.open('r'):
 			iso_grp = self._get_data_mol_iso_grp(mol_name, local_iso_id, self._file_hdl, on_missing_target, on_missing_mol, on_missing_iso)
 			if iso_grp is None:
-				return self._get_null_data(s_max, temperature, P_REF_DEFAULT, requested_wn_range, n_ambient_gasses)
+				return self._get_null_data(s_max_null, temperature, P_REF_DEFAULT, requested_wn_range, n_ambient_gasses)
 			
 			result = None
 			
@@ -599,7 +603,7 @@ class AnsPseudoContinuumFile(AnsDatabaseFile):
 			
 			if result is None:
 				_lgr.warn(f'No group found that is compatible with {target_grp_parameters=}, will return empty data. ')
-				return self._get_null_data(s_max, temperature, P_REF_DEFAULT, requested_wn_range, n_ambient_gasses)
+				return self._get_null_data(s_max_null, temperature, P_REF_DEFAULT, requested_wn_range, n_ambient_gasses)
 			else:
 				return result
 			

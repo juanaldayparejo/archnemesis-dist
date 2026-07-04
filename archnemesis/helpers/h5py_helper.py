@@ -2,6 +2,7 @@
 import dataclasses as dc
 from typing import Callable, Any, Literal, NamedTuple, Self, Type
 import textwrap
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -29,25 +30,76 @@ class VirtualGroupTarget(NamedTuple):
     vattrs : dict[str,Any]
 
 class HDF5Printer:
-    def __init__(self, mode : Literal['indent', 'full_paths'] = 'indent'):
-        self.mode = mode
+    def __init__(
+            self, 
+            path_mode : Literal['indent', 'full_paths'] = 'indent',
+            show_dataset_values : bool = True,
+            show_attributes : bool = True,
+    ):
+        self.path_mode = path_mode
+        self.show_dataset_values = show_dataset_values
+        self.show_attributes = show_attributes
         self.indent_1 = ' |  '
         self.indent_2 = ' |- '
         self.indent_3 = '    '
 
+    def print_file(self, fpath : str | Path):
+        with h5py.File(fpath, 'r') as f:
+            f.visititems(self)
+
     def __call__(self, name_tail : str, item : h5py.Group | h5py.Dataset):
-        if self.mode == 'indent':
+        if self.path_mode == 'indent':
             level = name_tail.count('/')
             name_last = name_tail.rsplit('/', 1)[-1]
-            item_type = 'Group' if isinstance(item, h5py.Group) else f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), (self.indent_1*(level+1)+self.indent_3))}\n{self.indent_1*(level+1)}'
-            print(f'{self.indent_1*level}{self.indent_2}{name_last} : {item_type}')
+            
+            item_str = ''
+            if isinstance(item, h5py.Group):
+                item_type = 'Group'
+            else:
+                if self.show_dataset_values:
+                    item_type = f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), (self.indent_1*(level+1)+self.indent_3))}'
+                else:
+                    item_type = f'Dataset[{item.shape}, {item.dtype}]'
+            
+            if self.show_attributes and len(item.attrs) > 0:
+                item_str = (
+                    item_type
+                    + f'\n{self.indent_1*(level+1)+self.indent_3}## ATTRIBUTES ##'
+                    + '\n' + textwrap.indent('\n'.join((f'{k} : {v}' for k,v in item.attrs.items())), (self.indent_1*(level+1)+2*self.indent_3))
+                    + f'\n{self.indent_1*(level+1)+self.indent_3}## ---------- ##'
+                    + f'\n{self.indent_1*(level+1)}'
+                )
+            else:
+                item_str = item_type + f'\n{self.indent_1*(level+1)}'
+            
+            print(f'{self.indent_1*level}{self.indent_2}{name_last} : {item_str}')
         
-        elif self.mode == 'full_paths':
+        elif self.path_mode == 'full_paths':
             item_type = 'Group' if isinstance(item, h5py.Group) else f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), " "*(len(name_tail)+6))}'
-            print(f'{name_tail} : {item_type}')
+            
+            item_str = ''
+            if isinstance(item, h5py.Group):
+                item_type = 'Group'
+            else:
+                if self.show_dataset_values:
+                    item_type = f'Dataset[{item.shape}, {item.dtype}] = \n{textwrap.indent(str(item[tuple()]), " "*(len(name_tail)+6))}'
+                else:
+                    item_type = f'Dataset[{item.shape}, {item.dtype}]'
+            
+            if self.show_attributes and len(item.attrs) > 0:
+                item_str = (
+                    item_type
+                    + f'\n{" "*(len(name_tail)+6)}## ATTRIBUTES ##'
+                    + '\n' + textwrap.indent('\n'.join((f'{k} : {v}' for k,v in item.attrs.items())), " "*(len(name_tail)+(6+4)))
+                    + f'\n{" "*(len(name_tail)+6)}## ---------- ##'
+                )
+            else:
+                item_str = item_type
+            
+            print(f'{name_tail} : {item_str}')
         
         else:
-            raise ValueError(f'Unknown mode {self.mode=}')
+            raise ValueError(f'Unknown mode {self.path_mode=}')
 
 class HDF5GetNonVirtualDatasets:
     def __init__(self):

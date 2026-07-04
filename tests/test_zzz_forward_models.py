@@ -571,12 +571,104 @@ def test_solar_occultation_mars():
         
         plt.show()
         
-        
-        
-        
     np.testing.assert_allclose(SPECONV, expected_speconv, rtol=1e-5, atol=1e-8)
     np.testing.assert_allclose(SPECONVg, expected_speconv, rtol=1e-5, atol=1e-8)
     
+
+def test_solar_occultation_mars_runtime():  
+    '''
+    Mars solar occultation test
+    
+    NOTE: Huge memory usage for this test.
+    '''
+    test_dir = os.path.join(ans.archnemesis_path(), 'tests/files/Mars_solar_occultation/')
+    os.chdir(test_dir) #Changing directory to read files
+    runname = 'mars_solocc_runtime'
+    runname2 = 'mars_solocc'
+     
+    #Reading the input files
+    (
+        Atmosphere,
+        Measurement,
+        Spectroscopy,
+        Scatter,
+        Stellar,
+        Surface,
+        CIA,
+        Layer,
+        Variables,
+        Retrieval,
+        Telluric
+    ) = ans.Files.read_input_files_hdf5(runname)
+    
+    #Calculating forward model with CIRSrad
+    ForwardModel = ans.ForwardModel_0(
+        runname=runname, 
+        Atmosphere=Atmosphere,
+        Surface=Surface,
+        Measurement=Measurement,
+        Spectroscopy=Spectroscopy,
+        Stellar=Stellar,
+        Scatter=Scatter,
+        CIA=CIA,
+        Layer=Layer,
+        Variables=Variables
+    )
+    SPECONV = ForwardModel.nemesisSOfm()
+    
+
+    #Reading the input files
+    (
+        Atmosphere,
+        Measurement,
+        Spectroscopy,
+        Scatter,
+        Stellar,
+        Surface,
+        CIA,
+        Layer,
+        Variables,
+        Retrieval,
+        Telluric
+    ) = ans.Files.read_input_files_hdf5(runname2)
+    
+    #Using only first gas in the Spectroscopy class
+    Spectroscopy.NGAS = 1
+
+    #Calculating forward model with CIRSrad
+    ForwardModel = ans.ForwardModel_0(
+        runname=runname, 
+        Atmosphere=Atmosphere,
+        Surface=Surface,
+        Measurement=Measurement,
+        Spectroscopy=Spectroscopy,
+        Stellar=Stellar,
+        Scatter=Scatter,
+        CIA=CIA,
+        Layer=Layer,
+        Variables=Variables
+    )
+    SPECONV2 = ForwardModel.nemesisSOfm()
+
+    if False: # More diagnostics for testing. To enable change `if False:` to `if True:`
+        import matplotlib.pyplot as plt
+        
+        print(f'{SPECONV.shape=} {SPECONV2.shape=}')
+    
+        fig,ax1 = plt.subplots(1,1,figsize=(12,3))
+        igeom = -1
+        ax1.plot(Measurement.VCONV[:,igeom],SPECONV[:,igeom],label="Runtime",linewidth=0.5)
+        ax1.plot(Measurement.VCONV[:,igeom],SPECONV2[:,igeom],label="Look-up tables",linewidth=0.5)
+        ax1.legend()
+        plt.tight_layout()
+        fig.savefig("mars_solocc_runtime.png",dpi=300)
+        plt.show()
+        
+        
+    np.testing.assert_allclose(SPECONV, SPECONV2, rtol=0.1)
+    
+
+
 def test_titan_avefov():  
     '''
     Titan test where several geometry across the planet are averaged

@@ -6,8 +6,8 @@
 
 =========================
 
-.. image:: https://img.shields.io/badge/version-v1.0.6-red
-  :target: https://doi.org/10.5281/zenodo.17948742
+.. image:: https://img.shields.io/badge/version-v1.1.0-red
+  :target: https://doi.org/10.5281/zenodo.20841873
 
 .. image:: https://img.shields.io/badge/readthedocs-latest-blue
    :target: https://archnemesis.readthedocs.io
@@ -105,6 +105,18 @@ If archNEMESIS has been significant in your research, we suggest citing the foll
 
 Revision history
 -----------------------------
+
+- `1.1.0 <https://doi.org/10.5281/zenodo.20841873>`_ (25 June, 2026)
+   - Option for custom planet parameters.
+   - Calculations for selection averaging points for disc-averaged measurements.
+   - Implementation of special forward model for primary transit observations of exoplanets.
+   - Filter signal integration for modelling radiometer-like instruments.
+   - Implementation of first version of Emissions_0 class for modelling atmospheric emissions.
+   - Optimised code to allow for fewer classes to be defined.
+   - Major update in line data calculations: created archNEMESIS format for storing spectroscopic line data.
+   - Major update in line data calculations: optimised absorption cross section calculations with numba.
+   - Major update in line data calculations: implemented functionality to calculation a pseudo-continuum from weak lines.
+   - Major update in line data calculations: implemented functionality to run calculation of cross sections at runtime (ILBL=1).
 
 - `1.0.6 <https://doi.org/10.5281/zenodo.17948742>`_ (16 December, 2025)
    - Fixing bugs to reconcile results with NEMESIS.
