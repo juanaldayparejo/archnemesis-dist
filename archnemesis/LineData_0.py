@@ -2009,11 +2009,9 @@ class LineData_0:
             self,
             refresh : bool = False,
     ) -> Self:
-        print('LineData_0::fetch_partition_fn()')
         if self._params_fetched_partition_last and not refresh:
             return self
         
-        print('Actually getting the partition function')
         self.partition_fn_data = self._ans_database.fetch_partition_fn(self.mol_ids, self.iso_ids, refresh=refresh)
         #print(f'{self.partition_fn_data=}')
         self._params_fetched_partition_last = True
