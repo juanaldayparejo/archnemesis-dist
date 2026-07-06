@@ -175,7 +175,7 @@ class Model4(PreRTModelBase):
 
                 #Functional derivative of PKNEE
                 if jfsh == 0:
-                    xmap[2,j] = (-xfac / (atm.P[j] / 101325.)) * xprof[j-1] * np.exp(-delh * xfac / scale[j])
+                    xmap[2,j] = (-xfac / (PKNEE)) * xprof[j-1] * np.exp(-delh * xfac / scale[j])
                 
                 xmap[2,j] = xmap[2,j] + xmap[2,j-1] * np.exp(-delh * xfac / scale[j])
 
