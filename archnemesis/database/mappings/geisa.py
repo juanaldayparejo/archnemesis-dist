@@ -95,18 +95,18 @@ radtran_to_geisa : dict[tuple[int,int], tuple[int,int]] = {
     # HCl
     (15,1): (16,15),     #(1H)(35Cl)
     (15,2): (16,17),     #(1H)(37Cl)
-    # (15,3) D35Cl not present
-    # (15,4) D37Cl not present
+    (15,3): (16,25),     #(2H)(35Cl)
+    (15,4): (16,27),     #(2H)(37Cl)
 
     # HBr
     (16,1): (17,19),     #(1H)(79Br)
     (16,2): (17,11),     #(1H)(81Br)
-    # (16,3) D79Br not present
-    # (16,4) D81Br not present
+    (16,3): (17,29),     #(2H)(79Br)
+    (16,4): (17,21),     #(2H)(81Br)
 
     # HI
     (17,1): (18,17),     #(1H)(127I)
-    # (17,2) DI not present
+    (17,2): (18,27),     #(2H)(127I)
 
     # ClO
     (18,1): (19,56),     #(35Cl)(16O)
@@ -150,7 +150,7 @@ radtran_to_geisa : dict[tuple[int,int], tuple[int,int]] = {
     # C2H2
     (26,1): (24,221),      #(12C)2(1H)2
     (26,2): (24,231),      #(12C)(13C)(1H)2
-    (26,3): (48,122),      # C2HD
+    (26,3): (48,122),      #C2HD
 
     # C2H6
     (27,1): (22,226),      #(12C)2(1H)6
@@ -179,7 +179,10 @@ radtran_to_geisa : dict[tuple[int,int], tuple[int,int]] = {
 
     # GeH4
     (33,1): (26,411),     #(74Ge)(1H)4
-    # Other Ge isotopes not included in the GEISA table
+    (33,2): (26,211),     #(72Ge)(1H)4
+    (33,3): (26,11),      #(70Ge)(1H)4
+    (33,4): (26,311),     #(73Ge)(1H)4
+    (33,5): (26,611),     #(76Ge)(1H)4
 
     #C3H8
     (34,1): (28,221),     #(12C)3(1H)8
@@ -222,9 +225,6 @@ radtran_to_geisa : dict[tuple[int,int], tuple[int,int]] = {
     # CH3CN
     (50,1): (50,234),    #(12C)(1H)3(12C)(14N)
 
-    # CH3I
-    (55,1): (55,1),
-
     # HNC
     (59,1): (46,142),    #(1H)(12C)(14N)
     # Other isotopologues not present in GEISA2020
@@ -240,18 +240,18 @@ radtran_to_geisa : dict[tuple[int,int], tuple[int,int]] = {
     (74,1): (52,26),     #(32S)(16O)3
 
     # CH3F
-    (95,1): (56,1),    #(12C)(1H)3(19F)
+    (95,1): (56,219),    #(12C)(1H)3(19F)
     # Other isotopologues not present in GEISA2020
 
-    #CH3I 
-    (139,1): (55,1),   #(12C)(1H)3(127I)
+    # CH3I
+    (139,1): (55,217),    #(12C)(1H)3(127I)
 
     # COFCl
     (142,1): (54,265), #(12C)(16O)(19F)(35Cl)
     (142,2): (54,267), #(12C)(16O)(19F)(37Cl)
 
     # HONO
-    (143,1): (53,1),   #(1H)(16O)(14N)(16O)
+    (143,1): (53,646),   #(1H)(16O)(14N)(16O)
 
     # RuO4
     (145,1): (57,102), #(102Ru)(16O)4
