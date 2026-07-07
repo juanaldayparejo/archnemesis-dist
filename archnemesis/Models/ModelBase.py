@@ -12,7 +12,7 @@ from archnemesis.helpers.io_helper import OutWidth
 from .ModelParameterEntry import ModelParameterEntry
 from .ModelParameter import ModelParameter
 
-
+from .log import _lgr
 
 if TYPE_CHECKING:
     # NOTE: This is just here to make 'flake8' play nice with the type hints
