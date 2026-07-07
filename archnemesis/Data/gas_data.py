@@ -136,6 +136,42 @@ def molecule_to_latex(formula):
     return formula
 
 
+def molecule_to_html(formula):
+    """
+    Convert a molecular formula into HTML.
+
+    Examples
+    --------
+    H2O            -> H<sub>2</sub>O
+    (13C)O2        -> <sup>13</sup>C O<sub>2</sub>
+    H2(18O)        -> H<sub>2</sub><sup>18</sup>O
+    HD(16O)        -> HD<sup>16</sup>O
+    """
+
+    import re
+
+    # Convert isotopes in parentheses: (13C) -> <sup>13</sup>C
+    formula = re.sub(
+        r"\((\d+)([A-Z][a-z]*)\)",
+        r"<sup>\1</sup>\2",
+        formula,
+    )
+
+    # Add subscripts to element counts
+    def add_subscripts(match):
+        element, number = match.groups()
+        if number:
+            return f"{element}<sub>{number}</sub>"
+        return element
+
+    formula = re.sub(
+        r"([A-Z][a-z]*)(\d*)",
+        add_subscripts,
+        formula,
+    )
+
+    return formula
+
 
 unit = {
     'pc': 3.08567e16,        # m parsec
