@@ -1072,7 +1072,7 @@ class Surface_0:
             Name of the Nemesis run
         """
         if any(x is None for x in (self.VEM,self.SGLALB,self.K,self.BS0,self.hs,self.BC0,self.hc,self.ROUGHNESS,self.G1,self.G2,self.F)):
-            _lgr.warn(f'Cannot write {runname+'.hap'} file as not all the parameters are initialised.')
+            _lgr.warn(f'Cannot write {runname+".hap"} file as not all the parameters are initialised.')
             return
         
         f = open(runname+'.hap','w')
