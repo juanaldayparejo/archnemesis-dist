@@ -448,6 +448,23 @@ class AnsLineDataFile(AnsDatabaseFile):
 
 		return x_grp['broadeners']
 
+	def _apply_defaults(self, result : LineSetData):
+		"""
+		Apply default parameters if some of them are missing from the HDF5 file. 
+		This is to ensure that the returned `LineSetData` object has all the required fields populated.
+		"""
+
+		# If n_self is missing (nan or zero), use the ambient temperature exponent
+		mask = np.isnan(result.n_self) | (result.n_self == 0)
+		if np.any(mask):
+			result.n_self[mask] = result.n_amb[mask, 0]
+
+		# If gamma_self is missing (nan or zero), use the ambient broadening coefficient
+		mask = np.isnan(result.gamma_self) | (result.gamma_self == 0)
+		if np.any(mask):
+			result.gamma_self[mask] = result.gamma_amb[mask, 0]
+
+
 	def _get_single_broadener_grp(
 			self,
 			x_grp, # group to search within, often ".../mol/iso/leaf_group_XXXX/broadeners"
@@ -560,6 +577,10 @@ class AnsLineDataFile(AnsDatabaseFile):
 				_lgr.warn(f'No compatible group found for {target_line_set_params=}. Therefore will return empty data.')
 				return self._get_null_data(s_min, temperature, 1, requested_wn_range, n_ambient_gasses)
 			else:
+
+				# Apply defaults to any missing parameters
+				self._apply_defaults(result)
+
 				return result
 			
 
