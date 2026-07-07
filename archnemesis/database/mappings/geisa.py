@@ -1,4 +1,4 @@
-radtran_to_hitran : dict[tuple[int,int], tuple[int,int]] = {
+radtran_to_geisa : dict[tuple[int,int], tuple[int,int]] = {
 
     # H2O
     (1, 1): (1, 161),    # H2(16O)
