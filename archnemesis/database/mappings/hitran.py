@@ -61,8 +61,8 @@ radtran_to_hitran : dict[tuple[int,int], tuple[int,int]] = {
     (9, 4): (9, 4), #(16O)(32S)(18O)
     
     (10, 1): (10, 1), #(14N)(16O)2
-    (10, 2): (10, 3), #(15N)(16O)2         ---> Changes in RADTRAN wrt HITRAN
-    (10, 3): (10, 2), #(14N)(16O)(18O)     ---> Changes in RADTRAN wrt HITRAN
+    (10, 2): (10, 2), #(15N)(16O)2 
+    (10, 3): (10, 3), #(14N)(16O)(18O)
 
     (11, 1): (11, 1), #(14N)H3
     (11, 2): (11, 2), #(15N)H3
