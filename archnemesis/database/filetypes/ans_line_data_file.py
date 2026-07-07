@@ -21,7 +21,7 @@ from archnemesis.database.data_layout_writers.line_data_table_writer import Line
 from archnemesis.database.datatypes.line_set_data import LineSetData
 
 # Logging
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 #_lgr.setLevel(logging.DEBUG)

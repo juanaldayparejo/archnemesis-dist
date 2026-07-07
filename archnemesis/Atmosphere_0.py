@@ -36,7 +36,7 @@ from archnemesis.Data.planet_data import planet_info
 from archnemesis.enum import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileTypeEnum
 from archnemesis.helpers import h5py_helper
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 #_lgr.setLevel(logging.DEBUG)
 _lgr.setLevel(logging.INFO)

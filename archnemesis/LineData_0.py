@@ -55,7 +55,7 @@ from archnemesis.database.filetypes.ans_pseudo_continuum_file import AnsPseudoCo
 from archnemesis.Data.path_data import archnemesis_path 
 
 # Logging
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 #_lgr.setLevel(logging.DEBUG)

@@ -43,10 +43,12 @@ import archnemesis as ans
 from archnemesis.helpers import h5py_helper, path_redirect
 #import matplotlib.pyplot as plt
 
-from archnemesis.Data.path_data import archnemesis_path 
+from archnemesis.Data.path_data import (
+    archnemesis_path,
+    archnemesis_resolve_path,
+)
 
-
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 
@@ -885,7 +887,7 @@ class Spectroscopy_0:
                                     attrs = None,
                                     mutators = {
                                         'lineshape' : lambda x: SpectroscopicLineProfileEnum(x),
-                                        'amb_gas' : lambda x: tuple(ans.enum.AmbientGasEnum(z) for z in x),
+                                        'amb_gas' : lambda x: tuple(ans.enum.AmbientGasEnum(z) for z in x.flat),
                                         'include_pressure_shift' : lambda x: True if x!=0 else False,
                                         'include_continuum' : lambda x: True if x!=0 else False,
                                         'include_lines' : lambda x: True if x!=0 else False,
@@ -944,10 +946,10 @@ class Spectroscopy_0:
             return self.read_lls_runtime(runname)
         
         # Otherwise read the normal version
-        ngasact = len(open(runname+'.lls').readlines(  ))
+        ngasact = len(open(archnemesis_resolve_path(runname+'.lls')).readlines(  ))
 
         #Opening .lls file
-        f = open(runname+'.lls','r')
+        f = open(archnemesis_resolve_path(runname+'.lls'),'r')
         strlta = [''] * ngasact
         for i in range(ngasact):
             s = f.readline().split()
@@ -1040,7 +1042,7 @@ class Spectroscopy_0:
         current_use_cache = True
         
         
-        with open(lls_fpath, 'r') as f:
+        with open(archnemesis_resolve_path(lls_fpath), 'r') as f:
             for aline in f:
                 aline = aline.split('#', maxsplit=1)[0].strip() # Comments are prefaced by `#` characters, remove them and any trailing whitespace
                 if len(aline) == 0 or aline.isspace(): # skip any empty lines
@@ -1260,7 +1262,7 @@ class Spectroscopy_0:
             Name of the Nemesis run
         """
         
-        ngasact = len(open(runname+'.kls').readlines(  ))
+        ngasact = len(open(archnemesis_resolve_path(runname+'.kls')).readlines(  ))
 
         #Opening file
         f = open(runname+'.kls','r')
@@ -2459,7 +2461,7 @@ def read_ltahead(filename):
     if not filename.endswith('.lta'):
         filename += '.lta'
     
-    with open(filename, 'rb') as f:
+    with open(archnemesis_resolve_path(filename), 'rb') as f:
         
         _ = int(np.fromfile(f,dtype='int32',count=1)[0]) # irec0
         nwave = np.fromfile(f,dtype='int32',count=1)[0]
@@ -2522,7 +2524,7 @@ def read_ktahead(filename):
     if not filename.endswith('.kta'):
         filename += '.kta'
     
-    with open(filename, 'rb') as f:
+    with open(archnemesis_resolve_path(filename), 'rb') as f:
 
         _ = int(np.fromfile(f,dtype='int32',count=1)[0]) # irec0
         nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
@@ -2660,7 +2662,7 @@ def read_lbltable(filename,wavemin,wavemax):
         filename += '.lta'
     
     _lgr.debug(f'{filename=}')
-    with open(filename, 'rb') as f:
+    with open(archnemesis_resolve_path(filename), 'rb') as f:
 
         #nbytes_int32 = 4
         nbytes_float32 = 4
@@ -2770,7 +2772,7 @@ def read_ktable(filename,wavemin,wavemax):
     if not filename.endswith('.kta'):
         filename += '.kta'
     
-    with open(filename, 'rb') as f:
+    with open(archnemesis_resolve_path(filename), 'rb') as f:
 
         nbytes_int32 = 4
         nbytes_float32 = 4
@@ -2897,7 +2899,7 @@ def write_lbltable(filename,npress,ntemp,gasID,isoID,presslevels,templevels,nwav
     if np.any(presslevels < 0):
         raise ValueError("error in write_lbltable :: Pressure levels must be non-negative")
 
-    with open(filename, 'wb') as f:
+    with open(archnemesis_resolve_path(filename), 'wb') as f:
 
         irec0 = 9 + npress + ntemp    #Don't know why this 9 is like this, but it works for a Linux/Ubuntu machine
         bin=struct.pack('i',irec0) #IREC0
@@ -2985,7 +2987,7 @@ def write_ktable(filename,gasID,isoID,g_ord,del_g,presslevels,templevels,nwave,v
     if delv <= 0.0:
         irec0 += nwave
 
-    with open(filename, 'wb') as f:
+    with open(archnemesis_resolve_path(filename), 'wb') as f:
 
         # Header
         np.int32(irec0).tofile(f)

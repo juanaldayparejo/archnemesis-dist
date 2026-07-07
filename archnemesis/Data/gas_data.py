@@ -31,7 +31,7 @@ look_up(gas_name):
     look up information about a molecule using the RADTRAN data base.
 """
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 

@@ -22,7 +22,7 @@ import numpy as np
 
 from archnemesis.enum import ZenithAngleOriginEnum, PathObserverPointingEnum, PathCalcEnum
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 """

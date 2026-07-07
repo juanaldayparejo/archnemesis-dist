@@ -21,7 +21,7 @@ from archnemesis.database.data_layout_writers.pseudo_continuum_table_writer impo
 from archnemesis.database.datatypes.pseudo_continuum_data import PseudoContinuumData
 
 # Logging
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 #_lgr.setLevel(logging.INFO)
 _lgr.setLevel(logging.DEBUG)

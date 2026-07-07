@@ -28,7 +28,7 @@ from numba import jit
 from archnemesis.helpers import h5py_helper
 from archnemesis.enum import GasEnum, ParaH2RatioEnum
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 ###############################################################################################

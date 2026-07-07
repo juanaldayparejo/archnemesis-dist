@@ -7,7 +7,7 @@ import numpy as np
 from .gas_descriptor import RadtranGasDescriptor
 from archnemesis import Data
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 

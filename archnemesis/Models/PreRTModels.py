@@ -21,7 +21,7 @@ from archnemesis.Scatter_0 import kk_new_sub
 from archnemesis.enum import AtmosphericProfileTypeEnum
 from archnemesis.enum import WaveUnitEnum
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 #_lgr.setLevel(logging.DEBUG)
 _lgr.setLevel(logging.INFO)
