@@ -1546,7 +1546,10 @@ class Spectroscopy_0:
         igas = np.where( (self.ID==ID) & (self.ISO==ISO) )[0]
         if len(igas)==0:
             raise ValueError('error in write_table_hdf5 :: The specified gas is not defined in the Spectroscopy class')
-        
+        elif len(igas)>1:
+            raise ValueError('error in write_table_hdf5 :: The specified gas is defined more than once in the Spectroscopy class')
+        igas = igas[0]
+
         
         if self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
             
@@ -3132,7 +3135,8 @@ def calc_lbltable(outname,                       #Name of the output .lta file
                   cont_database=None,            #Pseudo-continuum database (If not None, it will use the same as the line_database)
                   include_pressure_shift=True,   #Flag to include pressure shift in the waveumbers
                   n_chunks=1,                    #Number of chunks to split the wavenumber grid into for the calculations (default = 1, i.e. no splitting)
-                  n_cores=1                      #Number of cores to use in the calculations (if >1, parallel processes are used. maximum value is n_chunks) 
+                  n_cores=1,                     #Number of cores to use in the calculations (if >1, parallel processes are used. maximum value is n_chunks) 
+                  write_hdf5=False,              #If True, write the output in HDF5 format (default = False, i.e. write in binary .lta format)
 ):
     """
     Calculate a line-by-line look-up table for a given gas
@@ -3185,6 +3189,8 @@ def calc_lbltable(outname,                       #Name of the output .lta file
         Number of chunks to split the wavenumber grid into for the calculations (default = 1, i.e. no splitting)
     @param n_cores: int
         Number of cores to use in the calculations (if >1, parallel processes are used. maximum value is n_chunks)
+    @param write_hdf5: bool
+        If True, write the output in HDF5 format (default = False, i.e. write in binary .lta format)
     """
 
     from joblib import Parallel, delayed
@@ -3286,11 +3292,14 @@ def calc_lbltable(outname,                       #Name of the output .lta file
 
     Spectroscopy.K = k[:,:,:,np.newaxis]
 
-
     #Writing the look-up table
     ############################################################################
 
-    write_lbltable(outname,npress,ntemp,gasID,isoID,Spectroscopy.PRESS,Spectroscopy.TEMP,nwave,wavemin,delwave,k,DOUBLE=False)
+    if write_hdf5:
+        Spectroscopy.ILBL = SpectralCalculationModeEnum.LINE_BY_LINE_TABLES
+        Spectroscopy.write_table_hdf5(gasID,isoID,outname)
+    else:
+        write_lbltable(outname,npress,ntemp,gasID,isoID,Spectroscopy.PRESS,Spectroscopy.TEMP,nwave,wavemin,delwave,k,DOUBLE=False)
 
 
 ######################################################################################################
