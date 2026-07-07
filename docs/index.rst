@@ -184,6 +184,12 @@ Dependencies
    documentation/reference_classes.ipynb
 
 .. toctree::
+   :caption: Gas species information
+   :hidden:
+   
+   documentation/gas_information.ipynb
+
+.. toctree::
    :caption: Model parameterisations
    :hidden:
    
