@@ -1,6 +1,6 @@
-from enum import StrEnum, auto
+from enum import IntEnum, auto
 
-class ArchNemesisFileTypeEnum(StrEnum):
+class ArchNemesisFileTypeEnum(IntEnum):
 	UNDEFINED = auto()
 	LEGACY = auto()
 	HDF5 = auto()
