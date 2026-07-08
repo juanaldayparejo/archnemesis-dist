@@ -17,7 +17,7 @@ from archnemesis.database.datatypes.pf_list import PFList
 from archnemesis.database.data_holders.partition_function_data_holder import PartitionFunctionDataHolder
 
 # Logging
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 #_lgr.setLevel(logging.DEBUG)

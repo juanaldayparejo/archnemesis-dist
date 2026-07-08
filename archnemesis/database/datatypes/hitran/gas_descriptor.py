@@ -3,7 +3,7 @@ from typing import NamedTuple
 from ..gas_descriptor import RadtranGasDescriptor
 from ...mappings.hitran import radtran_to_hitran, hitran_to_radtran
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 

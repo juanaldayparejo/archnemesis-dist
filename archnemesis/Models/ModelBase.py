@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 
 
 
-
 class ModelBase(abc.ABC):
     """
         Abstract base class of all parameterised models used by ArchNemesis. This class should be subclassed further for models of a particular component.

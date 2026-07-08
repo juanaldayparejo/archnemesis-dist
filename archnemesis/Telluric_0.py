@@ -29,7 +29,7 @@ import archnemesis.Data.constants as const
 from archnemesis.enum import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnitEnum, SpectralCalculationModeEnum
 import archnemesis.helpers.h5py_helper as h5py_helper
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 

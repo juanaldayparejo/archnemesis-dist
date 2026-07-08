@@ -35,7 +35,7 @@ from archnemesis.enum import InstrumentLineshapeEnum, WaveUnitEnum, SpectraUnitE
 from archnemesis import gauss_lobatto
 
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 

@@ -57,7 +57,7 @@ from archnemesis.enum import (
     LayerIntegrationSchemeEnum,
 )
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 ###############################################################################################

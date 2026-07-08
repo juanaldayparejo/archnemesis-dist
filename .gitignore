@@ -169,3 +169,6 @@ local_*_database/
 HITRAN??/
 HITRAN_TEST/
 test_data/
+archnemesis/Data/reference_databases/hitran_2024.h5.bak
+archnemesis/Data/reference_databases/hitran_2024.h5
+archnemesis/Data/reference_databases/hitran_2024.h5.no_download

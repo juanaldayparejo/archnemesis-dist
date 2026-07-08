@@ -26,7 +26,8 @@ import numpy as np
 import scipy
 from numba import jit, njit
 
-#from archnemesis import *
+
+import archnemesis as ans
 from archnemesis.enum import (
     WaveUnitEnum,
     #SpectraUnitEnum,
@@ -36,21 +37,16 @@ from archnemesis.enum import (
 )
 from archnemesis.enum.map import SpectroscopicLineProfileEnum_to_lineshape_fn
 
-#import matplotlib.pyplot as plt
-import archnemesis as ans
-#from archnemesis.database.datatypes.wave_range import WaveRange
-
 from archnemesis.helpers import h5py_helper, path_redirect
-#import matplotlib.pyplot as plt
+from archnemesis.Data.path_data import (
+    archnemesis_path,
+    archnemesis_resolve_path,
+)
 
-from archnemesis.Data.path_data import archnemesis_path 
-
-import matplotlib.pyplot as plt
 
 import copy
 
-
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 
@@ -883,7 +879,7 @@ class Spectroscopy_0:
                                     attrs = None,
                                     mutators = {
                                         'lineshape' : lambda x: SpectroscopicLineProfileEnum(x),
-                                        'amb_gas' : lambda x: tuple(ans.enum.AmbientGasEnum(z) for z in x),
+                                        'amb_gas' : lambda x: tuple(ans.enum.AmbientGasEnum(z) for z in x.flat),
                                         'include_pressure_shift' : lambda x: True if x!=0 else False,
                                         'include_continuum' : lambda x: True if x!=0 else False,
                                         'include_lines' : lambda x: True if x!=0 else False,
@@ -942,10 +938,10 @@ class Spectroscopy_0:
             return self.read_lls_runtime(runname)
         
         # Otherwise read the normal version
-        ngasact = len(open(runname+'.lls').readlines(  ))
+        ngasact = len(open(archnemesis_resolve_path(runname+'.lls')).readlines(  ))
 
         #Opening .lls file
-        f = open(runname+'.lls','r')
+        f = open(archnemesis_resolve_path(runname+'.lls'),'r')
         strlta = [''] * ngasact
         for i in range(ngasact):
             s = f.readline().split()
@@ -1038,7 +1034,7 @@ class Spectroscopy_0:
         current_use_cache = True
         
         
-        with open(lls_fpath, 'r') as f:
+        with open(archnemesis_resolve_path(lls_fpath), 'r') as f:
             for aline in f:
                 aline = aline.split('#', maxsplit=1)[0].strip() # Comments are prefaced by `#` characters, remove them and any trailing whitespace
                 if len(aline) == 0 or aline.isspace(): # skip any empty lines
@@ -1258,7 +1254,7 @@ class Spectroscopy_0:
             Name of the Nemesis run
         """
         
-        ngasact = len(open(runname+'.kls').readlines(  ))
+        ngasact = len(open(archnemesis_resolve_path(runname+'.kls')).readlines(  ))
 
         #Opening file
         f = open(runname+'.kls','r')
@@ -2461,7 +2457,7 @@ def read_ltahead(filename):
     if not filename.endswith('.lta'):
         filename += '.lta'
     
-    with open(filename, 'rb') as f:
+    with open(archnemesis_resolve_path(filename), 'rb') as f:
         
         _ = int(np.fromfile(f,dtype='int32',count=1)[0]) # irec0
         nwave = np.fromfile(f,dtype='int32',count=1)[0]
@@ -2524,7 +2520,7 @@ def read_ktahead(filename):
     if not filename.endswith('.kta'):
         filename += '.kta'
     
-    with open(filename, 'rb') as f:
+    with open(archnemesis_resolve_path(filename), 'rb') as f:
 
         _ = int(np.fromfile(f,dtype='int32',count=1)[0]) # irec0
         nwave = int(np.fromfile(f,dtype='int32',count=1)[0])
@@ -2662,7 +2658,7 @@ def read_lbltable(filename,wavemin,wavemax):
         filename += '.lta'
     
     _lgr.debug(f'{filename=}')
-    with open(filename, 'rb') as f:
+    with open(archnemesis_resolve_path(filename), 'rb') as f:
 
         #nbytes_int32 = 4
         nbytes_float32 = 4
@@ -2772,7 +2768,7 @@ def read_ktable(filename,wavemin,wavemax):
     if not filename.endswith('.kta'):
         filename += '.kta'
     
-    with open(filename, 'rb') as f:
+    with open(archnemesis_resolve_path(filename), 'rb') as f:
 
         nbytes_int32 = 4
         nbytes_float32 = 4
@@ -2899,7 +2895,7 @@ def write_lbltable(filename,npress,ntemp,gasID,isoID,presslevels,templevels,nwav
     if np.any(presslevels < 0):
         raise ValueError("error in write_lbltable :: Pressure levels must be non-negative")
 
-    with open(filename, 'wb') as f:
+    with open(archnemesis_resolve_path(filename), 'wb') as f:
 
         irec0 = 9 + npress + ntemp    #Don't know why this 9 is like this, but it works for a Linux/Ubuntu machine
         bin=struct.pack('i',irec0) #IREC0
@@ -2987,7 +2983,7 @@ def write_ktable(filename,gasID,isoID,g_ord,del_g,presslevels,templevels,nwave,v
     if delv <= 0.0:
         irec0 += nwave
 
-    with open(filename, 'wb') as f:
+    with open(archnemesis_resolve_path(filename), 'wb') as f:
 
         # Header
         np.int32(irec0).tofile(f)
@@ -3194,7 +3190,6 @@ def calc_lbltable(outname,                       #Name of the output .lta file
     """
 
     from joblib import Parallel, delayed
-    import copy
 
 
     #Initialising spectroscopy class
@@ -3304,13 +3299,9 @@ def calc_lbltable(outname,                       #Name of the output .lta file
 
 ######################################################################################################
 
-def calc_lbltable_chunk(iwaves,Spectroscopy,self_frac):
+def calc_lbltable_chunk(iwaves,Spectroscopy,self_frac): 
 
-    iwavemin = iwaves[0]
-    iwavemax = iwaves[-1]
-    nwave = len(iwaves)
-
-    Spectroscopy.NWAVE = nwave
+    Spectroscopy.NWAVE = len(iwaves)
     Spectroscopy.WAVE = Spectroscopy.WAVE[iwaves]
 
     if Spectroscopy.ISPACE == 0:
@@ -3581,8 +3572,6 @@ def calc_ktable_bin(iwave,Spectroscopy,Spectroscopy_LBL,self_frac,Measurement):
     # Download partition function tables for the gas isotopes
     linedata.fetch_partition_fn()
     
-    store = np.empty((4, linedata.max_lines_or_bins), dtype=float)
-
     #Checking that there are lines in the spectral range. If not, the k-coefficients will be set to zero and a warning will be issued.
     k_coefficients = np.zeros((Spectroscopy.NG, Spectroscopy.NP, Spectroscopy.NT))
     if len(linedata.combined_line_data.NU) == 0:
@@ -3597,28 +3586,11 @@ def calc_ktable_bin(iwave,Spectroscopy,Spectroscopy_LBL,self_frac,Measurement):
             tempx = Spectroscopy.TEMP[it]
 
             _lgr.info(f'Calculating k-coefficients at p = {pressx} atm and t = {tempx} K')
-
-            #if ispace == WaveUnitEnum.Wavenumber_cm:
-            #    nus = linedata.combined_line_data.NU
-            #elif ispace == WaveUnitEnum.Wavelength_um:
-            #    nus = 1e4 / linedata.combined_line_data.NU
-
-            #Estimating the spacing in the cross section calculations
-            #alpha_d = linedata.calculate_doppler_width(tempx, combined_output=True)
-            #gamma_l = linedata.calculate_lorentz_width(tempx,pressx, amb_frac=1.-self_frac, combined_output=True)
-
-            #delv_calc_doppler = np.min(alpha_d * nus / linedata.combined_line_data.NU)
-            #delv_calc_lorentz = np.min(gamma_l * nus / linedata.combined_line_data.NU) 
-            #delv_calc = np.min([delv_calc_doppler, delv_calc_lorentz]) / 5.
+            
             delv_calc = 0.0001
 
             ncalc = int((vbinmax-vbinmin)/delv_calc)
             wavecalc = np.linspace(vbinmin,vbinmax,ncalc)
-
-            #_lgr.info(f'Central wavelength of the bin = {Spectroscopy.WAVE[iwave]}')
-            #_lgr.info(f'Number of absorption lines in the range = {len(linedata.combined_line_data.NU)}')
-            #_lgr.info(f'Number of spectral points in the range = {ncalc} - delta_wave = {delv_calc}')    
-            #_lgr.info('Calculating line-by-line absorption coefficients')        
 
             #Calculating the absorption coefficients at the line-by-line level for the given pressure and temperature
             Spectroscopy_LBL.NWAVE = ncalc
@@ -3685,8 +3657,6 @@ def calc_ktable_chunk(iwaves,Spectroscopy,Spectroscopy_LBL,self_frac,Measurement
     # Download partition function tables for the gas isotopes
     linedata.fetch_partition_fn()
 
-    store = np.empty((4, linedata.max_lines_or_bins), dtype=float)
-
     #Checking that there are lines in the spectral range. If not, the k-coefficients will be set to zero and a warning will be issued.
     k_coefficients = np.zeros((nwave,Spectroscopy.NG, Spectroscopy.NP, Spectroscopy.NT))
     if len(linedata.combined_line_data.NU) == 0:
@@ -3702,27 +3672,10 @@ def calc_ktable_chunk(iwaves,Spectroscopy,Spectroscopy_LBL,self_frac,Measurement
 
             _lgr.info(f'Calculating k-coefficients at p = {pressx} atm and t = {tempx} K')
 
-            #if ispace == WaveUnitEnum.Wavenumber_cm:
-            #    nus = linedata.combined_line_data.NU
-            #elif ispace == WaveUnitEnum.Wavelength_um:
-            #    nus = 1e4 / linedata.combined_line_data.NU
-
-            #Estimating the spacing in the cross section calculations
-            #alpha_d = linedata.calculate_doppler_width(tempx, combined_output=True)
-            #gamma_l = linedata.calculate_lorentz_width(tempx,pressx, amb_frac=1.-self_frac, combined_output=True)
-
-            #delv_calc_doppler = np.min(alpha_d * nus / linedata.combined_line_data.NU)
-            #delv_calc_lorentz = np.min(gamma_l * nus / linedata.combined_line_data.NU) 
-            #delv_calc = np.min([delv_calc_doppler, delv_calc_lorentz]) / 5.
             delv_calc = delv_lbl
 
             ncalc = int((vchunkmax-vchunkmin)/delv_calc)
             wavecalc = np.linspace(vchunkmin,vchunkmax,ncalc)
-
-            #_lgr.info(f'Central wavelength of the bin = {Spectroscopy.WAVE[iwave]}')
-            #_lgr.info(f'Number of absorption lines in the range = {len(linedata.combined_line_data.NU)}')
-            #_lgr.info(f'Number of spectral points in the range = {ncalc} - delta_wave = {delv_calc}')    
-            #_lgr.info('Calculating line-by-line absorption coefficients')        
 
             #Calculating the absorption coefficients at the line-by-line level for the given pressure and temperature
             Spectroscopy_LBL.NWAVE = ncalc
