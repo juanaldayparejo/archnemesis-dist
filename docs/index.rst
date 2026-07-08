@@ -187,7 +187,7 @@ Dependencies
    :caption: Gas species information
    :hidden:
    
-   documentation/gas_information.ipynb
+   documentation/gas_information.md
 
 .. toctree::
    :caption: Model parameterisations

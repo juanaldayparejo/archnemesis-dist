@@ -14,10 +14,31 @@ extensions = [
     "sphinx.ext.mathjax",
 #    "sphinx.ext.viewcode",
     "IPython.sphinxext.ipython_console_highlighting",
+    "myst_parser",
     ]
+
+myst_enable_extensions = [
+    "colon_fence",
+]
+
+#Creating gas_table.html file for documentation
+##################################################################################
+
+from pathlib import Path
+from archnemesis.Data.gas_data import generate_isotopologue_table_html
+
+outfile = Path(__file__).parent / "_static" / "gas_table.html"
+
+html = generate_isotopologue_table_html()
+
+# Only overwrite if the contents changed
+if (not outfile.exists()) or (outfile.read_text(encoding="utf-8") != html):
+    outfile.write_text(html, encoding="utf-8")
 
 
 #Defining paramters for autodoc documentation
+##################################################################################
+
 #napoleon_google_docstring = False
 #napoleon_numpy_docstring = True
 #napoleon_include_init_with_doc = False

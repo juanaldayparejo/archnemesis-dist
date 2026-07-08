@@ -7,3 +7,4 @@ pandoc
 numpydoc
 IPython
 pymdown-extensions
+myst_parser
