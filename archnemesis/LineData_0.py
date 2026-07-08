@@ -1969,7 +1969,14 @@ class LineData_0:
         
         if default_continuum_bin_width is not None:
             default_continuum_bin_width = WavePoint(default_continuum_bin_width, wave_unit).as_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value
-        
+
+        #Swapping vmin and vmax if they were express in wavelength
+        if vmax < vmin:
+            vmaxx = vmin
+            vminx = vmax
+            vmax = vmaxx
+            vmin = vminx
+
         self._set_params_direct(
             wn_min = vmin, 
             wn_max = vmax, 
@@ -2261,6 +2268,7 @@ class LineData_0:
             include_lines = include_lines,
             include_continuum = include_continuum,
             include_pressure_shift = include_pressure_shift,
+            wave_unit = wave_unit,
             use_cache = use_cache,
             out = out,
         )
@@ -2314,20 +2322,22 @@ class LineData_0:
         else:
             wn_grid = wave_grid
         
+
         #Calculating the spectral range required to perform the calculations
         if wave_calc_range is None:
             wn_calc_range = (np.min(wn_grid) - 2*wn_approx_window, np.max(wn_grid) + 2*wn_approx_window)
-        elif wave_unit != ans.enum.WaveUnitEnum.Wavenumber_cm:
-            wn_calc_range = (WavePoint(wave_calc_range[0], wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value, WavePoint(wave_calc_range[1], wave_unit).to_unit(ans.enum.WaveUnitEnum.Wavenumber_cm).value)
-        
+
+
         # Ensure that `wn_grid` is ascending. Flip both `wn_grid` and `out` if `wn_grid` is decending.
         if np.all(wn_grid[:-1] < wn_grid[1:]):
             pass
         elif np.all(wn_grid[:-1] > wn_grid[1:]):
-            out = out.flip(axis=-1)
+            out = np.flip(out,axis=-1)
+            wn_grid = np.flip(wn_grid)
         else:
             raise RuntimeError('`wave_grid` passed to LineData_0::monochromatic_absorption(...) must be either ascending or decending.')
         
+
         #Calculating the relative abundances of self and ambient gases
         if isinstance(amb_frac, float):
             mol_mix_frac = np.array([1-amb_frac, amb_frac], dtype=float)
@@ -2336,6 +2346,7 @@ class LineData_0:
         
         assert mol_mix_frac.shape[0] == len(self._params.ambient_gasses)+1, "LineData_0::add_monochromatic_absorption(...) `amb_frac` must have enough entries for each ambient gas"
         
+
         # Ensure isotopic abundances are arrays of correct length
         # Isotopic abundances are only applied if the gas is a mixture of isotopes (ISO=0)
         if self.ISO == 0:
@@ -2348,6 +2359,7 @@ class LineData_0:
                 assert self.n_isos == isotopic_abundance.shape[0], "If provided, there must be an isotopic abundance for each isotopologue in the LineData_0 instance"
         else:
             isotopic_abundance = [1.]
+
 
         #Debugging statements
         if _lgr.level <= logging.DEBUG:
