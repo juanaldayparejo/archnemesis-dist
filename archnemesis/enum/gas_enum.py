@@ -5,8 +5,6 @@ from enum import IntEnum
 class GasEnum(IntEnum):
     """
     Enum to define the gases used in the retrievals.
-    
-    Used in 'IPAIRG1', 'IPAIRG2'
     """
     H2O = 1
     CO2 = 2
@@ -144,3 +142,12 @@ class GasEnum(IntEnum):
     NO3 = 135
     BrO2 = 136
     IO2 = 137
+    CS2 = 138
+    CH3I = 139
+    NF3 = 140
+    S2 = 141
+    COFCl = 142
+    HONO = 143
+    ClNO2 = 144
+    RuO4 = 145
+    H2C3H2 = 146
