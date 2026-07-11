@@ -1060,7 +1060,7 @@ class CombinedLineSetSpecData:
         i = 0
         j = 0
         for iso_line_data in ld_list:
-            _lgr.info(f'{iso_line_data._data.shape=}')
+            _lgr.debug(f'{iso_line_data._data.shape=}')
             j = i + iso_line_data.n_lines
             id_data[0,i:j] = iso_line_data.rt_gas_desc.gas_id
             id_data[1,i:j] = iso_line_data.rt_gas_desc.iso_id

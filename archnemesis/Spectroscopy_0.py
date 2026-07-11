@@ -3610,8 +3610,6 @@ def calc_ktable_chunk(iwaves,Spectroscopy,Spectroscopy_LBL,self_frac,Measurement
             pressx = Spectroscopy.PRESS[ip]
             tempx = Spectroscopy.TEMP[it]
 
-            _lgr.info(f'Calculating k-coefficients at p = {pressx} atm and t = {tempx} K')
-
             #Estimating the spacing in the cross section calculations
             alpha_d = linedata.calculate_doppler_width(tempx, combined_output=True)
             gamma_l = linedata.calculate_lorentz_width(tempx,pressx, amb_frac=1.-self_frac, combined_output=True)
@@ -3624,7 +3622,9 @@ def calc_ktable_chunk(iwaves,Spectroscopy,Spectroscopy_LBL,self_frac,Measurement
                 delv_calc = delwn_calc
 
             ncalc = int((vchunkmax-vchunkmin)/delv_calc)
-            wavecalc = np.linspace(vchunkmin,vchunkmax,ncalc)   
+            wavecalc = np.linspace(vchunkmin,vchunkmax,ncalc)  
+
+            _lgr.info(f'Calculating k-coefficients at p = {pressx} atm and t = {tempx} K. Number of spectral points in lbl calculations = {ncalc} with a resolution of {delv_calc}')
 
             #Calculating the absorption coefficients at the line-by-line level for the given pressure and temperature
             Spectroscopy_LBL.NWAVE = ncalc
