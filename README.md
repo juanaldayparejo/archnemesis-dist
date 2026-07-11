@@ -73,6 +73,21 @@ pip install archnemesis
 This will install the latest stable release of the package along with its dependencies.
 It is the recommended method if you just want to use the library without editing the source code.
 
+## Downloading archNEMESIS spectroscopic databases
+
+Several features of archNEMESIS, including the calculation of absorption cross sections and correlated-*k* coefficients, rely on spectroscopic line parameters from databases such as HITRAN, HITEMP, GEISA, and ExoMol. To perform these calculations, the spectroscopic line data must be stored in the archNEMESIS database format.
+
+Reference spectroscopic databases compatible with archNEMESIS are available from our dedicated collection on DIGITAL.CSIC:
+
+<a href="https://digital.csic.es/handle/10261/435473" target="_blank">
+    <img src="docs/_static/digital_csic_logo.png"
+         alt="DIGITAL.CSIC"
+         width="250">
+</a>
+
+Users wishing to work with spectroscopic databases that are not included in this collection can generate their own archNEMESIS-formatted databases. If you require assistance with this process, please contact us.
+
+
 ## Contributing to archNEMESIS
 
 If you want to contribute to the development of archNEMESIS, please follow our [Contribution Guidelines](CONTRIBUTING.md).

@@ -89,6 +89,22 @@ Finally, install the library in editable mode:
 This will install archNEMESIS along with all required dependencies, while keeping the source editable.
 
 
+Downloading archNEMESIS spectroscopic databases
+-------------------------------------------------
+
+Several features of archNEMESIS, including the calculation of absorption cross sections and correlated-*k* coefficients, rely on spectroscopic line parameters from databases such as HITRAN, HITEMP, GEISA, and ExoMol. To perform these calculations, the spectroscopic line data must be stored in the archNEMESIS database format.
+
+Reference spectroscopic databases compatible with archNEMESIS are available from our DIGITAL.CSIC collection.
+
+.. image:: _static/digital_csic_logo.png
+   :alt: DIGITAL.CSIC
+   :width: 250px
+   :align: center
+   :target: https://digital.csic.es/handle/10261/435473
+
+Users wishing to work with spectroscopic databases that are not included in this collection can generate their own archNEMESIS-formatted databases. If you require assistance with this process, please contact us.
+
+
 Citing archNEMESIS
 --------------------
 
