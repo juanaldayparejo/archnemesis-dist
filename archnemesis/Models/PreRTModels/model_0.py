@@ -298,18 +298,19 @@ class Model0(PreRTModelBase):
         atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
         
         xn_params = self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
-        
+        xprof = xn_params[0]  #The profile is the first (and only) slice of the state vector entries
+
         atm, xmap1 = self.calculate(
             atm,
             atm_profile_type,
             atm_profile_idx,
-            *xn_params,
+            xprof,
         )
         
         #Calculating derivatives of the atmospheric profile with respect to the state vector
         for i in range(self.n_state_vector_entries):
             if forward_model.Variables.LX[self.state_vector_start+i] == 1: #If carried in log space, then the derivative is multiplied by the value of the profile at that level
-                xmap1[i,:] = xmap1[i,:] * xn_params[i]
+                xmap1[i,:] = xmap1[i,:] * xprof[i]
         
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
