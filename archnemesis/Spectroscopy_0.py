@@ -2942,9 +2942,12 @@ def write_lbltable(filename,npress,ntemp,gasID,isoID,presslevels,templevels,nwav
         for i in range(nwave):
             for j in range(npress):
                 tmp = k[i,j,:] * BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR
-                myfmt=df*len(tmp)
-                bin=struct.pack(myfmt,*tmp) #K
-                f.write(bin)
+                
+                # Use NumPy's tobytes instead of struct.pack
+                if DOUBLE:
+                    f.write(tmp.astype(np.float64).tobytes())
+                else:
+                    f.write(tmp.astype(np.float32).tobytes())
 
     
 ###############################################################################################
