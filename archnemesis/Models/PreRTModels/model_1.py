@@ -307,6 +307,8 @@ class Model1(PreRTModelBase):
         
         #Getting the parameters from the state vector
         xn_params = self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        xn_params_1d = np.concatenate([np.atleast_1d(v) for v in xn_params])
+
         xdeep = xn_params[0] ; fsh = xn_params[1]
         
         #Modifying Atmosphere based on model parameters
@@ -322,7 +324,7 @@ class Model1(PreRTModelBase):
         #Calculating derivatives of the atmospheric profile with respect to the state vector
         for i in range(self.n_state_vector_entries):
             if forward_model.Variables.LX[self.state_vector_start+i] == 1: #If carried in log space, then the derivative is multiplied by the value of the parameter
-                xmap1[i,:] = xmap1[i,:] * xn_params[i]
+                xmap1[i,:] = xmap1[i,:] * xn_params_1d[i]
 
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
