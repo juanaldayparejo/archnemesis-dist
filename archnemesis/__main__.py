@@ -9,6 +9,7 @@ from pathlib import Path
 import argparse as ap
 
 from archnemesis.Retrieval import Retrieval
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
@@ -23,10 +24,12 @@ def create_parser():
 	parser.add_argument('--log_at', choices=('DEBUG', 'INFO', 'WARN', 'ERROR', 'CRIT'), help='Level to set all logging to', default=None)
 	parser.add_argument('--log_stream', action='append', choices=('package', 'progress'), help='Logging stream to set level of (applied in order after `log_at`)', default=[])
 	parser.add_argument('--log_stream_level', action='append', choices=('DEBUG', 'INFO', 'WARN', 'ERROR', 'CRIT'), help='Level to set logging stream to (applied in order after `log_at`)', default=[])
-	#parser.add_argument('--redirect_path', type=redirect_file_access.Redirector.from_string, action='append', help='Creates a redirect from as string formatted as "{old_path}->{new_path}" any paths relative to {old_path} are redirected to be relative to {new_path}', default=[])
-	#parser.add_argument('--no_show_plots', action='store_true', help='if present, will not show plots (but will still write them to disk)', default=False)
-	#parser.add_argument('--plot_path_fmt', type=PathFormat.from_argument, help=PathFormat.get_description(extra_keywords=('retrieval_dir', 'plot_name',)) + ' (default = "{retrieval_dir}/{plot_name}.png")', default=PathFormat('{retrieval_dir}/{plot_name}.png'))
 
+	parser.add_argument('--convert', type=lambda x: ArchNemesisFileTypeEnum[x.upper()], choices=(ArchNemesisFileTypeEnum.HDF5, ArchNemesisFileTypeEnum.LEGACY), help='Will convert inputs to specified format', default=ArchNemesisFileTypeEnum.UNDEFINED)
+	parser.add_argument('--no_plot', dest='do_plot', action='store_false', help='if present, will not create any plots', default=True)
+	parser.add_argument('--no_write', dest='do_write', action='store_false', help='if present, will not write the results to disk', default=True)
+	#parser.add_argument('--redirect_path', type=redirect_file_access.Redirector.from_string, action='append', help='Creates a redirect from as string formatted as "{old_path}->{new_path}" any paths relative to {old_path} are redirected to be relative to {new_path}', default=[])
+	#parser.add_argument('--plot_path_fmt', type=PathFormat.from_argument, help=PathFormat.get_description(extra_keywords=('retrieval_dir', 'plot_name',)) + ' (default = "{retrieval_dir}/{plot_name}.png")', default=PathFormat('{retrieval_dir}/{plot_name}.png'))
 
 	retrieval_engine_subparsers = parser.add_subparsers(
 		title = 'Retrieval Engine',
@@ -105,20 +108,17 @@ if __name__ == '__main__':
 	_ = args.pop('log_stream', None)
 	_ = args.pop('log_stream_level', None)
 	retrieval_engine = args.pop('retrieval_engine', 'OptimalEstimation')
+	retrieval_engine = 'OptimalEstimation' if retrieval_engine is None else retrieval_engine
 
 	# Create and run retrieval with specified engine.
 	n_paths = len(paths)
 	if n_paths == 1:
 		path = Path(paths[0])
 		
-		if not path.exists(): # Assume ends in a runname
-			retrieval = Retrieval.from_runname(str(path))
-		elif path.is_file():
-			retrieval = Retrieval.from_file(str(path))
-		elif path.is_dir():
-			retrieval = Retrieval.from_dir(str(path))
-		else:
-			raise RuntimeError('Could not create retrieval instance')
+		retrieval = Retrieval.from_path(path)
+		
+		# perform any conversions first
+		retrieval.filetype = args.pop('convert', retrieval.filetype)
 		
 		run_retrieval_actions[retrieval_engine](retrieval, **args)
 		

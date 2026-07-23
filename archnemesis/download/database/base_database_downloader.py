@@ -3,9 +3,9 @@ import os
 from pathlib import Path
 
 
-from ..utils import fetch
+from ...database.utils import fetch
 
-from .ui.term import ui_show, ui_ask_yn
+from ...ui.terminal import ui_show, ui_ask_yn
 
 
 class BaseDatabaseDownloader:
@@ -53,7 +53,7 @@ class BaseDatabaseDownloader:
         raise RuntimeError('Could not get sentry file state, this should never happen.')
 
     
-
+    @staticmethod
     def is_in_pytest_environment() -> bool:
         if os.environ.get('PYTEST_VERSION') is not None: # ENSURE THAT PYTEST DOES NOT DOWNLOAD STUFF.
             return True
@@ -76,7 +76,7 @@ class BaseDatabaseDownloader:
         if (sentry_file_state := self.get_sentry_file_state()) is not None:
             return sentry_file_state
         
-        if ui_ask_yn(f'Download spectral database {self.DBASE_NAME}?'):
+        if ui_ask_yn(f'Download spectral database {self.DBASE_NAME}?', default=True):
             ui_show('User requested download...')
             return True
         else:
@@ -85,6 +85,9 @@ class BaseDatabaseDownloader:
         
         raise RuntimeError('Cannot work out whether download should continue. This should never happen.')
 
-    def action_download_reference_database(self, refresh : bool = False) -> None:
+    def action_check_and_download_reference_database(self, refresh : bool = False) -> None:
         if self.should_do_download():
-            fetch.safe_download(self.DBASE_URL, self.DBASE_PATH, ui_show = ui_show)
+            self.action_download_reference_database()
+
+    def action_download_reference_database(self) -> None:
+        fetch.safe_download(self.DBASE_URL, self.DBASE_PATH, ui_show = ui_show)

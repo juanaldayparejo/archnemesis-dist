@@ -339,6 +339,22 @@ class Retrieval:
 		
 		return Retrieval.from_file(os.path.abspath(os.path.join(dir_path, input_file)), path_redirects = path_redirects, lazy_load=lazy_load)
 		
+	@classmethod
+	def from_path(
+			cls, 
+			path : Path,
+			path_redirects : tuple[redirect_file_access.Redirector] = tuple(),
+			lazy_load = True
+		) -> Self:
+		if not path.exists(): # Assume ends in a runname
+			retrieval = Retrieval.from_runname(str(path), path_redirects, lazy_load)
+		elif path.is_file():
+			retrieval = Retrieval.from_file(str(path), path_redirects, lazy_load)
+		elif path.is_dir():
+			retrieval = Retrieval.from_dir(str(path), path_redirects, lazy_load)
+		else:
+			raise RuntimeError('Could not create retrieval_filetype instance')
+		return retrieval
 	
 	@classmethod
 	def copy(
@@ -809,7 +825,25 @@ class Retrieval:
 			return Path(Path(self.working_directory) / f'{self.runname}.inp')
 		else:
 			raise RuntimeError(f'Cannot determine `file` of retrieval when filetype is {self._filetype}')
+	
+	@property
+	def filetype(self) -> ArchNemesisFileTypeEnum:
+		return self._filetype
+	
+	@filetype.setter
+	def filetype(self, value : ArchNemesisFileTypeEnum) -> None:
+		if value == ArchNemesisFileTypeEnum.UNDEFINED or self._filetype == value:
+			return
 		
+		old_filetype = self._filetype
+		self._filetype = value
+		if not self.file.exists():
+			self._filetype = old_filetype
+			self.write(filetype=value)
+			self._filetype=value
+			
+		self.load(reload=True)
+	
 	## Private Methods ##
 	
 	def _get_forward_model_instance(self, IGEOM : int = None, IAV : int = None, new : bool = False):
@@ -865,10 +899,18 @@ class Retrieval:
 			yield
 		return
 	
-	def write(self, filetype : ArchNemesisFileTypeEnum = ArchNemesisFileTypeEnum.UNDEFINED) -> None:
+	def write(self, filetype : None | str | ArchNemesisFileTypeEnum = ArchNemesisFileTypeEnum.UNDEFINED) -> None:
 		"""
 		Write the components of this retrieval to disk
 		"""
+		if filetype is None:
+			filetype = ArchNemesisFileTypeEnum.UNDEFINED
+		if isinstance(filetype, str):
+			if filetype in ('hdf5', 'HDF5'):
+				filetype = ArchNemesisFileTypeEnum.HDF5
+			elif filetype in ('legacy', 'LEGACY'):
+				filetype = ArchNemesisFileTypeEnum.LEGACY
+			
 		if filetype is ArchNemesisFileTypeEnum.UNDEFINED:
 			filetype = self._filetype
 		
@@ -1107,7 +1149,8 @@ class Retrieval:
 			n_cores : None | int = None, 
 			write_itr : bool = False,
 			restart = True,
-			do_write : bool = True
+			do_write : bool = True,
+			do_plot : bool = True,
 	) -> Self:
 		
 		if restart:
@@ -1121,6 +1164,9 @@ class Retrieval:
 			with self.working_directory_context():
 				_lgr.info(f'Running forward model in {self._working_directory} as {n_iter=} is less than 0')
 				self.run_forward_model()
+				
+				if do_plot:
+					self.plot()
 				if do_write:
 					self.write()
 				return self
@@ -1182,6 +1228,8 @@ class Retrieval:
 		
 		self.calculate_profiles()
 		
+		if do_plot:
+			self.plot()
 		if do_write:
 			self.write()
 	

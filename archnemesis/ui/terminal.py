@@ -3,7 +3,6 @@
 ui_show = lambda x: print(x)
 
 def str_yes_or_no(response : str, default : bool | None = None) -> bool | None:
-    response = response.strip()
     if len(response) == 0:
         return default
     if response[0] in ('y','Y'):
@@ -18,8 +17,8 @@ def ui_ask_yn(msg : str, default : bool | None = None) -> bool:
     
     while yn is None:
         prompt = f'{msg} ({"Y" if default is not None and default else "y"}/{"N" if default is not None and not default else "n"}) >'
-        response = input(prompt).split()
-        yn = str_yes_or_no(response, default=True)
+        response = input(prompt).strip()
+        yn = str_yes_or_no(response, default=default)
         
         if yn is None:
             ui_show(f'  Unknown response "{response}".')

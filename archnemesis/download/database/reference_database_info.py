@@ -9,9 +9,3 @@ class HITRAN2024_RefDBaseInfo(NamedTuple):
     DBASE_DOWNLOAD_SENTRY_FILE    : Path = Path(archnemesis_resolve_path(archnemesis_path()+'/archnemesis/Data/reference_databases/hitran_2024.h5.download'))
     DBASE_NO_DOWNLOAD_SENTRY_FILE : Path = Path(archnemesis_resolve_path(archnemesis_path()+'/archnemesis/Data/reference_databases/hitran_2024.h5.no_download'))
 
-
-
-
-
-
-

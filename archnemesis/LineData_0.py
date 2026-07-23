@@ -52,7 +52,7 @@ from archnemesis.database.filetypes.ans_line_data_file import AnsLineDataFile
 from archnemesis.database.filetypes.ans_partition_fn_data_file import AnsPartitionFunctionDataFile
 from archnemesis.database.filetypes.ans_pseudo_continuum_file import AnsPseudoContinuumFile
 
-from archnemesis.download import get_reference_database_downloader_for
+from archnemesis.download.database import get_reference_database_downloader_for
 
 from archnemesis.Data.path_data import archnemesis_path 
 
@@ -1429,7 +1429,7 @@ class AnsDatabase:
         
         ref_dbase_downloader = get_reference_database_downloader_for(self.LINE_DATABASE)
         if ref_dbase_downloader is not None:
-            ref_dbase_downloader.action_download_reference_database()
+            ref_dbase_downloader.action_check_and_download_reference_database()
             
         self._ans_line_data_file = AnsLineDataFile(self.LINE_DATABASE)
         self._ans_partition_fn_file = AnsPartitionFunctionDataFile(self.PARTITION_FUNCTION_DATABASE)
