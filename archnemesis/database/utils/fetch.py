@@ -6,7 +6,9 @@ from pathlib import Path
 import urllib
 import urllib.request
 import ssl
-from typing import Iterator, Literal
+from typing import Iterator, Literal, Callable
+import tempfile
+import shutil
 
 import archnemesis.cfg.logs as logs
 _lgr = logs.getLogger(__name__)
@@ -189,3 +191,21 @@ def file(
         empty_str = b'' if encoding is None else ''
         return (empty_str if prefix is None else prefix) + empty_str.join(file_chunk_iterator)
    
+
+
+def safe_download(url : str, path : Path, ui_show : Callable[[str],None] = _lgr.info):
+    with tempfile.TemporaryDirectory() as temp_dir:
+        download_path = Path(temp_dir) / path.name
+        
+        ui_show(f'Downloading to temporary file {download_path!s}')
+        
+        file(
+            url,
+            to_fpath = download_path,
+            chunk_size = 1024*1024*10,
+        )
+        
+        if path.exists():
+            path.unlink()
+        shutil.move(download_path, path)
+        ui_show(f'Moved temporary download {download_path!s} to {path!s}')

@@ -52,6 +52,8 @@ from archnemesis.database.filetypes.ans_line_data_file import AnsLineDataFile
 from archnemesis.database.filetypes.ans_partition_fn_data_file import AnsPartitionFunctionDataFile
 from archnemesis.database.filetypes.ans_pseudo_continuum_file import AnsPseudoContinuumFile
 
+from archnemesis.download import get_reference_database_downloader_for
+
 from archnemesis.Data.path_data import archnemesis_path 
 
 # Logging
@@ -1424,11 +1426,14 @@ class AnsDatabase:
             raise RuntimeError('LineData_0 instance must have a LINE_DATABASE')
         if self.PARTITION_FUNCTION_DATABASE is None:
             raise RuntimeError('LineData_0 instance must have a PARTITION_FUNCTION_DATABASE')
+        
+        ref_dbase_downloader = get_reference_database_downloader_for(self.LINE_DATABASE)
+        if ref_dbase_downloader is not None:
+            ref_dbase_downloader.action_download_reference_database()
             
         self._ans_line_data_file = AnsLineDataFile(self.LINE_DATABASE)
         self._ans_partition_fn_file = AnsPartitionFunctionDataFile(self.PARTITION_FUNCTION_DATABASE)
         self._ans_pseudo_continuum_file = AnsPseudoContinuumFile(self.LINE_DATABASE if self.CONTINUUM_DATABASE is None else self.CONTINUUM_DATABASE)
-    
     
     def fetch_partition_fn(
             self,
@@ -1787,6 +1792,7 @@ class LineData_0:
             raise RuntimeError('LineData_0 instance must have a LINE_DATABASE')
         if PARTITION_FUNCTION_DATABASE is None:
             raise RuntimeError('LineData_0 instance must have a PARTITION_FUNCTION_DATABASE')
+        
         
         
         # Private attrs
