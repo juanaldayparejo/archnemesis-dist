@@ -1,10 +1,12 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
+from ..param import StateParam, ConstParam, VarParam
 from ..ModelParameter import ModelParameter
 
 
@@ -33,47 +35,51 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+
+
+
+@dc.dataclass(slots=True)
 class Model3(PreRTModelBase):
     """
         In this model, the atmospheric parameters are scaled using a single factor 
         in logscale with respect to the vertical profiles in the reference atmosphere
     """
+    id : ClassVar[int] = 3
+
     
-    id : int = 3
-
-
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-            
-            atm_profile_type : AtmosphericProfileTypeEnum,
-            #   ENUM that tells us what kind of atmospheric profile this model instance represents
-        ):
-        """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
-        
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model.
-        # NOTE: It is best to define these in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
-        self.parameters = (
-            ModelParameter('scaling_factor', slice(0,1), 'Scaling factor applied to the reference profile, stored as a log in the state vector', 'PROFILE_TYPE'),
+    scaling_factor   : StateParam.using(slice(0,1), 'Scaling factor applied to the reference profile, stored as a log in the state vector', 'PROFILE_TYPE')
+    
+    atm_profile_type : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to')
+    
+    
+    @classmethod
+    def from_apr_file(
+            cls,
+            f : IO,
+            varident : np.ndarray[[3],int],
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+            runname : str,
+            sxminfac : float,
+    ) -> Self:
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, len(cls._stateparam_names))
+    
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust)
         )
         
-        return
+        assert instance.atm_profile_type.v is not None, \
+            f"{cls.__name__}[id={instance.id}] is only valid for atmospheric profiles"
+        
+        return instance
+        
 
-
-    @classmethod
     def calculate(
-            cls, 
+            self, 
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
@@ -83,11 +89,8 @@ class Model3(PreRTModelBase):
             atm_profile_idx : int | None,
             #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
             
-            scf : float,
-            #   scaling factor to be applied to the reference vertical profile
-            
             MakePlot=False
-        ):
+    ):
 
         """
             FUNCTION NAME : model3()
@@ -127,6 +130,7 @@ class Model3(PreRTModelBase):
             MODIFICATION HISTORY : Juan Alday (29/03/2021)
 
         """
+        scf = self.scaling_factor.v
         xmap = np.zeros((1,atm.NP))
         
         if atm_profile_type == AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO:
@@ -150,7 +154,7 @@ class Model3(PreRTModelBase):
             atm.FRAC *= scf
         
         else:
-            raise ValueError(f'{cls.__name__} id {cls.id} has unknown atmospheric profile type {atm_profile_type}')
+            raise ValueError(f'{self.__name__} id {self.id} has unknown atmospheric profile type {atm_profile_type}')
         
 
         if MakePlot==True:
@@ -174,98 +178,4 @@ class Model3(PreRTModelBase):
             plt.show()
 
         return atm,xmap
-
-
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #**** model 3 - Exponential scaling factor of reference profile *******
-        #Read in scaling factor
-
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
-        xfac = float(tmp[0])
-        err = float(tmp[1])
-
-        if xfac > 0.0:
-            x0[ix] = np.log(xfac)
-            lx[ix] = 1
-            sx[ix,ix] = ( err/xfac ) **2.
-        else:
-            raise ValueError('Error in read_apr_nemesis().  xfac must be > 0')
-
-        ix = ix + 1
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
-
-
-    @classmethod
-    def from_bookmark(
-            cls,
-            variables : "Variables_0",
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-        ) -> Self:
-        _lgr.debug(f'Initialising model {cls.__name__} setup from bookmark')
-        ix_0 = ix
-        #**** model 2 - Simple scaling factor of reference profile *******
-        if varident[2] != cls.id:
-            raise ValueError('error in Model3.from_bookmark() :: wrong model id')
-
-        ix = ix + 1
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
-
-    def calculate_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> None:
-        #Model 3. Log scaling factor
-        #***************************************************************
-        atm = forward_model.AtmosphereX
-        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
-        
-        atm, xmap1 = self.calculate(
-            atm,
-            atm_profile_type,
-            atm_profile_idx,
-            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
-        )
-        
-        forward_model.AtmosphereX = atm
-        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
-        
-        return
-
 

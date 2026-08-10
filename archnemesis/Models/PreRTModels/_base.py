@@ -5,6 +5,11 @@ import abc
 import numpy as np
 
 from ..ModelBase import ModelBase
+from ..param import (
+    #StateParam, 
+    ConstParam, 
+    #VarParam,
+)
 from archnemesis.enum import AtmosphericProfileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
@@ -35,16 +40,6 @@ class PreRTModelBase(ModelBase):
     with Components before the radiative transfer calculation is performed.
     """
     
-    def __init__(
-            self,
-            state_vector_start : int, 
-            n_state_vector_entries : int,
-            atm_profile_type : AtmosphericProfileTypeEnum = AtmosphericProfileTypeEnum.NOT_PRESENT,
-            #   ENUM that tells us what kind of atmospheric profile this model instance represents
-    ):
-        super().__init__(state_vector_start, n_state_vector_entries)
-        self.target = atm_profile_type
-        return
     
     
     @classmethod
@@ -54,38 +49,8 @@ class PreRTModelBase(ModelBase):
     ) -> bool:
         return varident[2]==cls.id
     
-    
-    def patch_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-    ) -> None:
-        """
-        Patches values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
-        """
-        _lgr.debug(f'Model id {self.id} method "patch_from_subprofretg" does nothing...')
-    
-    
-    def calculate_from_subspecret(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ivar : int,
-            SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
-            dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
-    ) -> None:
-        """
-        Updated spectra based upon values of model parameters in the state vector. Called from ForwardModel_0::subspecret.
-        """
-        _lgr.debug(f'Model id {self.id} method "calculate_from_subspecret" does nothing...')
-    
-    
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
-    @abc.abstractmethod
     def calculate_from_subprofretg(
             self,
             forward_model : "ForwardModel_0",
@@ -94,5 +59,22 @@ class PreRTModelBase(ModelBase):
             ivar : int,
             xmap : np.ndarray,
     ) -> None:
-        raise NotImplementedError('calculate_from_subprofretg must be implemented for all Atmospheric models')
-
+        assert isinstance(atm_profile_type := getattr(self, "atm_profile_type", None), ConstParam) and isinstance(atm_profile_type.v, AtmosphericProfileTypeEnum), \
+            'Default method "calculate_from_subprofretg(...)" requires class to have an attribute like `atm_profile_type : ConstParam[AtmosphericProfileTypeEnum]` otherwise the "calculate_from_subprofretg(...)" method must be provided.'
+    
+        atm = forward_model.AtmosphereX
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
+        
+        assert atm_profile_type == self.atm_profile_type.v, \
+            f"Model[id={self.id}] was defined with {self.atm_profile_type.v}, but is being used with {atm_profile_type}"
+        
+        self.pull_from_state_vector(forward_model.Variables.XN)
+        
+        atm, xmap1 = self.calculate(
+            atm,
+            atm_profile_type,
+            atm_profile_idx,
+        )
+        
+        forward_model.AtmosphereX = atm
+        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1

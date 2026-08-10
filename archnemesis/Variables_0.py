@@ -594,63 +594,6 @@ class Variables_0:
 
     ################################################################################################################
 
-    @staticmethod
-    def classify_model_type_from_varident(
-            varident : np.ndarray[[3],int],
-            ngas : int,
-            ndust : int
-        ) -> tuple[Type, None | AtmosphericProfileTypeEnum]:
-        """
-        Works out the type of model (and subtype if applicable) identified by a VARIDENT triplet.
-        
-        ## ARGUMENTS ##
-            
-            varident : np.ndarray[[3],int]
-                Three integers that identify a model
-                
-            ngas : int
-                The number of gases present in the reference atmosphere
-            
-            ndust : int
-                The number of aerosol species present in the reference atmosphere
-            
-        ## RETURNS ##
-        
-            model_classification : tuple[Type, None | AtmosphericProfileTypeEnum]
-                A tuple containing values that classify the model. From broadest scope to narrowest.
-                Currently the tuple has the elements (in order):
-                    
-                    ModelClass : Type
-                        A subclass of archnemesis.Models.ModelBase.ModelBase that denotes the broadest
-                        classification of the model. This broadly corresponds to the retrieval component
-                        that the model interacts with (e.g. Atmosphere_0, Scatter_0, Measurement_0).
-                    
-                    ParameterisedTarget : None | AtmosphericProfileTypeEnum
-                        The part of the retrieval component that the model parameterises (and therefore
-                        alters). This is 'None' when unknown, or an ENUM corresponding to an attribute
-                        of the retrieval component that the model parameterises.
-        """
-        model_classification = None
-        if varident[0] == 0:
-            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.TEMPERATURE)
-        elif (varident[0] > 0) and int(varident[0]) in iter(GasEnum):
-            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO)
-        elif (varident[0] < 0) and (-varident[0]) <= ndust:
-            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.AEROSOL_DENSITY)
-        elif (varident[0] < 0) and (-varident[0]) == ndust + 1:
-            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.PARA_H2_FRACTION)
-        elif (varident[0] < 0) and (-varident[0]) == ndust + 2:
-            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE)
-        else:
-            # Other models are classified by their ID number
-            model_id_parent_classes = Models[varident[2]].__bases__
-            assert len(model_id_parent_classes) == 1, "Only support single inheritance of model classes for now"
-            model_classification = (model_id_parent_classes[0],None)
-        
-        return model_classification
-    
-    ################################################################################################################
-
     def read_hdf5(self,runname,npro):
         """
         Read the Variables field of the HDF5 file, which contains information about the variables and
@@ -823,7 +766,7 @@ class Variables_0:
                         _lgr.info(f'\nVariables_0 :: read_apr :: varident {varident[i]}. Constructed model "{model.__name__}" (id={model.id})')
                         try:
                             io_helper.OutWidth.push(io_helper.OutWidth.get() - 2)
-                            _lgr.info(textwrap.indent(str(self._models[-1].info(lx,x0)), '  '))
+                            _lgr.info(textwrap.indent(str(self._models[-1].info(x0,sx)), '  '))
                         finally:
                             io_helper.OutWidth.pop()
                         

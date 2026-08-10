@@ -1,10 +1,12 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
+from ..param import StateParam, ConstParam, VarParam
 from ..ModelParameter import ModelParameter
 
 import archnemesis.Data.constants as const
@@ -34,48 +36,51 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+
+
+
+@dc.dataclass(slots=True)
 class Model47(PreRTModelBase):
     """
         Profile is represented by a Gaussian with a specified optical thickness centred
         at a variable pressure level plus a variable FWHM (log press).
     """
-    id : int = 47
+    id : ClassVar[int] = 47
 
+    
+    tau   : StateParam.using(slice(0,1), 'Integrated optical thickness', 'ln(RATIO)')
+    p_ref : StateParam.using(slice(1,2), 'Mean pressure of the cloud', 'atm')
+    fwhm  : StateParam.using(slice(2,3), 'Full-width-half-maximum of the log-Gaussian', 'atm')
 
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-            
-            atm_profile_type : AtmosphericProfileTypeEnum,
-            #   ENUM that tells us what kind of atmospheric profile this model instance represents
-        ):
-        """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
-        
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model.
-        # NOTE: It is best to define these in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
-        self.parameters = (
-            ModelParameter('tau', slice(0,1), 'Integrated optical thickness', 'ln(RATIO)'),
-            ModelParameter('p_ref', slice(1,2), 'Mean pressure of the cloud', 'atm'),
-            ModelParameter('fwhm', slice(2,3), 'FWHM of the log-Gaussian', 'atm?'),
+    
+    @classmethod
+    def from_apr_file(
+            cls,
+            f : IO,
+            varident : np.ndarray[[3],int],
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+            runname : str,
+            sxminfac : float,
+    ) -> Self:
+    
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, len(cls._stateparam_names))
+    
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
         )
         
-        return
+        if varident[0] == 0:
+            instance.tau.log = False
+        
+        return instance
+        
 
-
-    @classmethod
     def calculate(
-            cls, 
+            self, 
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
@@ -85,17 +90,8 @@ class Model47(PreRTModelBase):
             atm_profile_idx : int | None,
             #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
             
-            tau : float, 
-            #   Integrated optical thickness
-            
-            pref : float, 
-            #   Mean pressure (atm) of the cloud
-            
-            fwhm : float, 
-            #   FWHM of the log-Gaussian
-            
             MakePlot=False
-        ) -> tuple["Atmosphere_0", np.ndarray]:
+    ) -> tuple["Atmosphere_0", np.ndarray]:
 
         """
             FUNCTION NAME : model47()
@@ -136,15 +132,12 @@ class Model47(PreRTModelBase):
                 atm,xmap = model47(atm, atm_profile_type, atm_profile_idx, tau, pref, fwhm)
 
             MODIFICATION HISTORY : Joe Penn (08/10/2024)
-
         """
-        _lgr.debug(f'{atm_profile_type=} {atm_profile_idx=} {tau=} {pref=} {fwhm=}')
-
-        if atm_profile_type != AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
-            _msg = f'Model id={cls.id} is only defined for aerosol profiles.'
-            _lgr.error(_msg)
-            raise ValueError(_msg)
         
+        tau = self.tau.v
+        pref = self.p_ref.v
+        fwhm = self.fwhm.v
+        _lgr.debug(f'{atm_profile_type=} {atm_profile_idx=} {tau=} {pref=} {fwhm=}')
         
         
         # Calculate atmospheric properties
@@ -241,142 +234,5 @@ class Model47(PreRTModelBase):
 
         return atm, xmap
 
-
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** cloud profile is represented by a peak optical depth at a 
-        #******** variable pressure level and a Gaussian profile with FWHM (in log pressure)
-
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
-        xdeep = tmp[0]
-        edeep = tmp[1]
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
-        pknee = tmp[0]
-        eknee = tmp[1]
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
-        xwid = tmp[0]
-        ewid = tmp[1]
-
-        #total optical depth
-        if varident[0]==0:
-            #temperature - leave alone
-            x0[ix] = xdeep
-            err = edeep
-        else:
-            if xdeep>0.0:
-                x0[ix] = np.log(xdeep)
-                lx[ix] = 1
-                err = edeep/xdeep
-                #inum[ix] = 1
-            else:
-                raise ValueError('error in read_apr() :: Parameter xdeep (total atmospheric aerosol column) must be positive')
-
-        sx[ix,ix] = err**2.
-
-        ix = ix + 1
-
-        #pressure level of the cloud
-        if pknee>0.0:
-            x0[ix] = np.log(pknee)
-            lx[ix] = 1
-            #inum[ix] = 1
-        else:
-            raise ValueError('error in read_apr() :: Parameter pknee (cloud pressure level) must be positive')
-
-        err = eknee/pknee
-        sx[ix,ix] = err**2.
-
-        ix = ix + 1
-
-        #fwhm of the gaussian function describing the cloud profile
-        if xwid>0.0:
-            x0[ix] = np.log(xwid)
-            lx[ix] = 1
-            #inum[ix] = 1
-        else:
-            raise ValueError('error in read_apr() :: Parameter xwid (width of the cloud gaussian profile) must be positive')
-
-        err = ewid/xwid
-        sx[ix,ix] = err**2.
-
-        ix = ix + 1
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
-
-
-    @classmethod
-    def from_bookmark(
-            cls,
-            variables : "Variables_0",
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-        ) -> Self:
-        ix_0 = ix
-        #******** cloud profile is represented by a peak optical depth at a 
-        #******** variable pressure level and a Gaussian profile with FWHM (in log pressure)
-        ix = ix + 3
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
-
-
-    def calculate_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> None:
-        #Model 47. Profile is represented by a Gaussian with a specified optical thickness centred
-            #at a variable pressure level plus a variable FWHM (log press) in height.
-        #***************************************************************
-        #tau = np.exp(forward_model.Variables.XN[ix])   #Integrated dust column-density (m-2) or opacity
-        #pref = np.exp(forward_model.Variables.XN[ix+1])  #Base pressure (atm)
-        #fwhm = np.exp(forward_model.Variables.XN[ix+2])  #FWHM
-        #forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX, ipar, tau, pref, fwhm)
-        
-        atm = forward_model.AtmosphereX
-        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
-        
-        atm, xmap1 = self.calculate(
-            atm, 
-            atm_profile_type, 
-            atm_profile_idx,
-            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
-        )
-        
-        forward_model.AtmosphereX = atm
-        xmap[self.state_vector_slice, ipar, 0:forward_model.AtmosphereX.NP] = xmap1
-        
-        return
 
 

@@ -1,10 +1,12 @@
 
-from typing import TYPE_CHECKING, Self, IO, Any
+from typing import TYPE_CHECKING, Self, ClassVar, Any, IO
+import dataclasses as dc
 
 import numpy as np
 
+
 from ._base import PreRTModelBase
-from ..ModelParameter import ModelParameter
+from ..param import StateParam, ConstParam, VarParam
 
 from archnemesis.Scatter_0 import kk_new_sub
 
@@ -31,105 +33,182 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+
+
+
+
+@dc.dataclass(slots=True)
 class Model444(PreRTModelBase):
     """
-        Allows for retrieval of the particle size distribution and imaginary refractive index.
+    Allows for retrieval of the particle size distribution and imaginary refractive index.
     """
     
-    id : int = 444
+    id : ClassVar[int] = 444
 
+    particle_size_distribution_params : StateParam.using(slice(0,2), 'Values that define the particle size distribution')
+    imaginary_ref_idx                 : StateParam.using(slice(2,None), 'Imaginary refractive index of the particle size distribution')
+    
+    haze_file_path      : ConstParam[str].using("Path to the file that contains haze parameters")
+    
+    aerosol_species_idx : VarParam[int].using('Index of the aerosol species the imaginary refactive index is varying for')
+    scattering_type_id  : VarParam[int].using('Type of scattering used in calculations')
+    n_waves             : VarParam[int].using('Number of wavenumbers for the imaginary refractive index')
+    haze_waves          : VarParam[np.ndarray].using('Wavenumbers of the imaginary refractive index points')
+    haze_wave_norm      : VarParam[float].using('Wavenumber to normalise extinction cross section spectrum to')
+    haze_wave_ref       : VarParam[float].using('Reference wavenumber for normal component')
+    haze_wave_ref_rri   : VarParam[float].using('Real component of refractive index at reference wavenumber')
+    correlation_length  : VarParam[float].using('Correlation length of imaginary refractive index')
 
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-            
-            haze_params : dict[str,Any],
-            #   Optical constants for the aerosol species (haze) this model represents
-            
-            aerosol_species_index : int,
-            #   Index of the aerosol species that this model pertains to
-            
-            scattering_type_id : int,
-            #   The scattering type this model uses
-        ):
+    
+    
+    
+    @staticmethod
+    def read_haze_file(fpath) -> tuple[np.ndarray, np.ndarray, tuple[Any,...]]:
         """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries)
+        Reads details from haze file at `fpath`
         
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model
-        self.parameters = (
-            ModelParameter('particle_size_distribution_params', slice(0,2), 'Values that define the particle size distribution'),
-            ModelParameter('imaginary_ref_idx', slice(2,None), 'Imaginary refractive index of the particle size distribution'),
+        Returns: (
+            state vector, 
+            covariance vector,
+            constparams and varparams
         )
-        
-        # Store model-specific constants on the model instance for easy access later
-        self.haze_params = haze_params
-        self.aerosol_species_idx = aerosol_species_index
-        self.scattering_type_id = scattering_type_id
-
-
-    @classmethod
-    def calculate(
-            cls, 
-            Scatter : "Scatter_0",
-            #   Scatter_0 instance of the retrieval setup we are calculating this model for
-            
-            idust : int,
-            #   Aerosol species index we are calculating this model for
-            
-            iscat : int,
-            #   scattering type we are using for this mode. NOTE: this is always set to 1 for now
-            
-            xprof : np.ndarray[["nparam"],float],
-            #   The slice of the state vector that parameters of this model are held in.
-            
-            haze_params : dict[str,Any] ,
-            #   A dictionary of constants for the aerosol being represented by this model.
-            
-        ) -> "Scatter_0":
         """
-            FUNCTION NAME : model444()
+        with open(fpath, 'r') as f:
+            """
+            File contents:
+            ```
+            mean radius of particle size distribution, error
+            variance of size distribution, error
+            number of wavelengths, correlation length
+            reference wavelength, real part of refractive index at reference wavelength
+            wavenumber to normalise extinction cross section spectrum to
+            wavenumber, imaginary refractive index, error
+            ...       , ...                       , ...
+            ```
+            """
+            xvals = []
+            xerrs = []
+            for j in range(2):
+                xval, xerr = (float(a) for a in f.readline().split()[:2])
+                xvals.append(np.log(xval))
+                xerrs.append((xerr/xval)**2)
+            
+            n_waves, clen = f.readline().split('!')[0].split()
+            vref, nreal_ref = f.readline().split('!')[0].split()
+            v_od_norm = f.readline().split('!')[0]
+            
+            n_waves = int(n_waves)
+            clen = float(clen)
+            vref = float(vref)
+            nreal_ref = float(nreal_ref)
+            v_od_norm = float(v_od_norm)
+            
+            
+            haze_waves = np.zeros(n_waves)
+            
+            for j in range(int(n_waves)):
+                v, xval, xerr = (float(x) for x in f.readline().split()[:3])
+                haze_waves[j] = v
+                xvals.append(np.log(xval))
+                xerrs.append((xerr/xval)**2)
+            
+            return (
+                np.array(xvals),
+                np.array(xerrs),
+                (
+                    n_waves,
+                    np.array(haze_waves),
+                    v_od_norm,
+                    vref,
+                    nreal_ref,
+                    clen,
+                ),
+            )
+    
+    @classmethod
+    def from_apr_file(
+            cls,
+            f : IO,
+            varident : np.ndarray[[3],int],
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+            runname : str,
+            sxminfac : float,
+    ) -> Self:
+        haze_file = f.readline().split()[0]
+        
+        (
+            xvals, 
+            xerrs,
+            (
+                n_waves,
+                haze_waves,
+                v_od_norm,
+                vref,
+                nreal_ref,
+                clen,
+            )
+        ) = cls.read_haze_file(haze_file)
+        
+        aerosol_species_idx = varident[1]-1
+        
+        scattering_type_id = 1 # Should add a way to alter this value from the input files.
+    
+        return cls.from_arrays(
+            xvals,
+            xerrs,
+            haze_file,
+            aerosol_species_idx, 
+            scattering_type_id,
+            n_waves,
+            haze_waves,
+            v_od_norm,
+            vref,
+            nreal_ref,
+            clen,
+        )
+    
+    
+    def push_to_covariance_matrix(
+            self,
+            sx : np.ndarray[["mx","mx"],float],
+            sxminfac : float,
+    ):
+        """
+        Model 444 requires a custom covariance matrix calculation
+        """
+        sx_part = sx[self.state_vector_slice, self.state_vector_slice]
+        sx_part[...] = 0.0
+        
+        sx_part[
+            self.particle_size_distribution_params.slice, 
+            self.particle_size_distribution_params.slice
+        ] = np.diag((self.particle_size_distribution_params.e / self.particle_size_distribution_params.v)**2)
+        
+        sx_part2 = sx_part[self.imaginary_ref_idx.slice, self.imaginary_ref_idx.slice]
+        
+        sx_part2[...] = np.diag((self.imaginary_ref_idx.e / self.imaginary_ref_idx.v)**2)
+        
+        
+        if self.correlation_length.v > 0:
+        
+            one = np.ones((self.n_waves, self.n_waves))
+            distance_matrix = (one * self.haze_waves[None,:]) - (one * self.haze_waves[:,None])
+            cor_dist_mat = np.exp(-1*np.abs(distance_matrix / self.correlation_length.v))
+            
+            variance = (self.imaginary_ref_idx.e / self.imaginary_ref_idx.v)**2
+            
+            sx_part2[cor_dist_mat >= sxminfac] = ((variance[:,None] @ variance[None,:])*cor_dist_mat)[cor_dist_mat >= sxminfac]
 
-            DESCRIPTION :
-
-                Function defining the model parameterisation 444 in NEMESIS.
-
-                Allows for retrieval of the particle size distribution and imaginary refractive index.
-
-            INPUTS :
-
-                Scatter :: Python class defining the scattering parameters
-                idust :: Index of the aerosol distribution to be modified (from 0 to NDUST-1)
-                iscat :: Flag indicating the particle size distribution
-                xprof :: Contains the size distribution parameters and imaginary refractive index
-                haze_params :: Read from 444 file. Contains relevant constants.
-
-            OPTIONAL INPUTS:
 
 
-            OUTPUTS :
-
-                Scatter :: Updated Scatter class
-
-            CALLING SEQUENCE:
-
-                Scatter = model444(Scatter,idust,iscat,xprof,haze_params)
-
-            MODIFICATION HISTORY : Joe Penn (11/9/2024)
-
-        """   
-        _lgr.debug(f'{idust=} {iscat=} {xprof=} {type(xprof)=}')
-        for item in ('WAVE', 'NREAL', 'WAVE_REF', 'WAVE_NORM'):
-            _lgr.debug(f'haze_params[{item}] : {type(haze_params[item])} = {haze_params[item]}')
-
-        a = np.exp(xprof[0])
-        b = np.exp(xprof[1])
+    def calculate(self, Scatter : "Scatter_0"):
+        a = np.exp(self.particle_size_distribution_params.v[0])
+        b = np.exp(self.particle_size_distribution_params.v[1])
+        
+        iscat = self.scattering_type_id.v
         if iscat == 1:
             pars = (a,b,(1-3*b)/b)
         elif iscat == 2:
@@ -140,16 +219,18 @@ class Model444(PreRTModelBase):
             _lgr.warning(f'ISCAT = {iscat} not implemented for model 444 yet! Defaulting to iscat = 1.')
             pars = (a,b,(1-3*b)/b)
 
-        Scatter.WAVER = haze_params['WAVE']
-        Scatter.REFIND_IM = np.exp(xprof[2:])
-        reference_nreal = haze_params['NREAL']
-        reference_wave = haze_params['WAVE_REF']
-        normalising_wave = haze_params['WAVE_NORM']
+        Scatter.WAVER = self.haze_waves.v
+        Scatter.REFIND_IM = np.exp(self.imaginary_ref_idx.v)
+        reference_nreal = self.haze_wave_ref_rri.v
+        reference_wave = self.haze_wave_ref.v
+        normalising_wave = self.haze_wave_norm.v
+        
+        idust = self.aerosol_species_idx.v
+        
         if len(Scatter.REFIND_IM) == 1:
             Scatter.REFIND_IM = Scatter.REFIND_IM * np.ones_like(Scatter.WAVER)
 
         Scatter.REFIND_REAL = kk_new_sub(np.array(Scatter.WAVER), np.array(Scatter.REFIND_IM), reference_wave, reference_nreal)
-
 
         Scatter.makephase(idust, iscat, pars)
 
@@ -157,95 +238,6 @@ class Model444(PreRTModelBase):
         Scatter.KEXT[:,idust] = Scatter.KEXT[:,idust]/xextnorm
         Scatter.KSCA[:,idust] = Scatter.KSCA[:,idust]/xextnorm
         return Scatter
-
-
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
-        
-        _lgr.debug(f'{ix=}')
-        s = f.readline().split()    
-        haze_f = open(s[0],'r')
-        haze_waves = []
-        for j in range(2):
-            line = haze_f.readline().split()
-            xai, xa_erri = line[:2]
-
-            x0[ix] = np.log(float(xai))
-            lx[ix] = 1
-            sx[ix,ix] = (float(xa_erri)/float(xai))**2.
-
-            ix = ix + 1
-        _lgr.debug(f'{ix=}')
-
-        nwave, clen = haze_f.readline().split('!')[0].split()
-        vref, nreal_ref = haze_f.readline().split('!')[0].split()
-        v_od_norm = haze_f.readline().split('!')[0]
-        _lgr.debug(f'{nwave=} {clen=} {vref=} {nreal_ref=} {v_od_norm=}')
-
-        for j in range(int(nwave)):
-            line = haze_f.readline().split()
-            v, xai, xa_erri = line[:3]
-
-            x0[ix] = np.log(float(xai))
-            lx[ix] = 1
-            sx[ix,ix] = (float(xa_erri)/float(xai))**2.
-
-            ix = ix + 1
-            haze_waves.append(float(v))
-
-            if float(clen) < 0:
-                break
-        _lgr.debug(f'{ix=}')
-
-        aerosol_species_idx = varident[1]-1
-
-        haze_params = dict()
-        haze_params['NX'] = 2+len(haze_waves)
-        haze_params['WAVE'] = haze_waves
-        haze_params['NREAL'] = float(nreal_ref)
-        haze_params['WAVE_REF'] = float(vref)
-        haze_params['WAVE_NORM'] = float(v_od_norm)
-
-        varparam[0] = 2+len(haze_waves)
-        varparam[1] = float(clen)
-        varparam[2] = float(vref)
-        varparam[3] = float(nreal_ref)
-        varparam[4] = float(v_od_norm)
-
-        if float(clen) > 0:
-            for j in range(int(nwave)):
-                for k in range(int(nwave)):
-
-                    delv = haze_waves[k]-haze_waves[j]
-                    arg = abs(delv/float(clen))
-                    xfac = np.exp(-arg)
-                    if xfac >= sxminfac:
-                        sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
-                        sx[ix+k,ix+j] = sx[ix+j,ix+k]
-        _lgr.debug(f'{ix=}')
-        
-        scattering_type_id = 1 # Should add a way to alter this value from the input files.
-
-        return cls(ix_0, ix-ix_0, haze_params, aerosol_species_idx, scattering_type_id)
 
 
     @classmethod
@@ -259,7 +251,7 @@ class Model444(PreRTModelBase):
             ngas : int,
             ndust : int,
             nlocations : int,
-        ) -> Self:
+    ) -> Self:
         ix_0 = ix
         #******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
         _lgr.warn(f"{cls.__name__}.from_bookmark(...) only sets model parameters that have been stored in `varident`, `varparam`. Therefore it cannot set `haze_params['WAVE']` at the moment as those values are in an external file whose name is not stored in those locations. Use with caution.")
@@ -297,19 +289,7 @@ class Model444(PreRTModelBase):
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> None:
-        
-        # NOTE:
-        # ix is not required as we have stored that information on the model instance
-        # ipar is ignored for this model
-        # ivar is ignored for this model
-        # xmap is ignored for this model
-        forward_model.ScatterX = self.calculate(
-            forward_model.ScatterX,
-            self.aerosol_species_idx,
-            self.scattering_type_id,
-            self.get_state_vector_slice(forward_model.Variables.XN),
-            self.haze_params
-        )
-
+    ) -> None:
+        self.pull_from_state_vector(forward_model.Variables.XN)
+        forward_model.ScatterX = self.calculate(forward_model.ScatterX)
 
