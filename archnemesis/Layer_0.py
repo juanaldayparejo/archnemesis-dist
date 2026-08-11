@@ -27,6 +27,7 @@ from archnemesis.enum import (
     LayerTypeEnum,
     LayerIntegrationSchemeEnum,
     InterpolationMethodEnum,
+    AerosolUnitEnum,
 )
 
 import logging
@@ -179,7 +180,7 @@ class Layer_0:
         self.TAUTOT = None  #(NWAVE,NG,NLAY) Total optical depth
 
         #Units of the dust
-        self.DUST_UNITS_FLAG = None   #If None, dust units are expected to be particles m-3. If -1 they are expected to be particles per gram of atmosphere
+        self.DUST_UNITS_FLAG = None   #If None or zero dust units are expected to be particles m-3. If -1 they are expected to be particles per gram of atmosphere
 
         # private attributes
         self._laytyp = None
@@ -865,7 +866,7 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
     #Checking consistency of DUST_UNITS and XMOLWT
     if DUST_UNITS is not None:
         for j in range(NDUST):
-            if DUST_UNITS[j]==-1:
+            if DUST_UNITS[j]==AerosolUnitEnum.PARTICLES_PER_GRAM:
                 if XMOLWT is None:
                     raise ValueError('error in layer_average :: if DUST_UNITS=-1 (particles per gram of atm), the XMOLWT must be defined')
         XMOLWT *= 1000. #Converting to molecular weight in g mol-1
@@ -930,7 +931,7 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
                 for J in range(NDUST):
                     DD = interp(H, DUST[:,J],HEIGHT)  
                     if DUST_UNITS is not None:
-                        if DUST_UNITS[J] == -1:  #dust units are particles per gram of atm
+                        if DUST_UNITS[J] == AerosolUnitEnum.PARTICLES_PER_GRAM:  #dust units are particles per gram of atm
                             CONT[:,J] =  DD * TOTAM * MOLWT / AVOGAD
                         else:
                             CONT[:,J] = DD * DELS  
@@ -939,7 +940,7 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
             else:
                 DD = interp(H, DUST,HEIGHT)  
                 if DUST_UNITS is not None:
-                    if DUST_UNITS[0] == -1: #dust units are particles per gram of atm
+                    if DUST_UNITS[0] == AerosolUnitEnum.PARTICLES_PER_GRAM: #dust units are particles per gram of atm
                         CONT =  DD * TOTAM * MOLWT / AVOGAD
                     else:
                         CONT = DD * DELS
@@ -993,7 +994,7 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
                     for J in range(NDUST):
                         dd[:,J] = interp(H, DUST[:,J], h)
                         if DUST_UNITS is not None:
-                            if DUST_UNITS[J] == -1: #dust units are particles per gram of atm
+                            if DUST_UNITS[J] == AerosolUnitEnum.PARTICLES_PER_GRAM: #dust units are particles per gram of atm
                                 CONT[I,J] = simpson(dd[:,J]*duds*molwt/AVOGAD,x=S)
                             else:
                                 CONT[I,J] = simpson(dd[:,J],x=S)
@@ -1002,7 +1003,7 @@ def layer_average(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
                 else:
                     dd = interp(H, DUST, h) 
                     if DUST_UNITS is not None:
-                        if DUST_UNITS[0] == -1: #dust units are particles per gram of atm
+                        if DUST_UNITS[0] == AerosolUnitEnum.PARTICLES_PER_GRAM: #dust units are particles per gram of atm
                             CONT[I] = simpson(dd*duds*molwt/AVOGAD,x=S)
                         else:
                             CONT[I] = simpson(dd,x=S)
@@ -1148,7 +1149,7 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
     #Checking consistency of DUST_UNITS and XMOLWT
     if DUST_UNITS is not None:
         for j in range(NDUST):
-            if DUST_UNITS[j]==-1:
+            if DUST_UNITS[j]==AerosolUnitEnum.PARTICLES_PER_GRAM:
                 if XMOLWT is None:
                     raise ValueError('error in layer_average :: if DUST_UNITS=-1 (particles per gram of atm), the XMOLWT must be defined')
         XMOLWT *= 1000. #Converting to molecular weight in g mol-1
@@ -1253,7 +1254,7 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
                 for J in range(NDUST):
                     DD = interp(H, DUST[:,J],HEIGHT)  
                     if DUST_UNITS is not None:
-                        if DUST_UNITS[J] == -1:  #dust units are particles per gram of atm
+                        if DUST_UNITS[J] == AerosolUnitEnum.PARTICLES_PER_GRAM:  #dust units are particles per gram of atm
                             dust_units_flag = True
                             CONT[:,J] =  DD * TOTAM * MOLWT / AVOGAD
                         else:
@@ -1263,7 +1264,7 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
             else:
                 DD = interp(H, DUST,HEIGHT)  
                 if DUST_UNITS is not None:
-                    if DUST_UNITS[0] == -1: #dust units are particles per gram of atm
+                    if DUST_UNITS[0] == AerosolUnitEnum.PARTICLES_PER_GRAM: #dust units are particles per gram of atm
                         dust_units_flag = True
                         CONT =  DD * TOTAM * MOLWT / AVOGAD
                     else:
@@ -1341,7 +1342,7 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
                     for J in range(NDUST):
                         dd[:,J],JJ,F = interpg(H, DUST[:,J], h)   #dust density (m-3) of dust population J at the NINT points
                         if DUST_UNITS is not None:
-                            if DUST_UNITS[J] == -1: #dust units are in particles per gram of atm
+                            if DUST_UNITS[J] == AerosolUnitEnum.PARTICLES_PER_GRAM: #dust units are in particles per gram of atm
                                 dust_units_flag = True
                                 CONT[I,J] = simpson(dd[:,J]*duds*molwt/AVOGAD,x=S)  #column density of dust population J in the layer (m-2)
                             else:
@@ -1351,7 +1352,7 @@ def layer_averageg(RADIUS, H, P, T, ID, VMR, DUST, PARAH2, BASEH, BASEP,
                 else:
                     dd,JJ,F = interpg(H, DUST, h) 
                     if DUST_UNITS is not None:
-                        if DUST_UNITS[0] == -1: #dust units are in particles per gram of atm
+                        if DUST_UNITS[0] ==AerosolUnitEnum.PARTICLES_PER_GRAM1: #dust units are in particles per gram of atm
                             dust_units_flag = True
                             CONT[I] = simpson(dd*duds*molwt/AVOGAD,x=S)
                         else:

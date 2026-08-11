@@ -11,7 +11,7 @@ from ..ModelParameter import ModelParameter
 
 import archnemesis.Data.constants as const
 
-from archnemesis.enum import AtmosphericProfileTypeEnum
+from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -64,6 +64,7 @@ class Model47(PreRTModelBase):
             nlocations : int,
             runname : str,
             sxminfac : float,
+            input_file_type : ArchNemesisFileTypeEnum,
     ) -> Self:
     
         xvals, xerrs = cls.read_apr_value_error_pairs(f, len(cls._stateparam_names))

@@ -111,3 +111,52 @@ class StateVectorModifier:
                 sx_part[stateparam.slice, stateparam.slice] = np.diag(stateparam.e**2)
     
     
+    def calc_correlation_distance_and_covariance_matrix(
+            self,
+            variance_vector : np.ndarray,
+            dist : np.ndarray,
+            correlation_length : float,
+    ) -> np.ndarray:
+        one = np.ones((dist.size, dist.size))
+        distance_matrix = (one * dist[None,:]) - (one * dist[:,None])
+        cor_dist_mat = np.exp(-1*np.abs(distance_matrix / correlation_length))
+        return cor_dist_mat, np.sqrt(variance_vector[:,None] @ variance_vector[None,:])
+    
+    def push_to_covariance_matrix_with_correlation_length(
+            self,
+            sx : np.ndarray[["nx","nx"],float],
+            sxminfac : float,
+            correlation_lengths : float | tuple[float,...],
+            distances : None | np.ndarray | tuple[None | np.ndarray] = None,
+    ):
+        self.check()
+        
+        if isinstance(correlation_lengths, (np.number, float, int)):
+            assert len(self.iter_stateparam_names) == 1, "If being used, correlation length can only be a single number if there is only one stateparam, otherwise must have one correlation length for each stateparam."
+        
+        sx_part = sx[self.state_vector_slice, self.state_vector_slice]
+        sx_part[...] = 0.0
+    
+        for i, stateparam in enumerate(self.iter_stateparam_objs()):
+            if stateparam.log:
+                variance_vector = (stateparam.e / stateparam.v)**2
+            else:
+                variance_vector = stateparam.e**2
+            
+            sx_part2 = sx_part[stateparam.slice, stateparam.slice]
+            
+            if correlation_lengths[i] == 0:
+                sx_part2[...] = np.diag(variance_vector)
+            else:
+                if distances is None:
+                    dist = stateparam.v
+                elif isinstance(dist, np.ndarray):
+                    dist = distances[stateparam.slice]
+                elif distances[i] is None:
+                    dist = stateparam.v
+                else:
+                    dist = dist[i]
+                
+                cor_dist_mat, covariance_mat = self.calc_correlation_distance_and_covariance_matrix(variance_vector, dist, correlation_lengths[i])
+                sxminfac_mask = cor_dist_mat >= sxminfac
+                sx_part2[sxminfac_mask] = covariance_mat[sxminfac_mask]

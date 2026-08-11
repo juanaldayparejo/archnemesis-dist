@@ -6,11 +6,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
-from ..param import StateParam, ConstParam, VarParam
+from ..param import (
+    StateParam, 
+    ConstParam, 
+    #VarParam,
+)
 from ..ModelParameter import ModelParameter
 
 
-from archnemesis.enum import AtmosphericProfileTypeEnum
+from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -63,6 +67,7 @@ class Model3(PreRTModelBase):
             nlocations : int,
             runname : str,
             sxminfac : float,
+            input_file_type : ArchNemesisFileTypeEnum,
     ) -> Self:
         xvals, xerrs = cls.read_apr_value_error_pairs(f, len(cls._stateparam_names))
     

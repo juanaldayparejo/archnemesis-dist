@@ -1,13 +1,21 @@
 
-from typing import TYPE_CHECKING, Self, IO
+
+
+
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
-from .model_0 import Model0
-from ..ModelParameter import ModelParameter
+from ..param import (
+    StateParam, 
+    ConstParam, 
+    #VarParam,
+)
 
-from archnemesis.enum import AtmosphericProfileTypeEnum
+from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum, AerosolUnitEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -17,61 +25,95 @@ if TYPE_CHECKING:
     # the problem is that importing Variables_0 or ForwardModel_0 creates a circular import
     # this actually means that I should possibly redesign how those work to avoid circular imports
     # but that is outside the scope of what I want to accomplish here
-    from archnemesis.Variables_0 import Variables_0
-    from archnemesis.ForwardModel_0 import ForwardModel_0
     from archnemesis.Atmosphere_0 import Atmosphere_0
 
     nx = 'number of elements in state vector'
-    m = 'an undetermined number, but probably less than "nx"'
-    mx = 'synonym for nx'
-    mparam = 'the number of parameters a model has'
-    nparam = 'the number of parameters a model has'
-    NCONV = 'number of spectral bins'
-    NGEOM = 'number of geometries'
-    NX = 'number of elements in state vector'
-    NDEGREE = 'number of degrees in a polynomial'
-    NWINDOWS = 'number of spectral windows'
 
+
+
+@dc.dataclass(slots=True)
 class Modelm1(PreRTModelBase):
     """
-    In this model, the aerosol profiles is modelled as a continuous profile in units
-    of particles per gram of atmosphere. Note that typical units of aerosol profiles in NEMESIS
-    are in particles per gram of atmosphere
+    In this model, the dust density is modelled as continuous profiles
+    in which each element of the state vector corresponds to the dust density 
+    at each altitude level. The units are different when invoked via LEGACY or
+    ARCHNEMESIS input files.
+    
+    LEGACY UNITS : particles cm^{-3}
+    ARCHNEMESIS UNITS : particles gram^{-1}
+    
+    ## DETAILS ##
+    
+    "Normal" archnemesis units are 'particles cm^{-3}', and FORTRAN-nemesis units are 'particles gram^{-1}',
+    this model swaps which one is being used depending upon the source of the input files.
+    
+    The unit being used is recorded in the 'Atmosphere_0.DUST_UNITS_FLAG' attribute. When reading ArchNemesis
+    input (HDF5) files, this is set to `None`, when reading LEGACY input files it is set to a numpy array filled
+    with `-1` values (for each dust profile).
+    
     """
     
-    id : int = -1
+    id : ClassVar[int] = -1
 
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-            
-            atm_profile_type : AtmosphericProfileTypeEnum,
-            #   ENUM that tells us what kind of atmospheric profile this model instance represents
-        ):
-        """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
-        
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model.
-        # NOTE: It is best to define these in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
-        self.parameters = (
-            ModelParameter('full_profile', slice(None), 'Every value for each level of the profile', 'PROFILE_TYPE'),
+    full_profile     : StateParam.using(slice(None), 'Every value for each level of the profile', 'PROFILE_TYPE')
+    
+    atm_profile_type   : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to')
+    input_file_type    : ConstParam[ArchNemesisFileTypeEnum].using('Input file type we are using the "alternate" units of.')
+    n_level            : ConstParam[int].using('Number of levels in the profile')
+    pressure           : ConstParam[np.ndarray].using('Pressure at each entry of the profile')
+    correlation_length : ConstParam[float].using('Correlation length of profile')
+    
+    
+    @classmethod
+    def from_apr_file(
+            cls,
+            f : IO,
+            varident : np.ndarray[[3],int],
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+            runname : str,
+            sxminfac : float,
+            input_file_type : ArchNemesisFileTypeEnum,
+    ) -> Self:
+        n_level, clen = cls.read_apr_entries(f, (int, float))
+        assert n_level == npro, "Profiles must be on the same grid as .prf"
+        pref, xvals, xerrs = cls.read_apr_entries(f, (float,float,float), n_level)
+        assert np.all(pref >= 0), "Apriori file must be on pressure grid"
+    
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust),
+            input_file_type,
+            n_level,
+            pref,
+            clen,
         )
         
-        return
+        assert instance.atm_profile_type.v is not None, \
+            f"{cls.__name__}[id={instance.id}] is only valid for atmospheric profiles"
+        
+        instance.full_profile.log = instance.atm_profile_type != AtmosphericProfileTypeEnum.TEMPERATURE
+        
+        return instance
+    
+    
+    def push_to_covariance_matrix(
+            self,
+            sx : np.ndarray[["nx","nx"],float],
+            sxminfac : float,
+    ):
+        self.push_to_covariance_matrix_with_correlation_length(
+            sx,
+            sxminfac,
+            self.correlation_length.v,
+        )
+    
 
-    @classmethod
     def calculate(
-            cls, 
+            self, 
             atm : "Atmosphere_0",
             #   Instance of Atmosphere_0 class we are operating upon
             
@@ -80,12 +122,9 @@ class Modelm1(PreRTModelBase):
             
             atm_profile_idx : int | None,
             #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
-            
-            xprof : np.ndarray[['mparam'],float],
-            #   Full profile, this model defines every value for each profile level. Has been unlogged as required
-            
+
             MakePlot=False
-        ) -> tuple["Atmosphere_0", np.ndarray]:
+    ) -> tuple["Atmosphere_0", np.ndarray]:
         """
             FUNCTION NAME : modelm1()
 
@@ -125,16 +164,29 @@ class Modelm1(PreRTModelBase):
             MODIFICATION HISTORY : Juan Alday (29/03/2021)
 
         """
-        
+        xprof = self.full_profile.v
         npro = len(xprof)
         if npro!=atm.NP:
             raise ValueError('error in model -1 :: Number of levels in atmosphere does not match the passed profile')
-            
+        
+        
+        xmap = np.diag(xprof) if self.full_profile.log else np.diag(np.ones_like(xprof))
+        
         if atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
             temp = np.array(atm.DUST)
             temp[:,atm_profile_idx] = xprof
             atm.edit_DUST(temp)
-            xmap = np.diag(xprof)
+            
+            
+            if self.input_file_type == ArchNemesisFileTypeEnum.LEGACY:
+                if atm.DUST_UNITS_FLAG is not None:
+                    atm.DUST_UNITS_FLAG[atm_profile_idx] = AerosolUnitEnum.NUMBER_DENSITY
+            elif self.input_file_type == ArchNemesisFileTypeEnum.HDF5:
+                if atm.DUST_UNITS_FLAG is None:
+                    atm.DUST_UNITS_FLAG = np.full((atm.NDUST,), fill_value=AerosolUnitEnum.NUMBER_DENSITY, dtype=int)
+                atm.DUST_UNITS_FLAG[atm_profile_idx] = AerosolUnitEnum.PARTICLES_PER_GRAM
+            else:
+                assert self.input_file_type != ArchNemesisFileTypeEnum.UNDEFINED, "Model0 must have a defined file type for input files."
         
         else:
             raise ValueError(f'error :: Model -1 is only compatible with aerosol profiles, not {atm_profile_type}')
@@ -142,159 +194,6 @@ class Modelm1(PreRTModelBase):
         return atm, xmap
 
 
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        #* continuous cloud, but cloud retrieved as particles/cm3 rather than
-        #* particles per gram to decouple it from pressure.
-        #********* continuous particles/cm3 profile ************************
-        ix_0 = ix
-        
-        if varident[0] >= 0:
-            raise ValueError('error in read_apr_nemesis :: model -1 type is only for use with aerosols')
 
-        s = f.readline().split()
-        
-        with open(s[0], 'r') as f1:
-            tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
-            
-            nlevel = int(tmp[0])
-            if nlevel != npro:
-                raise ValueError('profiles must be listed on same grid as .prf')
-            
-            clen = float(tmp[1])
-            pref = np.zeros([nlevel])
-            ref = np.zeros([nlevel])
-            eref = np.zeros([nlevel])
-            
-            for j in range(nlevel):
-                tmp = np.fromfile(f1,sep=' ',count=3,dtype='float')
-                pref[j] = float(tmp[0])
-                ref[j] = float(tmp[1])
-                eref[j] = float(tmp[2])
-
-                lx[ix+j] = 1
-                x0[ix+j] = np.log(ref[j])
-                sx[ix+j,ix+j] = ( eref[j]/ref[j]  )**2.
-
-        #Calculating correlation between levels in continuous profile
-        for j in range(nlevel):
-            for k in range(nlevel):
-                if pref[j] < 0.0:
-                    raise ValueError('Error in read_apr_nemesis().  A priori file must be on pressure grid')
-
-                delp = np.log(pref[k])-np.log(pref[j])
-                arg = abs(delp/clen)
-                xfac = np.exp(-arg)
-                if xfac >= sxminfac:
-                    sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
-                    sx[ix+k,ix+j] = sx[ix+j,ix+k]
-        ix = ix + nlevel
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
-
-
-    @classmethod
-    def from_bookmark(
-            cls,
-            variables : "Variables_0",
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-        ) -> Self:
-        #* continuous cloud, but cloud retrieved as particles/cm3 rather than
-        #* particles per gram to decouple it from pressure.
-        #********* continuous particles/cm3 profile ************************
-        ix_0 = ix
-        
-        if varident[0] >= 0:
-            raise ValueError('error in read_apr_nemesis :: model -1 type is only for use with aerosols')
-        ix = ix + npro
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
-
-
-    def calculate_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> None:
-        #Model -1. Continuous aerosol profile in particles cm-3
-        #***************************************************************
-        
-        atm = forward_model.AtmosphereX
-        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
-        
-        if atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
-            calculate_fn = lambda *args, **kwargs: Model0.calculate(*args, **kwargs)
-        else:
-            calculate_fn = lambda *args, **kwargs: self.calculate(*args, **kwargs)
-        
-        atm, xmap1 = calculate_fn(
-            atm,
-            atm_profile_type,
-            atm_profile_idx,
-            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
-        )
-        
-        forward_model.AtmosphereX = atm
-        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
-        
-        return
-
-
-    def patch_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> None:
-        #Model -1. Continuous aerosol profile in particles cm-3
-        #***************************************************************
-        atm = forward_model.AtmosphereX
-        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
-        
-        atm, xmap1 = self.calculate(
-            atm,
-            atm_profile_type,
-            atm_profile_idx,
-            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
-        )
-        
-        forward_model.AtmosphereX = atm
-        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
-        
-        return
 
 

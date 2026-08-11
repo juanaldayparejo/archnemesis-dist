@@ -9,6 +9,7 @@ from ._base import PreRTModelBase
 from ..param import StateParam, ConstParam, VarParam
 
 from archnemesis.Scatter_0 import kk_new_sub
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -136,6 +137,7 @@ class Model444(PreRTModelBase):
             nlocations : int,
             runname : str,
             sxminfac : float,
+            input_file_type : ArchNemesisFileTypeEnum,
     ) -> Self:
         haze_file = f.readline().split()[0]
         
@@ -179,28 +181,12 @@ class Model444(PreRTModelBase):
         """
         Model 444 requires a custom covariance matrix calculation
         """
-        sx_part = sx[self.state_vector_slice, self.state_vector_slice]
-        sx_part[...] = 0.0
-        
-        sx_part[
-            self.particle_size_distribution_params.slice, 
-            self.particle_size_distribution_params.slice
-        ] = np.diag((self.particle_size_distribution_params.e / self.particle_size_distribution_params.v)**2)
-        
-        sx_part2 = sx_part[self.imaginary_ref_idx.slice, self.imaginary_ref_idx.slice]
-        
-        sx_part2[...] = np.diag((self.imaginary_ref_idx.e / self.imaginary_ref_idx.v)**2)
-        
-        
-        if self.correlation_length.v > 0:
-        
-            one = np.ones((self.n_waves, self.n_waves))
-            distance_matrix = (one * self.haze_waves[None,:]) - (one * self.haze_waves[:,None])
-            cor_dist_mat = np.exp(-1*np.abs(distance_matrix / self.correlation_length.v))
-            
-            variance = (self.imaginary_ref_idx.e / self.imaginary_ref_idx.v)**2
-            
-            sx_part2[cor_dist_mat >= sxminfac] = ((variance[:,None] @ variance[None,:])*cor_dist_mat)[cor_dist_mat >= sxminfac]
+        self.push_to_covariance_matrix_with_correlation_length(
+            sx,
+            sxminfac,
+            correlation_lengths = (0, self.correlation_length.v),
+            distances = None,
+        )
 
 
 

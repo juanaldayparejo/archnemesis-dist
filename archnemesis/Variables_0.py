@@ -30,7 +30,7 @@ import matplotlib.pyplot as plt
 
 #from archnemesis import *
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
-from archnemesis.enum import AtmosphericProfileTypeEnum, GasEnum
+from archnemesis.enum import AtmosphericProfileTypeEnum, GasEnum, ArchnemesisFileTypeEnum
 from archnemesis.helpers import io_helper
 from archnemesis.helpers import h5py_helper
 
@@ -624,7 +624,15 @@ class Variables_0:
             
     ################################################################################################################
 
-    def read_apr(self,runname,npro,ngas,ndust,nlocations=1):
+    def read_apr(
+            self,
+            runname,
+            npro,
+            ngas,
+            ndust,
+            nlocations=1,
+            input_file_type : ArchnemesisFileTypeEnum = ArchnemesisFileTypeEnum.UNDEFINED
+    ):
         """
         Read the .apr file, which contains information about the variables and
         parametrisations that are to be retrieved, as well as their a priori values.
@@ -655,6 +663,8 @@ class Variables_0:
             Number of locations in the reference atmosphere/surface
         
         """
+        
+        assert input_file_type != ArchnemesisFileTypeEnum.UNDEFINED, "Must have input file type defined when reading *.apr file."
         
         if self._models is not None:
             _lgr.warning(f'Already have models for {runname}, will overwrite them as we read the *.apr file.')
@@ -757,7 +767,8 @@ class Variables_0:
                                     ndust,
                                     nlocations,
                                     runname,
-                                    sxminfac
+                                    sxminfac,
+                                    input_file_type,
                                 )
                             )
                         except Exception as e:

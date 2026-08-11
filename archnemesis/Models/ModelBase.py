@@ -1,6 +1,6 @@
 
 import abc
-from typing import TYPE_CHECKING, IO, Any, Self
+from typing import TYPE_CHECKING, IO, Any, Self, Type
 import textwrap
 import inspect
 
@@ -8,7 +8,7 @@ import inspect
 import numpy.ma
 import numpy as np
 from archnemesis.helpers.io_helper import OutWidth
-from archnemesis.enum import AtmosphericProfileTypeEnum, GasEnum
+from archnemesis.enum import AtmosphericProfileTypeEnum, GasEnum, ArchNemesisFileTypeEnum
 
 from .ModelParameterEntry import ModelParameterEntry
 from .ModelParameter import ModelParameter
@@ -112,6 +112,29 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
         for i in range(xvals.size):
             xvals[i], xerrs[i] = map(float, f.readline().rsplit('!',maxsplit=1)[0].strip().split(maxsplit=1))
         return xvals, xerrs
+    
+    @staticmethod
+    def read_apr_entries(
+        f : IO, # File object of *.apr file.
+        types : tuple[Type,...] = (float, float), # Types to read per line
+        n_lines : int = 1, # Number of pairs to read from the file
+        return_values_if_single_line : bool = True,
+    ) -> list[np.ndarray]:
+        entries = []
+        n_entries_per_line = len(types)
+        for j in n_entries_per_line:
+            entries.append(
+                np.array((n_lines,), dtype=types[j])
+            )
+        
+        for i in range(n_lines):
+            for j, x in enumerate(f.readline().rsplit('!',maxsplit=1)[0].strip().split(maxsplit=(n_entries_per_line-1))):
+                entries[j][i] = types[j](x)
+        
+        if return_values_if_single_line and n_lines == 1:
+            return [x[0] for x in entries]
+        else:
+            return entries
     
     
     @classmethod
@@ -227,6 +250,9 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
             sxminfac : float, 
             #   Minimum factor to bother calculating covariance matrix entries between current model's 
             #   parameters and other model's parameters.
+            
+            input_file_type : ArchNemesisFileTypeEnum,
+            #   Type of input files that we are reading the model from.
     ) -> Self:
         """
             Constructs a model from its entry in a *.apr file. 
@@ -302,6 +328,7 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
             nlocations,
             runname,
             sxminfac,
+            input_file_type,
         )
         
         instance.set_state_vector_region(ix, instance.get_n_stateparam_entries())
@@ -453,6 +480,7 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
             nlocations : int,               # Number of locations defined for the atmosphere component
             runname : str,                  # Name of the *.apr file, without extension.
             sxminfac : float,               # Minimum factor to bother calculating covariance matrix entries, below this value entries will be zero
+            input_file_type : ArchNemesisFileTypeEnum, # Type of input files that we are reading the model from.
     ) -> Self: # Instance of model class
         """
             Instance of model from values in *.apr file. Should be overwritten by subclass.
