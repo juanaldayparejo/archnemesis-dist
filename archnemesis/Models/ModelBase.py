@@ -119,22 +119,39 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
         types : tuple[Type,...] = (float, float), # Types to read per line
         n_lines : int = 1, # Number of pairs to read from the file
         return_values_if_single_line : bool = True,
+        return_values_if_single_type : bool = True,
     ) -> list[np.ndarray]:
         entries = []
         n_entries_per_line = len(types)
-        for j in n_entries_per_line:
+        for j in range(n_entries_per_line):
+            if types[j] is str:
+                dtype = np.dtype('T')
+            else:
+                dtype = types[j]
+            
             entries.append(
-                np.array((n_lines,), dtype=types[j])
+                np.zeros((n_lines,), dtype=dtype)
             )
         
+        #print(f'TESTING: {n_lines=}')
+        #print(f'TESTING: {entries=}')
         for i in range(n_lines):
+            #print(f'TESTING: {i=} {types=}')
             for j, x in enumerate(f.readline().rsplit('!',maxsplit=1)[0].strip().split(maxsplit=(n_entries_per_line-1))):
+                #print(f'TESTING: {j=} {x=}')
+                #print(f'TESTING: {entries[j]=}')
                 entries[j][i] = types[j](x)
         
         if return_values_if_single_line and n_lines == 1:
-            return [x[0] for x in entries]
+            if return_values_if_single_type and n_entries_per_line == 1:
+                return entries[0][0]
+            else:
+                return [x[0] for x in entries]
         else:
-            return entries
+            if return_values_if_single_type and n_entries_per_line == 1:
+                return entries[0]
+            else:
+                return entries
     
     
     @classmethod
@@ -156,9 +173,9 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
             return tuple()
     
     def varparam_write(self) -> np.ndarray:
-        if len(self._varparam_names) >0:
-            return np.array(self.iter_varparam_values(), dtype=float)
-        return np.array((0,), dtype=float)
+        if self._n_varparams > 0:
+            return np.array([x for x in self.iter_varparam_values()], dtype=float)
+        return np.zeros((0,), dtype=float)
     
     
     @classmethod
@@ -334,6 +351,7 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
         instance.push_to_state_vector(x0, lx)
         instance.push_to_covariance_matrix(sx, sxminfac)
         instance.push_to_numerical_differentiation_vector(inum)
+        varparam[:cls._n_varparams] = instance.varparam_write()
         
         return instance
     

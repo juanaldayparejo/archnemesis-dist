@@ -157,7 +157,7 @@ class Model3(PreRTModelBase):
             atm.FRAC *= scf
         
         else:
-            raise ValueError(f'{self.__name__} id {self.id} has unknown atmospheric profile type {atm_profile_type}')
+            raise ValueError(f'{self.__class__.__name__} id {self.id} has unknown atmospheric profile type {atm_profile_type}')
         
 
         if MakePlot==True:

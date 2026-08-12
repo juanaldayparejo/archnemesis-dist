@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 
 from ..param import (
     StateParam, 
-    #ConstParam, 
-    #VarParam,
+    ConstParam, 
+    VarParam,
 )
 
 from ._base import PreRTModelBase

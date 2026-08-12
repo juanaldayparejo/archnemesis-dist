@@ -37,11 +37,11 @@ if TYPE_CHECKING:
 
 
 @dc.dataclass
-class Model555(PreRTModelBase):
+class Model556(PreRTModelBase):
     """
         In this model, we retrieve a scaling factor for the planetary radius
     """
-    id : ClassVar[int] = 555
+    id : ClassVar[int] = 556
     
     radius_scaling_factor : StateParam.using(slice(0,1), 'Scaling factor for planetary radius', '', num_diff=True) # noqa: F722 F821
 
@@ -131,7 +131,7 @@ class Model555(PreRTModelBase):
             ivar : int,
             xmap : np.ndarray,
         ) -> None:
-        
+        self.pull_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
         forward_model.AtmosphereX = self.calculate(forward_model.AtmosphereX)
 
 

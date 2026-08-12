@@ -113,9 +113,9 @@ class Specialisable:
 		cache_identity = (cls,class_attr_overrides)
 		cache_result = _SPECIALISED_CLASS_CACHE.get(cache_identity,None)
 		
-		print(f'{cls.__name__}')
-		print(f'  {class_attr_ordering=}')
-		print(f'  {class_attr_overrides=}')
+		#print(f'{cls.__name__}')
+		#print(f'  {class_attr_ordering=}')
+		#print(f'  {class_attr_overrides=}')
 		
 		if cache_result is not None:
 			return cache_result

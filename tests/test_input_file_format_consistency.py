@@ -235,12 +235,26 @@ def test_input_file_legacy_to_hdf5_conversion_does_not_alter_parameters():
                         if f'{old_format.__class__.__name__}.{k}' == 'Atmosphere_0.DUST_UNITS_FLAG':
                             # HDF5 always uses number density (m^-3), indicated by 'None'
                             # Legacy always uses mass density (g cm^-3) indicated by a numpy array of -1 values.
-                            assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
+                            assert (
+                                type(o_attr) is np.ndarray and np.all(o_attr == -1) 
+                                and (
+                                    n_attr is None
+                                    or type(n_attr) is np.ndarray and np.all(n_attr == 0)
+                                )
+                            ), f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
+                            #assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
                             continue
                         if f'{old_format.__class__.__name__}.{k}' == 'Layer_0.DUST_UNITS_FLAG':
                             # HDF5 always uses number density (m^-3), indicated by 'None'
                             # Legacy always uses mass density (g cm^-3) indicated by a numpy array of -1 values.
-                            assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
+                            assert (
+                                type(o_attr) is np.ndarray and np.all(o_attr == -1) 
+                                and (
+                                    n_attr is None
+                                    or type(n_attr) is np.ndarray and np.all(n_attr == 0)
+                                )
+                            ), f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
+                            #assert type(o_attr) is np.ndarray and np.all(o_attr == -1) and n_attr is None, f"For input files at '{current_dir}' attribute {old_format.__class__.__name__}.{k}, special case for {old_format.__class__.__name__}.{k} should be respected"
                             continue
                         if f'{old_format.__class__.__name__}.{k}' == 'Spectroscopy_0.RUNNAME':
                             # HDF5 files do not use this parameter

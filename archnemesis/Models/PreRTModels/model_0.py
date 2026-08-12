@@ -1,5 +1,5 @@
 
-from typing import TYPE_CHECKING, Self, IO, ClassVar
+from typing import TYPE_CHECKING, Self, IO, ClassVar, Any
 import dataclasses as dc
 
 import numpy as np
@@ -48,6 +48,18 @@ class Model0(PreRTModelBase):
     
     
     @classmethod
+    def from_profile_file(
+            cls,
+            fpath : str,
+    ) -> tuple[np.ndarray, np.ndarray, tuple[Any,...]]:
+        
+        with open(fpath, 'r') as f:
+            n_level, clen = cls.read_apr_entries(f, (int, float))
+            pref, xvals, xerrs = cls.read_apr_entries(f, (float,float,float), n_level)
+        
+        return xvals, xerrs, (n_level, pref, clen)
+    
+    @classmethod
     def from_apr_file(
             cls,
             f : IO,
@@ -60,11 +72,13 @@ class Model0(PreRTModelBase):
             sxminfac : float,
             input_file_type : ArchNemesisFileTypeEnum,
     ) -> Self:
-        n_level, clen = cls.read_apr_entries(f, (int, float))
+        profile_fpath = cls.read_apr_entries(f, (str,))
+        
+        xvals, xerrs, (n_level, pref, clen) = cls.from_profile_file(profile_fpath)
+        
         assert n_level == npro, "Profiles must be on the same grid as .prf"
-        pref, xvals, xerrs = cls.read_apr_entries(f, (float,float,float), n_level)
         assert np.all(pref >= 0), "Apriori file must be on pressure grid"
-    
+        
         instance = cls.from_arrays(
             xvals,
             xerrs,
@@ -149,7 +163,7 @@ class Model0(PreRTModelBase):
         """
         
         xprof = self.full_profile.v
-        _lgr.debug(f'Calculating {self.__name__} {atm=} {atm_profile_type=} {atm_profile_idx=} {xprof.shape=}')
+        _lgr.debug(f'Calculating {self.__class__.__name__} {atm=} {atm_profile_type=} {atm_profile_idx=} {xprof.shape=}')
         _lgr.debug(f'{xprof[:10]=}')
         
         
@@ -192,7 +206,7 @@ class Model0(PreRTModelBase):
             atm.FRAC(xprof)
         
         else:
-            raise ValueError(f'{self.__name__} id {self.id} has unknown atmospheric profile type {atm_profile_type}')
+            raise ValueError(f'{self.__class__.__name__} id {self.id} has unknown atmospheric profile type {atm_profile_type}')
         
         if MakePlot==True:
             fig,(ax1,ax2,ax3) = plt.subplots(1,3,figsize=(10,5))

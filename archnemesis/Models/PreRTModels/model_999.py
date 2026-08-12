@@ -45,7 +45,7 @@ class Model999(PreRTModelBase):
     """
     id : ClassVar[int] = 999 
     
-    surface_temperature : StateParam(slice(0,1), "Surface temperature of planet", 'Kelvin') # noqa: F722 F821
+    surface_temperature : StateParam.using(slice(0,1), "Surface temperature of planet", 'Kelvin') # noqa: F722 F821
     
     
     @classmethod

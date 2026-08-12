@@ -2551,24 +2551,8 @@ class ForwardModel_0:
                         # Re-compute pressure levels based pressure at tangent height on hydrostatic equilibrum
                         self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, 0.0)
                     ix += self.Variables.models[ivar].n_state_vector_entries
-
-        #Patch for model -1, since the aerosol density is defined in particles per gram of atm (depends on the density)
-        #Going through the different variables an updating the atmosphere accordingly
-        ix = 0
-        for ivar in range(self.Variables.NVAR):
-
-            ipar = self._get_ipar(self.Variables.VARIDENT[ivar])
-
-            #Model parameterisation applies to atmospheric parameters in multiple locations
-            if ((self.Variables.VARIDENT[ivar,2]>=1000) 
-                    and (self.Variables.VARIDENT[ivar,2]<=1100)
-                    and (self.AtmosphereX.NLOCATION <= 1)
-                ):
-                    raise ValueError('error in subprofretg :: Models 1000-1100 are meant to be used for models of atmospheric properties in multiple locations')
-
-            # Patch state vector for the model
-            self.Variables.models[ivar].patch_from_subprofretg(self, ix, ipar, ivar, xmap)
-            ix += self.Variables.models[ivar].n_state_vector_entries
+        
+        # NOTE: Removed `patch_from_subprofretg` as I think it is now redundant.
         
         return xmap
 

@@ -775,6 +775,10 @@ class Variables_0:
                             raise AprReadError(f'Failed to read {i}^th model entry (with VARIDENT={varident[i]})') from e
                         
                         _lgr.info(f'\nVariables_0 :: read_apr :: varident {varident[i]}. Constructed model "{model.__name__}" (id={model.id})')
+                        if _lgr.level <= logging.DEBUG:
+                            print(f'x0[{ix}:{ix+self._models[-1].get_n_stateparam_entries()}] =')
+                            for _i, x in enumerate(x0[ix:ix+self._models[-1].get_n_stateparam_entries()]):
+                                print(f'{_i+ix: 5} : {x}')
                         try:
                             io_helper.OutWidth.push(io_helper.OutWidth.get() - 2)
                             _lgr.info(textwrap.indent(str(self._models[-1].info(x0,sx)), '  '))

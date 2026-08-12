@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from ._base import PreRTModelBase
 from ..param import (
     StateParam, 
-    #ConstParam, 
+    ConstParam, 
     #VarParam,
 )
 
@@ -52,7 +52,8 @@ class Model47(PreRTModelBase):
     tau   : StateParam.using(slice(0,1), 'Integrated optical thickness', 'ln(RATIO)') # noqa: F722 F821
     p_ref : StateParam.using(slice(1,2), 'Mean pressure of the cloud', 'atm') # noqa: F722 F821
     fwhm  : StateParam.using(slice(2,3), 'Full-width-half-maximum of the log-Gaussian', 'atm') # noqa: F722 F821
-
+    
+    atm_profile_type : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
     
     @classmethod
     def from_apr_file(
@@ -73,10 +74,14 @@ class Model47(PreRTModelBase):
         instance = cls.from_arrays(
             xvals,
             xerrs,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust)
         )
         
         if varident[0] == 0:
             instance.tau.log = False
+        
+        assert instance.atm_profile_type.v == AtmosphericProfileTypeEnum.AEROSOL_DENSITY, \
+            f"{cls.__name__}[id={instance.id}] is only valid for aerosol profiles"
         
         return instance
         

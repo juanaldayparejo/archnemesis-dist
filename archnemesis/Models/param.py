@@ -67,7 +67,7 @@ def get_simple_attributes(obj):
     
 
     for name in slots:
-        print(f'{name=} {value=}')
+        #print(f'{name=} {value=}')
         value = getattr(obj, name)
         if name.startswith("_"):
             continue

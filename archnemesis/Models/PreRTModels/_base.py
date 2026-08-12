@@ -49,6 +49,16 @@ class PreRTModelBase(ModelBase):
     ) -> bool:
         return varident[2]==cls.id
     
+    def calculate_from_subspecret(
+            self,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ivar : int,
+            SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
+            dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
+    ) -> None:
+        _lgr.debug(f'Model id {self.id} method "calculate_from_subspecret" does nothing...')
+    
     ## Abstract methods below this line, subclasses must implement all of these methods ##
     
     def calculate_from_subprofretg(
@@ -60,7 +70,7 @@ class PreRTModelBase(ModelBase):
             xmap : np.ndarray,
     ) -> None:
         assert isinstance(atm_profile_type := getattr(self, "atm_profile_type", None), ConstParam) and isinstance(atm_profile_type.v, AtmosphericProfileTypeEnum), \
-            'Default method "calculate_from_subprofretg(...)" requires class to have an attribute like `atm_profile_type : ConstParam[AtmosphericProfileTypeEnum]` otherwise the "calculate_from_subprofretg(...)" method must be provided.'
+            f'Default method "calculate_from_subprofretg(...)" requires class {self.__class__.__name__} to have an attribute like `atm_profile_type : ConstParam[AtmosphericProfileTypeEnum]` otherwise the "calculate_from_subprofretg(...)" method must be provided.'
     
         atm = forward_model.AtmosphereX
         atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)

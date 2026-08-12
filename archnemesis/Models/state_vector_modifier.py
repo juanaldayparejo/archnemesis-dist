@@ -4,6 +4,10 @@ import dataclasses as dc
 
 import numpy as np
 
+import logging
+_lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.DEBUG)
+
 if TYPE_CHECKING:
     nx = 'number of elements in state vector'
 
@@ -88,7 +92,6 @@ class StateVectorModifier:
             lx_part = lx[self.state_vector_slice]
         
         for stateparam in self.iter_stateparam_objs():
-            print(f'{stateparam.v=}')
             x0_part[stateparam.slice] = np.log(stateparam.v) if stateparam.log else stateparam.v
             if lx is not None:
                 lx_part[stateparam.slice] = stateparam.log
@@ -151,7 +154,8 @@ class StateVectorModifier:
         self.check_state_vector_region_valid()
         
         if isinstance(correlation_lengths, (np.number, float, int)):
-            assert len(self.iter_stateparam_names) == 1, "If being used, correlation length can only be a single number if there is only one stateparam, otherwise must have one correlation length for each stateparam."
+            assert self._n_stateparams == 1, "If being used, correlation length can only be a single number if there is only one stateparam, otherwise must have one correlation length for each stateparam."
+            correlation_lengths = np.ones((1,),dtype=type(correlation_lengths))*correlation_lengths
         
         sx_part = sx[self.state_vector_slice, self.state_vector_slice]
         sx_part[...] = 0.0

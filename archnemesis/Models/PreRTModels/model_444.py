@@ -50,11 +50,11 @@ class Model444(PreRTModelBase):
     imaginary_ref_idx                 : StateParam.using(slice(2,None), 'Imaginary refractive index of the particle size distribution') # noqa: F722 F821
     
     haze_file_path      : ConstParam[str].using("Path to the file that contains haze parameters") # noqa: F722 F821
+    haze_waves          : ConstParam[np.ndarray].using('Wavenumbers of the imaginary refractive index points') # noqa: F722 F821
     
     aerosol_species_idx : VarParam[int].using('Index of the aerosol species the imaginary refactive index is varying for') # noqa: F722 F821
     scattering_type_id  : VarParam[int].using('Type of scattering used in calculations') # noqa: F722 F821
     n_waves             : VarParam[int].using('Number of wavenumbers for the imaginary refractive index') # noqa: F722 F821
-    haze_waves          : VarParam[np.ndarray].using('Wavenumbers of the imaginary refractive index points') # noqa: F722 F821
     haze_wave_norm      : VarParam[float].using('Wavenumber to normalise extinction cross section spectrum to') # noqa: F722 F821
     haze_wave_ref       : VarParam[float].using('Reference wavenumber for normal component') # noqa: F722 F821
     haze_wave_ref_rri   : VarParam[float].using('Real component of refractive index at reference wavenumber') # noqa: F722 F821
@@ -91,8 +91,8 @@ class Model444(PreRTModelBase):
             xerrs = []
             for j in range(2):
                 xval, xerr = (float(a) for a in f.readline().split()[:2])
-                xvals.append(np.log(xval))
-                xerrs.append((xerr/xval)**2)
+                xvals.append(xval)
+                xerrs.append(xerr)
             
             n_waves, clen = f.readline().split('!')[0].split()
             vref, nreal_ref = f.readline().split('!')[0].split()
@@ -110,15 +110,15 @@ class Model444(PreRTModelBase):
             for j in range(int(n_waves)):
                 v, xval, xerr = (float(x) for x in f.readline().split()[:3])
                 haze_waves[j] = v
-                xvals.append(np.log(xval))
-                xerrs.append((xerr/xval)**2)
+                xvals.append(xval)
+                xerrs.append(xerr)
             
             return (
                 np.array(xvals),
                 np.array(xerrs),
                 (
-                    n_waves,
                     np.array(haze_waves),
+                    n_waves,
                     v_od_norm,
                     vref,
                     nreal_ref,
@@ -145,14 +145,16 @@ class Model444(PreRTModelBase):
             xvals, 
             xerrs,
             (
-                n_waves,
                 haze_waves,
+                n_waves,
                 v_od_norm,
                 vref,
                 nreal_ref,
                 clen,
             )
         ) = cls.read_haze_file(haze_file)
+        
+        print(f'TESTING: {xvals=}')
         
         aerosol_species_idx = varident[1]-1
         
@@ -162,10 +164,10 @@ class Model444(PreRTModelBase):
             xvals,
             xerrs,
             haze_file,
+            haze_waves,
             aerosol_species_idx, 
             scattering_type_id,
             n_waves,
-            haze_waves,
             v_od_norm,
             vref,
             nreal_ref,
@@ -238,35 +240,31 @@ class Model444(PreRTModelBase):
             ndust : int,
             nlocations : int,
     ) -> Self:
-        ix_0 = ix
         #******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
         _lgr.warn(f"{cls.__name__}.from_bookmark(...) only sets model parameters that have been stored in `varident`, `varparam`. Therefore it cannot set `haze_params['WAVE']` at the moment as those values are in an external file whose name is not stored in those locations. Use with caution.")
         
-        #haze_waves = []
-        for j in range(2):
-            ix = ix + 1
-
+        aerosol_species_idx = varident[1]-1
+        scattering_type_id = 1 # Should add a way to alter this value from the input files.
+        
         nwave = varparam[0] - 2
         #clen = varparam[1]
         vref = varparam[2]
         nreal_ref = varparam[3]
         v_od_norm = varparam[4]
-        
-        haze_params = dict()
-        haze_params['NX'] = nwave
-        #haze_params['WAVE'] = haze_waves    !This needs to be fixed!
-        haze_params['NREAL'] = float(nreal_ref)
-        haze_params['WAVE_REF'] = float(vref)
-        haze_params['WAVE_NORM'] = float(v_od_norm)
-
-        for j in range(int(nwave)):
-            ix = ix + 1
-
-        aerosol_species_idx = varident[1]-1
-        scattering_type_id = 1 # Should add a way to alter this value from the input files.
-
-        return cls(ix_0, ix-ix_0, haze_params, aerosol_species_idx, scattering_type_id)
-
+    
+        return cls.from_arrays(
+            np.zeros((nwave+2,)),
+            np.zeros((nwave+2,)),
+            'UNKNOWN_FILE',
+            aerosol_species_idx, 
+            scattering_type_id,
+            nwave,
+            np.zeros((nwave+2,)),
+            v_od_norm,
+            vref,
+            nreal_ref,
+            0.0,
+        )
 
     def calculate_from_subprofretg(
             self,

@@ -1,10 +1,19 @@
 
 
-from typing import TYPE_CHECKING, IO, Self, ClassVar
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 
+from ..param import (
+    StateParam, 
+    #ConstParam, 
+    #VarParam,
+)
+
 from ._base import PostRTModelBase
+
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -27,12 +36,41 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+
+@dc.dataclass
 class Model667(PostRTModelBase):
     """
         In this model, the output spectrum is scaled using a dillusion factor to account
         for strong temperature gradients in exoplanets
     """
     id : ClassVar[int] = 667
+    
+    dilution_factor : StateParam.using(slice(0,1), 'Scales output spectrum to account for strong temperature gradients') # noqa: F722 F821
+
+    @classmethod
+    def from_apr_file(
+            cls,
+            f : IO,
+            varident : np.ndarray[[3],int],
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+            runname : str,
+            sxminfac : float,
+            input_file_type : ArchNemesisFileTypeEnum,
+    ) -> Self:
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, 1)
+        
+        instance = cls(
+            xvals,
+            xerrs
+        )
+        
+        instance.dilution_factor.log = False
+        
+        return instance
+        
 
 
     @classmethod
@@ -71,36 +109,7 @@ class Model667(PostRTModelBase):
         return Spectrum
 
 
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** dilution factor to account for thermal gradients thorughout exoplanet
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
-        xfac = float(tmp[0])
-        xfacerr = float(tmp[1])
-        x0[ix] = xfac
-        inum[ix] = 0 
-        sx[ix,ix] = xfacerr**2.
-        ix = ix + 1
-
-        return cls(ix_0, ix-ix_0)
+    
 
     @classmethod
     def from_bookmark(
@@ -114,11 +123,9 @@ class Model667(PostRTModelBase):
             ndust : int,
             nlocations : int,
         ) -> Self:
-        ix_0 = ix
-        #******** dilution factor to account for thermal gradients thorughout exoplanet
-        ix = ix + 1
-
-        return cls(ix_0, ix-ix_0)
+        return cls(
+            (np.array([0]), np.array([0]))
+        )
 
     def calculate_from_subspecret(
             self,
@@ -130,8 +137,10 @@ class Model667(PostRTModelBase):
         ) -> None:
         #Model 667. Spectrum scaled by dilution factor to account for thermal gradients in planets
         #**********************************************************************************************
-
-        xfactor = forward_model.Variables.XN[ix]
+        
+        self.pull_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        
+        xfactor = self.dilution_factor.v
         spec = np.zeros(forward_model.SpectroscopyX.NWAVE)
         spec[:] = SPECMOD
         SPECMOD = self.calculate(SPECMOD,xfactor)
