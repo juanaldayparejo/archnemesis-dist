@@ -1,6 +1,6 @@
 
 
-from typing import TYPE_CHECKING, IO, Self
+from typing import TYPE_CHECKING, IO, Self, ClassVar
 
 import numpy as np
 
@@ -32,7 +32,7 @@ class Model667(PostRTModelBase):
         In this model, the output spectrum is scaled using a dillusion factor to account
         for strong temperature gradients in exoplanets
     """
-    id : int = 667
+    id : ClassVar[int] = 667
 
 
     @classmethod

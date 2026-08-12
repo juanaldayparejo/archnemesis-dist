@@ -1,10 +1,17 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
+from ..param import (
+    StateParam, 
+    ConstParam, 
+    #VarParam,
+)
+import dataclasses as dc
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 from archnemesis.helpers import h5py_helper
 
@@ -30,45 +37,23 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass(slots=True)
 class Model446(PreRTModelBase):
     """
         In this model, we change the extinction coefficient and single scattering albedo 
         of a given aerosol population based on its particle size, and based on the extinction 
         coefficients tabulated in a look-up table
     """
-    id : int = 446
+    id : ClassVar[int] = 446
 
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            n_state_vector_entries : int,
-            lookup_table_fpath : str,
-        ):
-        """
-        Initialise an instance of the model.
-        
-        ## ARGUMENTS ##
-            
-            state_vector_start : int
-                The index of the first entry of the model parameters in the state vector
-            
-            n_state_vector_entries : int
-                The number of model parameters that are stored in the state vector
-            
-            lookup_table_fpath: str
-                path to the lookup table of extinction coefficient vs particle size
-                
-        
-        ## RETURNS ##
-            An initialised instance of this object
-        """
-        super().__init__(state_vector_start, n_state_vector_entries)
-        
-        self.lookup_table_fpath : str = lookup_table_fpath
+    particle_size: StateParam.using(slice(0,1), 'Particle size for lookup interpolation') # noqa: F722 F821
+    aerosol_id: ConstParam[int].using('Aerosol population index') # noqa: F722 F821
+    wavenorm: ConstParam[int].using('Flag: normalise extinction at wavelength') # noqa: F722 F821
+    xwave: ConstParam[float].using('Normalization wavelength/wavenumber') # noqa: F722 F821
+    lookup_table_fpath: ConstParam[str].using('Path to lookup table HDF5 file') # noqa: F722 F821
 
 
-    @classmethod
-    def calculate(cls, Scatter,idust,wavenorm,xwave,rsize,lookupfile,MakePlot=False):
+    def calculate(self, Scatter,idust,wavenorm,xwave,rsize,lookupfile,MakePlot=False):
 
         """
             FUNCTION NAME : model446()
@@ -183,61 +168,40 @@ class Model446(PreRTModelBase):
 
 
     @classmethod
-    def from_apr_to_state_vector(
+    def from_apr_file(
             cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** model for retrieving an aerosol particle size distribution from a tabulated look-up table
-
-        #This model changes the extinction coefficient of a given aerosol population based on 
-        #the extinction coefficient look-up table stored in a separate file. 
-
-        #The look-up table specifies the extinction coefficient as a function of particle size, and 
-        #the parameter in the state vector is the particle size
-
-        #The look-up table must have the format specified in Models/Models.py (model446)
-
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> Self:
         s = f.readline().split()
-        aerosol_id = int(s[0])    #Aerosol population (from 0 to NDUST-1)
-        wavenorm = int(s[1])      #If 1 - then the extinction coefficient will be normalised at a given wavelength
-
+        aerosol_id = int(s[0])
+        wavenorm = int(s[1])
         xwave = 0.0
-        if wavenorm==1:
-            xwave = float(s[2])   #If 1 - wavelength at which to normalise the extinction coefficient
+        if wavenorm == 1 and len(s) > 2:
+            xwave = float(s[2])
 
-        varparam[0] = aerosol_id
-        varparam[1] = wavenorm
-        varparam[2] = xwave
-
-        #Read the name of the look-up table file
         s = f.readline().split()
         fnamex = s[0]
 
-        #Reading the particle size and its a priori error
-        s = f.readline().split()
-        lx[ix] = 0
-        inum[ix] = 1
-        x0[ix] = float(s[0])
-        sx[ix,ix] = (float(s[1]))**2.
+        xvals_raw, xerrs_raw = cls.read_apr_value_error_pairs(f, 1)
 
-        ix = ix + 1
-
-        return cls(ix_0, ix-ix_0, fnamex)
+        instance = cls.from_arrays(
+            xvals_raw,
+            xerrs_raw,
+            aerosol_id,
+            wavenorm,
+            xwave,
+            fnamex,
+        )
+        instance.particle_size.log = False
+        return instance
 
 
     @classmethod

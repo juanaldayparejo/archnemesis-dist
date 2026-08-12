@@ -6,8 +6,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
-from ..param import StateParam, ConstParam, VarParam
-from ..ModelParameter import ModelParameter
+from ..param import (
+    StateParam, 
+    #ConstParam, 
+    #VarParam,
+)
 
 import archnemesis.Data.constants as const
 
@@ -21,8 +24,6 @@ if TYPE_CHECKING:
     # the problem is that importing Variables_0 or ForwardModel_0 creates a circular import
     # this actually means that I should possibly redesign how those work to avoid circular imports
     # but that is outside the scope of what I want to accomplish here
-    from archnemesis.Variables_0 import Variables_0
-    from archnemesis.ForwardModel_0 import ForwardModel_0
     from archnemesis.Atmosphere_0 import Atmosphere_0
 
     nx = 'number of elements in state vector'
@@ -48,9 +49,9 @@ class Model47(PreRTModelBase):
     id : ClassVar[int] = 47
 
     
-    tau   : StateParam.using(slice(0,1), 'Integrated optical thickness', 'ln(RATIO)')
-    p_ref : StateParam.using(slice(1,2), 'Mean pressure of the cloud', 'atm')
-    fwhm  : StateParam.using(slice(2,3), 'Full-width-half-maximum of the log-Gaussian', 'atm')
+    tau   : StateParam.using(slice(0,1), 'Integrated optical thickness', 'ln(RATIO)') # noqa: F722 F821
+    p_ref : StateParam.using(slice(1,2), 'Mean pressure of the cloud', 'atm') # noqa: F722 F821
+    fwhm  : StateParam.using(slice(2,3), 'Full-width-half-maximum of the log-Gaussian', 'atm') # noqa: F722 F821
 
     
     @classmethod

@@ -30,7 +30,7 @@ import matplotlib.pyplot as plt
 
 #from archnemesis import *
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
-from archnemesis.enum import AtmosphericProfileTypeEnum, GasEnum, ArchnemesisFileTypeEnum
+from archnemesis.enum import AtmosphericProfileTypeEnum, GasEnum, ArchNemesisFileTypeEnum
 from archnemesis.helpers import io_helper
 from archnemesis.helpers import h5py_helper
 
@@ -631,7 +631,7 @@ class Variables_0:
             ngas,
             ndust,
             nlocations=1,
-            input_file_type : ArchnemesisFileTypeEnum = ArchnemesisFileTypeEnum.UNDEFINED
+            input_file_type : ArchNemesisFileTypeEnum = ArchNemesisFileTypeEnum.UNDEFINED
     ):
         """
         Read the .apr file, which contains information about the variables and
@@ -664,7 +664,7 @@ class Variables_0:
         
         """
         
-        assert input_file_type != ArchnemesisFileTypeEnum.UNDEFINED, "Must have input file type defined when reading *.apr file."
+        assert input_file_type != ArchNemesisFileTypeEnum.UNDEFINED, "Must have input file type defined when reading *.apr file."
         
         if self._models is not None:
             _lgr.warning(f'Already have models for {runname}, will overwrite them as we read the *.apr file.')

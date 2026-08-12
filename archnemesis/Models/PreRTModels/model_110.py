@@ -1,12 +1,13 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 
 from ._base import PreRTModelBase
-from ..ModelParameter import ModelParameter
+from ..param import StateParam, ConstParam
 
-from archnemesis.enum import AtmosphericProfileTypeEnum
+from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass(slots=True)
 class Model110(PreRTModelBase):
     """
         In this model, the Venus cloud is parameterised using the model of Haus et al. (2016).
@@ -39,38 +41,12 @@ class Model110(PreRTModelBase):
 
         The units of the aerosol density are in m-3, so the extinction coefficients must not be normalised.
     """
-    id : int = 110
+    id: ClassVar[int] = 110
 
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-            
-            atm_profile_type : AtmosphericProfileTypeEnum,
-            #   ENUM that tells us what kind of atmospheric profile this model instance represents
-        ):
-        """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
-        
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model.
-        # NOTE: It is best to define these in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
-        self.parameters = (
-            ModelParameter('z_offset', slice(0,1), 'Offset in altitude (km) of the cloud with respect to the Haus et al. (2016) model.', 'km'),
-        )
-        
-        return
+    z_offset: StateParam.using(slice(0,1), 'Offset in altitude (km) of the cloud with respect to the Haus et al. (2016) model.', 'km') # noqa: F722 F821
+    atm_profile_type: ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
 
-    @classmethod
-    def calculate(cls, atm, idust0, z_offset):
+    def calculate(self, atm, idust0, MakePlot=False):
         """
             FUNCTION NAME : model110()
 
@@ -118,7 +94,9 @@ class Model110(PreRTModelBase):
         #Cloud mode 1
         ###################################################
 
-        zb1 = 49. + z_offset #Lower base of peak altitude (km)
+        z_offset = self.z_offset.v
+
+        zb1 = 49. + z_offset
         zc1 = 16.            #Layer thickness of constant peak particle (km)
         Hup1 = 3.5           #Upper scale height (km)
         Hlo1 = 1.            #Lower scale height (km)
@@ -218,83 +196,70 @@ class Model110(PreRTModelBase):
 
 
     @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** model for Venus cloud following Haus et al. (2016) with altitude offset
+    def from_apr_file(
+        cls,
+        f: IO,
+        varident: np.ndarray[[3], int],
+        npro: int,
+        ngas: int,
+        ndust: int,
+        nlocations: int,
+        runname: str,
+        sxminfac: float,
+        input_file_type: ArchNemesisFileTypeEnum,
+    ) -> Self:
+        xvals_raw, xerrs_raw = cls.read_apr_value_error_pairs(f, 1)
+        instance = cls.from_arrays(
+            xvals_raw,
+            xerrs_raw,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust),
+        )
 
-        if varident[0]>0:
-            raise ValueError('error in read_apr model 110 :: VARIDENT[0] must be negative to be associated with the aerosols')
+        instance.z_offset.log = False
 
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #z_offset
-        x0[ix] = float(tmp[0])
-        sx[ix,ix] = float(tmp[1])**2.
-        lx[ix] = 0
-        inum[ix] = 1
-        ix = ix + 1
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
+        return instance
 
     @classmethod
     def from_bookmark(
-            cls,
-            variables : "Variables_0",
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-        ) -> Self:
-        ix_0 = ix
-        #******** model for Venus cloud following Haus et al. (2016) with altitude offset
-
-        if varident[0]>0:
-            raise ValueError('error in read_apr model 110 :: VARIDENT[0] must be negative to be associated with the aerosols')
-
-        ix = ix + 1
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
+        cls,
+        variables: "Variables_0",
+        varident: np.ndarray[[3], int],
+        varparam: np.ndarray[["mparam"], float],
+        ix: int,
+        npro: int,
+        ngas: int,
+        ndust: int,
+        nlocations: int,
+    ) -> Self:
+        xvals = np.zeros(1)
+        xerrs = np.zeros(1)
+        return cls.from_arrays(
+            xvals,
+            xerrs,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust),
+        )
 
 
     def calculate_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> None:
-        #Model 110. Venus cloud model from Haus et al. (2016) with altitude offset
-        #************************************************************************************  
+        self,
+        forward_model: "ForwardModel_0",
+        ix: int,
+        ipar: int,
+        ivar: int,
+        xmap: np.ndarray,
+    ) -> None:
+        atm = forward_model.AtmosphereX
 
-        offset = forward_model.Variables.XN[ix]   #altitude offset in km
-        idust0 = np.abs(forward_model.Variables.VARIDENT[ivar,0])-1  #Index of the first cloud mode                
-        forward_model.AtmosphereX = self.calculate(forward_model.AtmosphereX,idust0,offset)
+        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
 
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        idust0 = int(abs(forward_model.Variables.VARIDENT[ivar, 0]) - 1)
+
+        # Pull parameter values from the state vector into this instance
+        self.pull_from_state_vector(forward_model.Variables.XN)
+
+        # calculate uses the instance z_offset (or an explicit override)
+        forward_model.AtmosphereX = self.calculate(forward_model.AtmosphereX, idust0)
+
+        ix = ix + int(forward_model.Variables.NXVAR[ivar])
 
 

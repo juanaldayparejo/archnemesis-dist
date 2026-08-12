@@ -5,8 +5,12 @@ import dataclasses as dc
 import numpy as np
 
 from ._base import PreRTModelBase
-from ..param import StateParam, ConstParam, VarParam
-from ..ModelParameter import ModelParameter
+from ..param import (
+    StateParam, 
+    ConstParam, 
+    #VarParam,
+)
+# legacy ModelParameter removed; using new param API
 
 
 from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
@@ -19,8 +23,6 @@ if TYPE_CHECKING:
     # the problem is that importing Variables_0 or ForwardModel_0 creates a circular import
     # this actually means that I should possibly redesign how those work to avoid circular imports
     # but that is outside the scope of what I want to accomplish here
-    from archnemesis.Variables_0 import Variables_0
-    from archnemesis.ForwardModel_0 import ForwardModel_0
     from archnemesis.Atmosphere_0 import Atmosphere_0
 
     nx = 'number of elements in state vector'
@@ -45,11 +47,11 @@ class Model45(PreRTModelBase):
     id : ClassVar[int] = 45
 
     
-    deep_vmr   : StateParam.using(slice(0,1), 'deep (topospheric) gas volume mixing ratio', 'RATIO')
-    humidity   : StateParam.using(slice(1,2), 'relative humidity of gas', 'RATIO')
-    strato_vmr : StateParam.using(slice(2,3), 'high (stratospheric) gas volume mixing ratio', 'RATIO')
+    deep_vmr   : StateParam.using(slice(0,1), 'deep (topospheric) gas volume mixing ratio', 'RATIO') # noqa: F722 F821
+    humidity   : StateParam.using(slice(1,2), 'relative humidity of gas', 'RATIO') # noqa: F722 F821
+    strato_vmr : StateParam.using(slice(2,3), 'high (stratospheric) gas volume mixing ratio', 'RATIO') # noqa: F722 F821
     
-    atm_profile_type : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to')
+    atm_profile_type : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
     
     
     @classmethod

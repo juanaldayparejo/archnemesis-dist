@@ -1,12 +1,16 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
 
 import numpy as np
 
 from ._base import PreRTModelBase
-from ..ModelParameter import ModelParameter
-
-from archnemesis.enum import AtmosphericProfileTypeEnum
+from ..param import (
+    StateParam, 
+    #ConstParam, 
+    #VarParam,
+)
+import dataclasses as dc
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -30,55 +34,18 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass(slots=True)
 class Model111(PreRTModelBase):
     """
-        This is a parametersiation for the Venus cloud following the model of Haus et al. (2016),
-        but also includes a parametersiation for the SO2 profiles, whose mixing ratio is tightly linked to the
-        altitude of the cloud.
-
-        In this model, the cloud is made of a mixture of H2SO2+H2O droplets, with four different modes, and we allow the 
-        variation of the cloud altitude. The units of the aerosol density are in m-3, so the extinction coefficients must 
-        not be normalised.
-
-        In the case of the SO2 profile, it is tightly linked to the altitude of the cloud, as the mixing ratio
-        of these species greatly decreases within the cloud due to condensation and photolysis. This molecule is
-        modelled by defining its mixing ratio below and above the cloud, and the mixing ratio is linearly interpolated in
-        log-scale within the cloud.
+        Venus cloud + SO2 profile model with altitude offset
     """
-    id : int = 111
+    id : ClassVar[int] = 111
 
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-            
-            atm_profile_type : AtmosphericProfileTypeEnum,
-            #   ENUM that tells us what kind of atmospheric profile this model instance represents
-        ):
-        """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
-        
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model.
-        # NOTE: It is best to define these in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
-        self.parameters = (
-            ModelParameter('z_offset', slice(0,1), 'SO2 volume mixing ratio below the cloud', 'RATIO'),
-            ModelParameter('so2_deep', slice(1,2), 'SO2 volume mixing ratio above the cloud', 'RATIO'),
-            ModelParameter('so2_top', slice(2,3), 'Offset in altitude (km) of the cloud with respect to the Haus et al. (2016) model.', 'km'),
-        )
-        
-        return
+    z_offset: StateParam.using(slice(0,1), 'Altitude offset (km) of the cloud', 'km') # noqa: F722 F821
+    so2_deep: StateParam.using(slice(1,2), 'SO2 VMR below the cloud', 'RATIO') # noqa: F722 F821
+    so2_top: StateParam.using(slice(2,3), 'SO2 VMR above the cloud', 'RATIO') # noqa: F722 F821
 
-    @classmethod
-    def calculate(cls, atm, idust0, so2_deep, so2_top, z_offset):
+    def calculate(self, atm, idust0, MakePlot=False):
         """
             FUNCTION NAME : model111()
 
@@ -125,7 +92,7 @@ class Model111(PreRTModelBase):
             MODIFICATION HISTORY : Juan Alday (29/03/2021)
 
         """
-
+        z_offset = self.z_offset.v
         h = atm.H/1.0e3
         nh = len(h)
 
@@ -141,7 +108,7 @@ class Model111(PreRTModelBase):
         #Cloud mode 1
         ###################################################
 
-        zb1 = 49. + z_offset #Lower base of peak altitude (km)
+        zb1 = 49. + self.z_offset.v #Lower base of peak altitude (km)
         zc1 = 16.            #Layer thickness of constant peak particle (km)
         Hup1 = 3.5           #Upper scale height (km)
         Hlo1 = 1.            #Lower scale height (km)
@@ -243,7 +210,7 @@ class Model111(PreRTModelBase):
 
         cloud_bottom = zb1
         cloud_top = zb1 + 20. #Assuming the cloud extends 20 km above the base
-        SO2grad = (np.log(so2_top)-np.log(so2_deep))/(cloud_top-cloud_bottom)  #dVMR/dz (km-1)
+        SO2grad = (np.log(self.so2_top.v) - np.log(self.so2_deep.v)) / (cloud_top - cloud_bottom)  #dVMR/dz (km-1)
 
         #Calculating SO2 profile
         so2 = np.zeros(nh)
@@ -251,9 +218,9 @@ class Model111(PreRTModelBase):
         iabove = np.where(h>cloud_top)[0]
         icloud = np.where((h>=cloud_bottom) & (h<=cloud_top))[0]
 
-        so2[ibelow] = so2_deep
-        so2[iabove] = so2_top
-        so2[icloud] = np.exp(np.log(so2_deep) + SO2grad*(h[icloud]-cloud_bottom))
+        so2[ibelow] = self.so2_deep.v
+        so2[iabove] = self.so2_top.v
+        so2[icloud] = np.exp(np.log(self.so2_deep.v) + SO2grad*(h[icloud]-cloud_bottom))
 
         #Updating SO2 profile in atmosphere class
         atm.update_gas(9,0,so2)
@@ -262,59 +229,24 @@ class Model111(PreRTModelBase):
 
 
     @classmethod
-    def from_apr_to_state_vector(
+    def from_apr_file(
             cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** model for Venus cloud and SO2 vmr profile with altitude offset
-
-        if varident[0]>0:
-            raise ValueError('error in read_apr model 111 :: VARIDENT[0] must be negative to be associated with the aerosols')
-
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #z_offset
-        x0[ix] = float(tmp[0])
-        sx[ix,ix] = float(tmp[1])**2.
-        lx[ix] = 0
-        inum[ix] = 1
-        ix = ix + 1
-
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #SO2_deep
-        so2_deep = float(tmp[0])
-        so2_deep_err = float(tmp[1])
-        x0[ix] = np.log(so2_deep)
-        sx[ix,ix] = (so2_deep_err/so2_deep)**2.
-        lx[ix] = 1
-        inum[ix] = 1
-        ix = ix + 1
-
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files   #SO2_top
-        so2_top = float(tmp[0])
-        so2_top_err = float(tmp[1])
-        x0[ix] = np.log(so2_top)
-        sx[ix,ix] = (so2_top_err/so2_top)**2.
-        lx[ix] = 1
-        inum[ix] = 1
-        ix = ix + 1
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> "Model111":
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, 3)
+        instance = cls.from_arrays(xvals, xerrs)
+        # legacy APR stored SO2 values in log-space
+        instance.so2_deep.log = True
+        instance.so2_top.log = True
+        return instance
 
 
     @classmethod

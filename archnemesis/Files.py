@@ -254,7 +254,7 @@ def read_input_files_hdf5(runname,calc_SE=True):
     #################################################################
 
     Variables = Variables_0()
-    Variables.read_apr(runname, Atmosphere.NP, Atmosphere.NVMR, Atmosphere.NDUST, Atmosphere.NLOCATIONS, input_file_type=ArchNemesisFileType.HDF5)
+    Variables.read_apr(runname, Atmosphere.NP, Atmosphere.NVMR, Atmosphere.NDUST, Atmosphere.NLOCATIONS, input_file_type=ArchNemesisFileTypeEnum.HDF5)
     Variables.XN = copy(Variables.XA)
     Variables.SX = copy(Variables.SA)
 
@@ -584,7 +584,7 @@ def read_input_files(runname):
     #################################################################
     _lgr.info('Reading .apr file')
     Variables = Variables_0()
-    Variables.read_apr(runname, Atm.NP, Atm.NVMR, Atm.NDUST, Atm.NLOCATIONS, input_file_type=ArchNemesisFileType.LEGACY)
+    Variables.read_apr(runname, Atm.NP, Atm.NVMR, Atm.NDUST, Atm.NLOCATIONS, input_file_type=ArchNemesisFileTypeEnum.LEGACY)
     Variables.XN = copy(Variables.XA)
     Variables.SX = copy(Variables.SA)
 

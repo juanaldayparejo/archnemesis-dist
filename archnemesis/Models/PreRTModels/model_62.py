@@ -1,10 +1,16 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
 
 import numpy as np
 
 from ._base import PreRTModelBase
-from ..ModelParameter import ModelParameter
+from ..param import (
+    StateParam, 
+    #ConstParam, 
+    #VarParam,
+)
+import dataclasses as dc
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
@@ -30,68 +36,44 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass(slots=True)
 class Model62(PreRTModelBase):
     """
-        Temperature profile for exoplanets following the parameterisation of Madhusudhan & Seager (2009)   
+        Temperature profile for exoplanets following the parameterisation of Madhusudhan & Seager (2009)
     """
-    id : int = 62
+    id : ClassVar[int] = 62
 
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-        ):
-        """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries)
-        
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model.
-        # NOTE: It is best to define these in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
-        self.parameters = (
-            ModelParameter('P1', slice(0,1), 'Pressure at interface of Layer 1-2'),
-            ModelParameter('P2', slice(1,2), 'Pressure at middle of Layer 2'),
-            ModelParameter('P3', slice(2,3), 'Pressure at interface of Layer 2-3'),
-            ModelParameter('T0', slice(3,4), 'Top-of-atmosphere temperature (K)'),
-            ModelParameter('alpha1', slice(4,5), 'Exponential parameter alpha in Layer 1'),
-            ModelParameter('alpha2', slice(4,5), 'Exponential parameter alpha in Layer 2'),
-        )
-        
-        return
+    P1: StateParam.using(slice(0,1), 'Pressure at interface of Layer 1-2', 'atm') # noqa: F722 F821
+    P2: StateParam.using(slice(1,2), 'Pressure at middle of Layer 2', 'atm') # noqa: F722 F821
+    P3: StateParam.using(slice(2,3), 'Pressure at interface of Layer 2-3', 'atm') # noqa: F722 F821
+    T0: StateParam.using(slice(3,4), 'Top-of-atmosphere temperature', 'K') # noqa: F722 F821
+    alpha1: StateParam.using(slice(4,5), 'Exponential parameter alpha in Layer 1') # noqa: F722 F821
+    alpha2: StateParam.using(slice(5,6), 'Exponential parameter alpha in Layer 2') # noqa: F722 F821
 
     @classmethod
-    def calculate(
-            cls, 
-            atm : "Atmosphere_0",
-            #   Instance of Atmosphere_0 class we are operating upon
-            
-            P1 : float, 
-            #   Pressure at interface of Layer 1-2 (atm)
-            
-            P2 : float,
-            #   Pressure at middle of Layer 2 (atm)
-            
-            P3 : float,
-            #   Pressure at interface of Layer 2-3 (atm)
-            
-            T0 : float, 
-            #   Top-of-atmosphere temperature (K)
-            
-            alpha1 : float, 
-            #   Exponential parameter alpha in Layer 1
-            
-            alpha2 : float, 
-            #   Exponential parameter alpha in Layer 2
-            
-            MakePlot=False
-        ) -> tuple["Atmosphere_0", np.ndarray]:
+    def from_apr_file(
+            cls,
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> "Model62":
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, 6)
+        instance = cls.from_arrays(xvals, xerrs)
+        # In the legacy reader, P1,P2,P3,alpha1,alpha2 were stored in log-space
+        instance.P1.log = True
+        instance.P2.log = True
+        instance.P3.log = True
+        instance.alpha1.log = True
+        instance.alpha2.log = True
+        return instance
+
+    def calculate(self, atm: "Atmosphere_0", MakePlot: bool = False) -> tuple["Atmosphere_0", np.ndarray]:
 
         """
             FUNCTION NAME : model62()
@@ -128,13 +110,21 @@ class Model62(PreRTModelBase):
 
         """        
         
+        # Read parameters from state
+        P1 = self.P1.v
+        P2 = self.P2.v
+        P3 = self.P3.v
+        T0 = self.T0.v
+        alpha1 = self.alpha1.v
+        alpha2 = self.alpha2.v
+
         TP = np.zeros(atm.NP)
-        xmap = np.zeros((6,atm.NP))
-        
-        P = np.array(atm.P)  #Pa
-        P0 = np.min(P)       #Pa
-        P1 = P1 * 101325. ; P2 = P2 * 101325. ; P3 = P3 * 101325.   #Converting from atm to Pa
-        
+        xmap = np.zeros((6, atm.NP))
+
+        P = np.array(atm.P)  # Pa
+        P0 = np.min(P)       # Pa
+        P1 = P1 * 101325.; P2 = P2 * 101325.; P3 = P3 * 101325.   # Converting from atm to Pa
+
         T2 = ((1 / alpha1) * np.log10(P1 / P0)) ** 2 - ((1 / alpha2) * np.log10(P1 / P2)) ** 2 + T0
         T3 = ((1 / alpha2) * np.log10(P3 / P2)) ** 2 + T2
         

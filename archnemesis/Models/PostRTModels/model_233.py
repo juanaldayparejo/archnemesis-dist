@@ -1,6 +1,6 @@
 
 
-from typing import TYPE_CHECKING, IO, Self
+from typing import TYPE_CHECKING, IO, Self, ClassVar
 
 import numpy as np
 
@@ -40,7 +40,7 @@ class Model233(PostRTModelBase):
         The coefficient a2 accounts for a curvature in the angstrom coefficient used in model 232. Note that model
         233 converges to model 232 when a2=0.
     """
-    id : int = 233
+    id : ClassVar[int] = 233
     
     
     @classmethod

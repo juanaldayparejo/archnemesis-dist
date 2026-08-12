@@ -2,16 +2,17 @@
 
 
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 
 
 from ._base import PreRTModelBase
-from ..ModelParameter import ModelParameter
+from ..param import StateParam, ConstParam
 
 import archnemesis.Data.constants as const
-from archnemesis.enum import AtmosphericProfileTypeEnum
+from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -22,7 +23,6 @@ if TYPE_CHECKING:
     # this actually means that I should possibly redesign how those work to avoid circular imports
     # but that is outside the scope of what I want to accomplish here
     from archnemesis.Variables_0 import Variables_0
-    from archnemesis.ForwardModel_0 import ForwardModel_0
     from archnemesis.Atmosphere_0 import Atmosphere_0
 
     nx = 'number of elements in state vector'
@@ -38,62 +38,31 @@ if TYPE_CHECKING:
 
 
 
+@dc.dataclass(slots=True)
 class Model4(PreRTModelBase):
     """
         Variable deep abundance, knee pressure and fractional scale height. 
     """
-    id : int = 4
+    id: ClassVar[int] = 4
 
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-        ):
-        """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries)
-        
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model.
-        # NOTE: It is best to define these in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
-        self.parameters = (
-            ModelParameter('ABU_DEEP', slice(0,1), 'Deep abundance'),
-            ModelParameter('FSH', slice(1,2), 'Fractional scale height'),
-            ModelParameter('PKNEE', slice(2,3), 'Knee pressure (atm)'),
-        )
-        
-        return
+    deep_abundance: StateParam.using(slice(0,1), 'Deep abundance') # noqa: F722 F821
+    frac_scale_height: StateParam.using(slice(1,2), 'Fractional scale height') # noqa: F722 F821
+    pknee: StateParam.using(slice(2,3), 'Knee pressure (atm)') # noqa: F722 F821
+    atm_profile_type: ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
 
-    @classmethod
     def calculate(
-            cls, 
-            atm : "Atmosphere_0",
-            #   Instance of Atmosphere_0 class we are operating upon
-            
-            atm_profile_type : AtmosphericProfileTypeEnum,
-            #   ENUM of atmospheric profile type we are altering.
-            
-            atm_profile_idx : int | None,
-            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+        self,
+        atm: "Atmosphere_0",
+        #   Instance of Atmosphere_0 class we are operating upon
 
-            PKNEE : float,
-            #   Knee pressure (atm)
+        atm_profile_type: AtmosphericProfileTypeEnum,
+        #   ENUM of atmospheric profile type we are altering.
 
-            ABU_DEEP : float, 
-            #   Deep abundance 
-            
-            FSH : float,
-            #   Fractional scale height
-            
-            MakePlot=False
-        ) -> tuple["Atmosphere_0", np.ndarray]:
+        atm_profile_idx: int | None,
+        #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+
+        MakePlot=False,
+    ) -> tuple["Atmosphere_0", np.ndarray]:
 
         """
             FUNCTION NAME : model4()
@@ -123,6 +92,10 @@ class Model4(PreRTModelBase):
 
         """        
         
+        FSH = self.frac_scale_height.v
+        ABU_DEEP = self.deep_abundance.v
+        PKNEE = self.pknee.v
+
         xfac = (1.0 - FSH) / FSH
 
         #d(xfac)/d(FSH)
@@ -176,7 +149,7 @@ class Model4(PreRTModelBase):
                 #Functional derivative of PKNEE
                 if jfsh == 0:
                     xmap[2,j] = (-xfac / (PKNEE)) * xprof[j-1] * np.exp(-delh * xfac / scale[j])
-                
+
                 xmap[2,j] = xmap[2,j] + xmap[2,j-1] * np.exp(-delh * xfac / scale[j])
 
                 jfsh = 1
@@ -186,6 +159,13 @@ class Model4(PreRTModelBase):
 
 
         #Updating atmosphere class
+        # If any state parameters are stored in log-space, the functional
+        # derivatives must be multiplied by the parameter value (matching
+        # the behavior used in Model0).
+        for i, sp in enumerate(self.iter_stateparam_objs()):
+            if sp.log:
+                xmap[i, :] = xmap[i, :] * sp.v
+
         if atm_profile_type == AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO:
             tmp = np.array(atm.VMR)
             tmp[:,atm_profile_idx] = xprof
@@ -201,138 +181,57 @@ class Model4(PreRTModelBase):
         elif atm_profile_type == AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE:
             atm.FRAC(xprof)
         else:
-            raise ValueError(f'{cls.__name__} id {cls.id} has unknown atmospheric profile type {atm_profile_type}')
+            raise ValueError(f'{self.__class__.__name__} id {self.id} has unknown atmospheric profile type {atm_profile_type}')
         
         return atm, xmap
 
     @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** profile held as deep amount, fsh and knee pressure
+    def from_apr_file(
+        cls,
+        f: IO,
+        varident: np.ndarray[[3], int],
+        npro: int,
+        ngas: int,
+        ndust: int,
+        nlocations: int,
+        runname: str,
+        sxminfac: float,
+        input_file_type: ArchNemesisFileTypeEnum,
+    ) -> Self:
+        xvals_raw, xerrs_raw = cls.read_apr_value_error_pairs(f, 3)
+        instance = cls.from_arrays(
+            xvals_raw,
+            xerrs_raw,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust),
+        )
 
-        #Reading pknee
-        s = f.readline().split()
-        pknee = float(s[0])
-        eknee = float(s[1])
+        # In the legacy code, frac_scale_height and pknee were stored in log-space
+        # and deep abundance was stored in log-space for non-temperature profiles.
+        instance.frac_scale_height.log = True
+        instance.pknee.log = True
+        if varident[0] != 0:
+            instance.deep_abundance.log = True
 
-        #Reading deep abundance
-        s = f.readline().split()
-        xdeep = float(s[0])
-        edeep = float(s[1])
-
-        if varident[0]==0: #Temperature
-            x0[ix]=xdeep
-            err=edeep
-        else: #VMR, para-H2 or cloud
-            if xdeep>0.0:
-                x0[ix]=np.log(xdeep)
-                lx[ix]=1
-                inum[ix]=0  #We take the derivatives analytically
-            else:
-                raise ValueError("error in read_apr (Model 1) :: xdeep must be >0 if it applies to any parameter but temperature")
-            err=edeep/xdeep
-        sx[ix,ix]=err**2.
-        ix += 1
-        
-        #Reading fractional scale height
-        s = f.readline().split()
-        fsh = float(s[0])
-        efsh = float(s[1])
-        if fsh>0.0:
-            x0[ix] = np.log(fsh)
-            lx[ix] = 1
-            inum[ix] = 0 #We take the derivatives analytically
-            sx[ix,ix] = (efsh/fsh)**2.
-        else:
-            raise ValueError('error in read_apr (Model 1) :: fsh must be > 0')
-        ix += 1
-        
-        #Setting knee pressure
-        x0[ix] = np.log(pknee)
-        lx[ix] = 1
-        inum[ix] = 0
-        sx[ix,ix] = (eknee/pknee)**2.
-        ix += 1
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0)
+        return instance
 
     @classmethod
     def from_bookmark(
-            cls,
-            variables : "Variables_0",
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-        ) -> Self:
-        ix_0 = ix
-        #******** profile held as deep amount, fsh and knee pressure  
-        ix = ix + 3
-
-        return cls(ix_0, ix-ix_0)
-
-    def calculate_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> None:
-        #Model 4. profile held as deep amount, fsh and knee pressure  
-        #***************************************************************
-
-        atm = forward_model.AtmosphereX
-
-        #Finding the atmospheric profile type and the index of the profile we want to modify
-        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
-        
-        #Getting the parameters from the state vector
-        xn_params = self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
-        xn_params_1d = np.concatenate([np.atleast_1d(v) for v in xn_params])
-        
-        xdeep = xn_params[0] ; fsh = xn_params[1] ; pknee = xn_params[2]
-        
-        #Modifying Atmosphere based on model parameters
-        atm, xmap1 = self.calculate(
-            atm, 
-            atm_profile_type,
-            atm_profile_idx,
-            pknee, 
-            xdeep, 
-            fsh
+        cls,
+        variables: "Variables_0",
+        varident: np.ndarray[[3], int],
+        varparam: np.ndarray[["mparam"], float],
+        ix: int,
+        npro: int,
+        ngas: int,
+        ndust: int,
+        nlocations: int,
+    ) -> Self:
+        xvals = np.zeros(3)
+        xerrs = np.zeros(3)
+        return cls.from_arrays(
+            xvals,
+            xerrs,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust),
         )
-        
-        #Calculating derivatives of the atmospheric profile with respect to the state vector
-        #(i.e., correcting if they are carried in log space in the state vector)
-        for i in range(self.n_state_vector_entries):
-            if forward_model.Variables.LX[self.state_vector_start+i] == 1: #If carried in log space, then the derivative is multiplied by the value of the parameter
-                xmap1[i,:] = xmap1[i,:] * xn_params_1d[i]
 
-        forward_model.AtmosphereX = atm
-        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
-
-        return
+    

@@ -6,8 +6,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
-from ..param import StateParam, ConstParam, VarParam
-from ..ModelParameter import ModelParameter
+from ..param import (
+    StateParam, 
+    ConstParam, 
+    #VarParam,
+)
+# legacy ModelParameter removed; using new param API
 
 import archnemesis.Data.constants as const
 
@@ -21,8 +25,6 @@ if TYPE_CHECKING:
     # the problem is that importing Variables_0 or ForwardModel_0 creates a circular import
     # this actually means that I should possibly redesign how those work to avoid circular imports
     # but that is outside the scope of what I want to accomplish here
-    from archnemesis.Variables_0 import Variables_0
-    from archnemesis.ForwardModel_0 import ForwardModel_0
     from archnemesis.Atmosphere_0 import Atmosphere_0
 
     nx = 'number of elements in state vector'
@@ -51,11 +53,11 @@ class Model32(PreRTModelBase):
     id : ClassVar[int] = 32
 
     
-    tau                : StateParam.using(slice(0,1), 'Integrated dust column density', r'$m^{-2}$')
-    frac_scale_height  : StateParam.using(slice(1,2), 'Fractional scale height', 'km')
-    p_ref              : StateParam.using(slice(2,3), 'Reference pressure', 'atm')
+    tau                : StateParam.using(slice(0,1), 'Integrated dust column density', r'$m^{-2}$') # noqa: F722 F821
+    frac_scale_height  : StateParam.using(slice(1,2), 'Fractional scale height', 'km') # noqa: F722 F821
+    p_ref              : StateParam.using(slice(2,3), 'Reference pressure', 'atm') # noqa: F722 F821
     
-    atm_profile_type : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to')
+    atm_profile_type : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
     
     @classmethod
     def from_apr_file(

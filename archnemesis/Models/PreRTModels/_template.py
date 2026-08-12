@@ -1,15 +1,16 @@
 
 
-from typing import TYPE_CHECKING, Self, IO, Any
+from typing import TYPE_CHECKING, Self, IO, Any, ClassVar
 
 import numpy as np
 
 
-from ..ModelParameter import ModelParameter
+from ..param import StateParam, ConstParam
 from ._base import PreRTModelBase
+import dataclasses as dc
 
 
-from archnemesis.enum import AtmosphericProfileTypeEnum
+from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
 
 
 if TYPE_CHECKING:
@@ -85,40 +86,10 @@ class TemplatePreRTModel(PreRTModelBase):
         # class method.
         
         ############################################################
-        # Alter the below to reflect the parameters for your model #
-        ############################################################
-        self.parameters : tuple[ModelParameter] = (
-            ModelParameter(
-                'single_value_parameter_name', 
-                slice(0,1), 
-                'This parameter takes up a single slot in the state vector', 
-                'The unit of this parameter goes here, e.g. "km", "NUMBER", "UNDEFINED"'
-            ),
-            
-            ModelParameter(
-                'multi_value_parameter_name', 
-                slice(1,11), 
-                'This parameter takes up 10 slots in the state vector', 
-                'unit_placeholder'
-            ),
-            
-            ModelParameter(
-                'variable_length_parameter_name', 
-                slice(11,n_state_vector_entries/2), 
-                'This parameter takes up a variable number of slots in the state vector dependent on arguments to this __init__(...) method', 
-                'unit_placeholder'
-            ),
-            
-            ModelParameter(
-                'another_variable_length_parameter_name', 
-                slice(n_state_vector_entries/2,None), 
-                'The slice set here is bounded by the range of the entire slice of the state vector devoted to this model, so we do not have to specify an end value if we know we want the entire thing.', 
-                'unit_placeholder'
-            ),
-            
-        )
-        
-        
+        # Model parameters should be declared as `StateParam` class
+        # attributes (see README or other models for examples). The old
+        # `self.parameters : tuple[ModelParameter]` pattern is deprecated.
+        return
         return
     
     @classmethod

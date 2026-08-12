@@ -1,6 +1,6 @@
 
-from typing import TYPE_CHECKING
-import abc
+from typing import TYPE_CHECKING#, ClassVar
+#import abc
 
 import numpy as np
 
@@ -68,7 +68,7 @@ class PreRTModelBase(ModelBase):
         assert atm_profile_type == self.atm_profile_type.v, \
             f"Model[id={self.id}] was defined with {self.atm_profile_type.v}, but is being used with {atm_profile_type}"
         
-        self.pull_from_state_vector(forward_model.Variables.XN)
+        self.pull_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
         
         atm, xmap1 = self.calculate(
             atm,

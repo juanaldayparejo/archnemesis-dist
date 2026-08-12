@@ -124,6 +124,7 @@ class StateParam(Specialisable, Param):
     slice : ClassVar[slice]
     description : ClassVar[str]
     unit : ClassVar[str] = 'Unknown'
+    num_diff : ClassVar[bool] = False # Use numerical differentiation for this stateparam?
     
     v : np.ndarray
     e : np.ndarray

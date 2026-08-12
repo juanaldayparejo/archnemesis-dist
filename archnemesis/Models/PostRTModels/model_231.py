@@ -1,6 +1,6 @@
 
 
-from typing import TYPE_CHECKING, IO, Self
+from typing import TYPE_CHECKING, IO, Self, ClassVar
 
 import numpy as np
 
@@ -36,7 +36,7 @@ class Model231(PostRTModelBase):
         
             POL = A0 + A1*(WAVE-WAVE0) + A2*(WAVE-WAVE0)**2. + ...
     """
-    id : int = 231
+    id : ClassVar[int] = 231
     
     def __init__(
             self, 

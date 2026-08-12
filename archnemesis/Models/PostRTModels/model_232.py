@@ -1,6 +1,6 @@
 
 
-from typing import TYPE_CHECKING, IO, Self
+from typing import TYPE_CHECKING, IO, Self, ClassVar
 
 import numpy as np
 
@@ -35,7 +35,7 @@ class Model232(PostRTModelBase):
         The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( - TAU0 * (WAVE/WAVE0)**-ALPHA )
         Where the parameters to fit are TAU0 and ALPHA
     """
-    id : int = 232
+    id : ClassVar[int] = 232
     
     
     @classmethod

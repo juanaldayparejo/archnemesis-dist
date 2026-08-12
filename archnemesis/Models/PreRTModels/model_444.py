@@ -46,19 +46,19 @@ class Model444(PreRTModelBase):
     
     id : ClassVar[int] = 444
 
-    particle_size_distribution_params : StateParam.using(slice(0,2), 'Values that define the particle size distribution')
-    imaginary_ref_idx                 : StateParam.using(slice(2,None), 'Imaginary refractive index of the particle size distribution')
+    particle_size_distribution_params : StateParam.using(slice(0,2), 'Values that define the particle size distribution') # noqa: F722 F821
+    imaginary_ref_idx                 : StateParam.using(slice(2,None), 'Imaginary refractive index of the particle size distribution') # noqa: F722 F821
     
-    haze_file_path      : ConstParam[str].using("Path to the file that contains haze parameters")
+    haze_file_path      : ConstParam[str].using("Path to the file that contains haze parameters") # noqa: F722 F821
     
-    aerosol_species_idx : VarParam[int].using('Index of the aerosol species the imaginary refactive index is varying for')
-    scattering_type_id  : VarParam[int].using('Type of scattering used in calculations')
-    n_waves             : VarParam[int].using('Number of wavenumbers for the imaginary refractive index')
-    haze_waves          : VarParam[np.ndarray].using('Wavenumbers of the imaginary refractive index points')
-    haze_wave_norm      : VarParam[float].using('Wavenumber to normalise extinction cross section spectrum to')
-    haze_wave_ref       : VarParam[float].using('Reference wavenumber for normal component')
-    haze_wave_ref_rri   : VarParam[float].using('Real component of refractive index at reference wavenumber')
-    correlation_length  : VarParam[float].using('Correlation length of imaginary refractive index')
+    aerosol_species_idx : VarParam[int].using('Index of the aerosol species the imaginary refactive index is varying for') # noqa: F722 F821
+    scattering_type_id  : VarParam[int].using('Type of scattering used in calculations') # noqa: F722 F821
+    n_waves             : VarParam[int].using('Number of wavenumbers for the imaginary refractive index') # noqa: F722 F821
+    haze_waves          : VarParam[np.ndarray].using('Wavenumbers of the imaginary refractive index points') # noqa: F722 F821
+    haze_wave_norm      : VarParam[float].using('Wavenumber to normalise extinction cross section spectrum to') # noqa: F722 F821
+    haze_wave_ref       : VarParam[float].using('Reference wavenumber for normal component') # noqa: F722 F821
+    haze_wave_ref_rri   : VarParam[float].using('Real component of refractive index at reference wavenumber') # noqa: F722 F821
+    correlation_length  : VarParam[float].using('Correlation length of imaginary refractive index') # noqa: F722 F821
 
     
     

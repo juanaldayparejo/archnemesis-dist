@@ -38,13 +38,13 @@ class Model0(PreRTModelBase):
     
     id : ClassVar[int] = 0
 
-    full_profile     : StateParam.using(slice(None), 'Every value for each level of the profile', 'PROFILE_TYPE')
+    full_profile     : StateParam.using(slice(None), 'Every value for each level of the profile', 'PROFILE_TYPE') # noqa: F722 F821
     
-    atm_profile_type   : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to')
-    input_file_type    : ConstParam[ArchNemesisFileTypeEnum].using('Input file type we are using the "alternate" units of.')
-    n_level            : ConstParam[int].using('Number of levels in the profile')
-    pressure           : ConstParam[np.ndarray].using('Pressure at each entry of the profile')
-    correlation_length : ConstParam[float].using('Correlation length of profile')
+    atm_profile_type   : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
+    input_file_type    : ConstParam[ArchNemesisFileTypeEnum].using('Input file type we are using the "alternate" units of.') # noqa: F722 F821
+    n_level            : ConstParam[int].using('Number of levels in the profile') # noqa: F722 F821
+    pressure           : ConstParam[np.ndarray].using('Pressure at each entry of the profile') # noqa: F722 F821
+    correlation_length : ConstParam[float].using('Correlation length of profile') # noqa: F722 F821
     
     
     @classmethod

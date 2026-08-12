@@ -138,28 +138,27 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
     
     
     @classmethod
-    def constparam_read(cls):
+    def constparam_read(cls, constparam_bytes : bytes) -> tuple[Any]:
         if len(cls._constparam_names) >0:
             raise NotImplementedError()
         else:
             return tuple()
     
-    @classmethod
-    def constparam_write(cls):
-        if len(cls._constparam_names) >0:
+    def constparam_write(self) -> bytes:
+        if len(self._constparam_names) >0:
             raise NotImplementedError()
     
     @classmethod
-    def varparam_read(cls):
+    def varparam_read(cls, varparam : np.ndarray) ->tuple[float,...]:
         if len(cls._varparam_names) >0:
-            raise NotImplementedError()
+            return tuple(*varparam[:len(cls._varparam_names)])
         else:
             return tuple()
     
-    @classmethod
-    def varparam_write(cls):
-        if len(cls._varparam_names) >0:
-            raise NotImplementedError()
+    def varparam_write(self) -> np.ndarray:
+        if len(self._varparam_names) >0:
+            return np.array(self.iter_varparam_values(), dtype=float)
+        return np.array((0,), dtype=float)
     
     
     @classmethod
@@ -334,6 +333,7 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
         instance.set_state_vector_region(ix, instance.get_n_stateparam_entries())
         instance.push_to_state_vector(x0, lx)
         instance.push_to_covariance_matrix(sx, sxminfac)
+        instance.push_to_numerical_differentiation_vector(inum)
         
         return instance
     
