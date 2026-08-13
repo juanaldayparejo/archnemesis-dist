@@ -4,6 +4,8 @@ import dataclasses as dc
 
 import numpy as np
 
+from .ModelParameterEntry import ModelParameterEntry
+
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
@@ -37,6 +39,64 @@ class StateVectorModifier:
         self.n_state_vector_entries = n
         self.state_vector_slice = slice(self.state_vector_start, self.state_vector_start+self.n_state_vector_entries)
     
+    def get_stateparam_entries_from_vectors(
+            self,
+            apriori_state_vector : np.ndarray,
+            posterior_state_vector : np.ndarray,
+            apriori_covariance_matrix : np.ndarray,
+            posterior_covariance_matrix : np.ndarray,
+            lx : np.ndarray,
+            fix : np.ndarray,
+    ) -> dict[str,ModelParameterEntry,...]:
+        asv_part = apriori_state_vector[self.state_vector_slice]
+        psv_part = posterior_state_vector[self.state_vector_slice]
+        acm_part = np.diag(apriori_covariance_matrix[self.state_vector_slice, self.state_vector_slice])
+        pcm_part = np.diag(posterior_covariance_matrix[self.state_vector_slice, self.state_vector_slice])
+        fx_part = fix[self.state_vector_slice]
+        lx_part = lx[self.state_vector_slice]
+        
+        result = dict()
+        
+        for name, stateparam in self.iter_stateparam_items():
+            lx_bit = lx_part[stateparam.slice]
+            fx_bit = fx_part[stateparam.slice]
+            asv_bit = asv_part[stateparam.slice]
+            psv_bit = psv_part[stateparam.slice]
+            acm_bit = acm_part[stateparam.slice]
+            pcm_bit = pcm_part[stateparam.slice]
+            
+            asv_bit = np.where(lx_bit == 0, asv_bit, np.exp(asv_bit))
+            psv_bit = np.where(lx_bit == 0, psv_bit, np.exp(psv_bit))
+            
+            acm_bit = np.where(lx_bit == 0, np.sqrt(acm_bit), np.sqrt(acm_bit*(asv_bit**2)))
+            pcm_bit = np.where(lx_bit == 0, np.sqrt(pcm_bit), np.sqrt(pcm_bit*(psv_bit**2)))
+
+            ix = self.state_vector_slice.start + stateparam.slice.start
+
+            result[name] = ModelParameterEntry(
+                self.id,
+                name,
+                slice(ix, ix + len(asv_bit)),
+                fx_bit == 1,
+                asv_bit,
+                acm_bit,
+                psv_bit,
+                pcm_bit
+            )
+        return result
+        
+    
+    def pull_from_all_state(
+            self,
+            x0 : np.ndarray,
+            lx : np.ndarray,
+            inum : np.ndarray,
+            sx : np.ndarray,
+    ):
+        self.pull_from_state_vector(x0, lx)
+        self.pull_from_numerical_differentiation_vector(inum)
+        self.pull_from_covariance_matrix(sx)
+    
     def pull_from_state_vector(
             self,
             x0 : np.ndarray[["nx"], float],
@@ -49,24 +109,36 @@ class StateVectorModifier:
         
         x0_part = x0[self.state_vector_slice]
         if lx is not None:
-            lx_part = lx[self.state_vector_slice]
+            self.pull_from_log_vector(lx)
         
         for stateparam in self.iter_stateparam_objs():
-            if lx is not None:
-                logv = lx_part[stateparam.slice]
-                assert np.all(logv[0] == logv), "All log vector entries for a stateparam must be identical"
-                stateparam.log = logv[0]
             stateparam.v = np.exp(x0_part[stateparam.slice]) if stateparam.log else x0_part[stateparam.slice]
             
             if stateparam.slice.stop is not None and (stateparam.slice.stop - stateparam.slice.start) == 1:
                 stateparam.v = stateparam.v[0]
+    
+    
+    def pull_from_log_vector(
+            self,
+            lx : np.ndarray[["nx"],int],
+    ):
+        """
+        Default method to update values from state vector
+        """
+        self.check_state_vector_region_valid()
+        lx_part = lx[self.state_vector_slice]
+        
+        for stateparam in self.iter_stateparam_objs():
+            logv = lx_part[stateparam.slice]
+            assert np.all(logv[0] == logv), "All log vector entries for a stateparam must be identical"
+            stateparam.log = logv[0]
     
     def pull_from_numerical_differentiation_vector(
             self,
             inum : np.ndarray[['nx'], int],
     ):
         """
-        Default push to numerical differentiation vector
+        Default pull from numerical differentiation vector
         """
         self.check_state_vector_region_valid()
         inum_part = inum[self.state_vector_slice]

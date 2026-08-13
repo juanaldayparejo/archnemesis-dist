@@ -1,130 +1,111 @@
 
+# flake8: noqa # Do not check this file as it is just a template
 
-from typing import TYPE_CHECKING, Self, IO, Any
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 
-
-from ..ModelParameter import ModelParameter
+from archnemesis.enum import ArchNemesisFileTypeEnum
 from ._base import PreRTModelBase
 
 
 if TYPE_CHECKING:
-    # NOTE: This is just here to make 'flake8' play nice with the type hints
-    # the problem is that importing Variables_0 or ForwardModel_0 creates a circular import
-    # this actually means that I should possibly redesign how those work to avoid circular imports
-    # but that is outside the scope of what I want to accomplish here
-    from archnemesis.Variables_0 import Variables_0
-    from archnemesis.ForwardModel_0 import ForwardModel_0
-    
-    nx = 'number of elements in state vector'
-    m = 'an undetermined number, but probably less than "nx"'
-    mx = 'synonym for nx'
-    mparam = 'the number of parameters a model has'
-    nparam = 'the number of parameters a model has'
-    NCONV = 'number of spectral bins'
-    NGEOM = 'number of geometries'
-    NX = 'number of elements in state vector'
-    NDEGREE = 'number of degrees in a polynomial'
-    NWINDOWS = 'number of spectral windows'
+    from ..type_checking import ForwardModel_0, Variables_0, NCONV, NX, mparam, NGEOM
 
+
+@dc.dataclass # Has to be a dataclass so we can define what attributes are `StateParam`, `ConstParam` and `VarParam`
 class TemplatePreRTModel(PreRTModelBase):
-    """
-        This docstring acts as the description for the model, **REPLACE THIS**.
-    """
-    id : int = None # This is the ID of the model, it **MUST BE A UNIQUE INTEGER**.
     
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-            
-            # Extra arguments to this method can store constants etc. that the
-            # model requires, but we do not want to retrieve. Useful for setting things like dust ID numbers.
-            #####################################################################################################
-            # Alter (and add, or remove if not needed) the below to set non-retrievable arguments for the model #
-            #####################################################################################################
-            example_template_argument : Any,
-    ):
+    # The ID of the model **MUST BE A UNIQUE INTEGER**, check with the github to see taken and not-taken model ID numbers.
+    id : ClassVar[int] = None 
+    
+    # Any "StateParam" attributes are retrieved by ArchNemesis
+    # It is best to define these in the same order they appear in the state-vector, and the 
+    # same order they are read in from the *.apr file.
+    retrieved_parameter_1 : StateParam.using(slice(0,1), "retrieve a single floating point value", "units (optional)")                 # noqa: F722 F821
+    retrieved_parameter_2 : StateParam.using(slice(1,3), "retrieve two floating point values", "units (optional)")                     # noqa: F722 F821
+    retrieved_parameter_3 : StateParam.using(slice(3,None), "retrieve a variable amount of floating point values", "units (optional)") # noqa: F722 F821
+    
+    # Any "ConstParam" attributes are not retrieved, they store auxiliary information and can hold any values.
+    constant_parameter_1 : ConstParam[int].using('A constant integer, e.g. for saving the number of entries in a retrieved parameter of variable length') # noqa: F722 F821
+    constant_parameter_2 : ConstParam[str].using('A constant string, e.g. for saving filepaths')                                                          # noqa: F722 F821
+    
+    # Any "VarParam" attributes are not retrieved, they store auxiliary information like "ConstParam" but they must be 
+    # floating point numbers, they are saved and loaded from "varparams" for compatibility with FORTRAN-NEMESIS
+    var_param_1 : VarParam[float].using('A constant floating point number, will be saved and loaded from `varparams` for compatibility with FORTRAN-NEMESIS') # noqa: F722 F821
+    var_param_2 : VarParam[int].using('A constant integer, will be represented in `varparams` as a float and coerced to an `int` when loaded.')               # noqa: F722 F821
+    
+    
+    
+    # NOTE: Pushing the `StateParam` values into the state vector is handled via `cls.from_apr_to_state_vector(...)`
+    #       which calls this method `cls.from_apr_file(...)` internally. `cls.from_apr_to_state_vector(...)` is
+    #       provided by the `ModelBase` class. You almost certainly do not need to overwrite that method.
+    @classmethod
+    def from_apr_file(
+            cls,
+            f : IO, # file object of the *.apr file
+            varident : np.ndarray[[3],int], # varident (three integers) for this model
+            npro : int, # number of levels in each profile
+            ngas : int, # number of gasses
+            ndust : int, # number of aerosols
+            nlocations : int, # number of locations
+            runname : str, # <runname> in "<runname>.apr`
+            sxminfac : float, # minimum factor included in covariance matrix
+            input_file_type : ArchNemesisFileTypeEnum, # what kind of input files are we using, HDF5 or LEGACY.
+    ) -> Self:
         """
-            Initialise an instance of the model.
-        """
+        This is a **factory method**, so called because it creates an instance of the model
+        class, modifies it to the requirements specified in the *.apr file, and returns it.
         
-        # Remove the below line when copying this template and altering it
+        
+        
+        ## RETURNS ##
+            instance : Self
+                The model instance created by this method.
+        """
         raise NotImplementedError('This is a template model and should never be used')
         
-        # Initialise the parent class
-        super().__init__(state_vector_start, n_state_vector_entries)
+        # Helper functions exist to make it easier to interact with *.apr files
         
+        n = 3
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, n) # reads `n` (value, error) pairs from the *.apr file object `f` and returns them as a pair of arrays (values, errors)
         
-        # To store any constants etc. that the model instance needs, pass them
-        # as arguments to this method and set them on the instance.
-        # These can then be used in any method that is not
-        # a class method.
+        (
+            c1, 
+            c2 
+        ) = cls.read_apr_entries(f, (int,str)) # reads specified types from *.apr file object `f`
         
-        #######################################################################################
-        # Alter (and add, or remove if not needed) the below to add arguments the model needs #
-        #######################################################################################
-        self.example_template_argument : Any = example_template_argument
+        # You can also use the file object directly
+        v1 = float(f.readline())
+        v2 = int(f.readline())
         
-        
-        # NOTE: It is best to define the parameters in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
-        
-        ############################################################
-        # Alter the below to reflect the parameters for your model #
-        ############################################################
-        self.parameters : tuple[ModelParameter] = (
-            ModelParameter(
-                'single_value_parameter_name', 
-                slice(0,1), 
-                'This parameter takes up a single slot in the state vector', 
-                'The unit of this parameter goes here, e.g. "km", "NUMBER", "UNDEFINED"'
-            ),
-            
-            ModelParameter(
-                'multi_value_parameter_name', 
-                slice(1,11), 
-                'This parameter takes up 10 slots in the state vector', 
-                'unit_placeholder'
-            ),
-            
-            ModelParameter(
-                'variable_length_parameter_name', 
-                slice(11,n_state_vector_entries/2), 
-                'This parameter takes up a variable number of slots in the state vector dependent on arguments to this __init__(...) method', 
-                'unit_placeholder'
-            ),
-            
-            ModelParameter(
-                'another_variable_length_parameter_name', 
-                slice(n_state_vector_entries/2,None), 
-                'The slice set here is bounded by the range of the entire slice of the state vector devoted to this model, so we do not have to specify an end value if we know we want the entire thing.', 
-                'unit_placeholder'
-            ),
-            
+        # The `cls.from_arrays(...)` factory method constructs an instance
+        # from two arrays that hold the values and errors for the `StateParam`
+        # attributes, and other arguments that hold values for the `ConstParam`
+        # and `VarParam` attributes.
+        # They should be passed in the order they are defined on the class in.
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+            c1,
+            c2,
+            v1,
+            v2
         )
         
+        # Set logarithm and numerical differentiation after the object is created
+        instance.retrieved_parameter_1.log = False
         
-        return
+        instance.retrieved_parameter_3.num_diff = True
+        
+        # Finally, return the instance we created
+        return instance
     
-    @classmethod
+    
+    
     def calculate(
-            # NOTE:
-            # This is a CLASS METHOD (as specified by the `@classmethod` decorator.
-            # instance attributes (e.g. those set in the __init__(...) method) will
-            # not be available, so they should be passed to this method.
-            
-            cls, 
-            # NOTE:
-            # the `cls` argument is the ONLY ARGUMENT THAT MUST BE DEFINED
-            # the other arguments here are example ones, but they are commonly used by
-            # this kind of model class.
+            self,
             
             SPECMOD : np.ndarray[['NCONV'],float],
             #   Modelled spectrum
@@ -132,29 +113,8 @@ class TemplatePreRTModel(PreRTModelBase):
             dSPECMOD : np.ndarray[['NCONV','NX'],float],
             #   Gradient of modelled spectrum
             
-            # NOTE:
-            # Extra arguments to this function are usually the values stored in the state vector as 
-            # described by the `ModelParameter` instances in the `self.parameters` attribute which is
-            # defined in the __init__(...) method.
-            #
-            # Extra arguments are often of type `float` or `np.ndarray[[int],float]` this is because
-            # if the extra arguments are from the state vector, the state vector is an array of `float`s
-            # so single values are normally passed here as `float` and multiple values passed as an array
-            # of `float`s
-            
-            ####################################################################################
-            # Example extra arguments are below, they correspond to the examples in `__init__` #
-            ####################################################################################
-            single_value_parameter_name : float,
-            multi_value_parameter_name : np.ndarray[[10],float],
-            variable_length_parameter_name : np.ndarray[[int],float],
-            another_variable_length_parameter_name : np.ndarray[[int],float],
-            
-            ######################################################################################
-            # An example template argument is below, it corresponds to the example in `__init__` #
-            ######################################################################################
-            example_template_argument : Any,
-            
+            # Other arguments are optional, but they are how you get data into this method
+            # from `ForwardModel_0` via the `self.calculate_from_subprofretg(...)` method.
         ) -> tuple[np.ndarray[['NCONV'],float], np.ndarray[['NCONV','NX'],float]]:
         """
             This class method should perform the actual calculation. Ideally it should not know anything
@@ -174,115 +134,37 @@ class TemplatePreRTModel(PreRTModelBase):
                     gradient of spectra w.r.t variable parameters
             
         """
-        
         raise NotImplementedError('This is a template model and should never be used')
+        
+        # Often the instance attributes are unpacked so we can use shorter names in the body of `calculate(...)`
+        # NOTE: you need to use the `.v` member of the `*Param` attributes to get the actual **value** stored in it.
+        r1 = self.retrieved_parameter_1.v
+        r2 = self.retrieved_parameter_2.v
+        r3 = self.retrieved_parameter_3.v
+        
+        e1 = self.retrieved_parameter_1.e
+        e2 = self.retrieved_parameter_2.e
+        e3 = self.retrieved_parameter_3.e
+        
+        c1 = self.constant_parameter_1.v
+        c2 = self.constant_parameter_2.v
+        c3 = self.var_param_1.v
+        c4 = self.var_param_2.v
         
         # Return the results of the calculation
         return SPECMOD, dSPECMOD
-    
-
-
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-    ) -> Self:
-        """
-            This class method should read information from the <runname>.apr file, store
-            this model class's parameters in the state vector, set appropriate state vector flags,
-            pass constants etc. to the class's __init__(...) method, and return the constructed
-            model class instance.
-            
-            ## ARGUMENTS ##
-                
-                variables : Variables_0
-                    The "Variables_0" instance that is reading the *.apr file
-                
-                f : IO
-                    An open file descriptor for the *.apr file.
-                
-                varident : np.ndarray[[3],int]
-                    "Variable Identifier" from a *.apr file. Consists of 3 integers. Exact interpretation depends on the model
-                    subclass.
-                
-                varparam : np.ndarray[["mparam"], float]
-                    "Variable Parameters" from a *.apr file. Holds "extra parameters" for the model. Exact interpretation depends on the model
-                    subclass. NOTE: this is a holdover from the FORTRAN code, the better way to give extra data to the model is to store it on the
-                    model instance itself.
-                
-                ix : int
-                    The index of the next free entry in the state vector
-                
-                lx : np.ndarray[["mx"],int]
-                    State vector flags denoting if the value in the state vector is a logarithm of the 'real' value. 
-                    Should be a reference to the original
-                
-                x0 : np.ndarray[["mx"],float]
-                    The actual state vector, holds values to be retrieved. Should be a reference to the original
-                
-                sx : np.ndarray[["mx","mx"],float]
-                    Covariance matrix for the state vector. Should be a reference to the original
-                
-                inum : np.ndarray[["mx"],int]
-                    state vector flags denoting if the gradient is to be numerically calulated (1) 
-                    or analytically calculated (0) for the state vector entry. Should be a reference to the original
-                
-                npro : int
-                    Number of altitude levels defined for the atmosphere component of the retrieval setup.
-                
-                n_locations : int
-                    Number of locations defined for the atmosphere component of the retrieval setup.
-                
-                runname : str
-                    Name of the *.apr file, without extension. For example '/path/to/neptune.apr' has 'neptune'
-                    as `runname`
-                
-                sxminfac : float
-                    Minimum factor to bother calculating covariance matrix entries between current 
-                    model's parameters and another model's parameters.
-            
-            
-            ## RETURNS ##
-            
-                instance : Self
-                    A constructed instance of the model class that has parameters set from information in the *.apr file
-        """
-        
-        raise NotImplementedError('This is a template model and should never be used')
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        ix_0 = NotImplemented
-        
-        return cls(ix_0, ix-ix_0, model_classification[1], "example_template_argument_values")
-
 
     @classmethod
     def from_bookmark(
             cls,
-            variables : "Variables_0",
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
+            variables : "Variables_0", # The "Variables_0" instance that enables acccess to `variables.classify_model_type_from_varident`
+            varident : np.ndarray[[3],int], #"Variable Identifier" from a *.apr file. Consists of 3 integers. Exact interpretation depends on the model subclass.
+            varparam : np.ndarray[["mparam"],float], #"Variable Parameters" from a *.apr file. Holds "extra parameters" for the model. Exact interpretation depends on the model subclass
+            ix : int, # The index of the next free entry in the state vector, should not really be used in this method
+            npro : int, # Number of altitude levels defined for the atmosphere component of the retrieval setup.
+            ngas : int, # Number of gas volume mixing ratio profiles defined for the reference atmosphere
+            ndust : int, # Number of aerosol species density profiles define for the reference atmosphere
+            nlocations : int, # Number of locations defined for the atmosphere component of the retrieval setup.
     ) -> Self:
         """
             Constructs the model when it is loaded from a bookmark. 
@@ -291,37 +173,9 @@ class TemplatePreRTModel(PreRTModelBase):
             this point, therefore this does not need to set any state vector information.
             
             What this method *should* do is construct and return a model instance similarly to 
-            `self.from_apr_to_state_vector(...)`, but *not* set anything on the state vector as the state vector
-            is populated elsewhere in this case.
-            
-            ## ARGUMENTS ##
-            
-                variables : Variables_0
-                    The "Variables_0" instance that enables acccess to `variables.classify_model_type_from_varident`
-                
-                varident : np.ndarray[[3],int]
-                    "Variable Identifier" from a *.apr file. Consists of 3 integers. Exact interpretation depends on the model
-                    subclass.
-                
-                varparam : np.ndarray[["mparam"], float]
-                    "Variable Parameters" from a *.apr file. Holds "extra parameters" for the model. Exact interpretation depends on the model
-                    subclass. NOTE: this is a holdover from the FORTRAN code, the better way to give extra data to the model is to store it on the
-                    model instance itself.
-                
-                ix : int
-                    The index of the next free entry in the state vector
-                
-                npro : int
-                    Number of altitude levels defined for the atmosphere component of the retrieval setup.
-                
-                ngas : int,
-                    Number of gas volume mixing ratio profiles defined for the reference atmosphere
-                
-                ndust : int,
-                    Number of aerosol species density profiles define for the reference atmosphere
-                
-                n_locations : int
-                    Number of locations defined for the atmosphere component of the retrieval setup.
+            `self.from_apr_to_state_vector(...)`, but *not* set anything on the state vector. The `StateParam`
+            attributes should be given **dummy values** as they will be overwritten by the values loaded
+            from the state vector and covariance matrix.
             
             ## RETURNS ##
             
@@ -331,12 +185,27 @@ class TemplatePreRTModel(PreRTModelBase):
         
         raise NotImplementedError('This is a template model and should never be used')
         
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+        v1 = varparam[0]
+        v2 = int(varparam[1])
         
-        ix_0 = NotImplemented
+        c1, c2 = ... # These should be saved and loaded from somewhere, the exact supported mechanism is in progress.
         
-        return cls(ix_0, ix-ix_0, model_classification[1], "example_template_argument_values")
+        # Another way to construct a model instance is to give it a
+        # (value, error) tuple for each `StateParam`, then
+        # values for each `ConstParam` and `VarParam`.
+        instance = cls(
+            (0,0), # value, error for `retrieved_parameter_1`
+            (0,0), # value, error for `retrieved_parameter_2`
+            (0,0), # value, error for `retrieved_parameter_3`
+            c1,
+            c2,
+            v1,
+            v2
+        )
+        
+        return instance
+
+
 
 
     def calculate_from_subspecret(
@@ -389,15 +258,13 @@ class TemplatePreRTModel(PreRTModelBase):
         
         raise NotImplementedError('This is a template model and should never be used')
         
-        # Example code for unpacking parameters from the state vector
-        # NOTE: this takes care of 'unlogging' values when required.
-        (
-            single_value_parameter_name,
-            multi_value_parameter_name,
-            variable_length_parameter_name,
-            another_variable_length_parameter_name,
-        
-        ) = self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        # The model instance's `StateParam` values are pulled from the state vector
+        self.pull_from_state_vector(
+            forward_model.Variables.XN,
+            forward_model.Variables.LX,
+        )
+        # at this point all the `StateParam` attributes have new values set from
+        # whatever was in the state vector
         
         # Example code, generally want to loop over geometries here rather than in `self.calculate(...)`
         for i_geom in range(self.n_geom):
@@ -407,15 +274,6 @@ class TemplatePreRTModel(PreRTModelBase):
             specmod, dspecmod = self.calculate(
                 SPECMOD[:,i_geom],
                 dSPECMOD[:,i_geom,:],
-                
-                # Paramters defined in `__init__`
-                single_value_parameter_name,
-                multi_value_parameter_name,
-                variable_length_parameter_name,
-                another_variable_length_parameter_name,
-                
-                # Template arguments defined in `__init__`. NOTE: These will not be retrieved
-                self.example_template_argument,
             )
         
             # Example code for packing the results of the calculation back into the spectra

@@ -167,7 +167,7 @@ class Model444(PreRTModelBase):
             haze_waves,
             aerosol_species_idx, 
             scattering_type_id,
-            n_waves,
+            float(n_waves),
             v_od_norm,
             vref,
             nreal_ref,

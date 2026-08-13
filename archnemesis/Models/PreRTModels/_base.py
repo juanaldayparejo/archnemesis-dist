@@ -1,6 +1,7 @@
 
 from typing import TYPE_CHECKING#, ClassVar
 #import abc
+import dataclasses as dc
 
 import numpy as np
 
@@ -33,7 +34,7 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
-
+@dc.dataclass
 class PreRTModelBase(ModelBase):
     """
     Abstract base class of all parameterised models used by ArchNemesis that interact 

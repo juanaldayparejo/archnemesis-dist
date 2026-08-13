@@ -1,6 +1,7 @@
 
 from typing import TYPE_CHECKING
 import abc
+import dataclasses as dc
 
 import numpy as np
 
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     NWINDOWS = 'number of spectral windows'
 
 
+@dc.dataclass
 class PostRTModelBase(ModelBase):
     """
     Abstract base class of all parameterised models used by ArchNemesis that interact 

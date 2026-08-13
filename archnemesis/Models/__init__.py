@@ -36,10 +36,10 @@ def _get_all_model_classes():
 
 class _ModelPrinterMixin(type):
     def __repr__(cls) -> str:
-        return '\n\n'.join((x.to_string() for x in cls._model_classes.values()))
+        return '\n\n'.join((x.summary() for x in cls._model_classes.values()))
     
     def __str__(cls) -> str:
-        return '\n\n'.join((x.to_string() for x in cls._model_classes.values()))
+        return '\n\n'.join((x.summary() for x in cls._model_classes.values()))
     
     def __iter__(cls) -> Iterator[ModelBase]:
         yield from cls._model_classes.values()
@@ -62,7 +62,7 @@ class _ModelPrinterMixin(type):
         if id is None:
             return repr(cls)
         
-        return cls._model_classes[id].to_string()
+        return cls._model_classes[id].summary()
 
 
 class Models(metaclass = _ModelPrinterMixin):
@@ -114,10 +114,10 @@ class Models(metaclass = _ModelPrinterMixin):
     
     @classmethod
     def display(cls, id) -> None:
-        _lgr.info(cls[id].to_string())
+        _lgr.info(cls[id].summary())
     
     @classmethod
     def as_string(cls, id) -> str:
-        return cls[id].to_string()
+        return cls[id].summay()
     
 

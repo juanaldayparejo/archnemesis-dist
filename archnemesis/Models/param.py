@@ -8,6 +8,7 @@ import enum
 import numpy as np
 
 from .specialisable import Specialisable
+from .formatting import format_float
 from archnemesis.helpers.io_helper import OutWidth
 
 import logging
@@ -100,32 +101,29 @@ def get_simple_attributes(obj):
 
     return attrs
 
+def get_from_decendents(cls, item, default=dc.MISSING):
+    for x in cls.mro():
+        v = x.__dict__.get(item, dc.MISSING)
+        if v is not dc.MISSING:
+            return v
+    
+    return default
+    
 
-def format_float(x : float, width : int = 8):
-    nlog = int(np.fix(np.log10(np.abs(x))))
-    if nlog >= 100 or nlog <= -100:
-        exp_digits = 3
-    else:
-        exp_digits = 2
-    exp_width = exp_digits+2
-    
-    if nlog > width - (exp_width+1):
-        return f'{{:> {width}.{width-3-exp_width}E}}'.format(x)
-    if nlog < -1*exp_width:
-        return f'{{:> {width}.{width-3-exp_width}E}}'.format(x)
-    if nlog <= 0:
-        return f'{{:> {width}.{width-3}f}}'.format(x)
-    else:
-        return f'{{:> {width}.{width-3-nlog}f}}'.format(x)
-        
-    
 
 @dc.dataclass
 class Param:
-    def iter_class_attrs(self) -> Iterable[tuple[str,Any]]:
-        for k,t in self.__annotations__.items():
+    @classmethod
+    def iter_class_attrs(cls) -> Iterable[tuple[str,Any]]:
+        #for k,t in cls.__annotations__.items():
+        
+        annos = get_from_decendents(cls, '__annotations__')
+        if annos is dc.MISSING:
+            return
+        
+        for k,t in annos.items():
             if get_origin(t) is ClassVar:
-                yield (k, getattr(self,k))
+                yield (k, getattr(cls,k))
     
     def iter_fields(self) -> Iterable[tuple[str,Any]]:
         for field in dc.fields(self):
@@ -184,6 +182,19 @@ class ConstParam[T](Specialisable, Param):
     description : ClassVar[str]
     
     v : T
+    
+    """
+    def __init__(self, v : T):
+        if not isinstance(v, self.__expected_types__[0]):
+            _lgr.warn(f'ConstParam expected type {self.__expected_types__[0]}, but was set with type {type(v)}. Attempting to coerce...', stacklevel=1)
+            try:
+                self.v = self.__specialised_types__[0](v)
+            except:
+                _lgr.error(f'Cannot coerce value `{v}` into type "{self.__specialised_types__[0]}", ConstParam with description {self.description!r} cannot be set')
+                raise
+        else:
+            self.v = v
+    """
 
 @dc.dataclass(slots=True)
 class VarParam[T](Specialisable, Param):
@@ -191,6 +202,19 @@ class VarParam[T](Specialisable, Param):
     unit : ClassVar[str] = 'Unknown'
     
     v : T
+    
+    """
+    def __init__(self, v : T):
+        if not isinstance(v, self.__expected_types__[0]):
+            _lgr.warn(f'VarParam expected type {self.__expected_types__[0]}, but was set with type {type(v)}. Attempting to coerce...', stacklevel=1)
+            try:
+                self.v = self.__specialised_types__[0](v)
+            except:
+                _lgr.error(f'Cannot coerce value `{v}` into type "{self.__specialised_types__[0]}", VarParam with description {self.description!r} cannot be set')
+                raise
+        else:
+            self.v = v
+    """
 
 @dc.dataclass(slots=True)
 class StateParam(Specialisable, Param):
@@ -204,9 +228,9 @@ class StateParam(Specialisable, Param):
     num_diff : bool = False # Use numerical differentiation for this stateparam?
     
     def __init__(self, pair : tuple[np.ndarray, np.ndarray], log : bool = True, num_diff : bool = False):
-        print( 'StateParam::__init__(...)')
-        print(f'{pair=}')
-        print(f'{log=}')
+        #print( 'StateParam::__init__(...)')
+        #print(f'{pair=}')
+        #print(f'{log=}')
         
         self.v = pair[0]
         self.e = pair[1]
@@ -221,14 +245,13 @@ class StateParam(Specialisable, Param):
 import abc
 class ParamMeta(abc.ABCMeta):
     def __init__(cls, name, bases, dct):
-        
         super().__init__(name, bases, dct)
         
         if not dc.is_dataclass(cls):
             _lgr.debug(f'Class "{cls.__name__}" is not a dataclass, therefore ParamMeta will not automatically grab details for constparam, varparam, or stateparam attributes.')
             return
             
-        if name not in ('ParamTrackerMixin',):
+        if name not in ('ParamTrackerMixin','ParamMixin'):
             cls._constparam_names = cls._get_field_names_of_type(ConstParam)
             cls._constparam_types = cls._get_field_types_of_type(ConstParam)
             cls._n_constparams = len(cls._constparam_names)
@@ -243,10 +266,10 @@ class ParamMeta(abc.ABCMeta):
 
 
     def _get_field_names_of_type(cls, type):
-        return tuple(f.name for f in dc.fields(cls) if issubclass((x if (x:=get_origin(f.type)) is not None else f.type), type))
+        return tuple(k for k,t in cls.__annotations__.items() if (x:=get_origin(t)) != ClassVar and issubclass((x if x is not None else t), type))
     
     def _get_field_types_of_type(cls, type):
-        return tuple(f.type for f in dc.fields(cls) if issubclass((x if (x:=get_origin(f.type)) is not None else f.type), type))
+        return tuple(t for k,t in cls.__annotations__.items() if (x:=get_origin(t)) != ClassVar and issubclass((x if x is not None else t), type))
 
 @dc.dataclass(slots=True)
 class ParamMixin(metaclass=ParamMeta):

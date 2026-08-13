@@ -9,6 +9,7 @@ can also pass values via `.using()` method that will specialise class attributes
 from typing import get_args, get_origin, ClassVar, Self, Any, Iterable
 import dataclasses as dc
 
+import numpy as np
 
 _SPECIALISED_CLASS_CACHE = dict()
 
@@ -81,6 +82,15 @@ class Specialisable:
 		
 		subclass_dict = dict(**cls.__dict__)
 		subclass_dict['__specialised_types__'] = args
+		subclass_dict['__expected_types__'] = tuple(
+			(int, np.integer) if issubclass(x, (int, np.integer)) else (
+				(float, np.floating) if issubclass(x, (float, np.floating)) else (
+					x
+				)
+			)
+			for x in args
+		)
+		
 		subclass_dict['__annotations__'] = dict((k, type_args_replace_type_params(t,dict(zip(specialisable_type_parameters, args)))) for k,t in subclass_dict['__annotations__'].items())
 		slots = subclass_dict.pop('__slots__',tuple())
 		subclass_dict.pop('__match_args__',None)
@@ -182,6 +192,11 @@ class Specialisable:
 		if '__slots__' in cls.__dict__:
 			subclass_dict['__slots__'] = tuple()
 		
+		keep = ('__annotations__', '__specialised_types__', '__expected_types__')
+		for k in keep:
+			if (x := cls.__dict__.get(k, dc.MISSING)) is not dc.MISSING:
+				subclass_dict[k] = x
+		
 		specialised_subclass = type(
 			f'{cls.__name__}{{{", ".join(f"{k}={v}" for k,v in subclass_dict.items())}}}',
 			(cls,),
@@ -206,13 +221,18 @@ class Specialisable:
 		
 		subclass_dict['__init__'] = passthrough_init
 		
+		keep = ('__annotations__', '__specialised_types__', '__expected_types__')
+		for k in keep:
+			if (x := cls.__dict__.get(k, dc.MISSING)) is not dc.MISSING:
+				subclass_dict[k] = x
+		
 		#print('subclass_dict:')
 		#for k,v in subclass_dict.items():
 		#	print(f'    {k} : {v}')
 		
 		specialised_subclass = dc.dataclass(
 			type(
-				f'{cls.__name__}{{{", ".join(f"{k}={v}" for k,v in subclass_dict.items())}}}',
+				f'{cls.__name__}{{{", ".join(f"{k}={v}" for k,v in subclass_dict.items() if not k.startswith('__'))}}}',
 				(cls,),
 				subclass_dict
 			),

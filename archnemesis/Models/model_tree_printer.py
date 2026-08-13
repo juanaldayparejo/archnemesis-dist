@@ -1,11 +1,20 @@
 
 
 import textwrap
+import dataclasses as dc
 
 import numpy as np
 
 from archnemesis.helpers.io_helper import OutWidth
 
+
+def get_from_decendents(cls, item, default=dc.MISSING):
+    for x in cls.mro():
+        v = x.__dict__.get(item, dc.MISSING)
+        if v is not dc.MISSING:
+            return v
+    
+    return default
 
 class ModelTreePrinter:
     
@@ -13,7 +22,7 @@ class ModelTreePrinter:
         width = OutWidth.get(),
         expand_tabs=True,
         tabsize=2,
-        replace_whitespace=False,
+        replace_whitespace=True,
         initial_indent='|- description: ',
         subsequent_indent=('|  ' + ' '*(len('|- description: ')-3))
     )
@@ -21,11 +30,78 @@ class ModelTreePrinter:
         width = OutWidth.get(),
         expand_tabs=True,
         tabsize=2,
-        replace_whitespace=False,
+        replace_whitespace=True,
         initial_indent=('|  ' + ' '*(len('|- description: ')-3)),
         subsequent_indent=('|  ' + ' '*(len('|- description: ')-3))
     )
     
+    @classmethod
+    def summary(
+            cls,
+            indent : str = '', 
+    ) -> str:
+        docstr = textwrap.dedent(cls.__doc__.strip())
+        docstr = docstr.replace('\n\n', '\0')
+        docstr = docstr.replace('\n', ' ')
+        docstr = docstr.replace('\0', '\n\0\n')
+        #docstr_parts = docstr.split('\n')
+        docstr_parts = docstr.splitlines()
+        
+        docstr_lines = list(cls._description_wrapper_0.wrap(docstr_parts[0]))
+        for x in docstr_parts[1:]:
+            docstr_lines.extend(cls._description_wrapper_1.wrap(x))
+        
+        
+        
+        x = []
+        y = []
+        for k, t in cls.iter_constparam_types():
+            print(f'{k=} {t=}')
+            y.append(f'|  |- {k}')
+            for name, v in t.iter_class_attrs():
+                y.append(f'|  |  |- {name}: {v}')
+            
+            z = get_from_decendents(t, '__specialised_types__')
+            if z is not dc.MISSING:
+                y.append(f'|  |  |- type: {z[0].__name__}')
+        if len(y) > 0:
+            x.append('|- ConstParams:')
+            x.extend(y)
+            y = []
+        
+        for k, t in cls.iter_varparam_types():
+            print(f'{k=} {t=}')
+            y.append(f'|  |- {k}')
+            for name, v in t.iter_class_attrs():
+                y.append(f'|  |  |- {name}: {v}')
+                
+            z = get_from_decendents(t, '__specialised_types__')
+            if z is not dc.MISSING:
+                y.append(f'|  |  |- type: {z[0].__name__}')
+        if len(y) > 0:
+            x.append('|- VarParams:')
+            x.extend(y)
+            y = []
+        
+        for k, t in cls.iter_stateparam_types():
+            print(f'{k=} {t=}')
+            y.append(f'|  |- {k}')
+            for name, v in t.iter_class_attrs():
+                y.append(f'|  |  |- {name}: {v}')
+        if len(y) > 0:
+            x.append('|- StateParams:')
+            x.extend(y)
+            y = []
+        
+        result = indent + f'\n{indent}'.join(
+            [
+                cls.__name__
+            ]
+            +docstr_lines
+            +x
+        )
+        
+        return result.replace('\0', '')
 
     def info(
         self,
