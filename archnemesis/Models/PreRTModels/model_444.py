@@ -193,8 +193,8 @@ class Model444(PreRTModelBase):
 
 
     def calculate(self, Scatter : "Scatter_0"):
-        a = np.exp(self.particle_size_distribution_params.v[0])
-        b = np.exp(self.particle_size_distribution_params.v[1])
+        a = self.particle_size_distribution_params.v[0]
+        b = self.particle_size_distribution_params.v[1]
         
         iscat = self.scattering_type_id.v
         if iscat == 1:
@@ -208,7 +208,7 @@ class Model444(PreRTModelBase):
             pars = (a,b,(1-3*b)/b)
 
         Scatter.WAVER = self.haze_waves.v
-        Scatter.REFIND_IM = np.exp(self.imaginary_ref_idx.v)
+        Scatter.REFIND_IM = self.imaginary_ref_idx.v
         reference_nreal = self.haze_wave_ref_rri.v
         reference_wave = self.haze_wave_ref.v
         normalising_wave = self.haze_wave_norm.v

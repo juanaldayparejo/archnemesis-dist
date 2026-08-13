@@ -44,7 +44,7 @@ class Model666(PreRTModelBase):
     """
     id : ClassVar[int] = 666
     
-    pressure : StateParam.using(slice(0,1), "Pressure at tangent height", 'atm', num_diff = True) # noqa: F722 F821
+    pressure : StateParam.using(slice(0,1), "Pressure at tangent height", 'atm') # noqa: F722 F821
     
     tangent_height : VarParam[float].using("Tangent height at which the pressure is retrieved", 'km') # noqa: F722 F821
 
@@ -71,6 +71,8 @@ class Model666(PreRTModelBase):
             xerrs,
             htan
         )
+        
+        instance.pressure.num_diff = True
         
         return instance
 

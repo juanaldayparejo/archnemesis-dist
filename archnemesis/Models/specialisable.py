@@ -80,6 +80,7 @@ class Specialisable:
 		assert len(specialisable_type_parameters) == len(args), "Cannot partially specialise a class with type parameters"
 		
 		subclass_dict = dict(**cls.__dict__)
+		subclass_dict['__specialised_types__'] = args
 		subclass_dict['__annotations__'] = dict((k, type_args_replace_type_params(t,dict(zip(specialisable_type_parameters, args)))) for k,t in subclass_dict['__annotations__'].items())
 		slots = subclass_dict.pop('__slots__',tuple())
 		subclass_dict.pop('__match_args__',None)

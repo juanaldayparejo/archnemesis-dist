@@ -43,7 +43,7 @@ class Model555(PreRTModelBase):
     """
     id : ClassVar[int] = 555
     
-    radius_correction : StateParam.using(slice(0,1), 'Correction for planetary radius', 'km', num_diff=True) # noqa: F722 F821
+    radius_correction : StateParam.using(slice(0,1), 'Correction for planetary radius', 'km') # noqa: F722 F821
 
     @classmethod
     def from_apr_file(
@@ -66,6 +66,7 @@ class Model555(PreRTModelBase):
         )
         
         instance.radius_correction.log = False
+        instance.radius_correction.num_diff = True
         
         return instance
 

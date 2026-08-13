@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Self, IO, ClassVar
 import dataclasses as dc
 
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
 from ..param import (
@@ -95,7 +95,7 @@ class Modelm1(PreRTModelBase):
         assert instance.atm_profile_type.v is not None, \
             f"{cls.__name__}[id={instance.id}] is only valid for atmospheric profiles"
         
-        instance.full_profile.log = instance.atm_profile_type != AtmosphericProfileTypeEnum.TEMPERATURE
+        instance.full_profile.log = instance.atm_profile_type.v != AtmosphericProfileTypeEnum.TEMPERATURE
         
         return instance
     

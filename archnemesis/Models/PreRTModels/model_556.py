@@ -43,7 +43,7 @@ class Model556(PreRTModelBase):
     """
     id : ClassVar[int] = 556
     
-    radius_scaling_factor : StateParam.using(slice(0,1), 'Scaling factor for planetary radius', '', num_diff=True) # noqa: F722 F821
+    radius_scaling_factor : StateParam.using(slice(0,1), 'Scaling factor for planetary radius', '') # noqa: F722 F821
 
     @classmethod
     def from_apr_file(
@@ -64,6 +64,8 @@ class Model556(PreRTModelBase):
             xvals,
             xerrs,
         )
+        
+        instance.radius_scaling_factor.num_diff = True
         
         return instance
 

@@ -274,6 +274,24 @@ def retrieve_data(
         return default
 
 
+def guess_datatype(data):
+    dtype = None
+    if issubclass(type(data), np.ndarray):
+        dtype = data.dtype
+    elif isinstance(data, (int, np.integer)):
+        dtype = int
+    elif isinstance(data, (bool, np.bool_)):
+        dtype = bool
+    elif isinstance(data, (str, np.str_, np.dtype('T').type)):
+        dtype = h5py.string_dtype()
+    else:
+        if isinstance(data, (tuple, list)):
+            dtypes = tuple(guess_datatype(x) for x in data)
+            if all(dtypes[0] == t and t is not None for t in dtypes):
+                dtype = dtypes[0]
+    
+    return dtype
+
 def store_data(
         h5py_file : h5py.File | h5py.Group,
         item_path : str,
@@ -288,15 +306,7 @@ def store_data(
     #f.create_dataset('Retrieval/Output/OptimalEstimation/NX',data=self.NX)
     
     if dtype is None:
-        dtype = float
-        if issubclass(type(data), np.ndarray):
-            dtype = data.dtype
-        elif isinstance(data, (int, np.integer)):
-            dtype = int
-        elif isinstance(data, (bool, np.bool_)):
-            dtype = bool
-        elif isinstance(data, (str, np.str_, np.dtype('T').type)):
-            dtype = h5py.string_dtype()
+        dtype = dtype if (dtype := guess_datatype(data)) is not None else float
         
     
     if item_path not in h5py_file:
@@ -466,7 +476,7 @@ def write(
         
     for attr, meta in metadata.items():
         if attr not in attrs:
-            if 'default' in v:
+            if 'default' in meta:
                 attr_path = f'{item_path}/{attr}'
                 dset = store_data(h5py_file, attr_path, meta['default'])
                 for k,v in meta.items():

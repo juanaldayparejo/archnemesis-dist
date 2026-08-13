@@ -45,7 +45,7 @@ class Model887(PreRTModelBase):
     """
     id : ClassVar[int] = 887
 
-    extinction_cross_section : StateParam.using(slice(0,None), 'Extinction cross section values', num_diff=True) # noqa: F722 F821
+    extinction_cross_section : StateParam.using(slice(0,None), 'Extinction cross section values') # noqa: F722 F821
     
     correlation_length : ConstParam[float].using('Correlation length between the wavelengths/wavenumbers') # noqa: F722 F821
     wave_points : ConstParam[np.ndarray].using('Wavenumbers/wavelengths of the extinction cross-section values.') # noqa: F722 F821
@@ -81,6 +81,8 @@ class Model887(PreRTModelBase):
             nspec,
             icloud
         )
+        
+        instance.extinction_cross_section.num_diff = True
         
         return instance
 

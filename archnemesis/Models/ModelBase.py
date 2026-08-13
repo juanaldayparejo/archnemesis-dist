@@ -1,23 +1,16 @@
 
 import abc
 from typing import TYPE_CHECKING, IO, Any, Self, Type
-import textwrap
-import inspect
-
 
 import numpy.ma
 import numpy as np
-from archnemesis.helpers.io_helper import OutWidth
 from archnemesis.enum import AtmosphericProfileTypeEnum, GasEnum, ArchNemesisFileTypeEnum
-
-from .ModelParameterEntry import ModelParameterEntry
-from .ModelParameter import ModelParameter
 
 from .state_vector_modifier import StateVectorModifier
 from .model_tree_printer import ModelTreePrinter
 from .param import ParamMixin
 
-from .log import _lgr
+#from .log import _lgr
 
 if TYPE_CHECKING:
     # NOTE: This is just here to make 'flake8' play nice with the type hints
@@ -25,7 +18,6 @@ if TYPE_CHECKING:
     # this actually means that I should possibly redesign how those work to avoid circular imports
     # but that is outside the scope of what I want to accomplish here
     from archnemesis.Variables_0 import Variables_0
-    from archnemesis.ForwardModel_0 import ForwardModel_0
     
     nx = 'number of elements in state vector'
     m = 'an undetermined number, but probably less than "nx"'
@@ -167,10 +159,12 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
     
     @classmethod
     def varparam_read(cls, varparam : np.ndarray) ->tuple[float,...]:
-        if len(cls._varparam_names) >0:
-            return tuple(*varparam[:len(cls._varparam_names)])
-        else:
-            return tuple()
+        x = []
+        for i, vp in enumerate(cls.iter_varparam_objs()):
+            x.append(
+                vp.__specialised_types__[0](varparam[i])
+            )
+        return tuple(x)
     
     def varparam_write(self) -> np.ndarray:
         if self._n_varparams > 0:

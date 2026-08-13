@@ -92,7 +92,8 @@ class Model0(PreRTModelBase):
         assert instance.atm_profile_type.v is not None, \
             f"{cls.__name__}[id={instance.id}] is only valid for atmospheric profiles"
         
-        instance.full_profile.log = instance.atm_profile_type != AtmosphericProfileTypeEnum.TEMPERATURE
+        instance.full_profile.log = instance.atm_profile_type.v != AtmosphericProfileTypeEnum.TEMPERATURE
+        instance.full_profile.num_diff = instance.atm_profile_type.v == AtmosphericProfileTypeEnum.TEMPERATURE
         
         return instance
     

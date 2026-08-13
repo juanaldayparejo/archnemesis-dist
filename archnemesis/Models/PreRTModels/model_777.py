@@ -46,7 +46,7 @@ class Model777(PreRTModelBase):
     """
     id : ClassVar[int] = 777
     
-    height_correction : StateParam.using(slice(0,1), 'Correction to the tangent heights', 'km', num_diff=True) # noqa: F722 F821
+    height_correction : StateParam.using(slice(0,1), 'Correction to the tangent heights', 'km') # noqa: F722 F821
 
     @classmethod
     def from_apr_file(
@@ -68,6 +68,8 @@ class Model777(PreRTModelBase):
             xvals,
             xerrs,
         )
+        
+        instance.height_correction.num_diff = True
         
         return instance
 

@@ -52,13 +52,29 @@ class StateVectorModifier:
             lx_part = lx[self.state_vector_slice]
         
         for stateparam in self.iter_stateparam_objs():
-            stateparam.v = np.exp(x0_part[stateparam.slice]) if stateparam.log else x0_part[stateparam.slice]
             if lx is not None:
                 logv = lx_part[stateparam.slice]
                 assert np.all(logv[0] == logv), "All log vector entries for a stateparam must be identical"
-                assert stateparam.log == logv[0], "Log vector entries for a stateparam must agree with the stateparam's log value."
+                stateparam.log = logv[0]
+            stateparam.v = np.exp(x0_part[stateparam.slice]) if stateparam.log else x0_part[stateparam.slice]
+            
+            if stateparam.slice.stop is not None and (stateparam.slice.stop - stateparam.slice.start) == 1:
+                stateparam.v = stateparam.v[0]
+    
+    def pull_from_numerical_differentiation_vector(
+            self,
+            inum : np.ndarray[['nx'], int],
+    ):
+        """
+        Default push to numerical differentiation vector
+        """
+        self.check_state_vector_region_valid()
+        inum_part = inum[self.state_vector_slice]
         
-        
+        for stateparam in self.iter_stateparam_objs():
+            num_diffv = inum_part[stateparam.slice]
+            assert np.all(num_diffv[0] == num_diffv), "All entries in numerical differentiation vector for a stateparam must be identical"
+            stateparam.num_diff = num_diffv[0]
     
     def pull_from_covariance_matrix(
             self,
@@ -76,6 +92,9 @@ class StateVectorModifier:
                 stateparam.e = np.sqrt(np.diag(sx_part[stateparam.slice, stateparam.slice])*(stateparam.v**2))
             else:
                 stateparam.e = np.sqrt(np.diag(sx_part[stateparam.slice, stateparam.slice]))
+            
+            if stateparam.slice.stop is not None and (stateparam.slice.stop - stateparam.slice.start) == 1:
+                stateparam.e = stateparam.e[0]
     
     def push_to_state_vector(
             self,

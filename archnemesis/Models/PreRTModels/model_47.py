@@ -83,6 +83,8 @@ class Model47(PreRTModelBase):
         assert instance.atm_profile_type.v == AtmosphericProfileTypeEnum.AEROSOL_DENSITY, \
             f"{cls.__name__}[id={instance.id}] is only valid for aerosol profiles"
         
+        assert instance.p_ref.v > 0, "mean pressure of the cloud must be positive"
+        
         return instance
         
 

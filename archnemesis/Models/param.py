@@ -2,15 +2,27 @@
 from typing import Iterable, ClassVar, Any, Type, get_origin
 import inspect
 import dataclasses as dc
+import textwrap
+import enum
 
 import numpy as np
 
 from .specialisable import Specialisable
+from archnemesis.helpers.io_helper import OutWidth
 
 import logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 
+
+_variable_wrapper = textwrap.TextWrapper(
+    width = OutWidth.get(),
+    expand_tabs=True,
+    tabsize=2,
+    replace_whitespace=False,
+    initial_indent='PLACEHOLDER_FIRST',
+    subsequent_indent='PLACEHOLDER_AFTER'
+)
 
 def get_simple_attributes(obj):
     attrs = {}
@@ -89,6 +101,25 @@ def get_simple_attributes(obj):
     return attrs
 
 
+def format_float(x : float, width : int = 8):
+    nlog = int(np.fix(np.log10(np.abs(x))))
+    if nlog >= 100 or nlog <= -100:
+        exp_digits = 3
+    else:
+        exp_digits = 2
+    exp_width = exp_digits+2
+    
+    if nlog > width - (exp_width+1):
+        return f'{{:> {width}.{width-3-exp_width}E}}'.format(x)
+    if nlog < -1*exp_width:
+        return f'{{:> {width}.{width-3-exp_width}E}}'.format(x)
+    if nlog <= 0:
+        return f'{{:> {width}.{width-3}f}}'.format(x)
+    else:
+        return f'{{:> {width}.{width-3-nlog}f}}'.format(x)
+        
+    
+
 @dc.dataclass
 class Param:
     def iter_class_attrs(self) -> Iterable[tuple[str,Any]]:
@@ -100,10 +131,52 @@ class Param:
         for field in dc.fields(self):
             yield (field.name, getattr(self, field.name))
     
+    
+    
+    @staticmethod
+    def format_variable(k : str, v : Any, indent : str = '') -> str:
+        label = f'|- {k}: '
+        width = OutWidth.get() - (len(indent) + len(label))
+        
+        _variable_wrapper.width = width
+        _variable_wrapper.initial_indent = indent + label
+        _variable_wrapper.subsequent_indent = indent + '|'+(' '*(len(label)-1))
+        
+        if isinstance(v, enum.Enum):
+            f_str = _variable_wrapper.fill(f'{v!r}')
+        elif isinstance(v, np.ndarray):
+            array_str = np.array2string(
+                v, 
+                max_line_width=width, 
+                prefix='', 
+                threshold=1_000_000, 
+                sign=' ', 
+                separator=' ', 
+                formatter = {'float_kind' : format_float  }
+            )
+            
+            if array_str.count('\n') > 0:
+                array_str = array_str[1:-1].replace('\n ', '\n')
+                array_str = '[\n' + array_str + '\n]'
+        
+            f_str = (
+                indent 
+                + label 
+                + array_str.replace('\n', f'\n{_variable_wrapper.subsequent_indent}')
+            )
+            
+        else:
+            f_str = _variable_wrapper.fill(f'{v}')
+        
+        return f_str
+        
+        
+        
+        
     def attrs_to_tree(self, indent : str = '') -> str:
         return '\n'.join((
-            *(indent + f'|- {k}: {v}' for k, v in self.iter_class_attrs()),
-            *(indent + f'|- {k}: {v}' for k, v in self.iter_fields())
+            *(self.format_variable(k,v,indent=indent) for k, v in self.iter_class_attrs()),
+            *(self.format_variable(k,v,indent=indent) for k, v in self.iter_fields())
         ))
 
 @dc.dataclass(slots=True)
@@ -124,13 +197,13 @@ class StateParam(Specialisable, Param):
     slice : ClassVar[slice]
     description : ClassVar[str]
     unit : ClassVar[str] = 'Unknown'
-    num_diff : ClassVar[bool] = False # Use numerical differentiation for this stateparam?
     
     v : np.ndarray
     e : np.ndarray
-    log : bool = True
+    log : bool = True # Use logarithm when retrieving this stateparam?
+    num_diff : bool = False # Use numerical differentiation for this stateparam?
     
-    def __init__(self, pair : tuple[np.ndarray, np.ndarray], log : bool = True):
+    def __init__(self, pair : tuple[np.ndarray, np.ndarray], log : bool = True, num_diff : bool = False):
         print( 'StateParam::__init__(...)')
         print(f'{pair=}')
         print(f'{log=}')
@@ -138,6 +211,7 @@ class StateParam(Specialisable, Param):
         self.v = pair[0]
         self.e = pair[1]
         self.log = log
+        self.num_diff = num_diff
 
 
 
