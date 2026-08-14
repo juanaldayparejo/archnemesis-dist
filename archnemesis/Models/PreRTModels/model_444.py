@@ -95,18 +95,6 @@ class Model444(PreRTModelBase):
         )
         """
         with open(fpath, 'r') as f:
-            """
-            File contents:
-            ```
-            mean radius of particle size distribution, error
-            variance of size distribution, error
-            number of wavelengths, correlation length
-            reference wavelength, real part of refractive index at reference wavelength
-            wavenumber to normalise extinction cross section spectrum to
-            wavenumber, imaginary refractive index, error
-            ...       , ...                       , ...
-            ```
-            """
             xvals = []
             xerrs = []
             for j in range(2):
@@ -173,9 +161,7 @@ class Model444(PreRTModelBase):
                 clen,
             )
         ) = cls.read_haze_file(haze_file)
-        
-        print(f'TESTING: {xvals=}')
-        
+                
         aerosol_species_idx = varident[1]-1
         
         scattering_type_id = 1 # Should add a way to alter this value from the input files.
