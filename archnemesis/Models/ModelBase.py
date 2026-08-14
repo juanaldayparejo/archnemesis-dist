@@ -13,21 +13,7 @@ from .param import ParamMixin
 #from .log import _lgr
 
 if TYPE_CHECKING:
-    # NOTE: This is just here to make 'flake8' play nice with the type hints
-    # the problem is that importing Variables_0 or ForwardModel_0 creates a circular import
-    # this actually means that I should possibly redesign how those work to avoid circular imports
-    # but that is outside the scope of what I want to accomplish here
-    from archnemesis.Variables_0 import Variables_0
-    
-    nx = 'number of elements in state vector'
-    m = 'an undetermined number, but probably less than "nx"'
-    mx = 'synonym for nx'
-    mparam = 'the number of parameters a model has'
-    NCONV = 'number of spectral bins'
-    NGEOM = 'number of geometries'
-    NX = 'number of elements in state vector'
-    NDEGREE = 'number of degrees in a polynomial'
-    NWINDOWS = 'number of spectral windows'
+    from .type_checking import ForwardModel_0, Variables_0, mx, mparam, NCONV, NGEOM, NX
 
 
 
@@ -550,4 +536,26 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
             
             NOTE: Models are so varied in here that I cannot make any specific interface at this level of abstraction.
         """
+        ...
+    
+    @abc.abstractmethod
+    def calculate_from_subprofretg(
+            self,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ipar : int,
+            ivar : int,
+            xmap : np.ndarray,
+    ) -> None:
+        ...
+    
+    @abc.abstractmethod
+    def calculate_from_subspecret(
+            self,
+            forward_model : "ForwardModel_0",
+            ix : int,
+            ivar : int,
+            SPECMOD : np.ndarray[['NCONV','NGEOM'],float],
+            dSPECMOD : np.ndarray[['NCONV','NGEOM','NX'],float],
+    ) -> None:
         ...

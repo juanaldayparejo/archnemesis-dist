@@ -47,6 +47,14 @@ class Model3(PreRTModelBase):
         in logscale with respect to the vertical profiles in the reference atmosphere
     """
     id : ClassVar[int] = 3
+    apr_input_format : ClassVar[str] = \
+    """
+        <runname>.apr
+        --------------
+        VARIDENT
+        <float> <float> ! Scaling factor value and error
+        --------------
+    """
 
     
     scaling_factor   : StateParam.using(slice(0,1), 'Scaling factor applied to the reference profile, stored as a log in the state vector', 'PROFILE_TYPE') # noqa: F722 F821
@@ -67,7 +75,7 @@ class Model3(PreRTModelBase):
             sxminfac : float,
             input_file_type : ArchNemesisFileTypeEnum,
     ) -> Self:
-        xvals, xerrs = cls.read_apr_value_error_pairs(f, len(cls._stateparam_names))
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, 1)
     
         instance = cls.from_arrays(
             xvals,

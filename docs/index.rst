@@ -212,6 +212,12 @@ Dependencies
    documentation/model_parameterisations.ipynb
 
 .. toctree::
+   :caption: Custom Model Classes
+   :hidden:
+   
+   documentation/custom_model_classes.ipynb
+
+.. toctree::
    :caption: Forward Model
    :hidden:
    

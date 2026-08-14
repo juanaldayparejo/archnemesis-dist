@@ -47,7 +47,16 @@ class Model47(PreRTModelBase):
         at a variable pressure level plus a variable FWHM (log press).
     """
     id : ClassVar[int] = 47
-
+    apr_input_format : ClassVar[str] = \
+    """
+        <runname>.apr
+        --------------
+        VARIDENT
+        <float> <float> ! optical thickness, error
+        <float> <float> ! mean pressure (atm), error
+        <float> <float> ! fwhm of gaussian, error
+        --------------
+    """
     
     tau   : StateParam.using(slice(0,1), 'Integrated optical thickness', 'ln(RATIO)') # noqa: F722 F821
     p_ref : StateParam.using(slice(1,2), 'Mean pressure of the cloud', 'atm') # noqa: F722 F821

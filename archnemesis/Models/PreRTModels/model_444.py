@@ -45,6 +45,26 @@ class Model444(PreRTModelBase):
     """
     
     id : ClassVar[int] = 444
+    apr_input_format : ClassVar[str] = \
+    """
+        <runname>.apr
+        --------------
+        VARIDENT
+        <str> ! haze.dat file to read
+        --------------
+        
+        haze.dat
+        --------
+        <float> <float> ! mean radius of particle size distribution, error
+        <int>   <float> ! number or wavelengths, correlation length
+        <float> <float> ! reference wavelength, real part of refractive index at reference wavelength
+        <float>         ! wavenumber to normalise extinction cross section to
+        <float> <float> <float> ! wavenumber, imaginary refractive index, error
+        <float> <float> <float> ! ...
+        ...
+        <float> <float> <float> ! rows = number of wavelengths
+        --------
+    """
 
     particle_size_distribution_params : StateParam.using(slice(0,2), 'Values that define the particle size distribution') # noqa: F722 F821
     imaginary_ref_idx                 : StateParam.using(slice(2,None), 'Imaginary refractive index of the particle size distribution') # noqa: F722 F821

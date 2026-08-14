@@ -45,6 +45,16 @@ class Model45(PreRTModelBase):
         Variable deep tropospheric and stratospheric abundances, along with tropospheric humidity.
     """
     id : ClassVar[int] = 45
+    apr_input_format : ClassVar[str] = \
+    """
+        <runname>.apr
+        --------------
+        VARIDENT
+        <float> <float> ! deep gas vmr, error
+        <float> <float> ! relative humidity, error
+        <float> <float> ! high gas vmr, error
+        --------------
+    """
 
     
     deep_vmr   : StateParam.using(slice(0,1), 'deep (topospheric) gas volume mixing ratio', 'RATIO') # noqa: F722 F821
@@ -93,7 +103,7 @@ class Model45(PreRTModelBase):
             #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
             
             MakePlot=True
-        ) -> tuple["Atmosphere_0", np.ndarray]:
+    ) -> tuple["Atmosphere_0", np.ndarray]:
 
         """
             FUNCTION NAME : model45()
