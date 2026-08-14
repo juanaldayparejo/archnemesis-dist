@@ -38,6 +38,11 @@ class ModelBase(StateVectorModifier, ModelTreePrinter, ParamMixin, abc.ABC):
     """
     
     id : int = None # All "*ModelBase" classes that are not meant to be used should have an id of 'None'
+    apr_input_format : str = \
+    """
+        INPUT FORMAT NOT SPECIFIED
+    """
+    
     
     @staticmethod
     def get_model_profile_type_enum_from_varident(

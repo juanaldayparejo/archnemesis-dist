@@ -34,6 +34,95 @@ class ModelTreePrinter:
         initial_indent=('|  ' + ' '*(len('|- description: ')-3)),
         subsequent_indent=('|  ' + ' '*(len('|- description: ')-3))
     )
+    _description_wrapper_3 = textwrap.TextWrapper(
+        width = OutWidth.get(),
+        expand_tabs=True,
+        tabsize=2,
+        replace_whitespace=True,
+        initial_indent='',
+        subsequent_indent='',
+    )
+    
+    @classmethod
+    def documentation(cls) -> str:
+        docstr = textwrap.dedent(cls.__doc__.strip())
+        docstr = docstr.replace('\n\n', '\0')
+        docstr = docstr.replace('\n', ' ')
+        docstr = docstr.replace('\0', '\n\0\n')
+        #docstr_parts = docstr.split('\n')
+        docstr_parts = docstr.splitlines()
+        
+        docstr_lines = list(cls._description_wrapper_3.wrap(docstr_parts[0]))
+        for x in docstr_parts[1:]:
+            docstr_lines.extend(cls._description_wrapper_3.wrap(x))
+        
+        input_format_str = textwrap.dedent(cls.apr_input_format)
+        
+        
+        x = []
+        y = []
+        
+        for k, t in cls.iter_stateparam_types():
+            print(f'{k=} {t=}')
+            y.append(f'  - {k}')
+            for name, v in t.iter_class_attrs():
+                y.append(f'    - {name}: {v}')
+        if len(y) > 0:
+            x.append('- StateParams:')
+            x.extend(y)
+            y = []
+        
+        for k, t in cls.iter_constparam_types():
+            print(f'{k=} {t=}')
+            y.append(f'  - {k}')
+            for name, v in t.iter_class_attrs():
+                y.append(f'    - {name}: {v}')
+            
+            z = get_from_decendents(t, '__specialised_types__')
+            if z is not dc.MISSING:
+                y.append(f'    - type: {z[0].__name__}')
+        if len(y) > 0:
+            x.append('- ConstParams:')
+            x.extend(y)
+            y = []
+        
+        for k, t in cls.iter_varparam_types():
+            print(f'{k=} {t=}')
+            y.append(f'  - {k}')
+            for name, v in t.iter_class_attrs():
+                y.append(f'    - {name}: {v}')
+                
+            z = get_from_decendents(t, '__specialised_types__')
+            if z is not dc.MISSING:
+                y.append(f'    - type: {z[0].__name__}')
+        if len(y) > 0:
+            x.append('- VarParams:')
+            x.extend(y)
+            y = []
+        
+        
+        
+        result = cls.__name__ +'\n'+ textwrap.indent(
+            '\n'.join(
+                [
+                    
+                    '## Description ##',
+                ]
+                +docstr_lines
+                + ['#################']
+                +x
+                + [
+                    '## `<runname>.apr` input format ##',
+                    input_format_str,
+                    '##################################'
+                ]
+            )
+            , 
+            '  '
+        )
+        
+        return result
+        
     
     @classmethod
     def summary(

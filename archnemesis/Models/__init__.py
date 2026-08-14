@@ -63,6 +63,12 @@ class _ModelPrinterMixin(type):
             return repr(cls)
         
         return cls._model_classes[id].summary()
+    
+    def documentation(cls, id=None) -> str:
+        if id is None:
+            return '\n\n'.join((x.documentation() for x in cls._model_classes.values()))
+        
+        return cls._model_classes[id].documentation()
 
 
 class Models(metaclass = _ModelPrinterMixin):
