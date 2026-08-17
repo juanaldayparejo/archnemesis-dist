@@ -180,7 +180,7 @@ class Specialisable:
 		
 		specialised_subclass = dc.dataclass(
 			type(
-				f'{cls.__name__}{{{", ".join(f"{k}={v}" for k,v in subclass_dict.items() if not k.startswith('__'))}}}',
+				f'{cls.__name__}{{{", ".join(f"{k}={v}" for k,v in subclass_dict.items() if not k.startswith("__"))}}}',
 				(cls,),
 				subclass_dict
 			),
