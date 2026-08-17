@@ -43,8 +43,8 @@ class Model1(PreRTModelBase):
     deep_abundance: StateParam.using(slice(0,1), 'Deep abundance') # noqa: F722 F821
     frac_scale_height: StateParam.using(slice(1,2), 'Fractional scale height') # noqa: F722 F821
 
-    atm_profile_type: ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
-    pknee: VarParam.using('Knee pressure (atm)') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
+    pknee: VarParam.using(float,'Knee pressure (atm)') # noqa: F722 F821
 
     def calculate(
         self,

@@ -30,11 +30,11 @@ class Model43(PreRTModelBase):
     gammav1: StateParam.using(slice(3,4), 'Ratio of visible stream 1 opacity to thermal opacity') # noqa: F722 F821
     gammav2: StateParam.using(slice(4,5), 'Ratio of visible stream 2 opacity to thermal opacity') # noqa: F722 F821
 
-    atm_profile_type: ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
-    T_star: ConstParam.using('Star temperature (K)') # noqa: F722 F821
-    R_star: ConstParam.using('Star radius (km)') # noqa: F722 F821
-    sdist: ConstParam.using('Planet-star distance (km)') # noqa: F722 F821
-    T_int: ConstParam.using('Internal temperature (K)') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
+    T_star: ConstParam.using(float, 'Star temperature (K)') # noqa: F722 F821
+    R_star: ConstParam.using(float, 'Star radius (km)') # noqa: F722 F821
+    sdist: ConstParam.using(float, 'Planet-star distance (km)') # noqa: F722 F821
+    T_int: ConstParam.using(float, 'Internal temperature (K)') # noqa: F722 F821
 
     def calculate(
             self,

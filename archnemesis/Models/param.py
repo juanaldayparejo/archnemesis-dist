@@ -178,10 +178,12 @@ class Param:
         ))
 
 @dc.dataclass(slots=True)
-class ConstParam[T](Specialisable, Param):
+class ConstParam(Specialisable, Param):
+    type : ClassVar[Type]
     description : ClassVar[str]
+    unit : ClassVar[str] = 'Unit Not Specified'
     
-    v : T
+    v : Any
     
     """
     def __init__(self, v : T):
@@ -197,11 +199,12 @@ class ConstParam[T](Specialisable, Param):
     """
 
 @dc.dataclass(slots=True)
-class VarParam[T](Specialisable, Param):
+class VarParam(Specialisable, Param):
+    type : ClassVar[Type]
     description : ClassVar[str]
-    unit : ClassVar[str] = 'Unknown'
+    unit : ClassVar[str] = 'Unit Not Specified'
     
-    v : T
+    v : Any
     
     """
     def __init__(self, v : T):
@@ -220,7 +223,7 @@ class VarParam[T](Specialisable, Param):
 class StateParam(Specialisable, Param):
     slice : ClassVar[slice]
     description : ClassVar[str]
-    unit : ClassVar[str] = 'Unknown'
+    unit : ClassVar[str] = 'Unit Not Specified'
     
     v : np.ndarray
     e : np.ndarray

@@ -59,7 +59,7 @@ class Model3(PreRTModelBase):
     
     scaling_factor   : StateParam.using(slice(0,1), 'Scaling factor applied to the reference profile, stored as a log in the state vector', 'PROFILE_TYPE') # noqa: F722 F821
     
-    atm_profile_type : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
+    atm_profile_type : ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
     
     
     @classmethod

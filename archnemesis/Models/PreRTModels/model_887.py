@@ -47,11 +47,11 @@ class Model887(PreRTModelBase):
 
     extinction_cross_section : StateParam.using(slice(0,None), 'Extinction cross section values') # noqa: F722 F821
     
-    correlation_length : ConstParam[float].using('Correlation length between the wavelengths/wavenumbers') # noqa: F722 F821
-    wave_points : ConstParam[np.ndarray].using('Wavenumbers/wavelengths of the extinction cross-section values.') # noqa: F722 F821
+    correlation_length : ConstParam.using(float, 'Correlation length between the wavelengths/wavenumbers') # noqa: F722 F821
+    wave_points : ConstParam.using(np.ndarray, 'Wavenumbers/wavelengths of the extinction cross-section values.') # noqa: F722 F821
     
-    nspec : VarParam[int].using('Number of spectral points (must be the same as the *.xsc file)') # noqa: F722 F821
-    aerosol_id : VarParam[int].using('Aerosol ID number for the dust we are operating upon') # noqa: F722 F821
+    nspec : VarParam.using(int, 'Number of spectral points (must be the same as the *.xsc file)') # noqa: F722 F821
+    aerosol_id : VarParam.using(int, 'Aerosol ID number for the dust we are operating upon') # noqa: F722 F821
     
     
 

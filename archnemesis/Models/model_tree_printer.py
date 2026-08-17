@@ -113,7 +113,7 @@ class ModelTreePrinter:
         for k, t in cls.iter_stateparam_types():
             q = DescriptionList(html_class='model-param-attr')
             for name, v in t.iter_class_attrs():
-                q.add(name, v)
+                q.add(name, v.__name__ if isinstance(v, type) else v)
             d.add(k, q)
         if d.n_elements > 0:
             x.add('StateParams', d)
@@ -123,11 +123,7 @@ class ModelTreePrinter:
         for k, t in cls.iter_constparam_types():
             q = DescriptionList(html_class='model-param-attr')
             for name, v in t.iter_class_attrs():
-                q.add(name, v)
-            
-            z = get_from_decendents(t, '__specialised_types__')
-            if z is not dc.MISSING:
-                q.add('type', z[0].__name__)
+                q.add(name, v.__name__ if isinstance(v, type) else v)
             d.add(k, q)
         if d.n_elements > 0:
             x.add('ConstParams', d)
@@ -137,39 +133,12 @@ class ModelTreePrinter:
         for k, t in cls.iter_varparam_types():
             q = DescriptionList(html_class='model-param-attr')
             for name, v in t.iter_class_attrs():
-                #y.(f'    - {name}: {v}')
-                q.add(name, v)
-                
-            z = get_from_decendents(t, '__specialised_types__')
-            if z is not dc.MISSING:
-                q.add('type', z[0].__name__)
+                q.add(name, v.__name__ if isinstance(v, type) else v)
             d.add(k, q)
         if d.n_elements > 0:
             x.add('VarParam', d)
         
         result = f'<details style="margin-bottom: 0.5em;">\n<summary>\n{cls.__name__}\n</summary>\n{x.html()}\n</details>'
-        
-        """
-        result = cls.__name__ +'\n'+ textwrap.indent(
-            '\n'.join(
-                [
-                    
-                    '## Description ##',
-                ]
-                +docstr_lines
-                + ['#################']
-                +x
-                + [
-                    '## `<runname>.apr` input format ##',
-                    input_format_str,
-                    '##################################'
-                ]
-            )
-            , 
-            '  '
-        )
-        """
-        
         return result
         
     
@@ -194,35 +163,34 @@ class ModelTreePrinter:
         x = []
         y = []
         for k, t in cls.iter_constparam_types():
-            print(f'{k=} {t=}')
+            #print(f'{k=} {t=}')
             y.append(f'|  |- {k}')
             for name, v in t.iter_class_attrs():
-                y.append(f'|  |  |- {name}: {v}')
-            
-            z = get_from_decendents(t, '__specialised_types__')
-            if z is not dc.MISSING:
-                y.append(f'|  |  |- type: {z[0].__name__}')
+                if isinstance(v, type):
+                    y.append(f'|  |  |- {name}: {v.__name__}')
+                else:
+                    y.append(f'|  |  |- {name}: {v}')
         if len(y) > 0:
             x.append('|- ConstParams:')
             x.extend(y)
             y = []
         
         for k, t in cls.iter_varparam_types():
-            print(f'{k=} {t=}')
+            #print(f'{k=} {t=}')
             y.append(f'|  |- {k}')
             for name, v in t.iter_class_attrs():
-                y.append(f'|  |  |- {name}: {v}')
+                if isinstance(v, type):
+                    y.append(f'|  |  |- {name}: {v.__name__}')
+                else:
+                    y.append(f'|  |  |- {name}: {v}')
                 
-            z = get_from_decendents(t, '__specialised_types__')
-            if z is not dc.MISSING:
-                y.append(f'|  |  |- type: {z[0].__name__}')
         if len(y) > 0:
             x.append('|- VarParams:')
             x.extend(y)
             y = []
         
         for k, t in cls.iter_stateparam_types():
-            print(f'{k=} {t=}')
+            #print(f'{k=} {t=}')
             y.append(f'|  |- {k}')
             for name, v in t.iter_class_attrs():
                 y.append(f'|  |  |- {name}: {v}')

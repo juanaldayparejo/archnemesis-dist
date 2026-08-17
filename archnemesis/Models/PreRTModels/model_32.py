@@ -57,7 +57,7 @@ class Model32(PreRTModelBase):
     frac_scale_height  : StateParam.using(slice(1,2), 'Fractional scale height', 'km') # noqa: F722 F821
     p_ref              : StateParam.using(slice(2,3), 'Reference pressure', 'atm') # noqa: F722 F821
     
-    atm_profile_type : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
+    atm_profile_type : ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
     
     @classmethod
     def from_apr_file(

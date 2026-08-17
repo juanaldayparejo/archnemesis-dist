@@ -47,10 +47,10 @@ class Model446(PreRTModelBase):
     id : ClassVar[int] = 446
 
     particle_size: StateParam.using(slice(0,1), 'Particle size for lookup interpolation') # noqa: F722 F821
-    aerosol_id: ConstParam[int].using('Aerosol population index') # noqa: F722 F821
-    wavenorm: ConstParam[int].using('Flag: normalise extinction at wavelength') # noqa: F722 F821
-    xwave: ConstParam[float].using('Normalization wavelength/wavenumber') # noqa: F722 F821
-    lookup_table_fpath: ConstParam[str].using('Path to lookup table HDF5 file') # noqa: F722 F821
+    aerosol_id: ConstParam.using(int, 'Aerosol population index') # noqa: F722 F821
+    wavenorm: ConstParam.using(int, 'Flag: normalise extinction at wavelength') # noqa: F722 F821
+    xwave: ConstParam.using(float, 'Normalization wavelength/wavenumber') # noqa: F722 F821
+    lookup_table_fpath: ConstParam.using(str, 'Path to lookup table HDF5 file') # noqa: F722 F821
 
 
     def calculate(self, Scatter,idust,wavenorm,xwave,rsize,lookupfile,MakePlot=False):

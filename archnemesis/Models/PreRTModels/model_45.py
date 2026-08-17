@@ -61,7 +61,7 @@ class Model45(PreRTModelBase):
     humidity   : StateParam.using(slice(1,2), 'relative humidity of gas', 'RATIO') # noqa: F722 F821
     strato_vmr : StateParam.using(slice(2,3), 'high (stratospheric) gas volume mixing ratio', 'RATIO') # noqa: F722 F821
     
-    atm_profile_type : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
+    atm_profile_type : ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
     
     
     @classmethod

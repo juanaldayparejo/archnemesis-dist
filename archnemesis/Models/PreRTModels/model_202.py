@@ -43,7 +43,7 @@ class Model202(PreRTModelBase):
     id : ClassVar[int] = 202
 
     scaling_factor: StateParam.using(slice(0,1), 'Scaling factor applied to the telluric profile') # noqa: F722 F821
-    atm_profile_type: ConstParam[AtmosphericProfileFormatEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileFormatEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
 
 
     def calculate(self, telluric,varid1,varid2,scf):

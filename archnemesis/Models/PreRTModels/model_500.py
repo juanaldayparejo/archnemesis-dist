@@ -44,10 +44,10 @@ class Model500(PreRTModelBase):
 
 
     amplitude : StateParam.using(slice(0,None), 'Amplitudes of each gaussian') # noqa: F722 F821
-    amplitude_file : ConstParam[str].using('File that contains the amplitude data for this model') # noqa: F722 F821
-    nbasis : ConstParam[int].using('Number of basis gaussians') # noqa: F722 F821
-    icia : ConstParam[int].using('CIA pair to be modelled') # noqa: F722 F82
-    correlation_length : VarParam[float].using('Correlation length of the gaussians, note: "distance" between gaussians is their index.') # noqa: F722 F821
+    amplitude_file : ConstParam.using(str, 'File that contains the amplitude data for this model') # noqa: F722 F821
+    nbasis : ConstParam.using(int, 'Number of basis gaussians') # noqa: F722 F821
+    icia : ConstParam.using(int, 'CIA pair to be modelled') # noqa: F722 F82
+    correlation_length : VarParam.using(float, 'Correlation length of the gaussians, note: "distance" between gaussians is their index.') # noqa: F722 F821
 
     @classmethod
     def read_amplitude_file(

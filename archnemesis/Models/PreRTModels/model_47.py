@@ -62,7 +62,7 @@ class Model47(PreRTModelBase):
     p_ref : StateParam.using(slice(1,2), 'Mean pressure of the cloud', 'atm') # noqa: F722 F821
     fwhm  : StateParam.using(slice(2,3), 'Full-width-half-maximum of the log-Gaussian', 'atm') # noqa: F722 F821
     
-    atm_profile_type : ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
+    atm_profile_type : ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
     
     @classmethod
     def from_apr_file(

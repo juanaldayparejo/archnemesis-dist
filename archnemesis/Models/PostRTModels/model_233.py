@@ -55,7 +55,7 @@ class Model233(PostRTModelBase):
     
     coefficient_triplets : StateParam.using(slice(None), 'a0, a1, a2 coefficients') # noqa: F722 F821
     
-    nlevels : VarParam[int].using('Number of coefficient triplets') # noqa: F722 F821
+    nlevels : VarParam.using(int, 'Number of coefficient triplets') # noqa: F722 F821
     
     
     @classmethod

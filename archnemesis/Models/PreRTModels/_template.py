@@ -36,13 +36,13 @@ class TemplatePreRTModel(PreRTModelBase):
     retrieved_parameter_3 : StateParam.using(slice(3,None), "retrieve a variable amount of floating point values", "units (optional)") # noqa: F722 F821
     
     # Any "ConstParam" attributes are not retrieved, they store auxiliary information and can hold any values.
-    constant_parameter_1 : ConstParam[int].using('A constant integer, e.g. for saving the number of entries in a retrieved parameter of variable length') # noqa: F722 F821
-    constant_parameter_2 : ConstParam[str].using('A constant string, e.g. for saving filepaths')                                                          # noqa: F722 F821
+    constant_parameter_1 : ConstParam.using(int, 'A constant integer, e.g. for saving the number of entries in a retrieved parameter of variable length') # noqa: F722 F821
+    constant_parameter_2 : ConstParam.using(str, 'A constant string, e.g. for saving filepaths')                                                          # noqa: F722 F821
     
     # Any "VarParam" attributes are not retrieved, they store auxiliary information like "ConstParam" but they must be 
     # floating point numbers, they are saved and loaded from "varparams" for compatibility with FORTRAN-NEMESIS
-    var_param_1 : VarParam[float].using('A constant floating point number, will be saved and loaded from `varparams` for compatibility with FORTRAN-NEMESIS') # noqa: F722 F821
-    var_param_2 : VarParam[int].using('A constant integer, will be represented in `varparams` as a float and coerced to an `int` when loaded.')               # noqa: F722 F821
+    var_param_1 : VarParam.using(float, 'A constant floating point number, will be saved and loaded from `varparams` for compatibility with FORTRAN-NEMESIS') # noqa: F722 F821
+    var_param_2 : VarParam.using(int, 'A constant integer, will be represented in `varparams` as a float and coerced to an `int` when loaded.')               # noqa: F722 F821
     
     
     

@@ -44,7 +44,7 @@ class Model110(PreRTModelBase):
     id: ClassVar[int] = 110
 
     z_offset: StateParam.using(slice(0,1), 'Offset in altitude (km) of the cloud with respect to the Haus et al. (2016) model.', 'km') # noqa: F722 F821
-    atm_profile_type: ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
 
     def calculate(self, atm, idust0, MakePlot=False):
         """

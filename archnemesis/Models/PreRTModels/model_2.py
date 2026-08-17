@@ -39,7 +39,7 @@ class Model2(PreRTModelBase):
     id: ClassVar[int] = 2
 
     scaling_factor: StateParam.using(slice(0,1), 'Scaling factor applied to the reference profile') # noqa: F722 F821
-    atm_profile_type: ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
 
     def calculate(
         self,

@@ -50,7 +50,7 @@ class Model9(PreRTModelBase):
     tau: StateParam.using(slice(0,1), 'Total integrated column density of the cloud (aerosol)', r'$m^{-2}$') # noqa: F722 F821
     frac_scale_height: StateParam.using(slice(1,2), 'Fractional scale height (decays above `h_ref` zero below)', 'km') # noqa: F722 F821
     h_ref: StateParam.using(slice(2,3), 'Base height of cloud profile', 'km') # noqa: F722 F821
-    atm_profile_type: ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
 
     def calculate(
         self,

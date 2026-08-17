@@ -30,9 +30,9 @@ class Model49(PreRTModelBase):
     id: ClassVar[int] = 49
 
     scale: StateParam.using(slice(0,1), 'Factor to scale reference profile by', 'NUMBER') # noqa: F722 F821
-    atm_profile_type: ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
-    ref_gas: ConstParam.using('Reference gas') # noqa: F722 F821
-    ref_iso: ConstParam.using('Reference isotope') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
+    ref_gas: ConstParam.using(int, 'Reference gas') # noqa: F722 F821
+    ref_iso: ConstParam.using(int, 'Reference isotope') # noqa: F722 F821
 
     def calculate(self, atm: "Atmosphere_0", ipar: int, ref_gas: int, ref_iso: int) -> tuple["Atmosphere_0", np.ndarray]:
         npar = atm.NVMR + 2 + atm.NDUST

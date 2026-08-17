@@ -51,8 +51,8 @@ class Model232(PostRTModelBase):
     
     opacity_coeff_pairs : StateParam.using(slice(None), 'Opacity and angstrom coefficient pairs level at `wavenorm`') # noqa: F722 F821
 
-    n_levels : VarParam[int].using('Number of levels') # noqa: F722 F821
-    wavenorm : VarParam[float].using('Wavenumber of normalisation') # noqa: F722 F821
+    n_levels : VarParam.using(int, 'Number of levels') # noqa: F722 F821
+    wavenorm : VarParam.using(float, 'Wavenumber of normalisation') # noqa: F722 F821
     
     @classmethod
     def read_taufile(

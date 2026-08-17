@@ -46,7 +46,7 @@ class Model666(PreRTModelBase):
     
     pressure : StateParam.using(slice(0,1), "Pressure at tangent height", 'atm') # noqa: F722 F821
     
-    tangent_height : VarParam[float].using("Tangent height at which the pressure is retrieved", 'km') # noqa: F722 F821
+    tangent_height : VarParam.using(float, "Tangent height at which the pressure is retrieved", 'km') # noqa: F722 F821
 
 
     @classmethod

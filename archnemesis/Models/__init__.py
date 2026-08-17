@@ -36,10 +36,10 @@ def _get_all_model_classes():
 
 class _ModelPrinterMixin(type):
     def __repr__(cls) -> str:
-        return '\n\n'.join((x.summary() for x in cls._model_classes.values()))
+        return '\n\n'.join((x.summary() for x in sorted(cls._model_classes.values(), key=lambda x: x.id)))
     
     def __str__(cls) -> str:
-        return '\n\n'.join((x.summary() for x in cls._model_classes.values()))
+        return '\n\n'.join((x.summary() for x in sorted(cls._model_classes.values(), key=lambda x: x.id)))
     
     def __iter__(cls) -> Iterator[ModelBase]:
         yield from cls._model_classes.values()

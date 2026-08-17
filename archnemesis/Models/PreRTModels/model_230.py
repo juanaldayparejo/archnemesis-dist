@@ -46,9 +46,9 @@ class Model230(PreRTModelBase):
     id : ClassVar[int] = 230
 
     ils_params: StateParam.using(slice(None), 'Flattened ILS parameters (7 x nwindows)') # noqa: F722 F821
-    nwindows: ConstParam[int].using('Number of spectral windows') # noqa: F722 F821
-    liml: ConstParam[np.ndarray].using('Low limits of spectral windows') # noqa: F722 F821
-    limh: ConstParam[np.ndarray].using('High limits of spectral windows') # noqa: F722 F821
+    nwindows: ConstParam.using(int, 'Number of spectral windows') # noqa: F722 F821
+    liml: ConstParam.using(np.ndarray, 'Low limits of spectral windows') # noqa: F722 F821
+    limh: ConstParam.using(np.ndarray, 'High limits of spectral windows') # noqa: F722 F821
 
 
     def calculate(self, Measurement,nwindows,liml,limh,par,MakePlot=False):

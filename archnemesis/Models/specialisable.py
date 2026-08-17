@@ -9,8 +9,6 @@ can also pass values via `.using()` method that will specialise class attributes
 from typing import get_args, get_origin, ClassVar, Self, Any, Iterable
 import dataclasses as dc
 
-import numpy as np
-
 _SPECIALISED_CLASS_CACHE = dict()
 
 def type_args_replace_type_params(typ, type_param_dict):
@@ -61,56 +59,6 @@ def type_args_replace_type_params(typ, type_param_dict):
 
 
 class Specialisable:
-
-	@classmethod
-	def __class_getitem__(cls, *args):
-		#print(f'Specialisable::__class_getitem__ {cls=} {args=}')
-		
-		#print('cls.__dict__:')
-		#for k,v in cls.__dict__.items():
-		#	print(f'    {k} = {v}')
-		
-		cache_identity = (cls,args)
-		cache_result = _SPECIALISED_CLASS_CACHE.get(cache_identity,None)
-		if cache_result is not None:
-			return cache_result
-		
-		specialisable_type_parameters = getattr(cls, '__parameters__', None)
-		assert specialisable_type_parameters is not None, "Cannot subscript a class that has no type parameters"
-		
-		assert len(specialisable_type_parameters) == len(args), "Cannot partially specialise a class with type parameters"
-		
-		subclass_dict = dict(**cls.__dict__)
-		subclass_dict['__specialised_types__'] = args
-		subclass_dict['__expected_types__'] = tuple(
-			(int, np.integer) if issubclass(x, (int, np.integer)) else (
-				(float, np.floating) if issubclass(x, (float, np.floating)) else (
-					x
-				)
-			)
-			for x in args
-		)
-		
-		subclass_dict['__annotations__'] = dict((k, type_args_replace_type_params(t,dict(zip(specialisable_type_parameters, args)))) for k,t in subclass_dict['__annotations__'].items())
-		slots = subclass_dict.pop('__slots__',tuple())
-		subclass_dict.pop('__match_args__',None)
-		for k in slots:
-			subclass_dict.pop(k)
-		
-		#print('subclass_dict:')
-		#for k,v in subclass_dict.items():
-		#	print(f'    {k} = {v}')
-		
-		specialisation_str = '['+", ".join(f'{x}' for x in args)+']'
-		specialised_subclass = type(
-			f'{cls.__name__}{specialisation_str}',
-			(cls,),
-			subclass_dict
-		)
-		
-		_SPECIALISED_CLASS_CACHE[cache_identity] = specialised_subclass
-		
-		return specialised_subclass
 
 	@classmethod
 	def using(cls, *args, **kwargs) -> type[Self]:

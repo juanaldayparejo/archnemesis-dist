@@ -49,13 +49,13 @@ class Model1002(PreRTModelBase):
 
     scaling_factors: StateParam.using(slice(0,None), 'Scaling factors at each location', 'NUMBER') # noqa: F722 F821
     
-    atm_profile_type: ConstParam[AtmosphericProfileTypeEnum].using('Atmospheric profile type this model applies to') # noqa: F722 F821
-    lats: ConstParam[np.ndarray].using('Latitude of each location') # noqa: F722 F821
-    lons: ConstParam[np.ndarray].using('Longitude of each location') # noqa: F722 F821
-    correlation_length: ConstParam[float].using('Correlation length (degrees)') # noqa: F722 F821
-    angular_distance : ConstParam[np.ndarray].using('Angular distances between points', 'degrees') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
+    lats: ConstParam.using(np.ndarray, 'Latitude of each location') # noqa: F722 F821
+    lons: ConstParam.using(np.ndarray, 'Longitude of each location') # noqa: F722 F821
+    correlation_length: ConstParam.using(float, 'Correlation length (degrees)') # noqa: F722 F821
+    angular_distance : ConstParam.using(np.ndarray, 'Angular distances between points', 'degrees') # noqa: F722 F821
     
-    n_locations: VarParam[int].using('Number of locations') # noqa: F722 F821
+    n_locations: VarParam.using(int, 'Number of locations') # noqa: F722 F821
     
     
     @classmethod

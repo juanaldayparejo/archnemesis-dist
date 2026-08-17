@@ -50,8 +50,8 @@ class Model231(PostRTModelBase):
     
     coeff : StateParam.using(slice(None), 'coefficients of the polynomial', 'NUMBER') # noqa: F722 F821
     
-    ngeom : VarParam[int].using('Number of geometires that this model applies to, geometries with index >= ngeom will not be affected by this model') # noqa: F722 F821
-    ndegree : VarParam[int].using('The degree of the polynomial') # noqa: F722 F821
+    ngeom : VarParam.using(int, 'Number of geometires that this model applies to, geometries with index >= ngeom will not be affected by this model') # noqa: F722 F821
+    ndegree : VarParam.using(int, 'The degree of the polynomial') # noqa: F722 F821
     
     
     
