@@ -140,6 +140,7 @@ venv.bak/
 # mkdocs documentation
 /site
 /docs/_build
+/docs/autoapi
 
 # mypy
 .mypy_cache/

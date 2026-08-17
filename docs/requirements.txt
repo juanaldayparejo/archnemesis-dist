@@ -1,6 +1,7 @@
 nbsphinx
 sphinx-gallery
 sphinx-copybutton
+sphinx-autoapi
 ipython_genutils
 sphinx-rtd-theme
 pandoc

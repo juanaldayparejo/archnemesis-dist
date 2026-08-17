@@ -236,3 +236,9 @@ Dependencies
    examples
 
 
+.. toctree::
+   :caption: API
+   :hidden:
+   
+
+

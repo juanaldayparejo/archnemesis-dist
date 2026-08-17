@@ -7,4 +7,7 @@ if [[ -z "${DIR}" ]]; then
 fi
 
 rm -r "${DIR}/_build/html"
+rm -r "${DIR}/autoapi"
+
+
 sphinx-build "${DIR}" "${DIR}/_build/html"

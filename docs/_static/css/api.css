@@ -1,0 +1,25 @@
+/* 1. Force description cells to allow wrapping and fit all content */
+table.autosummary td:last-child,
+.autoapisummary td:last-child {
+    white-space: normal !important;      /* Allows words to wrap to the next line */
+    word-wrap: break-word !important;    /* Breaks long continuous words if necessary */
+    overflow: visible !important;         /* Makes sure hidden text pops into view */
+    text-overflow: clip !important;       /* Removes mandatory layout ellipses (...) */
+}
+
+/* 2. Allow table rows to expand infinitely downwards */
+table.autosummary tr,
+.autoapisummary tr {
+    height: auto !important;             /* Overrides fixed-height constraints */
+}
+
+/* 3. Ensure full API detail blocks (headers) never float next to each other */
+dl.py.attribute, 
+dl.py.property, 
+dl.py.method, 
+dl.py.function {
+    display: block !important;
+    clear: both !important;
+    width: 100% !important;
+    float: none !important;
+}
