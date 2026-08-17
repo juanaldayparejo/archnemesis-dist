@@ -21,9 +21,9 @@ class Specialisable:
 		# sort args and kwargs for the class first
 		
 		class_attr_ordering = cls._get_class_attr_ordering(require_classvar=dc.is_dataclass(cls))
-		class_attr_overrides = tuple(x if not isinstance(x, slice) else (x.start,x.stop,x.step) for x in cls._get_class_attr_overrides(class_attr_ordering, args, kwargs))
+		class_attr_overrides = tuple(cls._get_class_attr_overrides(class_attr_ordering, args, kwargs))
 		
-		cache_identity = (cls,class_attr_overrides)
+		cache_identity = (cls, tuple(x if not isinstance(x, slice) else (x.start,x.stop,x.step) for x in class_attr_overrides))
 		cache_result = _SPECIALISED_CLASS_CACHE.get(cache_identity,None)
 		
 		#print(f'{cls.__name__}')
