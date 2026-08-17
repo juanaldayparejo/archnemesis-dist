@@ -1,0 +1,60 @@
+
+
+dl.model {
+	all: initial;
+	display: block;
+	padding-left: 1em;
+}
+
+dl.model > dt {
+	all: initial;
+	display: block;
+}
+
+dl.model > dd {
+	all: initial;
+	display: block;
+	padding-left: 1em;
+}
+
+dl.model-param {
+	all: initial;
+	display: block;
+	padding-left: 1em;
+}
+
+dl.model-param > dt{
+	all: initial !important;
+	display: block;
+}
+
+dl.model-param > dd {
+	all: initial !important;
+	display: block;
+	padding-left: 1em;
+}
+
+dl.model-param-attr{
+	all: initial;
+	display: grid;
+	grid-template-columns: 1fr 5fr;
+	column-gap : 0em;
+	padding-left: 1em;
+}
+
+dl.model-param-attr > dt:nth-child(4n+1) {
+	all: initial !important;
+	background: whitesmoke !important;
+}
+dl.model-param-attr dd:nth-child(4n+2) {
+	all: initial !important;
+	background: whitesmoke !important;
+}
+dl.model-param-attr > dt:nth-child(4n+3) {
+	all: initial !important;
+	background: #DFDFDF !important;
+}
+dl.model-param-attr > dd:nth-child(4n) {
+	all: initial !important;
+	background: #DFDFDF !important;
+}

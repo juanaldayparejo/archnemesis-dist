@@ -64,11 +64,12 @@ class _ModelPrinterMixin(type):
         
         return cls._model_classes[id].summary()
     
-    def documentation(cls, id=None) -> str:
+    def html(cls, id=None) -> str:
         if id is None:
-            return '\n\n'.join((x.documentation() for x in cls._model_classes.values()))
+            model_classes = sorted(cls._model_classes.values(), key=lambda x: x.id)
+            return '\n\n'.join((x.html() for x in model_classes))
         
-        return cls._model_classes[id].documentation()
+        return cls._model_classes[id].html()
 
 
 class Models(metaclass = _ModelPrinterMixin):

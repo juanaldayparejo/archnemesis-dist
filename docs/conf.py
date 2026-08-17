@@ -83,6 +83,10 @@ html_logo = "images/archnemesis_logo_white_background.png"
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static','images']
 
+html_css_files = [
+    'css/model_reference_list.css',
+]
+
 exclude_patterns = ['_build', '**.ipynb_checkpoints']
 
 html_theme_options = {

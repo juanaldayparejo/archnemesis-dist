@@ -2,6 +2,7 @@
 
 import textwrap
 import dataclasses as dc
+from typing import NamedTuple, Any
 
 import numpy as np
 
@@ -15,6 +16,50 @@ def get_from_decendents(cls, item, default=dc.MISSING):
             return v
     
     return default
+
+class Pair(NamedTuple):
+    x : Any
+    y : Any
+
+@dc.dataclass
+class DescriptionList:
+    html_class : None | str = None
+    header : None | str = None
+    
+    _elements : list[Pair] = dc.field(default_factory=list, init=False)
+    
+    @property
+    def n_elements(self):
+        """
+        Get number of elements in description list
+        """
+        return len(self._elements)
+    
+    def add(self, x : Pair | Any, y : Any = dc.MISSING):
+        """
+        Add item to description list
+        """
+        if isinstance(x, Pair):
+            assert y is dc.MISSING, "When adding a pair to a description list, cannot pass a second argument."
+            self._elements.add(x)
+        else:
+            self._elements.append(Pair(x,y))
+        return
+    
+    def html(self) -> str:
+        """
+        Generate HTML string for description list
+        """
+        ds = '\n'.join(f'<dt>\n{p.x}\n</dt>\n<dd>\n{p.y if (z:=getattr(p.y, "html", None)) is None else z()}\n</dd>' for p in self._elements)
+        if self.header is not None:
+            h = f'<p>{self.header}</p>'
+            return f'{h}\n<dl>\n{ds}\n</dl>'
+        else:
+            return ('<dl>' if self.html_class is None else f'<dl class={self.html_class}>') + f'\n{ds}\n</dl>'
+    
+    
+    
+    
 
 class ModelTreePrinter:
     
@@ -44,64 +89,67 @@ class ModelTreePrinter:
     )
     
     @classmethod
-    def documentation(cls) -> str:
+    def html(cls) -> str:
         docstr = textwrap.dedent(cls.__doc__.strip())
         docstr = docstr.replace('\n\n', '\0')
         docstr = docstr.replace('\n', ' ')
-        docstr = docstr.replace('\0', '\n\0\n')
-        #docstr_parts = docstr.split('\n')
-        docstr_parts = docstr.splitlines()
-        
-        docstr_lines = list(cls._description_wrapper_3.wrap(docstr_parts[0]))
-        for x in docstr_parts[1:]:
-            docstr_lines.extend(cls._description_wrapper_3.wrap(x))
+        docstr = docstr.replace('\0', '</p><p>')
         
         input_format_str = textwrap.dedent(cls.apr_input_format)
+        input_format_str = input_format_str.replace('<', '&lt;')
+        input_format_str = input_format_str.replace('>', '&gt;')
+        #input_format_str = input_format_str.replace('\n\n', '\0')
+        #input_format_str = input_format_str.replace('\n', ' ')
+        #input_format_str = input_format_str.replace('\0', '</p><p>')
+        
+        x = DescriptionList(html_class='model')
+        #y = []
+        
+        x.add('Description', '<p>'+docstr+'</p>')
+        x.add('Format of <runname>.apr', '<pre>'+input_format_str+'</pre>')
         
         
-        x = []
-        y = []
-        
+        d = DescriptionList(html_class='model-param')
         for k, t in cls.iter_stateparam_types():
-            print(f'{k=} {t=}')
-            y.append(f'  - {k}')
+            q = DescriptionList(html_class='model-param-attr')
             for name, v in t.iter_class_attrs():
-                y.append(f'    - {name}: {v}')
-        if len(y) > 0:
-            x.append('- StateParams:')
-            x.extend(y)
-            y = []
+                q.add(name, v)
+            d.add(k, q)
+        if d.n_elements > 0:
+            x.add('StateParams', d)
         
+        
+        d = DescriptionList(html_class='model-param')
         for k, t in cls.iter_constparam_types():
-            print(f'{k=} {t=}')
-            y.append(f'  - {k}')
+            q = DescriptionList(html_class='model-param-attr')
             for name, v in t.iter_class_attrs():
-                y.append(f'    - {name}: {v}')
+                q.add(name, v)
             
             z = get_from_decendents(t, '__specialised_types__')
             if z is not dc.MISSING:
-                y.append(f'    - type: {z[0].__name__}')
-        if len(y) > 0:
-            x.append('- ConstParams:')
-            x.extend(y)
-            y = []
+                q.add('type', z[0].__name__)
+            d.add(k, q)
+        if d.n_elements > 0:
+            x.add('ConstParams', d)
         
+        
+        d = DescriptionList(html_class='model-param')
         for k, t in cls.iter_varparam_types():
-            print(f'{k=} {t=}')
-            y.append(f'  - {k}')
+            q = DescriptionList(html_class='model-param-attr')
             for name, v in t.iter_class_attrs():
-                y.append(f'    - {name}: {v}')
+                #y.(f'    - {name}: {v}')
+                q.add(name, v)
                 
             z = get_from_decendents(t, '__specialised_types__')
             if z is not dc.MISSING:
-                y.append(f'    - type: {z[0].__name__}')
-        if len(y) > 0:
-            x.append('- VarParams:')
-            x.extend(y)
-            y = []
+                q.add('type', z[0].__name__)
+            d.add(k, q)
+        if d.n_elements > 0:
+            x.add('VarParam', d)
         
+        result = f'<details style="margin-bottom: 0.5em;">\n<summary>\n{cls.__name__}\n</summary>\n{x.html()}\n</details>'
         
-        
+        """
         result = cls.__name__ +'\n'+ textwrap.indent(
             '\n'.join(
                 [
@@ -120,6 +168,7 @@ class ModelTreePrinter:
             , 
             '  '
         )
+        """
         
         return result
         
