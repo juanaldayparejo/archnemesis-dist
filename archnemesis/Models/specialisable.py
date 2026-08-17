@@ -6,56 +6,10 @@ can also pass values via `.using()` method that will specialise class attributes
 
 """
 
-from typing import get_args, get_origin, ClassVar, Self, Any, Iterable
+from typing import get_origin, ClassVar, Self, Any, Iterable
 import dataclasses as dc
 
 _SPECIALISED_CLASS_CACHE = dict()
-
-def type_args_replace_type_params(typ, type_param_dict):
-	"""
-	For a type like `ClassVar[tuple[T,float,list[Y]]]`, with type template arguments `T` and `Y`,
-	will replace the type template arguments with their mappings in `type_param_dict`.
-	
-	# EXAMPLE #
-	```
-	from typing import ClassVar, TypeVar
-	T = TypeVar["T"]
-	Y = TypeVar["Y"]
-	
-	templated_type = ClassVar[tuple[T,float,list[Y]]]
-	type_param_dict = {
-		T : int,
-		Y : bool
-	}
-	
-	specialised_type = type_args_replace_type_params(
-		templated_type,
-		type_param_dict
-	)
-	
-	print(specialised_type) # ClassVar[tuple[int,float,list[bool]]]
-	```
-	
-	
-	"""
-	#print(f'{type_param_dict=}')
-	#print(f'{typ=}')
-	if (o := get_origin(typ)) is not None:
-		o = type_param_dict.get(typ, o)
-		#print(f'{o=}')
-		#print(f'{get_args(typ)=}')
-		
-		new_args = tuple(type_args_replace_type_params(x, type_param_dict) for x in get_args(typ))
-		
-		if len(new_args) == 1:
-			return o[new_args[0]]
-		else:
-			return o[*new_args] 
-	else:
-		return type_param_dict.get(typ, typ)
-
-
-
 
 
 class Specialisable:
