@@ -44,7 +44,7 @@ from archnemesis.Data.path_data import (
 )
 
 
-#import copy
+import copy
 
 import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
