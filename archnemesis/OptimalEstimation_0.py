@@ -25,15 +25,18 @@ from archnemesis import Variables_0, ForwardModel_0
 import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
+import textwrap
 
 
 from archnemesis.enum import WaveUnitEnum, SpectraUnitEnum
 from archnemesis.helpers.maths_helper import is_diagonal
 import archnemesis.helpers.h5py_helper as h5py_helper
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
+progress_lgr = logging.getLogger(__name__, progress=True)
+progress_lgr.setLevel(logging.INFO)
 
 #!/usr/local/bin/python3
 # -*- coding: utf-8 -*-
@@ -730,6 +733,7 @@ class OptimalEstimation_0:
         @param Measurement: class
             Python class descrbing the measurement and observation
         """
+        print(f'{Variables.XN=}')
 
         #Opening file
         f = open(runname+'.mre','w')
@@ -879,10 +883,14 @@ class OptimalEstimation_0:
         @param Variables: class
             Python class describing the different parameterisations retrieved
         """
+        fname = runname+'.cov'
+        if self.SM is None:
+            _lgr.warn(f'Cannot write {fname} as some parameters are not initialised.')
+            return
 
         if pickle==False:
             #Open file
-            f = open(runname+'.cov','w')
+            f = open(fname,'w')
 
             npro=1
             f.write("%i %i\n" % (npro,Variables.NVAR))
@@ -1300,6 +1308,14 @@ def coreretOE(
         +' | state vector '
         +'\n'
     )
+    progress_first_dedent = 40+len(progress_head) - 14
+    progress_state_vector_wrapper = textwrap.TextWrapper(
+        width = 120,
+        expand_tabs = True,
+        tabsize = 4,
+        initial_indent = ' '*progress_first_dedent,
+        subsequent_indent = ' '*40+'-'*progress_w_iter + ' | '+'-'*16+' | '+'-'*9+' | '+'-'*9+' | ',
+    )
     
 
     _lgr.info(f'coreretOE :: Starting OptimalEstimation retrieval with NITER={OptimalEstimation.NITER} PHILIMIT={OptimalEstimation.PHILIMIT} NCORES={OptimalEstimation.NCORES}')
@@ -1354,9 +1370,9 @@ def coreretOE(
     chisq_history[0] = OptimalEstimation.CHISQ
     state_vector_history[0,:] = OptimalEstimation.XN
     
-    progress_line = progress_fmt.format(0, progress_iter_states['initial'], OptimalEstimation.PHI, OptimalEstimation.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))
-    _lgr.info(f'\t{progress_head}')
-    _lgr.info(f'\t{progress_line}')
+    progress_line = progress_fmt.format(0, progress_iter_states['initial'], OptimalEstimation.PHI, OptimalEstimation.CHISQ, progress_state_vector_wrapper.fill(' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))[progress_first_dedent:])
+    progress_lgr.info(f'\t{progress_head}')
+    progress_lgr.info(f'\t{progress_line}')
             
     with open(progress_file, 'w') as f:
         f.write(progress_head)
@@ -1513,9 +1529,9 @@ def coreretOE(
             chisq_history[n_successful_iterations] = OptimalEstimation.CHISQ
             state_vector_history[n_successful_iterations,:] = OptimalEstimation.XN
             
-        progress_line = progress_fmt.format(it, progress_iter_states[successful_iteration], OptimalEstimation1.PHI, OptimalEstimation1.CHISQ, ' '.join((f'{x:09.3E}' for x in OptimalEstimation1.XN)))
-        _lgr.info(f'\t{progress_head}')
-        _lgr.info(f'\t{progress_line}')
+        progress_line = progress_fmt.format(it, progress_iter_states[successful_iteration], OptimalEstimation1.PHI, OptimalEstimation1.CHISQ, progress_state_vector_wrapper.fill(' '.join((f'{x:09.3E}' for x in OptimalEstimation.XN)))[progress_first_dedent:])
+        progress_lgr.info(f'\t{progress_head}')
+        progress_lgr.info(f'\t{progress_line}')
                 
         with open(progress_file, 'a') as f:
             f.write(progress_line)

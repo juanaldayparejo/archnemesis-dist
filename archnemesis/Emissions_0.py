@@ -37,7 +37,7 @@ from archnemesis.helpers import h5py_helper, path_redirect
 #from typing import Optional
 
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 ###############################################################################################

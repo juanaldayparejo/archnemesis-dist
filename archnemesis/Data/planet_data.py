@@ -23,7 +23,7 @@ Data reference files.
 Contains the parameters describing different planets.
 """
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 

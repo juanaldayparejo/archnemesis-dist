@@ -21,7 +21,7 @@
 import numpy as np
 
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 """

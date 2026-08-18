@@ -35,7 +35,7 @@ from archnemesis.enum import InstrumentLineshapeEnum, WaveUnitEnum, SpectraUnitE
 from archnemesis import gauss_lobatto
 
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 
@@ -3331,7 +3331,7 @@ class Measurement_0:
 #################################################################################################################
 
 ###############################################################################################
-# @jit(nopython=True)
+@jit(nopython=True)
 def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
 
     """
@@ -3426,11 +3426,6 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
                     f1 = a * 1.08
             else:
                 pass
-
-            if f1==0:
-                print("HELP!!!!!!!!!")
-            elif f1 < 0:
-                print("STOPPPPPPPP")
 
             if f1>0.0:
                 yout[j] = yout[j] + f1*y[inwave[i]]
@@ -3536,6 +3531,7 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
                             f1 = numerator/denominator
                         else:
                             f1 = a * 1.08
+                    
                     if f1>0.0:
                         yout[j,:] = yout[j,:] + f1*y[inwave[i],:]
                         ynor[j,:] = ynor[j,:] + f1

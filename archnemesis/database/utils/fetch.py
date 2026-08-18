@@ -4,12 +4,18 @@ Functions and classes etc. that fetch resources from the web.
 #import os
 from pathlib import Path
 import urllib
+import urllib.request
 import ssl
-from typing import Iterator, Literal
+from typing import Iterator, Literal, Callable
+import tempfile
+import shutil
 
-import logging
-_lgr = logging.getLogger(__name__)
-_lgr.setLevel(logging.INFO)
+import archnemesis.cfg.logs as logs
+_lgr = logs.getLogger(__name__)
+_lgr.setLevel(logs.INFO)
+
+progress_lgr = logs.getLogger(__name__, progress=True)
+progress_lgr.setLevel(logs.INFO)
 
 
 PROGRESS_INTERVAL_Kb : None | float = 1024
@@ -80,6 +86,8 @@ def file_in_chunks(
             case _:
                 raise e
     
+    expected_size = int(response.headers.get('Content-Length', -1))
+    
     if chunk_size is None:
         get_chunk = lambda response: response.readline()
     else:
@@ -97,14 +105,18 @@ def file_in_chunks(
     while (size_of_current_chunk := len(chunk := get_chunk(response))) > 0:
         
         if PROGRESS_INTERVAL_Kb is not None and ((accumulated_size - last_reported_size) >= (PROGRESS_INTERVAL_Kb*1024)):
-            _lgr.info(f'Fetching chunk {i}. Chunk is {size_of_current_chunk/1024} Kb. Fetched {accumulated_size/1024} Kb so far...')
+            if expected_size >0:
+                fetched_amount_str = f"{accumulated_size/1024} of {expected_size/1024} Kb [{100*accumulated_size/expected_size: 6.2f} %] so far..."
+            else:
+                fetched_amount_str = f"{accumulated_size/1024} so far..."
+            progress_lgr.info(f'Fetching chunk {i}. Chunk is {size_of_current_chunk/1024} Kb. Fetched {fetched_amount_str}')
             last_reported_size = accumulated_size
         
         yield do_decode(chunk)
         accumulated_size += size_of_current_chunk
         i += 1
     
-    _lgr.info(f'Fetch complete, downloaded {accumulated_size/1024} Kb in total over {i} chunks.')
+    progress_lgr.info(f'Fetch complete, downloaded {accumulated_size/1024} Kb in total over {i} chunks.')
     
     return
 
@@ -179,3 +191,21 @@ def file(
         empty_str = b'' if encoding is None else ''
         return (empty_str if prefix is None else prefix) + empty_str.join(file_chunk_iterator)
    
+
+
+def safe_download(url : str, path : Path, ui_show : Callable[[str],None] = _lgr.info):
+    with tempfile.TemporaryDirectory() as temp_dir:
+        download_path = Path(temp_dir) / path.name
+        
+        ui_show(f'Downloading to temporary file {download_path!s}')
+        
+        file(
+            url,
+            to_fpath = download_path,
+            chunk_size = 1024*1024*10,
+        )
+        
+        if path.exists():
+            path.unlink()
+        shutil.move(download_path, path)
+        ui_show(f'Moved temporary download {download_path!s} to {path!s}')

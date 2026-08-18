@@ -35,7 +35,7 @@ from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
 from archnemesis.helpers import io_helper
 from archnemesis.helpers import h5py_helper
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 #!/usr/local/bin/python3

@@ -29,7 +29,7 @@ from archnemesis.enum import WaveUnitEnum
 from archnemesis.helpers import h5py_helper
 from archnemesis import planck
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 #!/usr/local/bin/python3

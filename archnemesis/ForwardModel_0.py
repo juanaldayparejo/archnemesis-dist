@@ -54,7 +54,7 @@ from archnemesis.enum import (
     AerosolPhaseFunctionCalculationModeEnum,
 )
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 
@@ -308,7 +308,7 @@ class ForwardModel_0:
                     spect_legacy_filename = f'{self.runname}.lls'
                 elif self.Spectroscopy.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
                     spect_table_type_str = 'line-by-line-runtime'
-                    spect_legacy_filename = None
+                    spect_legacy_filename = '[NO LEGACY LINE-BY-LINE RUNTIME FILE]'
                 else:
                     raise RuntimeError(f'Unknown SpectralCalculationMode: {self.Spectroscopy.ILBL}.')
                 #spect_table_type_str_pad = ' '*(22-len(spect_table_type_str))
@@ -332,17 +332,17 @@ class ForwardModel_0:
                 
                 if should_warn:
                     warning_lines.extend([
-                        '',
+                         '',
                         f'To deactivate this warning place a path to a {spect_table_type_str} file for these gasses in one of the following locations (depending upon your input file type):',
-                        '',
-                        '    [HDF5 Input]',
+                         '',
+                         '    [HDF5 Input]',
                         f'        In the "{self.runname}.h5" file, add an entry to "/Spectroscopy/LOCATION"',
-                        '        and update "/Spectroscopy/NGAS" appropriately.',
-                        '',
-                        '    [LEGACY Input]',
+                         '        and update "/Spectroscopy/NGAS" appropriately.',
+                         '',
+                         '    [LEGACY Input]',
                         f'        Add an entry to the "{spect_legacy_filename}" file.',
-                        '',
-                        '# END WARNING #####################################################################',
+                         '',
+                         '# END WARNING #####################################################################',
                     ])
                     _lgr.warning('\n'.join(warning_lines))
                     self.set_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG()

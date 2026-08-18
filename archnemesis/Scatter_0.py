@@ -30,7 +30,7 @@ import matplotlib.pyplot as plt
 
 from archnemesis.helpers import h5py_helper
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 
@@ -682,7 +682,11 @@ class Scatter_0:
         """
         Write the Henyey-Greenstein phase function parameters into the hgphaseN.dat files
         """
-
+        
+        if any(x is None for x in (self.WAVE, self.F, self.G1, self.G2)):
+            _lgr.info('Cannot write any hgphase files as F, G1, G2 are not all defined')
+            return
+        
         for IDUST in range(self.NDUST):
 
             filename = 'hgphase'+str(IDUST+1)+'.dat'

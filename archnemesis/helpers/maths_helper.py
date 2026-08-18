@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import archnemesis.Data.constants as const
 
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 

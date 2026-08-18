@@ -5,7 +5,7 @@ from collections import namedtuple
 
 import numpy as np
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.INFO)
 
