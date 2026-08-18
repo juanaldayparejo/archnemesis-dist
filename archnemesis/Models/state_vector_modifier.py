@@ -71,7 +71,7 @@ class StateVectorModifier:
             acm_bit = np.where(lx_bit == 0, np.sqrt(acm_bit), np.sqrt(acm_bit*(asv_bit**2)))
             pcm_bit = np.where(lx_bit == 0, np.sqrt(pcm_bit), np.sqrt(pcm_bit*(psv_bit**2)))
 
-            ix = self.state_vector_slice.start + stateparam.slice.start
+            ix = self.state_vector_slice.start + (0 if stateparam.slice.start is None else stateparam.slice.start)
 
             result[name] = ModelParameterEntry(
                 self.id,
