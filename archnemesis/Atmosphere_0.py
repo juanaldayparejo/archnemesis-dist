@@ -33,7 +33,7 @@ import matplotlib.pyplot as plt
 
 import archnemesis.Data.constants as const
 from archnemesis.Data.planet_data import planet_info
-from archnemesis.enum import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileTypeEnum
+from archnemesis.enum import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileTypeEnum, AerosolUnitEnum
 from archnemesis.helpers import h5py_helper
 
 import archnemesis.cfg.logs as logging
@@ -184,7 +184,7 @@ class Atmosphere_0:
         self.GRAV = None #np.zeros(NP) or np.zeros((NP,NLOCATIONS))    
         self.VMR = None # np.zeros((NP,NVMR)) or np.zeros((NP,NVMR,NLOCATIONS)) 
         self.DUST = None # np.zeros((NP,NDUST)) or np.zeros((NP,NDUST,NLOCATIONS)) #particles per m3
-        self.DUST_UNITS_FLAG = None # np.zeros(NDUST), -1 for legacy units (g cm^-3), None for standard (number m^-3)
+        self.DUST_UNITS_FLAG = None # np.zeros(NDUST), -1 for legacy units (g cm^-3), 0 for standard (number m^-3), if None, assume standard units
         self.DUST_RENORMALISATION = {} # flags for normalising clouds to specific opacity
         self.PARAH2 = None # np.zeros(NP) 
         
@@ -542,7 +542,7 @@ class Atmosphere_0:
 
                 if self.NDUST>0:
                     self.DUST = np.array(f.get(name+'/DUST'))
-                    self.DUST_UNITS_FLAG = None  #if reading from the HDF5 files units are assumed to be in number density (m^{-3})
+                    self.DUST_UNITS_FLAG = np.full((self.NDUST,), fill_value=AerosolUnitEnum.NUMBER_DENSITY, dtype=int)  #if reading from the HDF5 files units are assumed to be in number density (m^{-3})
                     
                 parah2 = name+'/PARAH2'
                 if parah2 in f:
@@ -1546,7 +1546,7 @@ class Atmosphere_0:
         if self.H is None:
             self.edit_H(height*1.0e3)   #m
 
-        self.DUST_UNITS_FLAG = -1*np.ones(self.NDUST)  #if reading from the NEMESIS files units are assumed to be particles per gram of atm
+        self.DUST_UNITS_FLAG = np.full((self.NDUST,), fill_value=AerosolUnitEnum.PARTICLES_PER_GRAM, dtype=int)  #if reading from the NEMESIS files units are assumed to be particles per gram of atm
         self.edit_DUST(aerodens)    #particles per gram of atm
 
     ##################################################################################
@@ -1567,20 +1567,33 @@ class Atmosphere_0:
             raise ValueError('error :: write_aerosol only works if NLOCATIONS=1')
             
         #Check if the density can be calculated
+        # P*V = N*k_b*T
         if self.DUST_UNITS_FLAG is None:
             _lgr.warning('DUST_UNITS_FLAG is not activated when writing aerosol.ref')
             _lgr.warning('Note that the dust units must be in particles per gram of atmosphere')
+            # archnemesis dust in particles cm^{-3}
+            # N / V = P / (k_b * T)
+            # MOLWT is molecular weight of atmosphere (kg / mol)
+            # N / (V * Avogad) = P / (k_b * T * Aovgad) # mol / cm^{-3}
+            # MOLWT * P / (k_b * T * Avogad) # kg / cm^{-3}
+            # dust / (MOLWT * P / (K-b * T * Avogad)) # dust particles / kg
+            # dust * K-b * T * Avogad/ (1000 * MOLWT * P) # dust particles / gram
+            dust = self.DUST * const.k_B * self.T * const.N_avogadro / (self.P * self.MOLWT * 1000.0)
+        elif np.any(self.DUST_UNITS_FLAG != AerosolUnitEnum.PARTICLES_PER_GRAM):
+            dust = np.array(self.DUST if self.DUST.ndim == 2 else self.DUST[None,:]) # copy
+            for i in range(max(1,self.NDUST)):
+                if self.DUST_UNITS_FLAG[i] != AerosolUnitEnum.PARTICLES_PER_GRAM:
+                    dust[i] = dust[i] * const.k_B * self.T * const.N_avogadro / (self.P * self.MOLWT * 1000.0)
+        else:
+            dust = self.DUST
             
         f = open('aerosol.ref','w')
         f.write('#aerosol.ref\n')
         f.write('{:<15} {:<15}'.format(self.NP, self.NDUST))
         for i in range(self.NP):
             f.write('\n{:<15.3f} '.format(self.H[i]*1e-3))
-            if self.NDUST >= 1:
-                for j in range(self.NDUST):
-                    f.write('{:<15.3E} '.format(self.DUST[i][j]))    #particles per gram of atm
-            else:
-                f.write('{:<15.3E}'.format(self.DUST[i]))
+            for j in range(max(1,self.NDUST)):
+                f.write('{:<15.3E} '.format(dust[i][j]))    #particles per gram of atm
         f.close()
 
     ##################################################################################

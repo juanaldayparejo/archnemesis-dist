@@ -1071,6 +1071,8 @@ class ForwardModel_0:
                 #Mapping variables into different classes
                 xmap = self.subprofretg()
 
+                self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
+                
                 #Calculating the atmospheric paths
                 self.calc_pathg_SO()
                 BASEH_TANHE = np.zeros(self.PathX.NPATH)
@@ -1174,6 +1176,8 @@ class ForwardModel_0:
 
             #Mapping variables into different classes
             xmap = self.subprofretg()
+            
+            self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
 
             #Calculating the atmospheric paths
             self.calc_pathg_SO()
@@ -1438,6 +1442,8 @@ class ForwardModel_0:
 
         #Mapping variables into different classes
         xmap = self.subprofretg()
+        
+        self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
 
         #Calculating the atmospheric paths
         self.calc_pathg_L()
@@ -1579,6 +1585,8 @@ class ForwardModel_0:
 
         #Mapping variables into different classes
         self.subprofretg() # xmap
+        
+        self.LayerX.DUST_UNITS_FLAG = self.AtmosphereX.DUST_UNITS_FLAG
         
         #Selecting the first angle to calculate the path (the actual geometry will be carried with the Measurement class)
         self.ScatterX.SOL_ANG = self.MeasurementX.SOL_ANG[0,0]
@@ -2487,13 +2495,11 @@ class ForwardModel_0:
             #raise ValueError('error in subprofretg :: subprofretg has not been upgraded yet to deal with multiple locations')
             xmap = np.zeros((self.Variables.NX,self.AtmosphereX.NVMR+2+self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.AtmosphereX.NLOCATIONS))
 
+        ## MAIN LOOP THROUGH MODELS ##
         #Going through the different variables an updating the atmosphere accordingly
         ix = 0
         for ivar in range(self.Variables.NVAR):
-            
-            
             ipar = self._get_ipar(self.Variables.VARIDENT[ivar])
-
 
             #Model parameterisation applies to atmospheric parameters in multiple locations
             if ((self.Variables.VARIDENT[ivar,2]>=1000) 
@@ -2506,6 +2512,7 @@ class ForwardModel_0:
             # Calculate state vector for the model
             self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, xmap)
             ix += self.Variables.models[ivar].n_state_vector_entries
+        ## ------------------------ ##
 
 
         #Now check if any gas in the retrieval saturates
@@ -2544,24 +2551,8 @@ class ForwardModel_0:
                         # Re-compute pressure levels based pressure at tangent height on hydrostatic equilibrum
                         self.Variables.models[ivar].calculate_from_subprofretg(self, ix, ipar, ivar, 0.0)
                     ix += self.Variables.models[ivar].n_state_vector_entries
-
-        #Patch for model -1, since the aerosol density is defined in particles per gram of atm (depends on the density)
-        #Going through the different variables an updating the atmosphere accordingly
-        ix = 0
-        for ivar in range(self.Variables.NVAR):
-
-            ipar = self._get_ipar(self.Variables.VARIDENT[ivar])
-
-            #Model parameterisation applies to atmospheric parameters in multiple locations
-            if ((self.Variables.VARIDENT[ivar,2]>=1000) 
-                    and (self.Variables.VARIDENT[ivar,2]<=1100)
-                    and (self.AtmosphereX.NLOCATION <= 1)
-                ):
-                    raise ValueError('error in subprofretg :: Models 1000-1100 are meant to be used for models of atmospheric properties in multiple locations')
-
-            # Patch state vector for the model
-            self.Variables.models[ivar].patch_from_subprofretg(self, ix, ipar, ivar, xmap)
-            ix += self.Variables.models[ivar].n_state_vector_entries
+        
+        # NOTE: Removed `patch_from_subprofretg` as I think it is now redundant.
         
         return xmap
 

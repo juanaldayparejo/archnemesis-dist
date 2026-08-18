@@ -1,9 +1,16 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
 
 import numpy as np
 
 from ._base import PreRTModelBase
+from ..param import (
+    StateParam, 
+    ConstParam, 
+    #VarParam,
+)
+import dataclasses as dc
+from archnemesis.enum import ArchNemesisFileTypeEnum, AtmosphericProfileFormatEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -27,16 +34,19 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass(slots=True)
 class Model202(PreRTModelBase):
     """
         In this model, the telluric atmospheric profile is multiplied by a constant 
         scaling factor
     """
-    id : int = 202
+    id : ClassVar[int] = 202
+
+    scaling_factor: StateParam.using(slice(0,1), 'Scaling factor applied to the telluric profile') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileFormatEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
 
 
-    @classmethod
-    def calculate(cls, telluric,varid1,varid2,scf):
+    def calculate(self, telluric,varid1,varid2,scf):
 
         """
             FUNCTION NAME : model202()
@@ -103,37 +113,26 @@ class Model202(PreRTModelBase):
 
 
     @classmethod
-    def from_apr_to_state_vector(
+    def from_apr_file(
             cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #********* simple scaling of telluric atmospheric profile ************************
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
-        x0[ix] = float(tmp[0])
-        sx[ix,ix] = (float(tmp[1]))**2.
-        inum[ix] = 1
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> "Model202":
+        xvals_raw, xerrs_raw = cls.read_apr_value_error_pairs(f, 1)
+        instance = cls.from_arrays(
+            xvals_raw,
+            xerrs_raw,
+            None,
+        )
 
-        ix = ix + 1
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
+        return instance
 
 
     @classmethod

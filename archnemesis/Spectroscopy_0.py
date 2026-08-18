@@ -152,7 +152,7 @@ class Spectroscopy_0:
                 - lineshape : Integer indicating the lineshape to use (enum is SpectroscopicLineProfileEnum) (default is VOIGT lineshape).
                 - wn_calc_window : Wavenumber region around a line where the line calculations are performed (default = 25 cm-1).
                 - wn_approx_window : Wavenumber region around a line up to which an approximation for the wings are included (default = 75 cm-1).
-                - amb_gas : List of ambient gases (default = [ans.enum.AmbientGasEnum.AIR]),
+                - amb_gas : Tuple of ambient gases (default = (ans.enum.AmbientGasEnum.AIR,)),
                 - s_min : float = -1.0,
                 - s_floor : float = 0.0,
                 - isotopic_abundance : If not None, abundance of each isotope to calculate the overall absorption by the gas (default = None, which uses standard isotopic abundances in the RADTRAN dictionary)
@@ -1025,7 +1025,7 @@ class Spectroscopy_0:
         current_lineshape = SpectroscopicLineProfileEnum.VOIGT
         current_wn_calc_window = 25.0
         current_wn_approx_window = 75.0
-        current_amb_gas = [ans.enum.AmbientGasEnum.AIR]
+        current_amb_gas = (ans.enum.AmbientGasEnum.AIR,)
         current_s_min = -1
         current_s_floor = 0
         current_include_pressure_shift = True
@@ -3209,7 +3209,7 @@ def calc_lbltable(outname,                       #Name of the output .lta file
         include_pressure_shift=include_pressure_shift,
         s_min=1.0e-50,
         s_floor=0.0,
-        amb_gas=[ans.enum.AmbientGasEnum.AIR],
+        amb_gas=(ans.enum.AmbientGasEnum.AIR,),
     )
 
     #Editing class
@@ -3461,7 +3461,7 @@ def calc_ktable(outname,                       #Name of the output .Kta file
         include_pressure_shift=include_pressure_shift,
         s_min=1.0e-50,
         s_floor=0.0,
-        amb_gas=[ans.enum.AmbientGasEnum.AIR],
+        amb_gas=(ans.enum.AmbientGasEnum.AIR,),
     )
 
     #Editing class

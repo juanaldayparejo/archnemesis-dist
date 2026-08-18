@@ -1,11 +1,18 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from ._base import PreRTModelBase
 from archnemesis.helpers.maths_helper import ngauss
+from ..param import (
+    StateParam, 
+    ConstParam, 
+    #VarParam,
+)
+import dataclasses as dc
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -29,17 +36,22 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass(slots=True)
 class Model230(PreRTModelBase):
     """
         In this model, the ILS of the measurement is defined from every convolution wavenumber
         using the double-Gaussian parameterisation created for analysing ACS MIR spectra.
         However, we can define several spectral windows where the ILS is different
     """
-    id : int = 230
+    id : ClassVar[int] = 230
+
+    ils_params: StateParam.using(slice(None), 'Flattened ILS parameters (7 x nwindows)') # noqa: F722 F821
+    nwindows: ConstParam.using(int, 'Number of spectral windows') # noqa: F722 F821
+    liml: ConstParam.using(np.ndarray, 'Low limits of spectral windows') # noqa: F722 F821
+    limh: ConstParam.using(np.ndarray, 'High limits of spectral windows') # noqa: F722 F821
 
 
-    @classmethod
-    def calculate(cls, Measurement,nwindows,liml,limh,par,MakePlot=False):
+    def calculate(self, Measurement,nwindows,liml,limh,par,MakePlot=False):
 
         """
             FUNCTION NAME : model230()
@@ -243,54 +255,50 @@ class Model230(PreRTModelBase):
 
 
     @classmethod
-    def from_apr_to_state_vector(
+    def from_apr_file(
             cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** model for retrieving multiple ILS (different spectral windows) in ACS MIR solar occultation observations
-
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> "Model230":
         s = f.readline().split()
-        f1 = open(s[0],'r')
-        s = f1.readline().split()
-        nwindows = int(s[0])
-        varparam[0] = nwindows
+        f1 = open(s[0], 'r')
+        tmp = f1.readline().split()
+        nwindows = int(tmp[0])
         liml = np.zeros(nwindows)
         limh = np.zeros(nwindows)
         for iwin in range(nwindows):
-            s = f1.readline().split()
-            liml[iwin] = float(s[0])
-            limh[iwin] = float(s[1])
-            varparam[2*iwin+1] = liml[iwin]
-            varparam[2*iwin+2] = limh[iwin]
+            sline = f1.readline().split()
+            liml[iwin] = float(sline[0])
+            limh[iwin] = float(sline[1])
 
-        par = np.zeros((7,nwindows))
-        parerr = np.zeros((7,nwindows))
+        par = np.zeros((7, nwindows))
+        parerr = np.zeros((7, nwindows))
         for iw in range(nwindows):
             for j in range(7):
-                s = f1.readline().split()
-                par[j,iw] = float(s[0])
-                parerr[j,iw] = float(s[1])
-                x0[ix] = par[j,iw]
-                sx[ix,ix] = (parerr[j,iw])**2.
-                inum[ix] = 0
-                ix = ix + 1
+                sline = f1.readline().split()
+                par[j, iw] = float(sline[0])
+                parerr[j, iw] = float(sline[1])
 
-        return cls(ix_0, ix-ix_0)
+        f1.close()
+
+        xvals = par.flatten()
+        xerrs = parerr.flatten()
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+            nwindows,
+            liml,
+            limh,
+        )
+        instance.ils_params.log = False
+        return instance
 
     @classmethod
     def from_bookmark(
@@ -325,24 +333,15 @@ class Model230(PreRTModelBase):
         #Model 230. Retrieval of multiple instrument line shapes for ACS-MIR
         #***************************************************************
 
-        nwindows = int(forward_model.Variables.VARPARAM[ivar,0])
-        liml = np.zeros(nwindows)
-        limh = np.zeros(nwindows)
-        i0 = 1
-        for iwin in range(nwindows):
-            liml[iwin] = forward_model.Variables.VARPARAM[ivar,i0]
-            limh[iwin] = forward_model.Variables.VARPARAM[ivar,i0+1]
-            i0 = i0 + 2
+        self.pull_from_state_vector(forward_model.Variables.XN)
+        nwindows = int(self.nwindows.v)
+        liml = self.liml.v
+        limh = self.limh.v
+        par_flat = self.ils_params.v
+        par1 = par_flat.reshape((7, nwindows))
 
-        par1 = np.zeros((7,nwindows))
-        for iwin in range(nwindows):
-            for jwin in range(7):
-                par1[jwin,iwin] = forward_model.Variables.XN[ix]
-                ix = ix + 1
+        forward_model.MeasurementX = self.calculate(forward_model.MeasurementX, nwindows, liml, limh, par1)
 
-        forward_model.MeasurementX = self.calculate(forward_model.MeasurementX,nwindows,liml,limh,par1)
-
-        #ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
 
 

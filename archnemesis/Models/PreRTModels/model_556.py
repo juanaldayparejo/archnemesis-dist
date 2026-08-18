@@ -1,12 +1,20 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 
+from ..param import (
+    StateParam, 
+    #ConstParam, 
+    #VarParam,
+)
+
 from ._base import PreRTModelBase
 
-from ..log import _lgr  # noqa # Ignore if _lgr is not used
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
+from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
 if TYPE_CHECKING:
     # NOTE: This is just here to make 'flake8' play nice with the type hints
@@ -27,28 +35,42 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+
+@dc.dataclass
 class Model556(PreRTModelBase):
     """
         In this model, we retrieve a scaling factor for the planetary radius
     """
-    id : int = 556
-
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-
-        ):
-        """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries)
+    id : ClassVar[int] = 556
+    
+    radius_scaling_factor : StateParam.using(slice(0,1), 'Scaling factor for planetary radius', '') # noqa: F722 F821
 
     @classmethod
-    def calculate(cls, Atmosphere, radius_scaling_factor, MakePlot=False):
+    def from_apr_file(
+            cls,
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> Self:
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, 1)
+        
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+        )
+        
+        instance.radius_scaling_factor.num_diff = True
+        
+        return instance
+
+
+    def calculate(self, Atmosphere, MakePlot=False):
 
         """
             FUNCTION NAME : model556()
@@ -76,6 +98,7 @@ class Model556(PreRTModelBase):
             MODIFICATION HISTORY : Juan Alday (15/02/2023)
 
         """
+        radius_scaling_factor = self.radius_scaling_factor.v
     
         _lgr.info(f'Calculating model 556 with radius_scaling_factor={radius_scaling_factor}')
         Atmosphere.PLANET_RADIUS = Atmosphere.PLANET_RADIUS * radius_scaling_factor
@@ -83,42 +106,7 @@ class Model556(PreRTModelBase):
 
         return Atmosphere
 
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        
-        ix_0 = ix
-        #******** pressure at a given tangent height
-        s = f.readline().split()
-        radius_scaling_factor = float(s[0])
-        radius_scaling_factor_err = float(s[1])
-
-        x0[ix] = radius_scaling_factor
-        lx[ix] = 0
-        inum[ix] = 1
-
-        sx[ix,ix] = (radius_scaling_factor_err)**2.
-        #jpre = ix
     
-        ix = ix + 1
-
-        return cls(ix_0, ix-ix_0)
 
     @classmethod
     def from_bookmark(
@@ -135,11 +123,7 @@ class Model556(PreRTModelBase):
         
         if varident[2] != cls.id:
             raise ValueError('error in Model556.from_bookmark() :: wrong model id')
-        
-        ix_0 = ix
-        ix = ix + 1
-
-        return cls(ix_0, ix-ix_0)
+        return cls((0,0))
 
     def calculate_from_subprofretg(
             self,
@@ -149,13 +133,12 @@ class Model556(PreRTModelBase):
             ivar : int,
             xmap : np.ndarray,
         ) -> None:
-        #Model 555. Retrieval of correction to planetary radius
-        #***************************************************************
+        self.pull_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        forward_model.AtmosphereX = self.calculate(forward_model.AtmosphereX)
 
-        radius_scaling_factor = forward_model.Variables.XN[ix]
 
-        forward_model.AtmosphereX = self.calculate(forward_model.AtmosphereX,radius_scaling_factor)
 
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+
+
 
 

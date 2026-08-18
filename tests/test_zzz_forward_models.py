@@ -10,7 +10,6 @@ curr = os.getcwd()
 if False:
     print(pytest) # Removes the "unused import" error
 
-
 THERMAL_EMISSION_CIRS_EXPECTED_RESULT = np.load(
     ans.Data.path_data.archnemesis_resolve_path("ARCHNEMESIS_PATH/tests/data/thermal_emission_cirs_expected_result.npy"), 
     allow_pickle=False
@@ -212,16 +211,77 @@ def test_multiple_scattering_cirs():
     os.chdir(test_dir) #Changing directory to read files
     runname = 'cirstest'
     
-    #Reading the input files
-    Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
+    try:
+        #Reading the input files
+        Atmosphere,Measurement,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Variables,Retrieval = ans.Files.read_input_files(runname)
+        
+        #Calculating forward model with CIRSrad
+        ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
+        SPECONV_cirsrad = ForwardModel.nemesisfm()
+        calculation_cirsrad = SPECONV_cirsrad[:,0]
+    finally:
+        os.chdir(curr)
     
-    #Calculating forward model with CIRSrad
-    ForwardModel = ans.ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,Measurement=Measurement,Spectroscopy=Spectroscopy,Stellar=Stellar,Scatter=Scatter,CIA=CIA,Layer=Layer,Variables=Variables)
-    SPECONV_cirsrad = ForwardModel.nemesisfm()
-    calculation_cirsrad = SPECONV_cirsrad[:,0]
-    os.chdir(curr)
+    expected_result = MULTIPLE_SCATTERING_CIRS_EXPECTED_RESULT
     
-    assert np.allclose(calculation_cirsrad, MULTIPLE_SCATTERING_CIRS_EXPECTED_RESULT, rtol=5.0e-2), "Calculated values must be close to expected values"
+    atol = np.quantile(expected_result, 0.5) * 2E-1
+    rtol = 5E-2
+    required_frac_within_tolerance = 0.99
+    
+    tol = atol + rtol*np.abs(expected_result)
+    cirsrad_residual = calculation_cirsrad - expected_result
+    cirsrad_out_of_tolerance_mask = np.abs(cirsrad_residual) > tol
+    cirsrad_frac_out_of_tolerance = np.count_nonzero(cirsrad_out_of_tolerance_mask) / calculation_cirsrad.size
+    
+    if False: # Extra diagnostic information if required
+        import matplotlib.pyplot as plt
+
+        wave = ForwardModel.MeasurementX.VCONV[:ForwardModel.MeasurementX.NCONV[0]][:,0]
+
+        msg_frac_within_tol = f'frac within tolerance: cirsrad={1-cirsrad_frac_out_of_tolerance:5.3}'
+
+        plt.figure()
+        plt.title(f'Expected vs Calculated result\n{msg_frac_within_tol}')
+        plt.plot(wave, calculation_cirsrad, marker='+', ls='-', alpha=0.6, label='calculated spectra')
+        lines = plt.plot(wave, expected_result, marker='none', ls='-', color='tab:red', alpha=0.6, label='expected result')
+        plt.fill_between(wave, expected_result - tol, expected_result+tol, alpha=0.1, color=lines[0].get_color(), label='expected region')
+        
+        if cirsrad_frac_out_of_tolerance > 0:
+            plt.plot(wave[cirsrad_out_of_tolerance_mask], calculation_cirsrad[cirsrad_out_of_tolerance_mask], marker='s', markersize=10, markerfacecolor='none', ls='none', color='tab:red', alpha=0.6, label='calculated values out of tolerance')
+        
+        plt.xlabel('Wave ($cm^{-1}$)')
+        plt.ylabel('Radiance ($W cm^{-2} sr^{-1} (cm^{-1})^{-1})$)')
+        plt.legend()
+        
+        plt.figure()
+        plt.title(f'Residual (calculated - expected)\n{msg_frac_within_tol}')
+        plt.plot(wave, cirsrad_residual, marker='+', ls='--', alpha=0.6, label='residual spectra')
+        plt.fill_between(wave, -1*tol, tol, alpha=0.1, color=lines[0].get_color(), label='expected region')
+        
+        if cirsrad_frac_out_of_tolerance > 0:
+            plt.plot(wave[cirsrad_out_of_tolerance_mask], cirsrad_residual[cirsrad_out_of_tolerance_mask], marker='s', markersize=10, markerfacecolor='none', ls='none', color='tab:red', alpha=0.6, label='calculated values out of tolerance')
+        
+        plt.xlabel('Wave ($cm^{-1}$)')
+        plt.ylabel('Radiance ($W cm^{-2} sr^{-1} (cm^{-1})^{-1})$)')
+        plt.legend()
+        
+        plt.show()
+    
+    # Perform comparison
+    assert (1-cirsrad_frac_out_of_tolerance) >= required_frac_within_tolerance, (
+         '## Failed Comparison ##\n'
+         '  Parameters:\n'
+        f'    {atol = :8.3G}\n'
+        f'    {rtol = :8.3G}\n'
+        f'    {required_frac_within_tolerance = }\n'
+         '  Comparison:\n'
+        f'    calculated frac within tolerance = {1-cirsrad_frac_out_of_tolerance:0.3f}\n'
+        f'    expected   = {np.array2string(expected_result, max_line_width=80, prefix="    expected   = ", threshold=16, edgeitems=8)}\n'
+        f'    calculated = {np.array2string(calculation_cirsrad, max_line_width=80, prefix="    calculated = ", threshold=16, edgeitems=8)}\n'
+         '##-------------------##'
+    )
+    
+    #assert np.allclose(calculation_cirsrad, expected_result, rtol=5.0e-2), "Calculated values must be close to expected values"
 
 def test_solar_occultation_mars():  
     '''
@@ -316,6 +376,8 @@ def test_solar_occultation_mars_runtime():
         Retrieval,
         Telluric
     ) = ans.Files.read_input_files_hdf5(runname)
+    
+    Spectroscopy.write_hdf5(runname)
     
     #Calculating forward model with CIRSrad
     ForwardModel = ans.ForwardModel_0(

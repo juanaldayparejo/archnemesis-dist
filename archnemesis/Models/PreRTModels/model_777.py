@@ -1,10 +1,19 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 import matplotlib.pyplot as plt
 
+from ..param import (
+    StateParam, 
+    #ConstParam, 
+    #VarParam,
+)
+
 from ._base import PreRTModelBase
+
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -28,16 +37,44 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+
+@dc.dataclass
 class Model777(PreRTModelBase):
     """
         In this model, we apply a correction to the tangent heights listed on the 
         Measurement class
     """
-    id : int = 777
-
+    id : ClassVar[int] = 777
+    
+    height_correction : StateParam.using(slice(0,1), 'Correction to the tangent heights', 'km') # noqa: F722 F821
 
     @classmethod
-    def calculate(cls, Measurement,hcorr,MakePlot=False):
+    def from_apr_file(
+            cls,
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> Self:
+    
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, 1)
+        
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+        )
+        
+        instance.height_correction.num_diff = True
+        
+        return instance
+
+
+    def calculate(self, Measurement,MakePlot=False):
 
         """
             FUNCTION NAME : model777()
@@ -66,6 +103,7 @@ class Model777(PreRTModelBase):
             MODIFICATION HISTORY : Juan Alday (15/02/2023)
 
         """
+        hcorr = self.height_correction.v
 
         #Getting the tangent heights
         tanhe = np.zeros(Measurement.NGEOM)
@@ -89,38 +127,7 @@ class Model777(PreRTModelBase):
         return Measurement
 
 
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** tangent height correction
-        s = f.readline().split()
-        hcorr = float(s[0])
-        herr = float(s[1])
-
-        x0[ix] = hcorr
-        sx[ix,ix] = herr**2.
-        inum[ix] = 1
-
-        ix = ix + 1
-
-        return cls(ix_0, ix-ix_0)
+    
 
     @classmethod
     def from_bookmark(
@@ -134,11 +141,7 @@ class Model777(PreRTModelBase):
             ndust : int,
             nlocations : int,
         ) -> Self:
-        ix_0 = ix
-        #******** tangent height correction
-        ix = ix + 1
-
-        return cls(ix_0, ix-ix_0)
+        return cls((0,0))
 
     def calculate_from_subprofretg(
             self,
@@ -150,12 +153,6 @@ class Model777(PreRTModelBase):
         ) -> None:
         #Model 777. Retrieval of tangent height corrections
         #***************************************************************
-
-        hcorr = forward_model.Variables.XN[ix]
-
-        forward_model.MeasurementX = self.calculate(forward_model.MeasurementX,hcorr)
-
-        #ipar = -1
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        forward_model.MeasurementX = self.calculate(forward_model.MeasurementX)
 
 

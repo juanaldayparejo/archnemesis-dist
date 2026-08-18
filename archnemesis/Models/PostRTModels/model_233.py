@@ -1,12 +1,21 @@
 
-
-from typing import TYPE_CHECKING, IO, Self
+from typing import TYPE_CHECKING, Self, IO, ClassVar, Any
+import dataclasses as dc
 
 import numpy as np
 
+from ..param import (
+    StateParam, 
+    #ConstParam, 
+    VarParam,
+)
+
 from ._base import PostRTModelBase
 
+from archnemesis.enum import ArchNemesisFileTypeEnum
+
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
+
 
 if TYPE_CHECKING:
     # NOTE: This is just here to make 'flake8' play nice with the type hints
@@ -28,6 +37,8 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+
+@dc.dataclass
 class Model233(PostRTModelBase):
     """
         Continuum addition to transmission spectra using a variable angstrom coefficient (Schuster et al., 2006 JGR)
@@ -40,7 +51,73 @@ class Model233(PostRTModelBase):
         The coefficient a2 accounts for a curvature in the angstrom coefficient used in model 232. Note that model
         233 converges to model 232 when a2=0.
     """
-    id : int = 233
+    id : ClassVar[int] = 233
+    
+    coefficient_triplets : StateParam.using(slice(None), 'a0, a1, a2 coefficients') # noqa: F722 F821
+    
+    nlevels : VarParam.using(int, 'Number of coefficient triplets') # noqa: F722 F821
+    
+    
+    @classmethod
+    def read_datafile(
+            cls,
+            fpath : str
+    ) -> tuple[np.ndarray, np.ndarray, tuple[Any,...]]:
+        
+        with open(fpath, 'r') as f:
+            nlevel = cls.read_apr_entries(f, (int,))
+            a0,e0,a1,e1,a2,e2 = cls.read_apr_entries(f, (float,float,float,float,float,float), nlevel)
+            
+            xvals = np.zeros((3*nlevel,))
+            xerrs = np.zeros((3*nlevel,))
+            
+            xvals[::3] = a0
+            xvals[1::3] = a1
+            xvals[2::3] = a2
+            
+            xerrs[::3] = e0
+            xerrs[1::3] = e1
+            xerrs[2::3] = e2
+        
+        return xvals, xerrs, nlevel
+    
+    @classmethod
+    def from_apr_file(
+            cls,
+            f : IO,
+            varident : np.ndarray[[3],int],
+            npro : int,
+            ngas : int,
+            ndust : int,
+            nlocations : int,
+            runname : str,
+            sxminfac : float,
+            input_file_type : ArchNemesisFileTypeEnum,
+    ) -> Self:
+        """
+        Aerosol opacity modelled with a variable angstrom coefficient. Applicable to transmission spectra.
+
+        The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( -TAU_AERO )
+        Where the aerosol opacity is modelled following
+
+         np.log(TAU_AERO) = a0 + a1 * np.log(WAVE) + a2 * np.log(WAVE)**2.
+
+        The coefficient a2 accounts for a curvature in the angstrom coefficient used in model 232. Note that model
+        233 converges to model 232 when a2=0.                  
+        """
+
+        datafile_path = cls.read_apr_entries(f, (str,))
+        xvals, xerrs, (nlevel) = cls.read_datafile(datafile_path)
+        
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+            nlevel
+        )
+        
+        instance.coefficient_triplets.log = False
+        
+        return instance
     
     
     @classmethod
@@ -75,63 +152,7 @@ class Model233(PostRTModelBase):
         return SPECMOD, dSPECMOD
     
     
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        """
-        Aerosol opacity modelled with a variable angstrom coefficient. Applicable to transmission spectra.
-
-        The computed transmission spectra is multiplied by TRANS = TRANS0 * NP.EXP( -TAU_AERO )
-        Where the aerosol opacity is modelled following
-
-         np.log(TAU_AERO) = a0 + a1 * np.log(WAVE) + a2 * np.log(WAVE)**2.
-
-        The coefficient a2 accounts for a curvature in the angstrom coefficient used in model 232. Note that model
-        233 converges to model 232 when a2=0.                  
-        """
-
-        #Reading the file where the a priori parameters are stored
-        s = f.readline().split()
-        f1 = open(s[0],'r')
-        tmp = np.fromfile(f1,sep=' ',count=1,dtype='int')
-        nlevel = int(tmp[0])
-        varparam[0] = nlevel
-        for ilevel in range(nlevel):
-            tmp = np.fromfile(f1,sep=' ',count=6,dtype='float')
-            a0 = float(tmp[0])   #A0
-            err0 = float(tmp[1])
-            a1 = float(tmp[2])   #A1
-            err1 = float(tmp[3])
-            a2 = float(tmp[4])   #A2
-            err2 = float(tmp[5])
-            x0[ix] = a0
-            sx[ix,ix] = (err0)**2.
-            x0[ix+1] = a1
-            sx[ix+1,ix+1] = err1**2.
-            x0[ix+2] = a2
-            sx[ix+2,ix+2] = err2**2.
-            inum[ix] = 0
-            inum[ix+1] = 0    
-            inum[ix+2] = 0                  
-            ix = ix + 3
-        return cls(ix_0, ix-ix_0)
+    
         
     @classmethod
     def from_bookmark(
@@ -145,7 +166,6 @@ class Model233(PostRTModelBase):
             ndust : int,
             nlocations : int,
         ) -> Self:
-        ix_0 = ix
         """
         Aerosol opacity modelled with a variable angstrom coefficient. Applicable to transmission spectra.
 
@@ -160,7 +180,10 @@ class Model233(PostRTModelBase):
         nlevel = int(varparam[0])
         for ilevel in range(nlevel):             
             ix = ix + 3
-        return cls(ix_0, ix-ix_0)
+        return cls(
+            (np.zeros(nlevel*3), np.zeros(nlevel*3)),
+            nlevel,
+        )
     
     def calculate_from_subspecret(
             self,
@@ -187,6 +210,8 @@ class Model233(PostRTModelBase):
         
         if int(forward_model.Variables.NXVAR[ivar]/3)!=forward_model.MeasurementX.NGEOM:
             raise ValueError('error using Model 233 :: The number of levels for the addition of continuum must be the same as NGEOM')
+    
+        self.pull_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
 
         NGEOM = forward_model.MeasurementX.NGEOM
         igeom_slices = tuple(slice(ix+igeom*(3), ix+(igeom+1)*(3)) for igeom in range(NGEOM))
@@ -195,9 +220,9 @@ class Model233(PostRTModelBase):
         if forward_model.MeasurementX.NGEOM>1:
             for i in range(forward_model.MeasurementX.NGEOM):
 
-                A0 = forward_model.Variables.XN[ix]
-                A1 = forward_model.Variables.XN[ix+1]
-                A2 = forward_model.Variables.XN[ix+2]
+                A0 = self.coefficient_triplets.v[3*i]
+                A1 = self.coefficient_triplets.v[3*i+1]
+                A2 = self.coefficient_triplets.v[3*i+2]
                 
                 SPECMOD[:,i], dSPECMOD[:,i] = self.calculate(
                     SPECMOD[:,i], 
@@ -210,9 +235,9 @@ class Model233(PostRTModelBase):
                 )
 
         else:
-            A0 = forward_model.Variables.XN[ix]
-            A1 = forward_model.Variables.XN[ix+1]
-            A2 = forward_model.Variables.XN[ix+2]
+            A0 = self.coefficient_triplets.v[0]
+            A1 = self.coefficient_triplets.v[1]
+            A2 = self.coefficient_triplets.v[2]
 
             SPECMOD[:], dSPECMOD[:] = self.calculate(
                 SPECMOD[:], 

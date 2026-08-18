@@ -1,10 +1,18 @@
-
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 import matplotlib.pyplot as plt
 
+from ..param import (
+    StateParam, 
+    ConstParam, 
+    VarParam,
+)
+
 from ._base import PreRTModelBase
+
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -29,16 +37,77 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass
 class Model887(PreRTModelBase):
     """
         In this model, the cross-section spectrum of IDUST is changed given the parameters in 
         the state vector
     """
-    id : int = 887
+    id : ClassVar[int] = 887
 
+    extinction_cross_section : StateParam.using(slice(0,None), 'Extinction cross section values') # noqa: F722 F821
+    
+    correlation_length : ConstParam.using(float, 'Correlation length between the wavelengths/wavenumbers') # noqa: F722 F821
+    wave_points : ConstParam.using(np.ndarray, 'Wavenumbers/wavelengths of the extinction cross-section values.') # noqa: F722 F821
+    
+    nspec : VarParam.using(int, 'Number of spectral points (must be the same as the *.xsc file)') # noqa: F722 F821
+    aerosol_id : VarParam.using(int, 'Aerosol ID number for the dust we are operating upon') # noqa: F722 F821
+    
+    
 
     @classmethod
-    def calculate(cls, Scatter,xsc,idust,MakePlot=False):
+    def from_apr_file(
+            cls,
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> Self:
+    
+        nspec, icloud, clen = cls.read_apr_entries(f, (int, int, float))
+        
+        waves, xvals, xerrs = cls.read_apr_entries(f, (float, float, float), nspec)
+        
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+            clen,
+            waves,
+            nspec,
+            icloud
+        )
+        
+        instance.extinction_cross_section.num_diff = True
+        
+        return instance
+
+    def push_to_covariance_matrix(
+            self,
+            sx : np.ndarray[["mx","mx"],float],
+            sxminfac : float,
+    ):
+        """
+        Model 887 requires a custom covariance matrix calculation
+        """
+        self.push_to_covariance_matrix_with_correlation_length(
+            sx,
+            sxminfac,
+            correlation_lengths = (0, self.correlation_length.v),
+            distances = self.wave_points.v,
+        )
+
+
+
+    def calculate(
+            self, 
+            Scatter : "Scatter_0",
+            MakePlot=False
+    ) -> "Scatter_0":
 
         """
             FUNCTION NAME : model887()
@@ -70,6 +139,8 @@ class Model887(PreRTModelBase):
             MODIFICATION HISTORY : Juan Alday (29/03/2021)
 
         """
+        xsc = self.extinction_cross_section.v
+        idust = self.aerosol_id.v
 
         if len(xsc)!=Scatter.NWAVE:
             raise ValueError('error in model 887 :: Cross-section array must be defined at the same wavelengths as in .xsc')
@@ -89,80 +160,10 @@ class Model887(PreRTModelBase):
                 ax1.set_xlabel(r'Wavenumber (cm$^{-1}$')
             plt.tight_layout()
             plt.show()
-
-
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** Cloud x-section spectrum
-
-        #Read in number of points, cloud id, and correlation between elements.
-        s = f.readline().split()
-        nwv = int(s[0]) #number of spectral points (must be the same as in .xsc)
-        icloud = int(s[1])  #aerosol ID
-        clen = float(s[2])  #Correlation length (in wavelengths/wavenumbers)
-
-        varparam[0] = nwv
-        varparam[1] = icloud
-
-        #Read the wavelengths and the extinction cross-section value and error
-        wv = np.zeros(nwv)
-        xsc = np.zeros(nwv)
-        err = np.zeros(nwv)
-        for iw in range(nwv):
-            s = f.readline().split()
-            wv[iw] = float(s[0])
-            xsc[iw] = float(s[1])
-            err[iw] = float(s[2])
-            if xsc[iw]<=0.0:
-                raise ValueError('error in read_apr :: Cross-section in model 887 must be greater than 0')
-
-        #It is important to check that the wavelengths in .apr and in .xsc are the same
-        Aero0 = Scatter_0()
-        Aero0.read_xsc(runname)
-        for iw in range(Aero0.NWAVE):
-            if (wv[iw]-Aero0.WAVE[iw])>0.01:
-                raise ValueError('error in read_apr :: Number of wavelengths in model 887 must be the same as in .xsc')
-
-        #Including the parameters in state vector and covariance matrix
-        for j in range(nwv):
-            x0[ix+j] = np.log(xsc[j])
-            lx[ix+j] = 1
-            inum[ix+j] = 1
-            sx[ix+j,ix+j] = (err[j]/xsc[j])**2.
-
-        for j in range(nwv):
-            for k in range(nwv):
-                delv = wv[j] - wv[k]
-                arg = abs(delv/clen)
-                xfac = np.exp(-arg)
-                if xfac>0.001:
-                    sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
-                    sx[ix+k,ix+j] = sx[ix+j,ix+k]
-
-        #jxsc = ix
-
-        ix = ix + nwv
-
-        return cls(ix_0, ix-ix_0)
-
+        
+        return Scatter
+    
+    
     @classmethod
     def from_bookmark(
             cls,
@@ -174,14 +175,9 @@ class Model887(PreRTModelBase):
             ngas : int,
             ndust : int,
             nlocations : int,
-        ) -> Self:
-        ix_0 = ix
-        #******** Cloud x-section spectrum
-        nwv = varparam[0]
-        #icloud = varparam[1]
-        ix = ix + nwv
+    ) -> Self:
+        raise NotImplementedError()
 
-        return cls(ix_0, ix-ix_0)
 
     def calculate_from_subprofretg(
             self,
@@ -190,7 +186,7 @@ class Model887(PreRTModelBase):
             ipar : int,
             ivar : int,
             xmap : np.ndarray,
-        ) -> None:
-        raise NotImplementedError
+    ) -> None:
+        forward_model.ScatterX = self.calculate(forward_model.ScatterX)
 
 

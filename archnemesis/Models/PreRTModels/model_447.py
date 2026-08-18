@@ -1,7 +1,16 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
+
+from ..param import (
+    StateParam, 
+    #ConstParam, 
+    #VarParam,
+)
+
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 from ._base import PreRTModelBase
 
@@ -27,17 +36,18 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass
 class Model447(PreRTModelBase):
     """
         In this model, we fit the Doppler shift of the observation. Currently this Doppler shift
         is common to all geometries, but in the future it will be updated so that each measurement
         can have a different Doppler velocity (in order to retrieve wind speeds).
     """
-    id : int = 447
+    id : ClassVar[int] = 447
 
+    v_dopper : StateParam.using('Doppler shift of observation', 'km/s') # noqa: F722 F821
 
-    @classmethod
-    def calculate(cls, Measurement,v_doppler):
+    def calculate(self, Measurement,v_doppler):
 
         """
             FUNCTION NAME : model447()
@@ -74,41 +84,28 @@ class Model447(PreRTModelBase):
 
 
     @classmethod
-    def from_apr_to_state_vector(
+    def from_apr_file(
             cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** model for retrieving the Doppler shift
-
-        #Read the Doppler velocity and its uncertainty
-        s = f.readline().split()
-        v_doppler = float(s[0])     #km/s
-        v_doppler_err = float(s[1]) #km/s
-
-        #Filling the state vector and a priori covariance matrix with the doppler velocity
-        lx[ix] = 0
-        x0[ix] = v_doppler
-        sx[ix,ix] = (v_doppler_err)**2.
-        inum[ix] = 1
-
-        ix = ix + 1
-
-        return cls(ix_0, ix-ix_0)
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> Self:
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, 1)
+        
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+        )
+        
+        instance.v_dopper.log = False
+        
+        return instance
     
     @classmethod
     def from_bookmark(
@@ -122,11 +119,14 @@ class Model447(PreRTModelBase):
             ndust : int,
             nlocations : int,
         ) -> Self:
-        ix_0 = ix
-        #******** model for retrieving the Doppler shift
-        ix = ix + 1
+        instance = cls.from_arrays(
+            np.zeros((1,)),
+            np.zeros((1,)),
+        )
+        
+        instance.v_dopper.log = False
 
-        return cls(ix_0, ix-ix_0)
+        return instance
 
     def calculate_from_subprofretg(
             self,

@@ -262,8 +262,8 @@ class CIA_0:
             if e==False:
                 raise ValueError('error :: CIA is not defined in HDF5 file')
             else:
-                self.CIADATA = f['CIA/CIADATA'][tuple()].decode('ascii')
-                self.CIATABLE = f['CIA/CIATABLE'][tuple()].decode('ascii')
+                self.CIADATA =  h5py_helper.retrieve_data(f, 'CIA/CIADATA', lambda x: (x[0] if isinstance(x, np.ndarray) else x).decode('ascii'))
+                self.CIATABLE = h5py_helper.retrieve_data(f, 'CIA/CIATABLE', lambda x: (x[0] if isinstance(x, np.ndarray) else x).decode('ascii'))
                 self.INORMAL = h5py_helper.retrieve_data(f, 'CIA/INORMAL', lambda x:  ParaH2RatioEnum(np.int32(x)))
     
         # Resolve archnemesis path if it has been indirected

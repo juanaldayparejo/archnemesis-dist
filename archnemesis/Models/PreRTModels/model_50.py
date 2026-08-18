@@ -1,12 +1,16 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
 
 import numpy as np
 
 from ._base import PreRTModelBase
-from ..ModelParameter import ModelParameter
-
-from archnemesis.enum import AtmosphericProfileTypeEnum
+from ..param import (
+    StateParam, 
+    ConstParam, 
+    #VarParam,
+)
+import dataclasses as dc
+from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -30,6 +34,7 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass
 class Model50(PreRTModelBase):
     """
         In this model, the atmospheric parameters are modelled as continuous profiles
@@ -37,7 +42,14 @@ class Model50(PreRTModelBase):
         corresponds to this scaling factor at each altitude level. This parameterisation
         allows the retrieval of negative VMRs.
     """
-    id : int = 50
+    id : ClassVar[int] = 50
+
+    full_profile: StateParam.using(slice(None), 'Factors at each level to scale reference profile by', 'PROFILE_TYPE') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
+    input_file_type: ConstParam.using(ArchNemesisFileTypeEnum, 'Input file type') # noqa: F722 F821
+    n_level: ConstParam.using(int, 'Number of levels in the profile') # noqa: F722 F821
+    pressure: ConstParam.using(np.ndarray, 'Pressure at each entry of the profile') # noqa: F722 F821
+    correlation_length: ConstParam.using(float, 'Correlation length of profile') # noqa: F722 F821
 
 
     def __init__(
@@ -56,20 +68,11 @@ class Model50(PreRTModelBase):
         """
         super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model.
-        # NOTE: It is best to define these in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
-        self.parameters = (
-            ModelParameter('xprof', slice(0,n_state_vector_entries), 'Factors at each level to scale reference profile by', 'NUMBER'),
-        )
-        
+        # Model parameters are declared as `StateParam` class attributes.
+        # No runtime `ModelParameter` tuple is required for the new API.
         return
 
-    @classmethod
-    def calculate(cls, atm,ipar,xprof,MakePlot=False):
+    def calculate(self, atm,ipar,xprof,MakePlot=False):
 
         """
             FUNCTION NAME : model0()
@@ -113,8 +116,9 @@ class Model50(PreRTModelBase):
 
         """
 
+        xprof = self.full_profile.v
         npro = len(xprof)
-        if npro!=atm.NP:
+        if npro != atm.NP:
             raise ValueError('error in model 50 :: Number of levels in atmosphere and scaling factor profile does not match')
 
         npar = atm.NVMR+2+atm.NDUST
@@ -159,65 +163,39 @@ class Model50(PreRTModelBase):
 
 
     @classmethod
-    def from_apr_to_state_vector(
+    def from_apr_file(
             cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #********* continuous profile of a scaling factor ************************
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> "Model50":
         s = f.readline().split()
-        f1 = open(s[0],'r')
-        tmp = np.fromfile(f1,sep=' ',count=2,dtype='float')
+        f1 = open(s[0], 'r')
+        tmp = np.fromstring(f1.readline().rsplit('!', 1)[0], sep=' ', count=2, dtype='float')
         nlevel = int(tmp[0])
         if nlevel != npro:
             raise ValueError('profiles must be listed on same grid as .prf')
         clen = float(tmp[1])
-        pref = np.zeros([nlevel])
-        ref = np.zeros([nlevel])
-        eref = np.zeros([nlevel])
-        for j in range(nlevel):
-            tmp = np.fromfile(f1,sep=' ',count=3,dtype='float')
-            pref[j] = float(tmp[0])
-            ref[j] = float(tmp[1])
-            eref[j] = float(tmp[2])
+        pref, xvals, xerrs = cls.read_apr_entries(f1, (float, float, float), nlevel)
         f1.close()
 
-        x0[ix:ix+nlevel] = ref[:]
-        for j in range(nlevel):
-            sx[ix+j,ix+j] = eref[j]**2.
-
-        #Calculating correlation between levels in continuous profile
-        for j in range(nlevel):
-            for k in range(nlevel):
-                if pref[j] < 0.0:
-                    raise ValueError('Error in read_apr_nemesis().  A priori file must be on pressure grid')
-
-                delp = np.log(pref[k])-np.log(pref[j])
-                arg = abs(delp/clen)
-                xfac = np.exp(-arg)
-                if xfac >= sxminfac:
-                    sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
-                    sx[ix+k,ix+j] = sx[ix+j,ix+k]
-
-        ix = ix + nlevel
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust),
+            input_file_type,
+            nlevel,
+            pref,
+            clen,
+        )
+        instance.full_profile.log = instance.atm_profile_type.v != AtmosphericProfileTypeEnum.TEMPERATURE
+        return instance
 
 
     @classmethod

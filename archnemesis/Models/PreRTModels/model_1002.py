@@ -1,10 +1,18 @@
-
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 import matplotlib.pyplot as plt
 
+from ..param import (
+    StateParam, 
+    ConstParam, 
+    VarParam,
+)
+
 from ._base import PreRTModelBase
+
+from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -15,7 +23,8 @@ if TYPE_CHECKING:
     # this actually means that I should possibly redesign how those work to avoid circular imports
     # but that is outside the scope of what I want to accomplish here
     from archnemesis.Variables_0 import Variables_0
-    from archnemesis.ForwardModel_0 import ForwardModel_0
+    from archnemesis.Atmosphere_0 import Atmosphere_0
+    #from archnemesis.ForwardModel_0 import ForwardModel_0
 
     nx = 'number of elements in state vector'
     m = 'an undetermined number, but probably less than "nx"'
@@ -28,6 +37,7 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass(slots=True)
 class Model1002(PreRTModelBase):
     """ 
         In this model, the atmospheric parameters are scaled using a single factor with 
@@ -35,11 +45,86 @@ class Model1002(PreRTModelBase):
         
         The model is applied simultaneously in different planet locations
     """
-    id : int = 1002
+    id : ClassVar[int] = 1002
 
-
+    scaling_factors: StateParam.using(slice(0,None), 'Scaling factors at each location', 'NUMBER') # noqa: F722 F821
+    
+    atm_profile_type: ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
+    lats: ConstParam.using(np.ndarray, 'Latitude of each location') # noqa: F722 F821
+    lons: ConstParam.using(np.ndarray, 'Longitude of each location') # noqa: F722 F821
+    correlation_length: ConstParam.using(float, 'Correlation length (degrees)') # noqa: F722 F821
+    angular_distance : ConstParam.using(np.ndarray, 'Angular distances between points', 'degrees') # noqa: F722 F821
+    
+    n_locations: VarParam.using(int, 'Number of locations') # noqa: F722 F821
+    
+    
     @classmethod
-    def calculate(cls, atm,ipar,scf,MakePlot=False):
+    def from_apr_file(
+            cls,
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> Self:
+    
+        nlocs, clen = cls.read_apr_entries(f, (int, int))
+        lats, lons, xvals, xerrs = cls.read_apr_entries(f, (float, float, float, float), nlocs)
+        
+        
+        lats_r = lats * np.pi/180.0
+        lons_r = lons * np.pi/180.0
+        
+        one = np.ones((nlocs,nlocs),dtype=float)
+        angular_distance = np.arccos(
+            np.sin(lats_r[None,:]) @ np.sin(lats_r[:,None]) 
+            + np.cos(lats_r[None,:]) @ np.cos(lats_r[:,None])*(one*lons_r[None,:] - one(lons_r[:,None]))
+        ) * 180.0 / np.pi
+        
+        instance = cls.from_arrays(
+            xvals,
+            xerrs,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust),
+            lats,
+            lons,
+            clen,
+            angular_distance,
+            nlocs,
+        )
+        
+        instance.scaling_factors.log = False
+        
+        return instance
+
+
+    def push_to_covariance_matrix(
+            self,
+            sx : np.ndarray[["mx","mx"],float],
+            sxminfac : float,
+    ):
+        """
+        Model 444 requires a custom covariance matrix calculation
+        """
+        self.push_to_covariance_matrix_with_correlation_length(
+            sx,
+            sxminfac,
+            correlation_lengths = (0, self.correlation_length.v),
+            distances = self.angular_distance.v,
+        )
+
+
+
+    def calculate(
+            self, 
+            atm : "Atmosphere_0",
+            atm_profile_type : AtmosphericProfileTypeEnum,
+            atm_profile_idx : int,
+            MakePlot=False
+    ):
 
         """
             FUNCTION NAME : model2()
@@ -56,14 +141,9 @@ class Model1002(PreRTModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                ipar :: Atmospheric parameter to be changed
-                        (0 to NVMR-1) :: Gas VMR
-                        (NVMR) :: Temperature
-                        (NVMR+1 to NVMR+NDUST-1) :: Aerosol density
-                        (NVMR+NDUST) :: Para-H2
-                        (NVMR+NDUST+1) :: Fractional cloud coverage
-
-                scf(nlocations) :: Scaling factors at the different locations
+                atm_profile_type :: AtmosphericProfileTypeEnum denoting what part of the atmosphere is being retrieved
+            
+                atm_profile_idx :: Index of the atmospheric type.
 
             OPTIONAL INPUTS: None
 
@@ -80,7 +160,8 @@ class Model1002(PreRTModelBase):
             MODIFICATION HISTORY : Juan Alday (19/04/2023)
 
         """
-
+        scf = self.scaling_factors.v
+        
         npar = atm.NVMR+2+atm.NDUST
         xmap = np.zeros((atm.NLOCATIONS,npar,atm.NP,atm.NLOCATIONS))
         #xmap1 = np.zeros((atm.NLOCATIONS,npar,atm.NP,atm.NLOCATIONS))
@@ -93,29 +174,26 @@ class Model1002(PreRTModelBase):
 
         x1 = np.zeros((atm.NP,atm.NLOCATIONS))
         xref = np.zeros((atm.NP,atm.NLOCATIONS))
-        if ipar<atm.NVMR:  #Gas VMR
-            jvmr = ipar
-            xref[:,:] = atm.VMR[:,jvmr,:]
-            x1[:,:] = atm.VMR[:,jvmr,:] * scf[:]
-            atm.VMR[:,jvmr,:] =  x1
-        elif ipar==atm.NVMR: #Temperature
+        if atm_profile_type == AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO:
+            xref[:,:] = atm.VMR[:,atm_profile_idx,:]
+            x1[:,:] = atm.VMR[:,atm_profile_idx,:] * scf[:]
+            atm.VMR[:,atm_profile_idx,:] =  x1
+        elif atm_profile_type == AtmosphericProfileTypeEnum.TEMPERATURE:
             xref[:] = atm.T[:,:]
             x1[:] = np.transpose(np.transpose(atm.T[:,:]) * scf[:])
             atm.T[:,:] = x1 
-        elif ipar>atm.NVMR:
-            jtmp = ipar - (atm.NVMR+1)
-            if jtmp<atm.NDUST:
-                xref[:] = atm.DUST[:,jtmp,:]
-                x1[:] = np.transpose(np.transpose(atm.DUST[:,jtmp,:]) * scf[:])
-                atm.DUST[:,jtmp,:] = x1
-            elif jtmp==atm.NDUST:
-                xref[:] = atm.PARAH2[:,:]
-                x1[:] = np.transpose(np.transpose(atm.PARAH2[:,:]) * scf)
-                atm.PARAH2[:,:] = x1
-            elif jtmp==atm.NDUST+1:
-                xref[:] = atm.FRAC[:,:]
-                x1[:] = np.transpose(np.transpose(atm.FRAC[:,:]) * scf)
-                atm.FRAC[:,:] = x1
+        elif atm_profile_type == AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
+            xref[:] = atm.DUST[:,atm_profile_idx,:]
+            x1[:] = np.transpose(np.transpose(atm.DUST[:,atm_profile_idx,:]) * scf[:])
+            atm.DUST[:,atm_profile_idx,:] = x1
+        elif atm_profile_type == AtmosphericProfileTypeEnum.PARA_H2_FRACTION:
+            xref[:] = atm.PARAH2[:,:]
+            x1[:] = np.transpose(np.transpose(atm.PARAH2[:,:]) * scf)
+            atm.PARAH2[:,:] = x1
+        elif atm_profile_type == AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE:
+            xref[:] = atm.FRAC[:,:]
+            x1[:] = np.transpose(np.transpose(atm.FRAC[:,:]) * scf)
+            atm.FRAC[:,:] = x1
 
 
         #This calculation takes a long time for big arrays
@@ -148,89 +226,6 @@ class Model1002(PreRTModelBase):
 
 
     @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** scaling of atmospheric profiles at multiple locations (linear scale)
-
-        s = f.readline().split()
-
-        #Reading file with the a priori information
-        f1 = open(s[0],'r') 
-        s = np.fromfile(f1,sep=' ',count=2,dtype='float')   #nlocations and correlation length
-        nlocs = int(s[0])   #number of locations
-        clen = int(s[1])    #correlation length (degress)
-
-        if nlocs != nlocations:
-            raise ValueError('error in model 1002 :: number of locations must be the same as in Surface and Atmosphere')
-
-        lats = np.zeros(nlocs)
-        lons = np.zeros(nlocs)
-        sfactor = np.zeros(nlocs)
-        efactor = np.zeros(nlocs)
-        for iloc in range(nlocs):
-
-            s = np.fromfile(f1,sep=' ',count=4,dtype='float')   
-            lats[iloc] = float(s[0])    #latitude of the location
-            lons[iloc] = float(s[1])    #longitude of the location
-            sfactor[iloc] = float(s[2])   #scaling value
-            efactor[iloc] = float(s[3])   #uncertainty in scaling value
-
-        f1.close()
-
-        #Including the parameters in the state vector
-        varparam[0] = nlocs
-        #iparj = 1
-        for iloc in range(nlocs):
-            #Including surface temperature in the state vector
-            x0[ix+iloc] = sfactor[iloc]
-            sx[ix+iloc,ix+iloc] = efactor[iloc]**2.0
-            lx[ix+iloc] = 0     #linear scale
-            inum[ix+iloc] = 0   #analytical calculation of jacobian
-
-
-        #Defining the correlation between surface pixels 
-        for j in range(nlocs):
-            s1 = np.sin(lats[j]/180.*np.pi)
-            s2 = np.sin(lats/180.*np.pi)
-            c1 = np.cos(lats[j]/180.*np.pi)
-            c2 = np.cos(lats/180.*np.pi)
-            c3 = np.cos( (lons[j]-lons)/180.*np.pi )
-            psi = np.arccos( s1*s2 + c1*c2*c3 ) / np.pi * 180.   #angular distance (degrees)
-            arg = abs(psi/clen)
-            xfac = np.exp(-arg)
-            for k in range(nlocs):
-                if xfac[k]>0.001:
-                    sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac[k]
-                    sx[ix+k,ix+j] = sx[ix+j,ix+k]
-
-        #jsurf = ix
-
-        ix = ix + nlocs
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
-
-
-    @classmethod
     def from_bookmark(
             cls,
             variables : "Variables_0",
@@ -242,36 +237,22 @@ class Model1002(PreRTModelBase):
             ndust : int,
             nlocations : int,
         ) -> Self:
-        ix_0 = ix
         #******** scaling of atmospheric profiles at multiple locations (linear scale)
 
-        nlocs = varparam[0]
+        nlocs = int(varparam[0])
         if nlocs != nlocations:
             raise ValueError('error in model 1002 :: number of locations must be the same as in Surface and Atmosphere')
 
-        ix = ix + nlocs
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
-
-
-    def calculate_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> None:
-        #Model 1002. Scaling factors at multiple locations
-        #***************************************************************
-
-        forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX,ipar,forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]],MakePlot=False)
-        #This calculation takes a long time for big arrays
-        #xmap[ix:ix+forward_model.Variables.NXVAR[ivar],:,0:forward_model.AtmosphereX.NP,0:forward_model.AtmosphereX.NLOCATIONS] = xmap1[:,:,:,:]
-
-        ix = ix + forward_model.Variables.NXVAR[ivar]
-
+        instance = cls.from_arrays(
+            np.zeros((nlocs,)),
+            np.zeros((nlocs,)),
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust),
+            np.zeros((nlocs,)),#lats,
+            np.zeros((nlocs,)),#lons,
+            0,#clen,
+            nlocs,
+        )
+        instance.scaling_factors.log = False
+        
+        return instance
 

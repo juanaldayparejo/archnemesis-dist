@@ -1,10 +1,19 @@
 
-from typing import TYPE_CHECKING, Self, IO
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
+#import matplotlib.pyplot as plt
+
+from ..param import (
+    StateParam, 
+    #ConstParam, 
+    #VarParam,
+)
 
 from ._base import PreRTModelBase
-from ..ModelParameter import ModelParameter
+
+from archnemesis.enum import ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -28,34 +37,44 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+
+@dc.dataclass
 class Model999(PreRTModelBase):
     """
         In this model, the temperature of the surface is defined.
     """
-    id : int = 999 
+    id : ClassVar[int] = 999 
+    
+    surface_temperature : StateParam.using(slice(0,1), "Surface temperature of planet", 'Kelvin') # noqa: F722 F821
+    
+    
+    @classmethod
+    def from_apr_file(
+            cls,
+            f: IO,
+            varident: np.ndarray[[3], int],
+            npro: int,
+            ngas: int,
+            ndust: int,
+            nlocations: int,
+            runname: str,
+            sxminfac: float,
+            input_file_type: ArchNemesisFileTypeEnum,
+    ) -> Self:
+    
+        xvals, xerrs = cls.read_apr_value_error_pairs(f, 1)
         
-    def __init__(
-            self, 
-            state_vector_start : int = 0, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int = 1,
-            #   Number of parameters for this model stored in the state vector
-        ):
-        """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries)
-        
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model
-        self.parameters = (
-            ModelParameter('surface temperature', slice(0,1), 'Surface Temperature','K'),
+        instance = cls.from_arrays(
+            xvals,
+            xerrs
         )
         
+        instance.surface_temperature.log = False
         
-    @classmethod
-    def calculate(cls, Surface, tsurf):
+        return instance
+    
+        
+    def calculate(self, Surface):
 
         """
             FUNCTION NAME : model999()
@@ -84,47 +103,12 @@ class Model999(PreRTModelBase):
 
         """
 
-        Surface.TSURF = tsurf
+        Surface.TSURF = self.surface_temperature.v
 
         return Surface
 
 
-    @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,            
-        ) -> Self:
-        ix_0 = ix
-        #******** model for retrieving the Surface temperature
-
-        #Read the surface temperature and its uncertainty
-        s = f.readline().split()
-        tsurf = float(s[0])     #K
-        tsurf_err = float(s[1]) #K
-
-        #Filling the state vector and a priori covariance matrix with the surface temperature
-        lx[ix] = 0   #linear scale
-        x0[ix] = tsurf
-        sx[ix,ix] = (tsurf_err)**2.
-        inum[ix] = 0  #analytical gradient
-
-        ix = ix + 1
-
-        return cls(ix_0, ix-ix_0)
+    
 
     @classmethod
     def from_bookmark(
@@ -141,11 +125,8 @@ class Model999(PreRTModelBase):
         
         if varident[2] != cls.id:
             raise ValueError('error in Model999.from_bookmark() :: wrong model id')
-        
-        ix_0 = ix
-        ix = ix + 1
 
-        return cls(ix_0, ix-ix_0)
+        return cls((0,0))
 
     def calculate_from_subprofretg(
             self,
@@ -157,13 +138,7 @@ class Model999(PreRTModelBase):
         ) -> None:
         #Model 999. Retrieval of surface temperature
         #***************************************************************
-
-        tsurf = forward_model.Variables.XN[ix]
-
-        forward_model.SurfaceX = self.calculate(forward_model.SurfaceX,tsurf)
-
-        #ipar = -1
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        forward_model.SurfaceX = self.calculate(forward_model.SurfaceX)
 
 
 

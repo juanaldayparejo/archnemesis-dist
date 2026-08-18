@@ -1,15 +1,17 @@
 
-from typing import TYPE_CHECKING, Self, IO
+
+from typing import TYPE_CHECKING, Self, IO, ClassVar
+import dataclasses as dc
 
 import numpy as np
 from scipy.integrate import simpson
 
 from ._base import PreRTModelBase
-from ..ModelParameter import ModelParameter
+from ..param import StateParam, ConstParam
 
 import archnemesis.Data.constants as const
 
-from archnemesis.enum import AtmosphericProfileTypeEnum
+from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
 
 from ..log import _lgr  # noqa # Ignore if _lgr is not used
 
@@ -20,7 +22,6 @@ if TYPE_CHECKING:
     # this actually means that I should possibly redesign how those work to avoid circular imports
     # but that is outside the scope of what I want to accomplish here
     from archnemesis.Variables_0 import Variables_0
-    from archnemesis.ForwardModel_0 import ForwardModel_0
     from archnemesis.Atmosphere_0 import Atmosphere_0
 
     nx = 'number of elements in state vector'
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     NDEGREE = 'number of degrees in a polynomial'
     NWINDOWS = 'number of spectral windows'
 
+@dc.dataclass(slots=True)
 class Model9(PreRTModelBase):
     """
     In this model, the profile (cloud profile) is represented by a value
@@ -42,62 +44,27 @@ class Model9(PreRTModelBase):
     altitude given by the fractional scale height. In addition, this model scales
     the profile to give the requested integrated cloud optical depth.
     """
-    
-    id : int = 9
 
-    def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-            
-            atm_profile_type : AtmosphericProfileTypeEnum,
-            #   ENUM that tells us what kind of atmospheric profile this model instance represents
-        ):
-        """
-            Initialise an instance of the model.
-        """
-        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
-        
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model.
-        # NOTE: It is best to define these in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
-        self.parameters = (
-            ModelParameter('tau', slice(2,3), 'Total integrated column density of the cloud (aerosol)', r'$m^{-2}$'),
-            ModelParameter('frac_scale_height', slice(1,2), 'Fractional scale height (decays above `h_ref` zero below)', 'km'),
-            ModelParameter('h_ref', slice(0,1), 'Base height of cloud profile', 'km'),
-        )
-        
-        return
+    id: ClassVar[int] = 9
 
-    @classmethod
+    tau: StateParam.using(slice(0,1), 'Total integrated column density of the cloud (aerosol)', r'$m^{-2}$') # noqa: F722 F821
+    frac_scale_height: StateParam.using(slice(1,2), 'Fractional scale height (decays above `h_ref` zero below)', 'km') # noqa: F722 F821
+    h_ref: StateParam.using(slice(2,3), 'Base height of cloud profile', 'km') # noqa: F722 F821
+    atm_profile_type: ConstParam.using(AtmosphericProfileTypeEnum, 'Atmospheric profile type this model applies to') # noqa: F722 F821
+
     def calculate(
-            cls,
-            atm : "Atmosphere_0",
-            #   Instance of Atmosphere_0 class we are operating upon
-            
-            atm_profile_type : AtmosphericProfileTypeEnum,
-            #   ENUM of atmospheric profile type we are altering.
-            
-            atm_profile_idx : int | None,
-            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
-            
-            tau,
-            #   Total integrated column density of the cloud (m-2)
-            
-            fsh,
-            #   Fractional scale height (km)
-            
-            href,
-            #   Base height of cloud profile (km)
-            
-            MakePlot=False
-        ):
+        self,
+        atm: "Atmosphere_0",
+        #   Instance of Atmosphere_0 class we are operating upon
+
+        atm_profile_type: AtmosphericProfileTypeEnum,
+        #   ENUM of atmospheric profile type we are altering.
+
+        atm_profile_idx: int | None,
+        #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
+
+        MakePlot=False,
+    ):
 
         """
             FUNCTION NAME : model9()
@@ -142,8 +109,12 @@ class Model9(PreRTModelBase):
         
 
 
+        tau = self.tau.v
+        fsh = self.frac_scale_height.v
+        href = self.h_ref.v
+
         if atm_profile_type != AtmosphericProfileTypeEnum.AEROSOL_DENSITY:
-            _msg = f'Model id={cls.id} is only defined for aerosol profiles.'
+            _msg = f'Model id={self.id} is only defined for aerosol profiles.'
             _lgr.error(_msg)
             raise ValueError(_msg)
         
@@ -212,7 +183,7 @@ class Model9(PreRTModelBase):
             #Calculating column density (m-2) by integrating the number density (m-3) over column (m)
             #Note that when doing the layering, the total column density in the atmosphere might not be
             #exactly the same as in xdeep due to misalignments at the boundaries of the cloud
-            totcol = simpson(ND,x=atm.H)
+            totcol = simpson(ND, x=atm.H)
             ND = ND / totcol * xdeep
 
             if itest==0:
@@ -222,127 +193,58 @@ class Model9(PreRTModelBase):
 
         atm.DUST[0:atm.NP,atm_profile_idx] = xprof
 
-        return atm,xmap
+        
+
+        return atm, xmap
 
 
     @classmethod
-    def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
-        ix_0 = ix
-        #******** cloud profile held as total optical depth plus
-        #******** base height and fractional scale height. Below the knee
-        #******** pressure the profile is set to zero - a simple
-        #******** cloud in other words!
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
-        hknee = tmp[0]
-        eknee = tmp[1]
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
-        xdeep = tmp[0]
-        edeep = tmp[1]
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
-        xfsh = tmp[0]
-        efsh = tmp[1]
+    def from_apr_file(
+        cls,
+        f: IO,
+        varident: np.ndarray[[3], int],
+        npro: int,
+        ngas: int,
+        ndust: int,
+        nlocations: int,
+        runname: str,
+        sxminfac: float,
+        input_file_type: ArchNemesisFileTypeEnum,
+    ) -> Self:
+        xvals_raw, xerrs_raw = cls.read_apr_value_error_pairs(f, 3)
+        instance = cls.from_arrays(
+            xvals_raw,
+            xerrs_raw,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust),
+        )
 
-        if xdeep>0.0:
-            x0[ix] = np.log(xdeep)
-            lx[ix] = 1
-            #inum[ix] = 1
-        else:
-            raise ValueError('error in read_apr() :: Parameter xdeep (total atmospheric aerosol column) must be positive')
+        instance.frac_scale_height.log = True
+        if varident[0] != 0:
+            instance.tau.log = True
 
-        err = edeep/xdeep
-        sx[ix,ix] = err**2.
-
-        ix = ix + 1
-
-        if xfsh>0.0:
-            x0[ix] = np.log(xfsh)
-            lx[ix] = 1
-            #inum[ix] = 1
-        else:
-            raise ValueError('error in read_apr() :: Parameter xfsh (cloud fractional scale height) must be positive')
-
-        err = efsh/xfsh
-        sx[ix,ix] = err**2.
-
-        ix = ix + 1
-
-        x0[ix] = hknee
-        #inum[ix] = 1
-        sx[ix,ix] = eknee**2.
-
-        ix = ix + 1
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
+        return instance
 
     @classmethod
     def from_bookmark(
-            cls,
-            variables : "Variables_0",
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-        ) -> Self:
-        ix_0 = ix
-        #******** cloud profile held as total optical depth plus
-        #******** base height and fractional scale height. Below the knee
-        #******** pressure the profile is set to zero - a simple
-        #******** cloud in other words!
-        ix = ix + 3
-
-        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
-        return cls(ix_0, ix-ix_0, model_classification[1])
-
-
-    def calculate_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> None:
-        #Model 9. Simple cloud represented by base height, fractional scale height
-            #and the total integrated cloud density
-        #***************************************************************
-        atm = forward_model.AtmosphereX
-        atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
-        
-        atm, xmap1 = self.calculate(
-            atm,
-            atm_profile_type,
-            atm_profile_idx,
-            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+        cls,
+        variables: "Variables_0",
+        varident: np.ndarray[[3], int],
+        varparam: np.ndarray[["mparam"], float],
+        ix: int,
+        npro: int,
+        ngas: int,
+        ndust: int,
+        nlocations: int,
+    ) -> Self:
+        xvals = np.zeros(3)
+        xerrs = np.zeros(3)
+        return cls.from_arrays(
+            xvals,
+            xerrs,
+            cls.get_model_profile_type_enum_from_varident(varident, ngas, ndust),
         )
-        
-        forward_model.AtmosphereX = atm
-        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
-        
-        return
+
+
+    
 
 

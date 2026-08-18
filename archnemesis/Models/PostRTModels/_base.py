@@ -1,6 +1,7 @@
 
 from typing import TYPE_CHECKING
 import abc
+import dataclasses as dc
 
 import numpy as np
 
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     NWINDOWS = 'number of spectral windows'
 
 
+@dc.dataclass
 class PostRTModelBase(ModelBase):
     """
     Abstract base class of all parameterised models used by ArchNemesis that interact 
@@ -41,21 +43,6 @@ class PostRTModelBase(ModelBase):
             varident : np.ndarray[[3],int],
     ) -> bool:
         return varident[0]==cls.id
-    
-    
-    def patch_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-    ) -> None:
-        """
-        Patches values of components based upon values of model parameters in the state vector. Called from ForwardModel_0::subprofretg.
-        """
-        _lgr.debug(f'Model id {self.id} method "patch_from_subprofretg" does nothing...')
-    
     
     def calculate_from_subprofretg(
             self,

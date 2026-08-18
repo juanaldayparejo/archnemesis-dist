@@ -3,6 +3,7 @@ Module contains ENUMs that are used to select/record states such as which linesh
 """
 
 from .aerosol_phase_function_calculation_mode_enum import AerosolPhaseFunctionCalculationModeEnum # noqa: F401 :: Unused variable is imported to namespace
+from .aerosol_unit_enum                            import AerosolUnitEnum                         # noqa: F401 :: Unused variable is imported to namespace
 from .ambient_gas_enum                             import AmbientGasEnum                          # noqa: F401 :: Unused variable is imported to namespace
 from .archnemesis_file_type_enum                   import ArchNemesisFileTypeEnum                 # noqa: F401 :: Unused variable is imported to namespace
 from .atmospheric_profile_format_enum              import AtmosphericProfileFormatEnum            # noqa: F401 :: Unused variable is imported to namespace

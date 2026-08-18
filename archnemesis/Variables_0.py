@@ -23,14 +23,15 @@ import os
 import os.path
 import textwrap
 #import sys
-from typing import Type, Iterable
+from typing import Iterable
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 #from archnemesis import *
 from archnemesis.Models import Models, ModelBase, ModelParameterEntry
-from archnemesis.enum import AtmosphericProfileTypeEnum, GasEnum
+from archnemesis.Models.formatting import format_float
+from archnemesis.enum import AtmosphericProfileTypeEnum, ArchNemesisFileTypeEnum
 from archnemesis.helpers import io_helper
 from archnemesis.helpers import h5py_helper
 
@@ -196,10 +197,13 @@ class Variables_0:
         all_model_parameters : tuple[dict[str, ModelParameterEntry], ...]
             A tuple of dictionaries that map model parameter names to the "ModelParameterEntry" for that parameter.
         """
+        
         return tuple(
-            model.get_parameters_from_state_vector(
+            model.get_stateparam_entries_from_vectors(
                 self.XA,
                 self.XN,
+                self.SA,
+                self.SX,
                 self.LX,
                 self.FIX
             )
@@ -209,7 +213,7 @@ class Variables_0:
     
     def model_parameters_as_string(
             self,
-        ) -> str:
+    ) -> str:
         """
         Returns a string of the model parameters (formatted as a table)
         """
@@ -222,7 +226,7 @@ class Variables_0:
         )) + '\n'
         
         # Header for the table, i.e. column labels
-        p_tbl_hdr = ('i', 'model id', 'parameter name', 'apriori value', 'posterior value', 'apriori error')
+        p_tbl_hdr = ('i', 'model id', 'parameter name', 'apriori value', 'posterior value', 'apriori error', 'posterior error')
         p_tbl_col_widths = [len(x) for x in p_tbl_hdr]
         p_tbl_full_col_width = None
         p_str = []
@@ -234,19 +238,17 @@ class Variables_0:
                 p_str.append([])
             first1 = True
             for p_name, p_val in mp[i-1].items():
-                is_log = self.LX[p_val.sv_slice] == 1
-                apriori_error = np.sqrt(np.diag(self.SA[p_val.sv_slice,p_val.sv_slice]))
-                apriori_error = np.where(is_log, apriori_error*p_val.apriori_value, apriori_error)
                 more_than_one_entry = len(p_val.apriori_value) > 1
-                for j, (fix, a, b, s) in enumerate(zip(p_val.is_fixed, p_val.apriori_value, p_val.posterior_value, apriori_error)):
+                for j, (fix, va, vx, sa, sx) in enumerate(zip(p_val.is_fixed, p_val.apriori_value, p_val.posterior_value, p_val.apriori_error, p_val.posterior_error)):
                     
                     p_str[i].append((
                         f'{p_val.sv_slice.start+j}',
                         f'{p_val.model_id}' if first1 else '---', 
-                        p_name+f'[{j}]' if more_than_one_entry else p_name, 
-                        f'{a:07.2E}', 
-                        'FIXED' if fix else f'{b:07.2E}',
-                        'FIXED' if fix else f'{s:07.2E}'
+                        p_name+f'[{j}]' if more_than_one_entry else p_name,
+                        format_float(va),
+                        'FIXED' if fix else format_float(vx),
+                        format_float(sa),
+                        'FIXED' if fix else format_float(sx),
                     ))
                     first1 = False
                     #first2 = False
@@ -274,7 +276,7 @@ class Variables_0:
             self, 
             plot_dir : None | str = None, 
             show : bool = False
-        ):
+    ):
         """
         Plots the parameters of the models in the state vector
         
@@ -594,63 +596,6 @@ class Variables_0:
 
     ################################################################################################################
 
-    @staticmethod
-    def classify_model_type_from_varident(
-            varident : np.ndarray[[3],int],
-            ngas : int,
-            ndust : int
-        ) -> tuple[Type, None | AtmosphericProfileTypeEnum]:
-        """
-        Works out the type of model (and subtype if applicable) identified by a VARIDENT triplet.
-        
-        ## ARGUMENTS ##
-            
-            varident : np.ndarray[[3],int]
-                Three integers that identify a model
-                
-            ngas : int
-                The number of gases present in the reference atmosphere
-            
-            ndust : int
-                The number of aerosol species present in the reference atmosphere
-            
-        ## RETURNS ##
-        
-            model_classification : tuple[Type, None | AtmosphericProfileTypeEnum]
-                A tuple containing values that classify the model. From broadest scope to narrowest.
-                Currently the tuple has the elements (in order):
-                    
-                    ModelClass : Type
-                        A subclass of archnemesis.Models.ModelBase.ModelBase that denotes the broadest
-                        classification of the model. This broadly corresponds to the retrieval component
-                        that the model interacts with (e.g. Atmosphere_0, Scatter_0, Measurement_0).
-                    
-                    ParameterisedTarget : None | AtmosphericProfileTypeEnum
-                        The part of the retrieval component that the model parameterises (and therefore
-                        alters). This is 'None' when unknown, or an ENUM corresponding to an attribute
-                        of the retrieval component that the model parameterises.
-        """
-        model_classification = None
-        if varident[0] == 0:
-            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.TEMPERATURE)
-        elif (varident[0] > 0) and int(varident[0]) in iter(GasEnum):
-            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO)
-        elif (varident[0] < 0) and (-varident[0]) <= ndust:
-            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.AEROSOL_DENSITY)
-        elif (varident[0] < 0) and (-varident[0]) == ndust + 1:
-            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.PARA_H2_FRACTION)
-        elif (varident[0] < 0) and (-varident[0]) == ndust + 2:
-            model_classification = ( ModelBase, AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE)
-        else:
-            # Other models are classified by their ID number
-            model_id_parent_classes = Models[varident[2]].__bases__
-            assert len(model_id_parent_classes) == 1, "Only support single inheritance of model classes for now"
-            model_classification = (model_id_parent_classes[0],None)
-        
-        return model_classification
-    
-    ################################################################################################################
-
     def read_hdf5(self,runname,npro):
         """
         Read the Variables field of the HDF5 file, which contains information about the variables and
@@ -681,7 +626,15 @@ class Variables_0:
             
     ################################################################################################################
 
-    def read_apr(self,runname,npro,ngas,ndust,nlocations=1):
+    def read_apr(
+            self,
+            runname,
+            npro,
+            ngas,
+            ndust,
+            nlocations=1,
+            input_file_type : ArchNemesisFileTypeEnum = ArchNemesisFileTypeEnum.UNDEFINED
+    ):
         """
         Read the .apr file, which contains information about the variables and
         parametrisations that are to be retrieved, as well as their a priori values.
@@ -712,6 +665,8 @@ class Variables_0:
             Number of locations in the reference atmosphere/surface
         
         """
+        
+        assert input_file_type != ArchNemesisFileTypeEnum.UNDEFINED, "Must have input file type defined when reading *.apr file."
         
         if self._models is not None:
             _lgr.warning(f'Already have models for {runname}, will overwrite them as we read the *.apr file.')
@@ -814,16 +769,21 @@ class Variables_0:
                                     ndust,
                                     nlocations,
                                     runname,
-                                    sxminfac
+                                    sxminfac,
+                                    input_file_type,
                                 )
                             )
                         except Exception as e:
                             raise AprReadError(f'Failed to read {i}^th model entry (with VARIDENT={varident[i]})') from e
                         
                         _lgr.info(f'\nVariables_0 :: read_apr :: varident {varident[i]}. Constructed model "{model.__name__}" (id={model.id})')
+                        if _lgr.level <= logging.DEBUG:
+                            print(f'x0[{ix}:{ix+self._models[-1].get_n_stateparam_entries()}] =')
+                            for _i, x in enumerate(x0[ix:ix+self._models[-1].get_n_stateparam_entries()]):
+                                print(f'{_i+ix: 5} : {x}')
                         try:
                             io_helper.OutWidth.push(io_helper.OutWidth.get() - 2)
-                            _lgr.info(textwrap.indent(str(self._models[-1].info(lx,x0)), '  '))
+                            _lgr.info(textwrap.indent(str(self._models[-1].info(x0,sx)), '  '))
                         finally:
                             io_helper.OutWidth.pop()
                         
