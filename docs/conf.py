@@ -98,9 +98,13 @@ html_theme_options = {
 }
 
 
+
+# Generate API documentation
+
 extensions.append("autoapi.extension")
 autoapi_dirs = [f'{docdir.parent / "archnemesis"}']
 
+autoapi_template_dir = "_autoapi_templates"
 
 autoapi_options = [
     "members",
@@ -126,35 +130,38 @@ autoapi_own_page_types = ['class', 'function', 'data', 'exception']
 
 
 
-# NOTE: Dataclasses are not documented in the API properly yet. I am trying to fix them.
-"""
+# NOTE: The below ensures dataclasses are documented correctly.
+import inspect
+import importlib
+import dataclasses as dc
 import sys
 
+def get_dataclass_constructor(obj):
+    full_name = obj.id
+    #print(f'INFO: {full_name=}')
+    try:
+        module_name, class_name = full_name.rsplit(".", 1)
 
-def print_all_decorators(x, level=0):
-    for k,v in x.obj.items():
-        print(k)
-    #print(x.obj)
-    #print(' '*level + )
-    if (d:=getattr(x, 'decorators', None)) is not None:
-        print(f'{d=}')
-        
-    if level==3:
-        sys.exit("LEVEL")
-    #for y in x.children:
-    #    print_all_decorators(y,level+1)
+        module = importlib.import_module(module_name)
+        cls = getattr(module, class_name)
 
-def walk_ast_and_fix_dataclasses(app):
-    for k,v in app.env.autoapi_objects.items():
-        if k.endswith('Model444'):
-            print(f'{k=}')
-            print_all_decorators(v)
-    
-    sys.exit('objects')
+        if not dc.is_dataclass(cls):
+            return None
+
+        sig = inspect.signature(cls)
+        params = sig.parameters
+        return (
+            f"{cls.__name__}(\n"
+            + ",\n".join(f"    {name}" if (param.default is inspect.Parameter.empty) else f"    {name} = {param.default!r}" for name, param in params.items() if not name.startswith('_'))
+            + "\n)"
+        )
+    except Exception:
+        return None
+
+def prepare_jinja_env(jinja_env):
+    jinja_env.globals["get_dataclass_constructor"] = get_dataclass_constructor
 
 
-def setup(app):
-    # Connect directly to the stage right after AutoAPI finishes walking the AST,
-    # but right before Sphinx writes the template files to disk.
-    app.connect("builder-inited", walk_ast_and_fix_dataclasses)
-"""
+autoapi_prepare_jinja_env = prepare_jinja_env
+
+

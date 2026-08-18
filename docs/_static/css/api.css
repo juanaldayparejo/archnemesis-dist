@@ -23,3 +23,18 @@ dl.py.function {
     width: 100% !important;
     float: none !important;
 }
+
+.dataclass-stereotype {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    margin-bottom: 0.5rem;
+
+    border-radius: 0.4rem;
+
+    background-color: #e6f2ff;
+    color: #0050a0;
+
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
