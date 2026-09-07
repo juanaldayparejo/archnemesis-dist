@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from archnemesis.Variables_0 import Variables_0
     from archnemesis.ForwardModel_0 import ForwardModel_0
     from archnemesis.Atmosphere_0 import Atmosphere_0
+    from archnemesis.Telluric_0 import Telluric_0
 
     nx = 'number of elements in state vector'
     m = 'an undetermined number, but probably less than "nx"'
