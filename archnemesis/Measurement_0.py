@@ -3055,15 +3055,23 @@ class Measurement_0:
             ax3.set_title('Spectra log scale')
             ax3.set_yscale('log')
 
-            if np.mean(self.VCONV)>30.:
+            if self.ISPACE == 0:
                 ax3.set_xlabel(r'Wavenumber (cm$^{-1}$)')
-                ax3.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
-                ax2.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
+                if self.IFORM == 0:
+                    ax3.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
+                    ax2.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ (cm$^{-1}$)$^{-1}$)')
+                elif self.IFORM == 5:
+                    ax3.set_ylabel(r'Normalised radiance')
+                    ax2.set_ylabel(r'Normalised radiance')
             else:
                 ax3.set_xlabel(r'Wavelength ($\mu$m)')
-                ax3.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
-                ax2.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
-
+                if self.IFORM == 0:
+                    ax3.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
+                    ax2.set_ylabel(r'Radiance (W cm$^{-2}$ sr$^{-1}$ $\mu$m$^{-1}$)')
+                elif self.IFORM == 5:
+                    ax3.set_ylabel(r'Normalised radiance')
+                    ax2.set_ylabel(r'Normalised radiance')
+                    
             ax3.grid()
 
             plt.tight_layout()
