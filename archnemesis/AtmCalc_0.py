@@ -24,6 +24,7 @@ from archnemesis.enum import ZenithAngleOriginEnum, PathObserverPointingEnum, Pa
 
 import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
+_lgr.setLevel(logging.INFO)
 
 """
 Object to calculate the atmospheric paths
