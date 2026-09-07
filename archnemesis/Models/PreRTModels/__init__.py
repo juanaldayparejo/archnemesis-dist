@@ -21,6 +21,7 @@ from .model_49 import Model49
 from .model_50 import Model50
 from .model_51 import Model51
 from .model_62 import Model62
+from .model_103 import Model103
 from .model_110 import Model110
 from .model_111 import Model111
 from .model_202 import Model202
