@@ -577,14 +577,15 @@ class ForwardModel_0:
 
                 SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
                 
-                #Normalising measurement to a given wavelength if required
-                if self.Measurement.IFORM == SpectraUnitEnum.Normalised_radiance:
-                    SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
-
 
         #Applying any changes to the computed spectra required by the state vector
         dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX))
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+
+        #Normalising measurement to a given wavelength if required
+        for IGEOM in range(self.Measurement.NGEOM):
+            if self.Measurement.IFORM == SpectraUnitEnum.Normalised_radiance:
+                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
 
         return SPECONV
 
@@ -1601,6 +1602,8 @@ class ForwardModel_0:
             SPECONV,dSPECONV = self.MeasurementX.convg(self.SpectroscopyX.WAVE,SPECOUT,dSPECOUT,IGEOM='All')
         elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:
             SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECOUT,IGEOM='All')
+        elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME: #LBL-runtime calculations
+            SPECONV = self.MeasurementX.lblconv(self.SpectroscopyX.WAVE,SPECOUT,IGEOM='All')
 
         return SPECONV
 
@@ -1704,13 +1707,15 @@ class ForwardModel_0:
 
             SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
             
-            #Normalising measurement to a given wavelength if required
-            if self.Measurement.IFORM == SpectraUnitEnum.Normalised_radiance:
-                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
-
         #Applying any changes to the computed spectra required by the state vector
         dSPECONV = np.zeros((self.Measurement.NCONV.max(),self.Measurement.NGEOM,self.Variables.NX))
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
+
+        #Normalising measurement to a given wavelength if required
+        for IGEOM in range(self.Measurement.NGEOM):
+            if self.Measurement.IFORM == SpectraUnitEnum.Normalised_radiance:
+                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] /= np.interp(self.Measurement.VNORM,self.Measurement.VCONV[0:self.Measurement.NCONV[IGEOM],IGEOM],SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM])
+
 
         return SPECONV
 
@@ -2389,6 +2394,22 @@ class ForwardModel_0:
                 jcont = -int(varident[0])
                 ipar = self.AtmosphereX.NVMR + jcont
             return ipar
+
+        elif(
+            (varident[2]==103)   #Telluric atmosphere
+                ):
+
+            if varident[0]==0:     #Temperature is to be retrieved
+                ipar = self.TelluricX.Atmosphere.NVMR
+            elif varident[0]>0:    #Gas VMR is to be retrieved
+                jvmr = np.nonzero( (np.array(self.TelluricX.Atmosphere.ID)==varident[0]) & (np.array(self.TelluricX.Atmosphere.ISO)==varident[1]) )[0]
+                assert len(jvmr)==1, 'Cannot have more than one gas VMR retrieved at once'
+                ipar = int(jvmr[0])
+            elif varident[0]<0: # aerosol species density is to be retrieved
+                jcont = -int(varident[0])
+                ipar = self.TelluricX.Atmosphere.NVMR + jcont
+            return ipar
+
         else:
             return None
 
@@ -3823,8 +3844,9 @@ class ForwardModel_0:
                 amb_frac = np.ones((self.SpectroscopyX.NGAS,1), dtype=float)
                 for igas in range(self.SpectroscopyX.NGAS):
                     igas_all_isotopes = np.where( self.AtmosphereX.ID==self.SpectroscopyX.ID[igas] )[0]
-                    self_frac = np.sum(ave_vmr[igas_all_isotopes])
+                    self_frac = np.sum(ave_vmr[igas_all_isotopes]) / np.sum(ave_vmr[:])
                     amb_frac[igas,0] = 1.0 - self_frac
+
 
                 #Calculating the absorption cross sections
                 if return_grad:
