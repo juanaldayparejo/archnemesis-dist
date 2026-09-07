@@ -247,9 +247,12 @@ class Telluric_0:
         ##############################################################################################################
         
         datetime_str = f'{date} {time}'
+
+        
         
         # Define the format in which the date and time are provided
         datetime_format = '%d-%m-%Y %H:%M:%S'
+        datetime_str = normalize_datetime(datetime_str)
         
         # Convert the string to a datetime object
         dt = datetime.strptime(datetime_str, datetime_format)
@@ -668,3 +671,35 @@ def extract_grib_parameter(filename,parameter,latitude,longitude):
                u*v*param_lat2_lon2[:]
 
     return param_int
+
+
+
+############################################################################################
+
+def normalize_datetime(datetime_string):
+
+    from datetime import datetime
+
+    datetime_format = "%d-%m-%Y %H:%M:%S"
+    possible_formats = (
+        "%d-%m-%Y %H:%M:%S.%f",
+        "%d-%m-%Y %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+    )
+
+    for input_format in possible_formats:
+        try:
+            parsed_datetime = datetime.strptime(
+                datetime_string,
+                input_format,
+            )
+
+            return parsed_datetime.strftime(datetime_format)
+
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"Unrecognized date-time format: {datetime_string!r}"
+    )
