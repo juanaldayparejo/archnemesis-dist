@@ -265,18 +265,18 @@ class Surface_0:
                 
             elif self.NLOCATIONS in (0,1):
                 
-                assert np.issubdtype(type(self.TSURF), np.float64) == True, f"TSURF must be a float {self.TSURF=}"
+                assert np.issubdtype(type(self.TSURF), np.floating) == True, f"TSURF must be a float {self.TSURF=}"
                 
                 if self.NLOCATIONS == 0:
                     assert self.LATITUDE is None, "No locations, therefore LATITUDE must be `None`"
                     assert self.LONGITUDE is None, "No locations, therefore LONGITUDE must be `None`"
                 
                 elif self.NLOCATIONS==1:
-                    assert np.issubdtype(type(self.LATITUDE), np.float64) == True , \
+                    assert np.issubdtype(type(self.LATITUDE), np.floating) == True , \
                         f'LATITUDE must be float {self.LATITUDE=}'
                     assert abs(self.LATITUDE) < 90.0 , \
                         f'LATITUDE must be within -90 to 90 degrees {self.LATITUDE=}'
-                    assert np.issubdtype(type(self.LONGITUDE), np.float64) == True , \
+                    assert np.issubdtype(type(self.LONGITUDE), np.floating) == True , \
                         f'LONGITUDE must be float {self.LONGITUDE=}'
 
                 assert len(self.EMISSIVITY) == self.NEM , \
