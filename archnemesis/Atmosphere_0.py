@@ -30,6 +30,9 @@ from archnemesis import Data
 import numpy as np
 from scipy.special import legendre
 import matplotlib.pyplot as plt
+plt.rcParams["axes.prop_cycle"] = plt.cycler(
+    color=plt.get_cmap("tab20").colors
+)
 
 import archnemesis.Data.constants as const
 from archnemesis.Data.planet_data import planet_info
@@ -40,6 +43,8 @@ import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 #_lgr.setLevel(logging.DEBUG)
 _lgr.setLevel(logging.INFO)
+
+
 
 class Atmosphere_0:
     """
@@ -1776,9 +1781,8 @@ class Atmosphere_0:
         ax1.semilogx(p/101325.,h/1.0e3,c='black')
         ax2.plot(t,h/1.0e3,c='black')
         for i in range(self.NVMR):
-            label1 = gas_info[str(self.ID[i])]['name']
-            if self.ISO[i]!=0:
-                label1 = label1+' ('+str(self.ISO[i])+')'
+            label1 = Data.gas_data.id_to_name(self.ID[i],self.ISO[i])
+            label1 = Data.gas_data.molecule_to_latex("$"+label1+"$")
             ax3.semilogx(vmr[:,i],h/1.0e3, label=label1)
         ax1.set_xlabel('Pressure (atm)')
         ax1.set_ylabel('Altitude (km)')
