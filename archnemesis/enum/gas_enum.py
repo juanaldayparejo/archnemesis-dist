@@ -151,3 +151,5 @@ class GasEnum(IntEnum):
     ClNO2 = 144
     RuO4 = 145
     H2C3H2 = 146
+    C = 147
+    HCO_PLUS = 148
