@@ -120,8 +120,14 @@ class Retrieval:
 	"""
 	Holds all the data required to specify an ArchNemesis model, plus methods to operate on that data.
 	"""
-	_runname : str # runname of ArchNemesis model
+	_runname : str = ""         # runname of ArchNemesis model
 	
+	nemesisSO : bool = False    #forward model optimised for solar occultation observations
+	nemesisL : bool = False     #forward model optimised for multiple limb geometries
+	nemesisdisc : bool = False  #forward model optimised for disc-averaged observations
+	nemesisPT : bool = False    #forward model optimised for primary transit observations
+	nemesisC : bool = False     #forward model optimised for multiple geometries in multiple scattering mode
+
 	# internal attributes are keyword-only attributes and are prefixed with an underscore ('_')
 	
 	_ : dc.KW_ONLY # all following attributes are keyword only attributes
@@ -134,6 +140,8 @@ class Retrieval:
 	_acceptable_stored_vs_input_apriori_err : float = dc.field(default=1E-3, repr=False, compare=False) # acceptable error on stored vs input apriori state vector
 	_cached_forward_model_instance : None|ans.ForwardModel_0 = dc.field(default=None, repr=False, compare=False)
 	
+	
+
 	def __repr__(self)->str:
 		return f'Retrieval(working_directory={self.working_directory}, runname={self.runname}, filetype={self._filetype})'
 	
@@ -153,11 +161,10 @@ class Retrieval:
 		print(f'Logging level set to: {logging.getLevelName(_lgr.level)}')
 		return
 	
-	
+	###############################################################################################
 	## Factories ##
-	
-	
-	
+	###############################################################################################
+
 	@classmethod
 	def from_hdf5(
 			cls, 
@@ -639,16 +646,21 @@ class Retrieval:
 				_lgr.warning(f"Layer.LAYANG not set. Measurements are a combination of LIMB and NADIR. Setting to {self._data.Layer.LAYANG} but layer plot results will not reflect all measurements.")
 	
 	
-	## Interrogators ##
+	###################################################################################################
+	## Interrogators
+	###################################################################################################
 	
+
 	def has_modelled_spectra(self) -> bool:
 		return self.Measurement.SPECMOD is not None
 	
 	def is_solar_occultation_or_limb_measurement(self) -> bool:
 		return self.Measurement.TANHE is not None
 	
-	
+
+	###################################################################################################
 	## Properties ##
+	###################################################################################################
 	
 	@property
 	def runname(self) -> str:
@@ -844,7 +856,9 @@ class Retrieval:
 			
 		self.load(reload=True)
 	
+	###################################################################################################
 	## Private Methods ##
+	###################################################################################################
 	
 	def _get_forward_model_instance(self, IGEOM : int = None, IAV : int = None, new : bool = False):
 		if new or self._cached_forward_model_instance is None:
@@ -1062,14 +1076,27 @@ class Retrieval:
 		
 		# Only the self.Atmosphere component has profiles, so update that one
 		self.Atmosphere = forward_model_instance.AtmosphereX
+
+		# Update telluric if it exists
+		if self.Telluric is not None:
+			self.Telluric.Atmosphere = forward_model_instance.TelluricX.Atmosphere
+
 		return self
 		
 	def calculate_profiles(self):
+		"""
+		Calculate atmospheric profiles based on the parameters in the state vector
+		"""
 		forward_model_instance = self._get_forward_model_instance()
 		forward_model_instance.subprofretg() # perform profile calculations
 		
 		# Only the self.Atmosphere component has profiles, so update that one
 		self.Atmosphere = forward_model_instance.AtmosphereX
+
+		# Update telluric if it exists
+		if self.Telluric is not None:
+			self.Telluric.Atmosphere = forward_model_instance.TelluricX.Atmosphere
+
 		return self
 	
 	def calculate_layering(self):
@@ -1094,6 +1121,9 @@ class Retrieval:
 			self._cached_forward_model_instance.LayerX = copy.deepcopy(self.Layer)
 	
 	def calculate_layer_opacity(self):
+		"""
+		Calculate the opacities in each atmospheric layer 
+		"""
 		if self.Layer.PRESS is None:
 			self.calculate_layering()
 		
@@ -1112,23 +1142,53 @@ class Retrieval:
 		"""
 		return np.count_nonzero(self.Variables.FIX==0) + 1
 	
-	def run_forward_model(self, apriori=False):
+
+	##################################################################################################
+
+	def run_forward_model(self, 
+						  apriori : bool = False,
+						):
+		"""
+		Run a forward model simulation
+
+		Optional Parameters
+		-------------------
+
+		apriori : bool
+			If True, it will set the state vector parameters to the a priori parameters
+
+		Returns
+		-----------
+
+		self.Measurement.SPECMOD : ndarray (NCONV,NGEOM)
+			Modelled spectrum
+		"""
 		if self.has_modelled_spectra():
 			_lgr.warning(f"Retrieval(runname={self.runname}) already has a modelled spectra, running the forward model will overwrite the current value")
 	
 		forward_model_instance = self._get_forward_model_instance()
 		
 		if apriori:
-			print('Using APRIORI values for forward model')
+			_lgr.info('Using APRIORI values for forward model')
 			forward_model_instance.Variables = copy.deepcopy(forward_model_instance.Variables) # copy this or we wil alter self.Variables via reference
 			forward_model_instance.Variables.XN = self.Variables.XA
 			forward_model_instance.Variables.SX = self.Variables.SA
 		
-		
+
+		#Selecting the forward model type
+		nemesis_method = forward_model_instance.select_nemesis_fm(
+			nemesisSO=self.nemesisSO, 
+			nemesisL=self.nemesisL, 
+			nemesisdisc=self.nemesisdisc, 
+			nemesisC=self.nemesisC, 
+			nemesisPT=self.nemesisPT,
+			analytical_gradient=False
+		)
+
 		# Run the forward model
 		with self.working_directory_context():
 			with redirect_file_access.using(*self._path_redirects):
-				modelled_spectra = forward_model_instance.nemesisfm()
+				modelled_spectra = nemesis_method()
 		
 		# Only the self.Atmosphere component has profiles, so update that one
 		self.Atmosphere = forward_model_instance.AtmosphereX
@@ -1141,8 +1201,155 @@ class Retrieval:
 		self._set_optimal_estimation_setup_from_measurement()
 		self._set_optimal_estimation_setup_from_variables(forward_model_instance.Variables)
 		
-		return self
+		return modelled_spectra
 	
+	##################################################################################################
+
+	def run_forward_model_gas_contributions(self, 
+												apriori : bool = False,
+											):
+		"""
+		Run a calculation of the forward model including the contribution of each gas
+		in the Spectroscopy class independently
+
+		Optional Parameters
+		-------------------
+
+		apriori : bool
+			If True, it will set the state vector parameters to the a priori parameters
+
+		Returns
+		-----------
+
+		SPECONV : ndarray (NCONV,NGEOM,NGAS)
+			Modelled spectrum for each gas
+
+		"""
+		if self.has_modelled_spectra():
+			_lgr.warning(f"Retrieval(runname={self.runname}) already has a modelled spectra, running the forward model will overwrite the current value")
+	
+		forward_model_instance = self._get_forward_model_instance()
+		
+		if apriori:
+			_lgr.info('Using APRIORI values for forward model')
+			forward_model_instance.Variables = copy.deepcopy(forward_model_instance.Variables) # copy this or we wil alter self.Variables via reference
+			forward_model_instance.Variables.XN = self.Variables.XA
+			forward_model_instance.Variables.SX = self.Variables.SA
+		
+
+		#Selecting the forward model type
+		nemesis_method = forward_model_instance.select_nemesis_fm(
+			nemesisSO=self.nemesisSO, 
+			nemesisL=self.nemesisL, 
+			nemesisdisc=self.nemesisdisc, 
+			nemesisC=self.nemesisC, 
+			nemesisPT=self.nemesisPT,
+			analytical_gradient=False
+		)
+
+		# Run the forward model with all gases
+		with self.working_directory_context():
+			with redirect_file_access.using(*self._path_redirects):
+				SPECONV = nemesis_method()
+
+		#Saving the reference spectroscopy including all gases
+		Spectroscopy_ref = copy.deepcopy(forward_model_instance.Spectroscopy)
+
+		if Spectroscopy_ref.ILBL == 1:
+			raise ValueError("error :: currently this option has only been implemented when working with look-up tables (ILBL=0 or 2)")
+
+		SPECONV_GAS = np.zeros((forward_model_instance.Measurement.NCONV.max(),forward_model_instance.Measurement.NGEOM,forward_model_instance.Spectroscopy.NGAS))
+		for igas in range(Spectroscopy_ref.NGAS):
+
+			_lgr.info(f".................................................................")
+			_lgr.info(f"Running forward model for gas {igas+1} of {Spectroscopy_ref.NGAS}")
+			forward_model_instance.Spectroscopy.NGAS = 1
+			forward_model_instance.Spectroscopy.LOCATION = [Spectroscopy_ref.LOCATION[igas]]
+			forward_model_instance.Spectroscopy.ID = [Spectroscopy_ref.ID[igas]]
+			forward_model_instance.Spectroscopy.ISO = [Spectroscopy_ref.ISO[igas]]
+
+			vmin, vmax = forward_model_instance.MeasurementX.calc_wave_range()
+			forward_model_instance.Spectroscopy.read_tables(vmin,vmax)
+
+			# Run the forward model
+			with self.working_directory_context():
+				with redirect_file_access.using(*self._path_redirects):
+					SPECONV_GAS[:,:,igas] = nemesis_method()
+		
+
+		# Only the self.Atmosphere component has profiles, so update that one
+		self.Atmosphere = forward_model_instance.AtmosphereX
+		
+		# Update the Retrieval with computed values
+		self.Layer = forward_model_instance.LayerX
+		self.Spectroscopy = Spectroscopy_ref
+		self.Measurement.edit_SPECMOD(SPECONV)
+		
+		self._set_optimal_estimation_setup_from_measurement()
+		self._set_optimal_estimation_setup_from_variables(forward_model_instance.Variables)
+		
+		return SPECONV, SPECONV_GAS
+
+
+	##################################################################################################
+
+	def run_jacobian_matrix(self, 
+						  apriori : bool = False,
+						):
+		"""
+		Run a forward model simulation with calculation of the Jacobian matrix
+
+		Optional Parameters
+		-------------------
+
+		apriori : bool
+			If True, it will set the state vector parameters to the a priori parameters
+
+		Returns
+		-----------
+
+		YN : ndarray (NY)
+			Modelled measurement vector (i.e., concatenated spectra)
+		KK : ndarray (NY,NX)
+			Modelled Jacobian matrix (dR/dx)
+
+		"""
+		if self.has_modelled_spectra():
+			_lgr.warning(f"Retrieval(runname={self.runname}) already has a modelled spectra, running the forward model will overwrite the current value")
+	
+		forward_model_instance = self._get_forward_model_instance()
+		
+		if apriori:
+			_lgr.info('Using APRIORI values for forward model')
+			forward_model_instance.Variables = copy.deepcopy(forward_model_instance.Variables) # copy this or we wil alter self.Variables via reference
+			forward_model_instance.Variables.XN = self.Variables.XA
+			forward_model_instance.Variables.SX = self.Variables.SA
+		
+		# Run the forward model
+		with self.working_directory_context():
+			with redirect_file_access.using(*self._path_redirects):
+				YN, KK = forward_model_instance.jacobian_nemesis(nemesisSO=self.nemesisSO,
+																 nemesisC=self.nemesisC,
+																 nemesisL=self.nemesisL,
+																 nemesisPT=self.nemesisPT,
+																 nemesisdisc=self.nemesisdisc)
+
+		# Only the self.Atmosphere component has profiles, so update that one
+		self.Atmosphere = forward_model_instance.AtmosphereX
+		
+		# Update the Retrieval with computed values
+		self.Layer = forward_model_instance.LayerX
+		self.Spectroscopy = forward_model_instance.SpectroscopyX
+		
+		self._set_optimal_estimation_setup_from_measurement()
+		self._set_optimal_estimation_setup_from_variables(forward_model_instance.Variables)
+		
+		return YN,KK
+
+
+
+	################################################################################################
+
 	def run_optimal_estimation(
 			self, 
 			n_iter : None | int = None, 
@@ -1150,13 +1357,36 @@ class Retrieval:
 			write_itr : bool = False,
 			restart = True,
 			do_write : bool = True,
-			do_plot : bool = True,
-	) -> Self:
-		
+			do_plot : bool = False,
+		) -> Self:
+		"""
+		Run an optimal estimation retrieval
+
+		Optional Parameters
+		-------------------
+
+		n_iter : int (default = None)
+			Number of retrieval iterations
+		n_cores : int (default = None)
+			Number of parallel forward models for numerical calculation of Jacobian matrix
+		write_itr : bool (default = False)
+			If True, it will write a .itr file with the retrieval metrics in every iteration
+		do_plot : bool (default = False)
+			If True, makes some diagnostic plots at the end of the retrieval
+		do_write : bool (default = True)
+			If True, writes the retrieval results to the output files
+
+		Returns
+		-----------
+
+		self.Measurement.SPECMOD : ndarray (NCONV,NGEOM)
+			Modelled spectrum
+		"""
 		if restart:
 			# Reset the current state vector to the apriori state vector
 			self.Variables.XN[...] = self.Variables.XA
 		
+		#Update parameters if set in keywords
 		n_iter = self.RetrievalEngine.NITER if n_iter is None else n_iter
 		n_cores = self.guess_optimal_cores() if n_cores is None else n_cores
 		
@@ -1171,7 +1401,7 @@ class Retrieval:
 					self.write()
 				return self
 			
-		
+		#Running retrieval
 		with self.working_directory_context():
 			phi_history = None
 			chisq_history = None
@@ -1192,7 +1422,10 @@ class Retrieval:
 				NITER = n_iter,
 				PHILIMIT = self.RetrievalEngine.PHILIMIT,
 				NCores = n_cores,
-				nemesisSO = False,
+				nemesisSO = self.nemesisSO,
+				nemesisC = self.nemesisC,
+				nemesisdisc = self.nemesisdisc,
+				nemesisPT = self.nemesisPT,
 				write_itr = write_itr,
 				return_forward_model = True,
 				return_phi_and_chisq_history=True,
@@ -1216,18 +1449,24 @@ class Retrieval:
 		# Update the retrieval with the result
 		self.RetrievalEngine = copy.deepcopy(OptimalEstimationResult)
 		
+		# Extracting the best-fit spectra
 		modelled_spectra = np.zeros_like(self.Measurement.MEAS)
 		ix = 0
 		for i in range(self.Measurement.NGEOM):
 			modelled_spectra[0:self.Measurement.NCONV[i],i] = OptimalEstimationResult.YN[ix:ix+self.Measurement.NCONV[i]]
 			ix += self.Measurement.NCONV[i]
 		
+
+		# Updating the best-fit in the Measurement class
 		self.Measurement.edit_SPECMOD(modelled_spectra)
 		
+		# Updating the Layering
 		self.Layer = ForwardModel.LayerX
 		
+		#Updating the reference classes based on the retrieved parameters
 		self.calculate_profiles()
 		
+		#Plot and write retrieval results if required
 		if do_plot:
 			self.plot()
 		if do_write:

@@ -28,6 +28,7 @@ from .NestedSampling_0 import *
 from .Telluric_0 import *
 from .LineData_0 import *
 from .Retrievals import *
+from .Retrieval import *
 from .Emissions_0 import *
 
 from .Models import Models
