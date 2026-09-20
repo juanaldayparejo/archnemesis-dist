@@ -21,7 +21,8 @@
 #from archnemesis import *
 #from archnemesis.Models import Models
 
-from typing import Callable
+from typing import Any, Callable
+from functools import partial
 import os
 from copy import deepcopy
 
@@ -294,7 +295,7 @@ class ForwardModel_0:
         if self.Spectroscopy.NGAS > 0:
             
             if not self.get_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG():
-                _lgr.info('Checking atmospheric gasses have spectroscopy data.')
+                _lgr.debug('Checking atmospheric gasses have spectroscopy data.')
                 should_warn = False
                 
                 # Test that the forward model has Spectroscopy data for each
@@ -344,7 +345,7 @@ class ForwardModel_0:
                          '',
                          '# END WARNING #####################################################################',
                     ])
-                    _lgr.warning('\n'.join(warning_lines))
+                    _lgr.debug('\n'.join(warning_lines))
                     self.set_DONE_GAS_SPECTROSCOPY_DATA_WARNING_ONCE_FLAG()
             
             
@@ -408,13 +409,13 @@ class ForwardModel_0:
             nemesisPT : bool = False,
             nemesisC : bool = False,
             analytical_gradient : bool = False,
+            **kwargs: Any,
         ) -> Callable[[],np.ndarray] | Callable[[],tuple[np.ndarray,np.ndarray]]:
         """
         Selects the correct method to calculate the nemesis forward model based on passed flags.
         """
         method = None
-        
-        
+
         if nemesisSO:
             method = self.nemesisSOfmg if analytical_gradient else self.nemesisSOfm
         elif nemesisL:
@@ -422,7 +423,8 @@ class ForwardModel_0:
         elif nemesisdisc:
             method = self.nemesisdiscfmg if analytical_gradient else self.nemesisdiscfm
         elif nemesisPT:
-            method = (lambda: self.nemesisPTfm(gradients=True)) if analytical_gradient else (lambda: self.nemesisPTfm(gradients=False))
+            method = self.nemesisPTfm
+            kwargs["gradients"] = analytical_gradient
         elif nemesisC:
             method = self.nemesisfmg if analytical_gradient else self.nemesisCfm
         else:
@@ -431,10 +433,13 @@ class ForwardModel_0:
         if method is None:
             raise RuntimeError('Could not select method to use when calculating nemesis forward model.')
         
-        return method
+        return partial(method, **kwargs)
         
 
-    def nemesisfm(self):
+    def nemesisfm(self,
+                    include_tau_gas=True,
+                    include_tau_dust=True,
+                    include_tau_cia=True):
 
         """
             FUNCTION NAME : nemesisfm()
@@ -443,7 +448,16 @@ class ForwardModel_0:
 
             INPUTS : none
 
-            OPTIONAL INPUTS: none
+            OPTIONAL INPUTS:
+
+                include_tau_gas : bool
+                    If False, it will not add any opacity contributions from gases
+
+                include_tau_cia : bool
+                    If False, it will not add any opacity contributions from CIA
+
+                include_tau_dust : bool
+                    If False, it will not add any opacity contributions from aerosols
 
             OUTPUTS :
 
@@ -516,7 +530,9 @@ class ForwardModel_0:
                 self.calc_path()
                 
                 #Calling CIRSrad to perform the radiative transfer calculations
-                SPEC1X = self.CIRSrad()
+                SPEC1X = self.CIRSrad(include_tau_gas=include_tau_gas,
+                                      include_tau_dust=include_tau_dust,
+                                      include_tau_cia=include_tau_cia)
 
                 if self.PathX.NPATH>1:  #If the calculation type requires several paths for a given geometry (e.g. netflux calculation)
                     SPEC1 = np.zeros((self.PathX.NPATH*self.SpectroscopyX.NWAVE,1))  #We linearise all paths into 1 measurement
@@ -534,8 +550,8 @@ class ForwardModel_0:
                     SPEC[:] = SPEC1[:,0]
 
             
-            #Applying the Telluric transmission if it exists
-            if self.TelluricX is not None:
+            #Applying the Telluric transmission if its Spectroscopy exists
+            if self.TelluricX.Spectroscopy is not None:
                 
                 #Looking for the calculation wavelengths
                 wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
@@ -727,8 +743,8 @@ class ForwardModel_0:
                     SPEC[:] = SPEC1[:,0]
                     dSPEC[:,:] = dSPEC1[:,0,:]
 
-            #Applying the Telluric transmission if it exists
-            if self.TelluricX is not None:
+            #Applying the Telluric transmission if its Spectroscopy exists
+            if self.TelluricX.Spectroscopy is not None:
                                          
                 #Looking for the calculation wavelengths
                 wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
@@ -1675,8 +1691,8 @@ class ForwardModel_0:
 
             SPEC = np.sum(results_array, axis=0)
 
-            #Applying the Telluric transmission if it exists
-            if self.TelluricX is not None:
+            #Applying the Telluric transmission if its Spectroscopy exists
+            if self.TelluricX.Spectroscopy is not None:
                 
                 #Looking for the calculation wavelengths
                 wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
@@ -1798,8 +1814,8 @@ class ForwardModel_0:
             SPEC = np.sum(results_array, axis=0)
             dSPEC = np.sum(results_array_grad, axis=0)
             
-            #Applying the Telluric transmission if it exists
-            if self.TelluricX is not None:
+            #Applying the Telluric transmission if if its Spectroscopy exists
+            if self.TelluricX.Spectroscopy is not None:
                 
                 #Looking for the calculation wavelengths
                 wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
@@ -2163,15 +2179,17 @@ class ForwardModel_0:
         self.NCores = int(n_jobs_internal)
         # ------------------------------
         
-        try:
-            # Turn off warning and below logging
-            archnemesis.cfg.logs.push_packagewide_level(logging.ERROR)
-            
-            # model the spectrum
-            SPECMOD = nemesis_method()
-        finally:
-            archnemesis.cfg.logs.pop_packagewide_level()
+        #try:
+        #    # Turn off warning and below logging
+        #    archnemesis.cfg.logs.push_packagewide_level(logging.ERROR)
+        #    
+        #    # model the spectrum
+        #    SPECMOD = nemesis_method()
+        #finally:
+        #    archnemesis.cfg.logs.pop_packagewide_level()
         
+        SPECMOD = nemesis_method()
+
         if SPECMOD is not None:
             ik = 0
             for igeom in range(self.Measurement.NGEOM):
@@ -2381,8 +2399,9 @@ class ForwardModel_0:
         atmospheric profile is to be retrieved. Returns 'None' if the
         parameterised model is not an atmospheric one.
         """
-        if ((varident[2]<100) 
-                    or ((varident[2]>=1000) and (varident[2]<=1100))
+        if (
+            (varident[2] < 100 or 1000 <= varident[2] <= 1100)
+            and (varident[2] != 103)
                 ):
             if varident[0]==0:     #Temperature is to be retrieved
                 ipar = self.AtmosphereX.NVMR
@@ -3924,7 +3943,10 @@ class ForwardModel_0:
         
         return TAUCIA, dTAUCIA
 
-    def calculate_layer_opacity(self, return_grad=False):
+    def calculate_layer_opacity(self, return_grad=False,
+                                      include_tau_gas=True,
+                                      include_tau_dust=True,
+                                      include_tau_cia=True):
         #There will be different kinds of opacities:
         #   Line opacity due to gaseous absorption (K-tables or LBL-tables)
         #   Continuum opacity due to aerosols coming from the extinction coefficient
@@ -3943,9 +3965,12 @@ class ForwardModel_0:
 
         #Calculating the gaseous line opacity in each layer
         ########################################################################################################
-        TAUGAS, dTAUGAS = self.calculate_gaseous_line_opacity(return_grad)
+        if include_tau_gas is True:
+            TAUGAS, dTAUGAS = self.calculate_gaseous_line_opacity(return_grad)
+        else:
+            TAUGAS = np.zeros((self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.LayerX.NLAY)) #(NWAVE,NG,NLAY)
+            dTAUGAS = np.zeros((self.SpectroscopyX.NWAVE,self.SpectroscopyX.NG,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST,self.LayerX.NLAY)) #(NWAVE,NG,NLAY,NGAS+2+NDUST)
         self.LayerX.TAUGAS = TAUGAS
-        
         
         #Calculating the continuum absorption by gaseous species
         #################################################################################################################
@@ -3957,7 +3982,12 @@ class ForwardModel_0:
         #Calculating the vertical opacity by CIA
         #################################################################################################################
 
-        TAUCIA, dTAUCIA = self.calculate_vertical_cia_opacity(return_grad)
+        if include_tau_cia is True:
+            TAUCIA, dTAUCIA = self.calculate_vertical_cia_opacity(return_grad)
+        else:
+            TAUCIA = np.zeros((self.SpectroscopyX.NWAVE,self.LayerX.NLAY)) #(NWAVE,NG,NLAY)
+            dTAUCIA = np.zeros((self.SpectroscopyX.NWAVE,self.LayerX.NLAY,self.AtmosphereX.NVMR+2+self.ScatterX.NDUST)) #(NWAVE,NLAY,NGAS+2+NDUST)
+
         
         if return_grad and dTAUCIA is not None:
             dTAUCON[:,0:self.AtmosphereX.NVMR,:] = dTAUCON[:,0:self.AtmosphereX.NVMR,:] + np.transpose(np.transpose(dTAUCIA[:,:,0:self.AtmosphereX.NVMR],axes=(2,0,1)) / (self.LayerX.TOTAM.T),axes=(1,0,2)) #dTAUCIA/dAMOUNT (m2)
@@ -3982,7 +4012,13 @@ class ForwardModel_0:
         #Calculating the vertical opacity by aerosols from the extinction coefficient and single scattering albedo
         #################################################################################################################
 
-        TAUDUST1,TAUCLSCAT,dTAUDUST1,dTAUCLSCAT = self.calc_tau_dust() #(NWAVE,NLAYER,NDUST)
+        if include_tau_dust is True:
+            TAUDUST1,TAUCLSCAT,dTAUDUST1,dTAUCLSCAT = self.calc_tau_dust() #(NWAVE,NLAYER,NDUST)
+        else:
+            TAUDUST1 = np.zeros((NWAVEC, Layer.NLAY, Scatter.NDUST))
+            TAUCLSCAT = np.zeros((NWAVEC, Layer.NLAY, Scatter.NDUST))
+            dTAUDUST1 = np.zeros((NWAVEC, Layer.NLAY, Scatter.NDUST))
+            dTAUCLSCAT = np.zeros((NWAVEC, Layer.NLAY, Scatter.NDUST))
 
         #Calculating the total optical depth for the aerosols
         TAUDUST1 = np.clip(np.nan_to_num(TAUDUST1),0,1e20)
@@ -4395,7 +4431,10 @@ class ForwardModel_0:
 
     ################################################################################################
 
-    def CIRSrad(self, return_grad=False):
+    def CIRSrad(self, return_grad=False, 
+                      include_tau_gas=True,
+                      include_tau_dust=True,
+                      include_tau_cia=True):
 
         """
             FUNCTION NAME : CIRSrad()
@@ -4408,6 +4447,15 @@ class ForwardModel_0:
             
                 return_grad : bool
                     If True, will calculate and return gradients otherwise will not.
+
+                include_tau_gas : bool
+                    If False, it will not add any opacity contributions by gases
+                
+                include_tau_dust : bool
+                    If False, it will not add any opacity contributions by aerosols
+
+                include_tau_cia : bool
+                    If False, it will not add any opacity contributions from CIA
 
             OUTPUTS :
 
@@ -4438,7 +4486,10 @@ class ForwardModel_0:
             TAUTOT_LAYINC, 
             TAUTOT_PATH, 
             dTAUTOT_LAYINC,
-        ) = self.calculate_layer_opacity(return_grad)
+        ) = self.calculate_layer_opacity(return_grad,
+                                         include_tau_gas=include_tau_gas,
+                                         include_tau_cia=include_tau_cia,
+                                         include_tau_dust=include_tau_dust)
 
         #TAUTOT_LAYINC is the line-of-sight opacity in each layer and path (NWAVE,NG,NLAYIN,NPATH)
         #TAUTOT_PATH is the line-of-sight opacity integrated across all layers (NWAVE,NG,NPATH)

@@ -1147,6 +1147,9 @@ class Retrieval:
 
 	def run_forward_model(self, 
 						  apriori : bool = False,
+						  include_tau_gas : bool = True,
+						  include_tau_dust : bool = True,
+						  include_tau_cia : bool = True
 						):
 		"""
 		Run a forward model simulation
@@ -1156,6 +1159,15 @@ class Retrieval:
 
 		apriori : bool
 			If True, it will set the state vector parameters to the a priori parameters
+
+		include_tau_gas : bool
+			If False, it will not add any opacity contributions from gases
+
+		include_tau_dust : bool
+			If False, it will not add any opacity contributions from aerosols
+
+		include_tau_cia : bool
+			If False, it will not add any opacity contributions from CIA absorption
 
 		Returns
 		-----------
@@ -1182,7 +1194,10 @@ class Retrieval:
 			nemesisdisc=self.nemesisdisc, 
 			nemesisC=self.nemesisC, 
 			nemesisPT=self.nemesisPT,
-			analytical_gradient=False
+			analytical_gradient=False,
+			include_tau_gas=include_tau_gas,
+			include_tau_dust=include_tau_dust,
+			include_tau_cia=include_tau_cia,
 		)
 
 		# Run the forward model
@@ -1207,6 +1222,7 @@ class Retrieval:
 
 	def run_forward_model_gas_contributions(self, 
 												apriori : bool = False,
+												include_telluric = True,
 											):
 		"""
 		Run a calculation of the forward model including the contribution of each gas
@@ -1217,6 +1233,9 @@ class Retrieval:
 
 		apriori : bool
 			If True, it will set the state vector parameters to the a priori parameters
+
+		include_telluric : bool
+			If True, it will also include the telluric absorption
 
 		Returns
 		-----------
@@ -1236,6 +1255,11 @@ class Retrieval:
 			forward_model_instance.Variables.XN = self.Variables.XA
 			forward_model_instance.Variables.SX = self.Variables.SA
 		
+		if include_telluric is not True:
+			forward_model_instance.Telluric.Spectroscopy = None
+
+		_lgr.info(f".................................................................")
+		_lgr.info(f"Running forward model with all gas contributions")
 
 		#Selecting the forward model type
 		nemesis_method = forward_model_instance.select_nemesis_fm(
@@ -1276,6 +1300,25 @@ class Retrieval:
 				with redirect_file_access.using(*self._path_redirects):
 					SPECONV_GAS[:,:,igas] = nemesis_method()
 		
+		_lgr.info(f".................................................................")
+		_lgr.info(f"Running forward model with no gas contributions")
+
+		#Selecting the forward model type
+		nemesis_method = forward_model_instance.select_nemesis_fm(
+			nemesisSO=self.nemesisSO, 
+			nemesisL=self.nemesisL, 
+			nemesisdisc=self.nemesisdisc, 
+			nemesisC=self.nemesisC, 
+			nemesisPT=self.nemesisPT,
+			analytical_gradient=False,
+			include_tau_gas=False,
+			include_tau_cia=False,
+		)
+
+		# Run the forward model with no gas contributions
+		with self.working_directory_context():
+			with redirect_file_access.using(*self._path_redirects):
+				SPECONV_noGAS = nemesis_method()
 
 		# Only the self.Atmosphere component has profiles, so update that one
 		self.Atmosphere = forward_model_instance.AtmosphereX
@@ -1283,12 +1326,11 @@ class Retrieval:
 		# Update the Retrieval with computed values
 		self.Layer = forward_model_instance.LayerX
 		self.Spectroscopy = Spectroscopy_ref
-		self.Measurement.edit_SPECMOD(SPECONV)
 		
 		self._set_optimal_estimation_setup_from_measurement()
 		self._set_optimal_estimation_setup_from_variables(forward_model_instance.Variables)
 		
-		return SPECONV, SPECONV_GAS
+		return SPECONV, SPECONV_GAS, SPECONV_noGAS
 
 
 	##################################################################################################
