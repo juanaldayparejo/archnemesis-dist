@@ -551,21 +551,22 @@ class ForwardModel_0:
 
             
             #Applying the Telluric transmission if its Spectroscopy exists
-            if self.TelluricX.Spectroscopy is not None:
+            if self.TelluricX is not None:
+                if self.TelluricX.Spectroscopy is not None:
                 
-                #Looking for the calculation wavelengths
-                wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
-                self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
+                    #Looking for the calculation wavelengths
+                    wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
+                    self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
+                    
+                    #Calculating the telluric transmission
+                    WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
                 
-                #Calculating the telluric transmission
-                WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
-            
-                #Interpolating the telluric transmission to the wavelengths of the planetary spectrum
-                wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
-                TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
-                
-                #Applying the telluric transmission to the planetary spectrum
-                SPEC *= TRANSMISSION_TELLURICx
+                    #Interpolating the telluric transmission to the wavelengths of the planetary spectrum
+                    wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
+                    TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
+                    
+                    #Applying the telluric transmission to the planetary spectrum
+                    SPEC *= TRANSMISSION_TELLURICx
                 
             
             #Convolving the spectra with the Instrument line shape or integrating over filter function
@@ -744,22 +745,23 @@ class ForwardModel_0:
                     dSPEC[:,:] = dSPEC1[:,0,:]
 
             #Applying the Telluric transmission if its Spectroscopy exists
-            if self.TelluricX.Spectroscopy is not None:
+            if self.TelluricX is not None:
+                if self.TelluricX.Spectroscopy is not None:
                                          
-                #Looking for the calculation wavelengths
-                wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
-                self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
+                    #Looking for the calculation wavelengths
+                    wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
+                    self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
+                    
+                    #Calculating the telluric transmission
+                    WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
                 
-                #Calculating the telluric transmission
-                WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
-            
-                #Interpolating the telluric transmission to the wavelengths of the planetary spectrum 
-                wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
-                TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
-                
-                #Applying the telluric transmission to the planetary spectrum
-                SPEC *= TRANSMISSION_TELLURICx
-                dSPEC[:,:] = (dSPEC[:,:].T * TRANSMISSION_TELLURICx).T 
+                    #Interpolating the telluric transmission to the wavelengths of the planetary spectrum 
+                    wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
+                    TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
+                    
+                    #Applying the telluric transmission to the planetary spectrum
+                    SPEC *= TRANSMISSION_TELLURICx
+                    dSPEC[:,:] = (dSPEC[:,:].T * TRANSMISSION_TELLURICx).T 
 
  
             #Convolving the spectra with the Instrument line shape or integrating over filter function
@@ -1692,21 +1694,22 @@ class ForwardModel_0:
             SPEC = np.sum(results_array, axis=0)
 
             #Applying the Telluric transmission if its Spectroscopy exists
-            if self.TelluricX.Spectroscopy is not None:
+            if self.TelluricX is not None:
+                if self.TelluricX.Spectroscopy is not None:
+                    
+                    #Looking for the calculation wavelengths
+                    wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
+                    self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
+                    
+                    #Calculating the telluric transmission
+                    WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
                 
-                #Looking for the calculation wavelengths
-                wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
-                self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
-                
-                #Calculating the telluric transmission
-                WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
-            
-                #Interpolating the telluric transmission to the wavelengths of the planetary spectrum
-                wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
-                TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
-                
-                #Applying the telluric transmission to the planetary spectrum
-                SPEC *= TRANSMISSION_TELLURICx
+                    #Interpolating the telluric transmission to the wavelengths of the planetary spectrum
+                    wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
+                    TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
+                    
+                    #Applying the telluric transmission to the planetary spectrum
+                    SPEC *= TRANSMISSION_TELLURICx
                 
             
             #Convolving the spectra with the Instrument line shape
@@ -1815,22 +1818,23 @@ class ForwardModel_0:
             dSPEC = np.sum(results_array_grad, axis=0)
             
             #Applying the Telluric transmission if if its Spectroscopy exists
-            if self.TelluricX.Spectroscopy is not None:
+            if self.TelluricX is not None:
+                if self.TelluricX.Spectroscopy is not None:
+                    
+                    #Looking for the calculation wavelengths
+                    wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
+                    self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
+                    
+                    #Calculating the telluric transmission
+                    WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
                 
-                #Looking for the calculation wavelengths
-                wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
-                self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
-                
-                #Calculating the telluric transmission
-                WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
-            
-                #Interpolating the telluric transmission to the wavelengths of the planetary spectrum
-                wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
-                TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
-                
-                #Applying the telluric transmission to the planetary spectrum
-                SPEC *= TRANSMISSION_TELLURICx
-                dSPEC[:,:] = (dSPEC[:,:].T * TRANSMISSION_TELLURICx).T
+                    #Interpolating the telluric transmission to the wavelengths of the planetary spectrum
+                    wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
+                    TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
+                    
+                    #Applying the telluric transmission to the planetary spectrum
+                    SPEC *= TRANSMISSION_TELLURICx
+                    dSPEC[:,:] = (dSPEC[:,:].T * TRANSMISSION_TELLURICx).T
 
             #Convolving the spectra with the Instrument line shape
             if self.Spectroscopy.ILBL == SpectralCalculationModeEnum.K_TABLES: #k-tables
