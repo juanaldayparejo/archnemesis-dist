@@ -4015,10 +4015,10 @@ class ForwardModel_0:
         if include_tau_dust is True:
             TAUDUST1,TAUCLSCAT,dTAUDUST1,dTAUCLSCAT = self.calc_tau_dust() #(NWAVE,NLAYER,NDUST)
         else:
-            TAUDUST1 = np.zeros((NWAVEC, Layer.NLAY, Scatter.NDUST))
-            TAUCLSCAT = np.zeros((NWAVEC, Layer.NLAY, Scatter.NDUST))
-            dTAUDUST1 = np.zeros((NWAVEC, Layer.NLAY, Scatter.NDUST))
-            dTAUCLSCAT = np.zeros((NWAVEC, Layer.NLAY, Scatter.NDUST))
+            TAUDUST1 = np.zeros((self.SpectroscopyX.WAVE, self.LayerX.NLAY, self.ScatterX.NDUST))
+            TAUCLSCAT = np.zeros((self.SpectroscopyX.WAVE, self.LayerX.NLAY, self.ScatterX.NDUST))
+            dTAUDUST1 = np.zeros((self.SpectroscopyX.WAVE, self.LayerX.NLAY, self.ScatterX.NDUST))
+            dTAUCLSCAT = np.zeros((self.SpectroscopyX.WAVE, self.LayerX.NLAY, self.ScatterX.NDUST))
 
         #Calculating the total optical depth for the aerosols
         TAUDUST1 = np.clip(np.nan_to_num(TAUDUST1),0,1e20)
