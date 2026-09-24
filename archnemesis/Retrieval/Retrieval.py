@@ -434,6 +434,8 @@ class Retrieval:
 		if self._data is None:
 			raise RuntimeError('Could not open RetrievalData from HDF5 file')
 		
+		"""
+		#Checking if retrieved parameters are available
 		retrieved_values_valid = True
 		retrieved_params = RetrievedParams(*ans.read_retparam_hdf5(self.runname))
 		
@@ -508,6 +510,7 @@ class Retrieval:
 				
 				self._data.Variables.XN[...] = np.where(self._data.Variables.LX==1, sv_log, retrieved_state_vector_values)
 				np.fill_diagonal(self._data.Variables.SX, np.where(self._data.Variables.LX==1, se_frac, retrieved_error_values)**2)
+		"""
 		return
 	
 	
@@ -551,8 +554,13 @@ class Retrieval:
 		_lgr.debug('Determine validity of loaded self.RetrievalEngine, check lengths of arrays and values of apriori state vector')
 		
 		# Check state vector is consistent
-		retrieved_values_valid = self.RetrievalEngine.NX == self.Variables.NX
-		
+		#retrieved_values_valid = self.RetrievalEngine.NX == self.Variables.NX
+		if self.RetrievalEngine.KK is not None:
+			retrieved_values_valid = True
+		else:
+			retrieved_values_valid = False
+
+
 		if not retrieved_values_valid:
 			_lgr.warning(f'Stored apriori state vector has different length than found from *.apr file, {self.RetrievalEngine.NX=} {self.Variables.NX=}')
 		else:
@@ -1256,6 +1264,7 @@ class Retrieval:
 			forward_model_instance.Variables.SX = self.Variables.SA
 		
 		if include_telluric is not True:
+			Telluric_Spectroscopy = deepcopy(forward_model_instance.Telluric.Spectroscopy)
 			forward_model_instance.Telluric.Spectroscopy = None
 
 		_lgr.info(f".................................................................")
@@ -1279,18 +1288,22 @@ class Retrieval:
 		#Saving the reference spectroscopy including all gases
 		Spectroscopy_ref = copy.deepcopy(forward_model_instance.Spectroscopy)
 
-		if Spectroscopy_ref.ILBL == 1:
-			raise ValueError("error :: currently this option has only been implemented when working with look-up tables (ILBL=0 or 2)")
-
 		SPECONV_GAS = np.zeros((forward_model_instance.Measurement.NCONV.max(),forward_model_instance.Measurement.NGEOM,forward_model_instance.Spectroscopy.NGAS))
 		for igas in range(Spectroscopy_ref.NGAS):
 
 			_lgr.info(f".................................................................")
 			_lgr.info(f"Running forward model for gas {igas+1} of {Spectroscopy_ref.NGAS}")
-			forward_model_instance.Spectroscopy.NGAS = 1
-			forward_model_instance.Spectroscopy.LOCATION = [Spectroscopy_ref.LOCATION[igas]]
-			forward_model_instance.Spectroscopy.ID = [Spectroscopy_ref.ID[igas]]
-			forward_model_instance.Spectroscopy.ISO = [Spectroscopy_ref.ISO[igas]]
+			if((Spectroscopy_ref.ILBL == 0) or (Spectroscopy_ref.ILBL == 2)):
+				forward_model_instance.Spectroscopy.NGAS = 1
+				forward_model_instance.Spectroscopy.LOCATION = [Spectroscopy_ref.LOCATION[igas]]
+				forward_model_instance.Spectroscopy.ID = [Spectroscopy_ref.ID[igas]]
+				forward_model_instance.Spectroscopy.ISO = [Spectroscopy_ref.ISO[igas]]
+			else:
+				forward_model_instance.Spectroscopy.NGAS = 1
+				forward_model_instance.Spectroscopy.LINE_DATA = [Spectroscopy_ref.LINE_DATA[igas]]
+				forward_model_instance.Spectroscopy.LINE_DATA_PARAMS = [Spectroscopy_ref.LINE_DATA_PARAMS[igas]]
+				forward_model_instance.Spectroscopy.ID = [Spectroscopy_ref.ID[igas]]
+				forward_model_instance.Spectroscopy.ISO = [Spectroscopy_ref.ISO[igas]]
 
 			vmin, vmax = forward_model_instance.MeasurementX.calc_wave_range()
 			forward_model_instance.Spectroscopy.read_tables(vmin,vmax)
@@ -1326,12 +1339,51 @@ class Retrieval:
 		# Update the Retrieval with computed values
 		self.Layer = forward_model_instance.LayerX
 		self.Spectroscopy = Spectroscopy_ref
+		self.Telluric.Spectroscopy = Telluric_Spectroscopy
 		
 		self._set_optimal_estimation_setup_from_measurement()
 		self._set_optimal_estimation_setup_from_variables(forward_model_instance.Variables)
 		
 		return SPECONV, SPECONV_GAS, SPECONV_noGAS
 
+	##################################################################################################
+
+	def run_telluric_transmission(self, 
+						  apriori : bool = False,
+						):
+		"""
+		Run a forward model simulation of the telluric transmission
+
+		Optional Parameters
+		-------------------
+
+		apriori : bool
+			If True, it will set the state vector parameters to the a priori parameters
+
+		Returns
+		-----------
+
+		TELLURIC_TRANSMISSION : ndarray (NCONV,NGEOM)
+			Modelled telluric transmission
+		"""
+
+		forward_model_instance = self._get_forward_model_instance()
+		
+		if apriori:
+			_lgr.info('Using APRIORI values for forward model')
+			forward_model_instance.Variables = copy.deepcopy(forward_model_instance.Variables) # copy this or we wil alter self.Variables via reference
+			forward_model_instance.Variables.XN = self.Variables.XA
+			forward_model_instance.Variables.SX = self.Variables.SA
+
+		# Run the forward model
+		with self.working_directory_context():
+			with redirect_file_access.using(*self._path_redirects):
+				modelled_spectra = forward_model_instance.calculate_telluric_transmission()
+		
+		self._set_optimal_estimation_setup_from_measurement()
+		self._set_optimal_estimation_setup_from_variables(forward_model_instance.Variables)
+		
+		return modelled_spectra
 
 	##################################################################################################
 
@@ -1387,8 +1439,6 @@ class Retrieval:
 		self._set_optimal_estimation_setup_from_variables(forward_model_instance.Variables)
 		
 		return YN,KK
-
-
 
 	################################################################################################
 

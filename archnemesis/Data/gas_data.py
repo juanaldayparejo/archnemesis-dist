@@ -72,6 +72,17 @@ def id_to_name(gasid,isoid):
         return gas_info[str(gasid)]["isotope"][str(isoid)]["name"]
 
 
+def id_to_label(gasid,isoid):
+    """
+    Return the number of the molecule or isotope
+    """
+    
+    gasname = id_to_name(gasid,isoid)
+    labelname = molecule_to_latex(gasname)
+
+    return "$"+labelname+"$"
+
+
 def replace_str_outside_brackets(text, x, replacement = ''):
     # find 'x' in text only if outside brackets
     n = len(x)

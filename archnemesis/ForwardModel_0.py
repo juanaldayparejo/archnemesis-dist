@@ -996,7 +996,6 @@ class ForwardModel_0:
 
         return SPECONV
 
-
     ###############################################################################################
 
     def nemesisSOfmg(self):
@@ -1267,7 +1266,6 @@ class ForwardModel_0:
         
         return SPECONV,dSPECONV
 
-
     ###############################################################################################
 
     def nemesisLfm(self):
@@ -1384,7 +1382,6 @@ class ForwardModel_0:
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
 
         return SPECONV
-
 
     ###############################################################################################
 
@@ -1538,7 +1535,6 @@ class ForwardModel_0:
         SPECONV,dSPECONV = self.subspecret(SPECONV,dSPECONV)
         
         return SPECONV,dSPECONV
-
 
     ###############################################################################################
 
@@ -2207,6 +2203,88 @@ class ForwardModel_0:
         return YNtot
     
     ###############################################################################################
+
+    def calculate_telluric_transmission(self):
+        """
+            FUNCTION NAME : nemesisfm()
+
+            DESCRIPTION : This function computes a forward model
+
+            INPUTS : none
+
+            OPTIONAL INPUTS: none
+
+            OUTPUTS :
+
+                SPECMOD(NCONV,NGEOM) :: Modelled spectra
+
+            CALLING SEQUENCE:
+
+                ForwardModel.nemesisfm()
+
+            MODIFICATION HISTORY : Juan Alday (14/03/2022)
+
+        """
+
+
+        SPECONV = np.zeros(self.Measurement.MEAS.shape) #Initalise the array where the spectra will be stored (NWAVE,NGEOM)
+        for IGEOM in range(self.Measurement.NGEOM):
+
+            #Calculating new wave array            
+            self.Measurement.build_ils(IGEOM=IGEOM)
+            wavecalc_min,wavecalc_max = self.Measurement.calc_wave_range(apply_doppler=True,IGEOM=IGEOM)
+
+            #Reading tables in the required wavelength range
+            self.SpectroscopyX = deepcopy(self.Spectroscopy)
+            if self.SpectroscopyX.NGAS>0:
+                self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+
+            #Applying the Telluric transmission if its Spectroscopy exists
+            if self.TelluricX is not None:
+                if self.TelluricX.Spectroscopy is not None:
+                
+                    #Looking for the calculation wavelengths
+                    wavecalc_min_tel,wavecalc_max_tel = self.Measurement.calc_wave_range(apply_doppler=False,IGEOM=IGEOM)
+                    self.TelluricX.Spectroscopy.read_tables(wavemin=wavecalc_min_tel,wavemax=wavecalc_max_tel)
+                    
+                    #Calculating the telluric transmission
+                    WAVE_TELLURIC,TRANSMISSION_TELLURIC = self.TelluricX.calc_transmission()
+                
+                    #Interpolating the telluric transmission to the wavelengths of the planetary spectrum
+                    wavecorr = self.MeasurementX.correct_doppler_shift(self.SpectroscopyX.WAVE)
+                    TRANSMISSION_TELLURICx = np.interp(wavecorr,WAVE_TELLURIC,TRANSMISSION_TELLURIC)
+                    
+            
+            #Convolving the spectra with the Instrument line shape or integrating over filter function
+            if self.Measurement.IFORM == SpectraUnitEnum.Integrated_radiance:
+                
+                #Integrating the radiance over the filter function
+                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = self.Measurement.integrate_filter(self.SpectroscopyX.WAVE,TRANSMISSION_TELLURICx,IGEOM=IGEOM)
+                
+            else:
+                
+                #Convolving the spectra with the Instrument line shape
+                if self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.K_TABLES: #k-tables
+                    if os.path.exists(self.runname+'.fwh')==True:
+                        FWHMEXIST=self.runname
+                    else:
+                        FWHMEXIST=''
+
+                    SPECONV1 = self.Measurement.conv(self.SpectroscopyX.WAVE,TRANSMISSION_TELLURICx,IGEOM=IGEOM,FWHMEXIST=FWHMEXIST)
+
+                elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_TABLES: #LBL-tables
+                    SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,TRANSMISSION_TELLURICx,IGEOM=IGEOM)
+
+                elif self.SpectroscopyX.ILBL == SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME: #LBL-runtime calculations
+                    SPECONV1 = self.Measurement.lblconv(self.SpectroscopyX.WAVE,TRANSMISSION_TELLURICx,IGEOM=IGEOM)
+
+                SPECONV[0:self.Measurement.NCONV[IGEOM],IGEOM] = SPECONV1[0:self.Measurement.NCONV[IGEOM]]
+                
+        return SPECONV
+
+
+    ###############################################################################################
+
 
     def jacobian_nemesis(self, NCores=1, nemesisSO=False, nemesisL=False, nemesisC=False, nemesisdisc=False, nemesisPT=False, analytical_gradient=True):
 
