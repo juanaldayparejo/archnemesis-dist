@@ -1264,7 +1264,7 @@ class Retrieval:
 			forward_model_instance.Variables.SX = self.Variables.SA
 		
 		if include_telluric is not True:
-			Telluric_Spectroscopy = deepcopy(forward_model_instance.Telluric.Spectroscopy)
+			Telluric_Spectroscopy = copy.deepcopy(forward_model_instance.Telluric.Spectroscopy)
 			forward_model_instance.Telluric.Spectroscopy = None
 
 		_lgr.info(f".................................................................")
