@@ -11,6 +11,11 @@ if TYPE_CHECKING:
     from archnemesis.ForwardModel_0 import ForwardModel_0
     from archnemesis.Scatter_0 import Scatter_0
 
+    # Dimension labels used by the array annotations, as in the other models.
+    nparam = 'the number of parameters a model has'
+    mparam = 'the number of parameters a model has'
+    mx = 'number of elements in state vector'
+
 class Model501(PreRTModelBase):
     """
     Multiplier on the imaginary refractive index spectrum of an aerosol species.
