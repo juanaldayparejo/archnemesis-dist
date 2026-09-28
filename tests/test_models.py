@@ -1,8 +1,11 @@
 import pytest  
-import archnemesis as ans
-import numpy as np
+#import archnemesis as ans
+#import numpy as np
 
 from archnemesis.Models import _get_all_model_classes
+
+if False:
+    print(pytest) # Removes the "unused import" error
 
 def test_model_classes_have_unique_id_numbers():
     """
@@ -22,7 +25,7 @@ def test_model_classes_have_no_abstract_methods():
     writing a model class.
     """
     
-    model_instances = []
+    #model_instances = []
     
     for model_class in _get_all_model_classes():
         assert len(model_class.__abstractmethods__) == 0, f'Model id {model_class.id} must not have any abstract methods left (must be a concrete class). Has abstract methods: {tuple(model_class.__abstractmethods__)}'

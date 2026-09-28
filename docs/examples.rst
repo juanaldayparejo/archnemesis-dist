@@ -22,6 +22,7 @@ This section includes Jupyter notebooks with examples showing how to use the dif
    examples/cia_archnemesis/convert_cia_nemesis.ipynb
    examples/stellar/noaa_solar_spectrum.ipynb
    examples/linedata/linedata.ipynb
+   examples/linedata/create_lookup_tables.ipynb
    examples/disc_weights/disc_weights.ipynb
 
 
@@ -39,6 +40,7 @@ This sections includes Jupyter notebookes with examples showing how archNEMESIS 
    examples/mars_aotf/mars_aotf.ipynb
    examples/Exoplanet_thermal_emission/exoplanet.ipynb
    examples/Exoplanet_primary_transit/exoplanet.ipynb
+   examples/mars_rover/mars_rover.ipynb
    
 Retrievals
 ------------------

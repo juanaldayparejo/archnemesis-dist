@@ -5,37 +5,37 @@ from typing import Self, NamedTuple
 import numpy as np
 
 import archnemesis as ans
-import archnemesis.enums
+import archnemesis.enum
 
 class WaveRange(NamedTuple):
     
     min : float = 0
     max : float = 0
-    unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm
+    unit : ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm
     
-    def to_unit(self, new_unit : ans.enums.WaveUnit) -> Self:
-        if self.unit == ans.enums.WaveUnit.Wavenumber_cm:
-            if new_unit == ans.enums.WaveUnit.Wavenumber_cm:
+    def to_unit(self, new_unit : ans.enum.WaveUnitEnum) -> Self:
+        if self.unit == ans.enum.WaveUnitEnum.Wavenumber_cm:
+            if new_unit == ans.enum.WaveUnitEnum.Wavenumber_cm:
                     return self
-            elif new_unit ==  ans.enums.WaveUnit.Wavelength_um:
+            elif new_unit ==  ans.enum.WaveUnitEnum.Wavelength_um:
                 x1 = (1.0 / self.min) * 1E4
                 x2 = (1.0 / self.max) * 1E4
                 return WaveRange(*sorted((x1, x2)), new_unit)
             else:
                 raise ValueError(f'No conversion from {self.unit} to {new_unit} was found.')
-        elif self.unit ==  ans.enums.WaveUnit.Wavelength_um:
-            if new_unit == ans.enums.WaveUnit.Wavenumber_cm:
+        elif self.unit ==  ans.enum.WaveUnitEnum.Wavelength_um:
+            if new_unit == ans.enum.WaveUnitEnum.Wavenumber_cm:
                 x1 = 1.0 / (self.min * 1E-4)
                 x2 = 1.0 / (self.max * 1E-4)
                 return WaveRange(*sorted((x1, x2)), new_unit)
-            elif new_unit == ans.enums.WaveUnit.Wavelength_um:
+            elif new_unit == ans.enum.WaveUnitEnum.Wavelength_um:
                 return self
             else:
                 raise ValueError(f'No conversion from {self.unit} to {new_unit} was found.')
         else:
             raise ValueError(f'No conversion from {self.unit} to anything else was found.')
     
-    def as_unit(self, new_unit : ans.enums.WaveUnit) -> Self:
+    def as_unit(self, new_unit : ans.enum.WaveUnitEnum) -> Self:
         return self.to_unit(new_unit)
     
     @property

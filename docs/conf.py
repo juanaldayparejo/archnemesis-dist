@@ -14,10 +14,31 @@ extensions = [
     "sphinx.ext.mathjax",
 #    "sphinx.ext.viewcode",
     "IPython.sphinxext.ipython_console_highlighting",
+    "myst_parser",
     ]
+
+myst_enable_extensions = [
+    "colon_fence",
+]
+
+#Creating gas_table.html file for documentation
+##################################################################################
+
+from pathlib import Path
+from archnemesis.Data.gas_data import generate_isotopologue_table_html
+
+outfile = Path(__file__).parent / "_static" / "gas_table.html"
+
+html = generate_isotopologue_table_html()
+
+# Only overwrite if the contents changed
+if (not outfile.exists()) or (outfile.read_text(encoding="utf-8") != html):
+    outfile.write_text(html, encoding="utf-8")
 
 
 #Defining paramters for autodoc documentation
+##################################################################################
+
 #napoleon_google_docstring = False
 #napoleon_numpy_docstring = True
 #napoleon_include_init_with_doc = False
@@ -48,8 +69,11 @@ nbsphinx_thumbnails = {
     'examples/Exoplanet_thermal_emission/exoplanet': '_static/exoplanet_orbit.png',
     'examples/Exoplanet_primary_transit/exoplanet': '_static/exoplanet_orbit.png',
     'examples/retrieval_exoplanet_transit/retrieval_exoplanet': '_static/exoplanet_orbit.png',
-    #'examples/Jupiter_CIRS_nadir_thermal_emission/Jupiter_CIRS': '_static/jupiter_cassini.jpg',
+    'examples/Jupiter_CIRS_nadir_thermal_emission/Jupiter_CIRS': '_static/jupiter_cassini.jpg',
     #'examples/Measurement/Measurement': '_static/observation_sketch.png',
+    'examples/mars_rover/mars_rover': '_static/mars_rover.jpg',
+    'examples/Mars_DISORT/archnemesis_disort_comparisons': '_static/mars_orbiter.jpg',
+    'examples/mars_groundbased/mars_groundbased': '_static/nasa_irtf.jpg',
 }
 
 #Adding logo

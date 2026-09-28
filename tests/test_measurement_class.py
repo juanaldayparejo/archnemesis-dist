@@ -1,7 +1,10 @@
 import pytest  
 import archnemesis as ans
 import numpy as np
-  
+
+if False:
+    print(pytest) # Removes the "unused import" error
+
 def test_lblconv():
     '''
     Test convolution of the spectra with the ILS
@@ -37,7 +40,7 @@ def test_lblconv():
         Measurement.ISPACE = 0
 
         vconv = vwave.copy()
-        nconv = len(vconv)
+        #nconv = len(vconv)
 
         Measurement.NGEOM = 1
         Measurement.NCONV = np.array([len(vconv)])

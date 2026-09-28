@@ -30,16 +30,21 @@ from archnemesis import Data
 import numpy as np
 from scipy.special import legendre
 import matplotlib.pyplot as plt
+plt.rcParams["axes.prop_cycle"] = plt.cycler(
+    color=plt.get_cmap("tab20").colors
+)
 
 import archnemesis.Data.constants as const
 from archnemesis.Data.planet_data import planet_info
-from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileType
+from archnemesis.enum import PlanetEnum, AtmosphericProfileFormatEnum, AtmosphericProfileTypeEnum
 from archnemesis.helpers import h5py_helper
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 #_lgr.setLevel(logging.DEBUG)
 _lgr.setLevel(logging.INFO)
+
+
 
 class Atmosphere_0:
     """
@@ -250,9 +255,9 @@ class Atmosphere_0:
             f"IPLANET must be one of {tuple(PlanetEnum)}"
         
         if self.IPLANET==-1: #Custom planet
-            assert np.issubdtype(type(self.PLANET_MASS), float) == True , \
+            assert np.issubdtype(type(self.PLANET_MASS), np.floating) == True , \
                 'PLANET_MASS must be defined if custom planet'
-            assert np.issubdtype(type(self.PLANET_RADIUS), float) == True , \
+            assert np.issubdtype(type(self.PLANET_RADIUS), np.floating) == True , \
                 'PLANET_RADIUS must be defined if custom planet'    
             
         assert len(self.ID) == self.NVMR , \
@@ -262,11 +267,11 @@ class Atmosphere_0:
         
         if self.NLOCATIONS==1:
 
-            assert np.issubdtype(type(self.LATITUDE), float) == True , \
+            assert np.issubdtype(type(self.LATITUDE), np.floating) == True , \
                 'LATITUDE must be float'
             assert abs(self.LATITUDE) < 90.0 , \
                 'LATITUDE must be within -90 to 90 degrees'
-            assert np.issubdtype(type(self.LONGITUDE), float) == True , \
+            assert np.issubdtype(type(self.LONGITUDE), np.floating) == True , \
                 'LONGITUDE must be float'
             
             assert len(self.H) == self.NP , \
@@ -565,7 +570,7 @@ class Atmosphere_0:
     def ipar_to_atm_profile_type(
             self, 
             ipar : int
-        ) -> tuple[AtmosphericProfileType, None|int]:
+        ) -> tuple[AtmosphericProfileTypeEnum, None|int]:
         """
             Decodes `ipar` from a magic number to a profile type and an index of that profile type
             
@@ -580,7 +585,7 @@ class Atmosphere_0:
             
             ## RETURNS ##
             
-                atm_profile_type : AtmosphericProfileType
+                atm_profile_type : AtmosphericProfileTypeEnum
                     An ENUM specifiying the type of the profile.
                 
                 atm_profile_idx : int | None
@@ -596,19 +601,19 @@ class Atmosphere_0:
         _lgr.debug(f'{ipar=}')
         _lgr.debug(f'{self.NVMR=} {self.NDUST=}')
         if ipar >=0 and ipar < self.NVMR:
-            return AtmosphericProfileType.GAS_VOLUME_MIXING_RATIO, ipar
+            return AtmosphericProfileTypeEnum.GAS_VOLUME_MIXING_RATIO, ipar
         
         if ipar == self.NVMR:
-            return AtmosphericProfileType.TEMPERATURE, 0
+            return AtmosphericProfileTypeEnum.TEMPERATURE, 0
         
         if ipar > self.NVMR and ipar <= self.NVMR+self.NDUST:
-            return AtmosphericProfileType.AEROSOL_DENSITY, ipar - (self.NVMR+1)
+            return AtmosphericProfileTypeEnum.AEROSOL_DENSITY, ipar - (self.NVMR+1)
         
         if ipar == self.NVMR+self.NDUST+1:
-            return AtmosphericProfileType.PARA_H2_FRACTION, None # only ever one of these profiles
+            return AtmosphericProfileTypeEnum.PARA_H2_FRACTION, None # only ever one of these profiles
         
         if ipar == self.NVMR+self.NDUST+2:
-            return AtmosphericProfileType.FRACTIONAL_CLOUD_COVERAGE, None # only ever one of these profiles
+            return AtmosphericProfileTypeEnum.FRACTIONAL_CLOUD_COVERAGE, None # only ever one of these profiles
         
         raise ValueError(f'Atmosphere_0 :: ipar_to_atm_profile_type :: {ipar=} is not a supported value')
 
@@ -1493,8 +1498,9 @@ class Atmosphere_0:
         Read the aerosol profiles from an aerosol.ref file
         
         Note: The units of the aerosol.ref file in NEMESIS are in particles per gram of atmosphere, while the units of the aerosols
-              in the Atmosphere class are in particles per m3. Therefore, when reading the file an internal unit conversion is
-              applied, but it requires the pressure and temperature profiles to be defined prior to reading the aerosol.ref file.
+              in the Atmosphere class are in particles per m3 (when reading from the HDF5 file). To keep backward compatibility with 
+              NEMESIS, a DUST_UNITS_FLAG is activated when reading the aerosols from the aerosol.ref file, and it is assumed the units
+              of the aerosol density are in particles per gram of atmosphere.
         """
 
         if self.NLOCATIONS!=1:
@@ -1554,23 +1560,22 @@ class Atmosphere_0:
         """
         Write current aerosol profile to a aerosol.ref file in Nemesis format.
         
-        Note: The units of the aerosol.ref file in NEMESIS are in particles per gram of atmosphere, while the units of the aerosols
-              in the Atmosphere class are in particles per m3. Therefore, when writing the file an internal unit conversion is
-              applied, but it requires the pressure and temperature profiles to be defined prior to writing the aerosol.ref file.
+        Note: The units of the aerosol.ref file in NEMESIS are in particles per gram of atmosphere, but the default units
+              of archNEMESIS are particles per m3. To allow backward compatibility with NEMESIS, this class incorporates a
+              DUST_UNITS_FLAG that indicates that the dust density is in particles per gram of atmosphere.
+
+              If using this write_aerosol() function, the user must make sure the units are particles per gram of atmosphere.
+
         """
 
         if self.NLOCATIONS!=1:
-            raise ValueError('error :: read_aerosol only works if NLOCATIONS=1')
+            raise ValueError('error :: write_aerosol only works if NLOCATIONS=1')
             
         #Check if the density can be calculated
-        if((self.T is not None) & (self.P is not None)):
-            rho = self.calc_rho()  #kg/m3
-            xscale = rho * 1000.
-        else:
-            xscale = 1.
-            _lgr.warning(' :: reading aerosol.ref file but density is not define. Units of Atmosphere_0.DUST are in particles per gram of atmosphere')
+        if self.DUST_UNITS_FLAG is None:
+            _lgr.warning('DUST_UNITS_FLAG is not activated when writing aerosol.ref')
+            _lgr.warning('Note that the dust units must be in particles per gram of atmosphere')
             
-
         f = open('aerosol.ref','w')
         f.write('#aerosol.ref\n')
         f.write('{:<15} {:<15}'.format(self.NP, self.NDUST))
@@ -1578,7 +1583,7 @@ class Atmosphere_0:
             f.write('\n{:<15.3f} '.format(self.H[i]*1e-3))
             if self.NDUST >= 1:
                 for j in range(self.NDUST):
-                    f.write('{:<15.3E} '.format(self.DUST[i][j]/xscale[i]))    #particles per m-3
+                    f.write('{:<15.3E} '.format(self.DUST[i][j]))    #particles per gram of atm
             else:
                 f.write('{:<15.3E}'.format(self.DUST[i]))
         f.close()
@@ -1700,6 +1705,58 @@ class Atmosphere_0:
         
     ##################################################################################
 
+    def plot_gas(self,gasID,isoID,SavePlot=None,ILOCATION=0):
+
+        """
+        Makes a summary plot of the current atmospheric profiles
+        """
+        
+        from archnemesis.Data.gas_data import gas_info#, const
+
+        fig, (ax1) = plt.subplots(1, 1, sharey=True,figsize=(4,4))
+        gasID = np.atleast_1d(gasID)
+        isoID = np.atleast_1d(isoID)
+        
+        if self.NLOCATIONS==1:
+            p = self.P
+            t = self.T
+            h = self.H
+            vmr = self.VMR
+        elif self.NLOCATIONS>1:
+            p = self.P[:,ILOCATION]
+            t = self.T[:,ILOCATION]
+            h = self.H[:,ILOCATION]
+            vmr = self.VMR[:,:,ILOCATION]
+        if len(gasID)>1:
+            for i in range(len(gasID)):
+                label = gas_info[str(gasID[i])]['name']
+                if isoID[i]!=0:
+                            label = label+' ('+str(isoID[i])+')' 
+                color = np.random.rand(3)              
+                ax1.semilogx(self.VMR[:,(self.ID == gasID[i]) & (self.ISO == isoID[i])],h/1.0e3,c=color,label=label)
+        elif len(gasID)==1:
+            label1 = gas_info[str(gasID[0])]['name']
+            if isoID!=0:
+                label1 = label1+' ('+str(isoID)+')'
+            color = np.random.rand(3)   
+            ax1.semilogx(self.VMR[:,(self.ID == gasID[0]) & (self.ISO == isoID[0])],h/1.0e3,c=color,label=label1)
+        
+       
+   
+        ax1.set_ylabel('Altitude (km)')
+
+        ax1.set_xlabel('Volume mixing ratio')
+        plt.subplots_adjust(left=0.08,bottom=0.12,right=0.88,top=0.96,wspace=0.16,hspace=0.20)
+  
+        ax1.grid()
+        ax1.legend()
+     
+
+        if SavePlot is not None:
+            fig.savefig(SavePlot)
+        else:
+            plt.show()
+
     def plot_Atm(self,SavePlot=None,ILOCATION=0):
 
         """
@@ -1724,9 +1781,8 @@ class Atmosphere_0:
         ax1.semilogx(p/101325.,h/1.0e3,c='black')
         ax2.plot(t,h/1.0e3,c='black')
         for i in range(self.NVMR):
-            label1 = gas_info[str(self.ID[i])]['name']
-            if self.ISO[i]!=0:
-                label1 = label1+' ('+str(self.ISO[i])+')'
+            label1 = Data.gas_data.id_to_name(self.ID[i],self.ISO[i])
+            label1 = Data.gas_data.molecule_to_latex("$"+label1+"$")
             ax3.semilogx(vmr[:,i],h/1.0e3, label=label1)
         ax1.set_xlabel('Pressure (atm)')
         ax1.set_ylabel('Altitude (km)')

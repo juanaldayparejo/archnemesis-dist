@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="128.13704mm"
+   height="166.43428mm"
+   viewBox="0 0 128.13704 166.43428"
+   version="1.1"
+   id="svg5"
+   inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
+   sodipodi:docname="patch.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="1"
+     inkscape:cx="238"
+     inkscape:cy="299.5"
+     inkscape:window-width="1920"
+     inkscape:window-height="1008"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs2">
+    <marker
+       style="overflow:visible"
+       id="Arrow2"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       inkscape:stockid="Arrow2"
+       markerWidth="6.6999998"
+       markerHeight="4.8727274"
+       viewBox="0 0 7.7 5.6"
+       inkscape:isstock="true"
+       inkscape:collect="always"
+       preserveAspectRatio="xMidYMid">
+      <path
+         transform="scale(0.7)"
+         d="M -2,-4 9,0 -2,4 c 2,-2.33 2,-5.66 0,-8 z"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:none"
+         id="arrow2L" />
+    </marker>
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-25.696053,-27.264153)">
+    <rect
+       style="fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:markers fill stroke"
+       id="rect5166"
+       width="128.13704"
+       height="166.43428"
+       x="25.696053"
+       y="27.264153"
+       rx="4.9999995"
+       ry="5" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#Arrow2);paint-order:markers fill stroke"
+       d="m 135.42842,134.70616 c -0.0454,45.39624 -92.881885,46.26209 -92.871295,9.90145"
+       id="path5040"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#Arrow2);paint-order:markers fill stroke"
+       d="M 42.557125,86.84049 C 42.602551,41.444334 135.43901,40.578482 135.42842,76.939043"
+       id="path4541"
+       sodipodi:nodetypes="cc" />
+    <g
+       id="g4214"
+       transform="translate(0,-1.8795045)">
+      <rect
+         style="fill:#f2f2f2;fill-opacity:1;stroke:#808000;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect3190"
+         width="30"
+         height="40"
+         x="29.176594"
+         y="92.8396"
+         rx="5"
+         ry="5" />
+      <text
+         xml:space="preserve"
+         style="font-size:4.23333px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linejoin:bevel;paint-order:markers fill stroke"
+         x="32.950191"
+         y="98.682571"
+         id="text236"><tspan
+           sodipodi:role="line"
+           id="tspan234"
+           style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:1"
+           x="32.950191"
+           y="98.682571">file_1.txt</tspan></text>
+      <g
+         id="g4010"
+         transform="translate(-43.688467,4.8006598)">
+        <path
+           style="fill:none;fill-opacity:1;stroke:#bc5fd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 76.069419,97.531271 H 98.179762"
+           id="path3567" />
+        <path
+           style="fill:none;fill-opacity:1;stroke:#bc5fd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 76.069419,100.97257 H 99.515701"
+           id="path3567-3" />
+        <path
+           style="fill:none;fill-opacity:1;stroke:#bc5fd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 76.069419,104.41386 H 97.519673"
+           id="path3567-3-7" />
+        <path
+           style="fill:none;fill-opacity:1;stroke:#bc5fd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 76.069419,107.85516 H 92.858451"
+           id="path3567-6" />
+      </g>
+    </g>
+    <g
+       id="g4204"
+       transform="translate(22.576497,18.355931)">
+      <rect
+         style="fill:#f2f2f2;fill-opacity:1;stroke:#808000;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+         id="rect3190-1"
+         width="30"
+         height="40"
+         x="96.654167"
+         y="72.604164"
+         rx="5"
+         ry="5" />
+      <text
+         xml:space="preserve"
+         style="font-size:4.23333px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linejoin:bevel;paint-order:markers fill stroke"
+         x="99.800354"
+         y="78.113693"
+         id="text946"><tspan
+           sodipodi:role="line"
+           style="stroke-width:1"
+           x="99.800354"
+           y="78.113693"
+           id="tspan948">file_2.txt</tspan></text>
+      <g
+         id="g4010-5"
+         transform="translate(24.792909,-21.68172)">
+        <path
+           style="fill:none;fill-opacity:1;stroke:#d4aa00;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 75.065624,117.56902 H 99.944077"
+           id="path3567-35" />
+        <path
+           style="fill:none;fill-opacity:1;stroke:#d4aa00;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 75.06562,121.01032 H 91.593541"
+           id="path3567-3-6" />
+        <path
+           style="fill:none;fill-opacity:1;stroke:#d4aa00;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 75.065616,124.45161 H 98.972825"
+           id="path3567-3-7-2" />
+        <path
+           style="fill:none;fill-opacity:1;stroke:#d4aa00;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 75.06562,127.89291 H 88.998883"
+           id="path3567-6-9" />
+      </g>
+      <g
+         id="g4010-2"
+         transform="translate(23.789106,-15.434773)">
+        <path
+           style="fill:none;fill-opacity:1;stroke:#bc5fd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 76.069419,97.531271 H 98.179762"
+           id="path3567-7" />
+        <path
+           style="fill:none;fill-opacity:1;stroke:#bc5fd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 76.069419,100.97257 H 99.515701"
+           id="path3567-3-0" />
+        <path
+           style="fill:none;fill-opacity:1;stroke:#bc5fd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 76.069419,104.41386 H 97.519673"
+           id="path3567-3-7-9" />
+        <path
+           style="fill:none;fill-opacity:1;stroke:#bc5fd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+           d="M 76.069419,107.85516 H 92.858451"
+           id="path3567-6-3" />
+      </g>
+    </g>
+    <g
+       id="g4465"
+       transform="translate(1.4720204,-25.929177)">
+      <text
+         xml:space="preserve"
+         style="font-size:4.23333px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linejoin:bevel;paint-order:markers fill stroke"
+         x="67.473015"
+         y="57.796249"
+         id="text954"><tspan
+           sodipodi:role="line"
+           id="tspan952"
+           style="stroke-width:1"
+           x="67.473015"
+           y="57.796249">file_1_to_file_2.patch</tspan></text>
+      <g
+         id="g4204-6"
+         transform="translate(-23.922555,-10.896457)">
+        <rect
+           style="fill:#f2f2f2;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:2, 2;stroke-dashoffset:0;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect3190-1-9"
+           width="30"
+           height="40"
+           x="96.654167"
+           y="72.604164"
+           rx="5"
+           ry="5" />
+        <g
+           id="g4010-5-2"
+           transform="translate(24.792909,-21.68172)"
+           style="stroke:#5f8dd3">
+          <path
+             style="fill:none;fill-opacity:1;stroke:#5f8dd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+             d="M 75.065624,117.56902 H 99.944077"
+             id="path3567-35-6" />
+          <path
+             style="fill:none;fill-opacity:1;stroke:#5f8dd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+             d="M 75.06562,121.01032 H 91.593541"
+             id="path3567-3-6-1" />
+          <path
+             style="fill:none;fill-opacity:1;stroke:#5f8dd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+             d="M 75.065616,124.45161 H 98.972825"
+             id="path3567-3-7-2-8" />
+          <path
+             style="fill:none;fill-opacity:1;stroke:#5f8dd3;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+             d="M 75.06562,127.89291 H 88.998883"
+             id="path3567-6-9-7" />
+        </g>
+      </g>
+    </g>
+    <g
+       id="g4476"
+       transform="translate(5.066129,23.283335)">
+      <text
+         xml:space="preserve"
+         style="font-size:4.23333px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1;stroke-linejoin:bevel;paint-order:markers fill stroke"
+         x="63.878906"
+         y="122.45098"
+         id="text1684"><tspan
+           sodipodi:role="line"
+           id="tspan1682"
+           style="stroke-width:1"
+           x="63.878906"
+           y="122.45098">file_2_to_file_1.patch</tspan></text>
+      <g
+         id="g4204-5"
+         transform="translate(-27.516667,54.239586)">
+        <rect
+           style="fill:#f2f2f2;fill-opacity:1;stroke:#000000;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:2, 2;stroke-dashoffset:0;stroke-opacity:1;paint-order:markers fill stroke"
+           id="rect3190-1-1"
+           width="30"
+           height="40"
+           x="96.654167"
+           y="72.604164"
+           rx="5"
+           ry="5" />
+        <g
+           id="g4010-5-28"
+           transform="translate(24.792909,-21.68172)"
+           style="stroke:#ff5555">
+          <path
+             style="fill:none;fill-opacity:1;stroke:#ff5555;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+             d="M 75.065624,117.56902 H 99.944077"
+             id="path3567-35-9" />
+          <path
+             style="fill:none;fill-opacity:1;stroke:#ff5555;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+             d="M 75.06562,121.01032 H 91.593541"
+             id="path3567-3-6-7" />
+          <path
+             style="fill:none;fill-opacity:1;stroke:#ff5555;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+             d="M 75.065616,124.45161 H 98.972825"
+             id="path3567-3-7-2-3" />
+          <path
+             style="fill:none;fill-opacity:1;stroke:#ff5555;stroke-width:2;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1;paint-order:markers fill stroke"
+             d="M 75.06562,127.89291 H 88.998883"
+             id="path3567-6-9-6" />
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

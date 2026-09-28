@@ -26,10 +26,10 @@ import numpy as np
 import h5py
 
 import archnemesis.Data.constants as const
-from archnemesis.enums import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnit, SpectralCalculationMode
+from archnemesis.enum import PlanetEnum, AtmosphericProfileFormatEnum, SpectraUnitEnum, SpectralCalculationModeEnum
 import archnemesis.helpers.h5py_helper as h5py_helper
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 
 
@@ -247,9 +247,12 @@ class Telluric_0:
         ##############################################################################################################
         
         datetime_str = f'{date} {time}'
+
+        
         
         # Define the format in which the date and time are provided
         datetime_format = '%d-%m-%Y %H:%M:%S'
+        datetime_str = normalize_datetime(datetime_str)
         
         # Convert the string to a datetime object
         dt = datetime.strptime(datetime_str, datetime_format)
@@ -299,7 +302,7 @@ class Telluric_0:
 
         #First estimation of the altitudes
         g0 = 9.80665 #m/s2
-        mmol = 0.0289644 #kg/mol
+        mmol = 0.0289644 #kg/mol molecular weight of air
         R = const.R
         
         sh = R * temp / (mmol * g0)
@@ -308,8 +311,8 @@ class Telluric_0:
         #Calculating the VMRs of H2O and O3
         ############################################################################################
         
-        # Calculate water vapour mixing ratio (w = q / (1 - q))
-        vmr_h2o = specific_humidity / (1 - specific_humidity)
+        # Calculate water vapour volume mixing ratio (mmr = q / (1 - q) ; vmr = mmr * mmol / mh2o)
+        vmr_h2o = specific_humidity / (1 - specific_humidity) * mmol / 0.018
     
         #Converting the mass mixing ratio of O3 to the volue mixing ratio
         vmr_o3 = ozone_mmr / 0.048 * mmol
@@ -317,7 +320,7 @@ class Telluric_0:
         #Reading the VMRs for CH4,CO2,CO and N2O
         ############################################################################################
         
-        Atmosphere_CIRC = Atmosphere_0(runname=archnemesis_path()+'archnemesis/Data/reference_profiles/earth_circ_case1')
+        Atmosphere_CIRC = Atmosphere_0(runname=archnemesis_path()+'/archnemesis/Data/reference_profiles/earth_circ_case1')
         Atmosphere_CIRC.read_ref()
         
         ico2 = np.where(Atmosphere_CIRC.ID==2)[0][0]
@@ -387,10 +390,11 @@ class Telluric_0:
         #Reading the VMRs for CH4,CO2,CO and N2O
         ############################################################################################
         
-        Atmosphere_CIRC = Atmosphere_0(runname=archnemesis_path()+'archnemesis/Data/reference_profiles/earth_circ_case1')
+        Atmosphere_CIRC = Atmosphere_0(runname=archnemesis_path()+'/archnemesis/Data/reference_profiles/earth_circ_case1')
         Atmosphere_CIRC.read_ref()
         
         self.Atmosphere = Atmosphere_CIRC
+        self.Atmosphere.NDUST = 0
     
     ##################################################################################
     
@@ -403,14 +407,14 @@ class Telluric_0:
         from archnemesis import k_overlap
         
         #Adding zero dust in case it does not exist
-        self.Atmosphere.NDUST = 1
+        self.Atmosphere.NDUST = 0
         self.Atmosphere.edit_DUST(np.zeros((self.Atmosphere.NP,self.Atmosphere.NDUST)))
         
         #Calculating the Layering of the atmosphere
         Layer = Layer_0()
         Layer.RADIUS = self.Atmosphere.RADIUS
         Layer.LAYHT = self.ALTITUDE
-        Layer.NLAY = 31
+        Layer.NLAY = 51
         Layer.LAYTYP=2
         Layer.LAYANG=0.
         Layer.calc_layering(H=self.Atmosphere.H,P=self.Atmosphere.P,T=self.Atmosphere.T, ID=self.Atmosphere.ID,VMR=self.Atmosphere.VMR, DUST=self.Atmosphere.DUST, PARAH2=self.Atmosphere.PARAH2)
@@ -428,11 +432,16 @@ class Telluric_0:
         Scatter.SOL_ANG = 0.
         Scatter.AZI_ANG = 0.
         Measurement = Measurement_0()
-        Measurement.IFORM = SpectraUnit.Radiance
+        Measurement.IFORM = SpectraUnitEnum.Radiance
         
         #Calculating the path
-        FM = ForwardModel_0()
+        FM = ForwardModel_0(Spectroscopy=self.Spectroscopy,Atmosphere=self.Atmosphere)
         FM.calc_path(Atmosphere=self.Atmosphere,Scatter=Scatter,Layer=Layer,Measurement=Measurement)
+
+        _lgr.info("Calculating telluric transmission")
+        _lgr.info(f"Altitude of observatory = {self.ALTITUDE} metres")
+        _lgr.info(f"Base Altitude and Pressure at lowest layer = {Layer.BASEH[0]} metres, {Layer.BASEP[0]} Pa")
+        _lgr.info(f"Airmass = {FM.PathX.SCALE[0,0]}")
     
         #Calculating the line-of-sight column density for each gas
         amounts = (np.transpose(Layer.AMOUNT[FM.PathX.LAYINC[:,:],:],axes=(2,0,1)) * FM.PathX.SCALE[:,:])[:,:,0] #N_col density in each layer for each gas (NVMR,NLAY)
@@ -441,7 +450,7 @@ class Telluric_0:
         
         #Calculating the optical depth along the line-of-sight
         ########################################################################################################
-        if self.Spectroscopy.ILBL==SpectralCalculationMode.LINE_BY_LINE_TABLES:  #LBL-table
+        if self.Spectroscopy.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:  #LBL-table
 
             #Calculating the cross sections for each gas in each layer
             k = self.Spectroscopy.calc_klbl(len(tlay),play/101325.,tlay,WAVECALC=self.Spectroscopy.WAVE)
@@ -452,7 +461,7 @@ class Telluric_0:
                 igas = np.where( (self.Atmosphere.ID==self.Spectroscopy.ID[i]) & (self.Atmosphere.ISO==self.Spectroscopy.ISO[i]) )[0][0]
 
                 #Calculating vertical column density in each layer
-                VLOSDENS = amounts[igas,:] * 1.0e-4 * 1.0e-20   #cm-2
+                VLOSDENS = amounts[igas,:] * 1.0e-4   #cm-2
 
                 #Calculating vertical opacity for each gas in each layer
                 TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
@@ -462,7 +471,38 @@ class Telluric_0:
             #Removing necessary data to save memory
             del k
 
-        elif self.Spectroscopy.ILBL==SpectralCalculationMode.K_TABLES:    #K-table
+        elif self.Spectroscopy.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:  #Line-by-line
+
+            igas = np.empty((self.Spectroscopy.NGAS,), dtype=int)
+            for i, (mol_id, iso_id) in enumerate(zip(self.Spectroscopy.ID,self.Spectroscopy.ISO)):
+                igas[i] = self.Atmosphere.locate_gas(mol_id, iso_id)
+            
+            self_frac = np.mean((Layer.PP.T / Layer.PRESS),axis=1) #(NGAS) average volume mixing ratio of each gas
+            amb_frac = np.ones((self.Spectroscopy.NGAS,1), dtype=float)
+            amb_frac[:,0] = 1.0 - self_frac[igas]
+
+            #Converting IDs into list
+            self.Spectroscopy.ID = np.atleast_1d(self.Spectroscopy.ID).astype(int).tolist()
+            self.Spectroscopy.ISO = np.atleast_1d(self.Spectroscopy.ISO).astype(int).tolist()
+
+            #Calculating the absorption cross sections
+            k = self.Spectroscopy.calc_klbl_online(len(tlay),play/101325.,tlay,amb_frac=amb_frac,wave=None)
+
+            #Calculating the optical depths
+            TAUGAS = np.zeros((self.Spectroscopy.NWAVE,self.Spectroscopy.NG,len(tlay),self.Spectroscopy.NGAS))  #Vertical opacity of each gas in each layer
+            for i in range(self.Spectroscopy.NGAS):
+                IGAS = self.Atmosphere.locate_gas(self.Spectroscopy.ID[i],self.Spectroscopy.ISO[i])
+
+                #Calculating vertical column density in each layer
+                VLOSDENS = amounts[IGAS,:] * 1.0e-4   #cm-2
+
+                #Calculating vertical opacity for each gas in each layer
+                TAUGAS[:,0,:,i] = k[:,:,i] * VLOSDENS
+
+            #Combining the gaseous opacity in each self.LayerX
+            TAUGAS = np.sum(TAUGAS,3) #(NWAVE,NG,NLAY)
+
+        elif self.Spectroscopy.ILBL==SpectralCalculationModeEnum.K_TABLES:    #K-table
             
             #Calculating the k-coefficients for each gas in each layer
             k_gas = self.Spectroscopy.calc_k(len(tlay),play/101325.,tlay,WAVECALC=self.Spectroscopy.WAVE) # (NWAVE,NG,NLAY,NGAS)
@@ -471,7 +511,7 @@ class Telluric_0:
             #utotl = np.zeros(len(tlay))
             for i in range(self.Spectroscopy.NGAS):
                 igas = np.where( (self.Atmosphere.ID==self.Spectroscopy.ID[i]) & (self.Atmosphere.ISO==self.Spectroscopy.ISO[i]) )[0][0]
-                f_gas[i,:] = amounts[igas,:] * 1.0e-4 * 1.0e-20  #Vertical column density of the radiatively active gases in cm-2
+                f_gas[i,:] = amounts[igas,:] * 1.0e-4  #Vertical column density of the radiatively active gases in cm-2
 
             #Combining the k-distributions of the different gases in each layer
             k_layer = k_overlap(self.Spectroscopy.DELG,k_gas,f_gas)
@@ -636,3 +676,35 @@ def extract_grib_parameter(filename,parameter,latitude,longitude):
                u*v*param_lat2_lon2[:]
 
     return param_int
+
+
+
+############################################################################################
+
+def normalize_datetime(datetime_string):
+
+    from datetime import datetime
+
+    datetime_format = "%d-%m-%Y %H:%M:%S"
+    possible_formats = (
+        "%d-%m-%Y %H:%M:%S.%f",
+        "%d-%m-%Y %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+    )
+
+    for input_format in possible_formats:
+        try:
+            parsed_datetime = datetime.strptime(
+                datetime_string,
+                input_format,
+            )
+
+            return parsed_datetime.strftime(datetime_format)
+
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"Unrecognized date-time format: {datetime_string!r}"
+    )

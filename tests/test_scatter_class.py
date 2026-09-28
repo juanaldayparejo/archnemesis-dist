@@ -4,6 +4,8 @@ import numpy as np
 import os
 curr = os.getcwd()
 
+if False:
+    print(pytest) # Removes the "unused import" error
 
 def test_makephase_imie0():  
     '''

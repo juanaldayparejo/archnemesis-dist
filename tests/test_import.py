@@ -1,12 +1,15 @@
-import warnings
+#import warnings
 import pytest
 import archnemesis as ans
 import importlib
 from pathlib import Path
 import os
 
+if False:
+    print(pytest) # Removes the "unused import" error
+
 def test_no_syntax_warnings_on_compile(recwarn):
-    caught_warnings = []
+    #caught_warnings = []
     
     for path in ans.__path__:
         for dirpath, dirnames, filenames in os.walk(str(path)):

@@ -29,7 +29,7 @@ from matplotlib.lines import Line2D
 import archnemesis as ans
 import archnemesis.Files
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 

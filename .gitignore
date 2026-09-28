@@ -165,3 +165,11 @@ cython_debug/
 .vscode/
 
 local_*_database/
+*.zip
+HITRAN??/
+HITRAN_TEST/
+test_data/
+archnemesis/Data/reference_databases/*.h5.bak
+archnemesis/Data/reference_databases/*.h5
+*.h5.download
+*.h5.no_download

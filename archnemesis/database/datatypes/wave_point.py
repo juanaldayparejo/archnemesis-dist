@@ -5,34 +5,34 @@ from typing import Self, NamedTuple
 import numpy as np
 
 import archnemesis as ans
-import archnemesis.enums
+import archnemesis.enum
 
 # NOTE: There must be a better way of doing unit conversions like this
 #       maybe look into astropy.unit to either use or take inspiration from?
 
 class WavePoint(NamedTuple):
     value : float | np.ndarray
-    unit : ans.enums.WaveUnit = ans.enums.WaveUnit.Wavenumber_cm
+    unit : ans.enum.WaveUnitEnum = ans.enum.WaveUnitEnum.Wavenumber_cm
     
-    def to_unit(self, new_unit : ans.enums.WaveUnit) -> Self:
-        if self.unit == ans.enums.WaveUnit.Wavenumber_cm:
-            if new_unit == ans.enums.WaveUnit.Wavenumber_cm:
+    def to_unit(self, new_unit : ans.enum.WaveUnitEnum) -> Self:
+        if self.unit == ans.enum.WaveUnitEnum.Wavenumber_cm:
+            if new_unit == ans.enum.WaveUnitEnum.Wavenumber_cm:
                     return self
-            elif new_unit ==  ans.enums.WaveUnit.Wavelength_um:
+            elif new_unit ==  ans.enum.WaveUnitEnum.Wavelength_um:
                 return WavePoint((1.0/self.value)*1E4, new_unit)
             else:
                 raise ValueError(f'No conversion from {self.unit} to {new_unit} was found.')
-        elif self.unit ==  ans.enums.WaveUnit.Wavelength_um:
-            if new_unit == ans.enums.WaveUnit.Wavenumber_cm:
+        elif self.unit ==  ans.enum.WaveUnitEnum.Wavelength_um:
+            if new_unit == ans.enum.WaveUnitEnum.Wavenumber_cm:
                 return WavePoint(1.0/(self.value*1E-4), new_unit)
-            elif new_unit == ans.enums.WaveUnit.Wavelength_um:
+            elif new_unit == ans.enum.WaveUnitEnum.Wavelength_um:
                 return self
             else:
                 raise ValueError(f'No conversion from {self.unit} to {new_unit} was found.')
         else:
             raise ValueError(f'No conversion from {self.unit} to anything else was found.')
     
-    def as_unit(self, new_unit : ans.enums.WaveUnit) -> Self:
+    def as_unit(self, new_unit : ans.enum.WaveUnitEnum) -> Self:
         return self.to_unit(new_unit)
     
     def __getattr__(self, name):

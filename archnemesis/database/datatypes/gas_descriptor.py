@@ -6,7 +6,7 @@ from typing import NamedTuple
 
 from archnemesis import Data
 
-import logging
+import archnemesis.cfg.logs as logging
 _lgr = logging.getLogger(__name__)
 _lgr.setLevel(logging.DEBUG)
 
@@ -28,8 +28,11 @@ class RadtranGasDescriptor(NamedTuple):
     @property
     def isotope_name(self):
         if self.iso_id == 0:
-            return "(all isotopes in terrestrial abundance)"
-        return Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)]['name']
+            return "ALL"
+        name = Data.gas_info[str(self.gas_id)]['isotope'][str(self.iso_id)].get('name',None)
+        if name is None or len(name) == 0:
+            return f'UNKNOWN_{self.global_iso_id}'
+        return name
 
     @property
     def label(self):

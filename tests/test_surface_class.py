@@ -51,4 +51,4 @@ def test_surface_radiance_calculation(NEM, NLOCATIONS):
         surface.EMISSIVITY = np.squeeze(surface.EMISSIVITY, axis=1)
     
     # This should not throw an error
-    surface_radiance = surface.calc_radground(surface.ISPACE)
+    _ = surface.calc_radground(surface.ISPACE)

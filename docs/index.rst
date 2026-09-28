@@ -6,8 +6,8 @@
 
 =========================
 
-.. image:: https://img.shields.io/badge/version-v1.0.6-red
-  :target: https://doi.org/10.5281/zenodo.17948742
+.. image:: https://img.shields.io/badge/version-v1.1.0-red
+  :target: https://doi.org/10.5281/zenodo.20841873
 
 .. image:: https://img.shields.io/badge/readthedocs-latest-blue
    :target: https://archnemesis.readthedocs.io
@@ -89,6 +89,22 @@ Finally, install the library in editable mode:
 This will install archNEMESIS along with all required dependencies, while keeping the source editable.
 
 
+Downloading archNEMESIS spectroscopic databases
+-------------------------------------------------
+
+Several features of archNEMESIS, including the calculation of absorption cross sections and correlated-*k* coefficients, rely on spectroscopic line parameters from databases such as HITRAN, HITEMP, GEISA, and ExoMol. To perform these calculations, the spectroscopic line data must be stored in the archNEMESIS database format.
+
+Reference spectroscopic databases compatible with archNEMESIS are available from our DIGITAL.CSIC collection.
+
+.. image:: _static/digital_csic_logo.png
+   :alt: DIGITAL.CSIC
+   :width: 250px
+   :align: center
+   :target: https://digital.csic.es/handle/10261/435473
+
+Users wishing to work with spectroscopic databases that are not included in this collection can generate their own archNEMESIS-formatted databases. If you require assistance with this process, please contact us.
+
+
 Citing archNEMESIS
 --------------------
 
@@ -105,6 +121,18 @@ If archNEMESIS has been significant in your research, we suggest citing the foll
 
 Revision history
 -----------------------------
+
+- `1.1.0 <https://doi.org/10.5281/zenodo.20841873>`_ (25 June, 2026)
+   - Option for custom planet parameters.
+   - Calculations for selection averaging points for disc-averaged measurements.
+   - Implementation of special forward model for primary transit observations of exoplanets.
+   - Filter signal integration for modelling radiometer-like instruments.
+   - Implementation of first version of Emissions_0 class for modelling atmospheric emissions.
+   - Optimised code to allow for fewer classes to be defined.
+   - Major update in line data calculations: created archNEMESIS format for storing spectroscopic line data.
+   - Major update in line data calculations: optimised absorption cross section calculations with numba.
+   - Major update in line data calculations: implemented functionality to calculation a pseudo-continuum from weak lines.
+   - Major update in line data calculations: implemented functionality to run calculation of cross sections at runtime (ILBL=1).
 
 - `1.0.6 <https://doi.org/10.5281/zenodo.17948742>`_ (16 December, 2025)
    - Fixing bugs to reconcile results with NEMESIS.
@@ -172,6 +200,12 @@ Dependencies
    documentation/reference_classes.ipynb
 
 .. toctree::
+   :caption: Gas species information
+   :hidden:
+   
+   documentation/gas_information.md
+
+.. toctree::
    :caption: Model parameterisations
    :hidden:
    
@@ -195,4 +229,8 @@ Dependencies
    
    examples
 
+.. toctree::
+   :caption: Contributors Guide
+   :hidden:
 
+   documentation/contributors_guide.md
