@@ -37,7 +37,18 @@ def retrieval_nemesis(
         nemesisdisc=False,
         nemesisPT=False,
         nemesisC=False,
-        NS_prefix='chains/'
+        NS_prefix='chains/',
+        Emulator=None,
+        emulator_mean=None,
+        emulator_cov=None,
+        NS_options=None,
+        guide_options=None,
+        NS_normalise=None,
+        NS_run_id=None,
+        NS_full_covariance=None,
+        NS_validate_state=None,
+        NS_transport_options=None,
+        NS_stage='both'
 ):
     
     """
@@ -62,10 +73,35 @@ def retrieval_nemesis(
             nemesisdisc :: If True, it indicates that the retrieval is a disc-averaged observation
             nemesisPT :: If True, it indicates that the retrieval is a planetary transit observation
             nemesisC :: If True, calculates all geometries at once (multiple scattering)
+            NS_prefix :: Output directory for nested sampling
+            Emulator :: Optional pretrained callable: free state-vector parameters to spectrum
+            emulator_mean :: Held-out mean residual (emulator minus full model)
+            emulator_cov :: Held-out residual covariance, or vector of variances
+            NS_options :: MultiNest options for ordinary or corrected full-model sampling
+                          With no new options or .nsp file, ordinary runs retain the
+                          original sampler/output and can resume old chains.
+                          NS_options={} explicitly selects the new framework.
+            guide_options :: MultiNest options for the emulator guide, run serially on rank zero
+            NS_transport_options :: Optional Gaussian mixture selection settings; see coreretNS.
+            NS_stage :: 'both' (default), 'guide', or 'full'. Separate stages require NS_run_id.
+                        'guide' saves the guide and transport without full-model sampling.
+                        'full' reuses a saved transport with matching inputs and settings;
+                        Emulator, error arrays and guide/transport settings may be omitted.
+            NS_normalise :: Include the Gaussian log-normalisation constant;
+                            defaults to True with Emulator and False otherwise
+            NS_full_covariance :: Use full Measurement.SE rather than its diagonal;
+                                  defaults to True with Emulator and False otherwise,
+                                  independently of NS_normalise
+            NS_run_id :: Identifier for emulator and forward-model inputs, required to resume
+                         a guided run; must also be supplied on the original run.
+                         Include the state validator in this identifier when supplied.
+            NS_validate_state :: Optional callable checking the complete Variables.XN vector.
+                                 False or InvalidAtmosphericState means zero likelihood;
+                                 other errors abort. Requires NS_run_id. Used in both stages.
         
         OUTPUTS :
         
-            Output files
+            Output files. Nested sampling also returns its NestedSampling_0 object.
         
         CALLING SEQUENCE:
         
@@ -303,7 +339,27 @@ def retrieval_nemesis(
         elif retrieval_method == RetrievalStrategyEnum.Nested_Sampling:
             from archnemesis.NestedSampling_0 import coreretNS
             
-            NestedSampling = coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,NS_prefix=NS_prefix,nemesisC=nemesisC)
+            NestedSampling = coreretNS(
+                runname, Variables, Measurement, Atmosphere, Spectroscopy,
+                Scatter, Stellar, Surface, CIA, Layer, Telluric,
+                NS_prefix=NS_prefix,
+                nemesisC=nemesisC,
+                Emulator=Emulator,
+                emulator_mean=emulator_mean,
+                emulator_cov=emulator_cov,
+                NS_options=NS_options,
+                guide_options=guide_options,
+                NS_normalise=NS_normalise,
+                NS_run_id=NS_run_id,
+                NS_full_covariance=NS_full_covariance,
+                NS_validate_state=NS_validate_state,
+                NS_transport_options=NS_transport_options,
+                NS_stage=NS_stage,
+                nemesisSO=nemesisSO,
+                nemesisdisc=nemesisdisc,
+                nemesisPT=nemesisPT
+            )
+
             Retrieval = NestedSampling
         else:
             raise ValueError('error in retrieval_nemesis :: Retrieval scheme has not been implemented yet')
@@ -325,9 +381,13 @@ def retrieval_nemesis(
             Retrieval.write_raw(runname,Variables,Atmosphere)
             
     if retrieval_method == RetrievalStrategyEnum.Nested_Sampling:
-        Retrieval.make_plots()
+        from mpi4py import MPI
+        from archnemesis.NestedSampling_0 import _ns_rank_zero
+        _ns_rank_zero(MPI.COMM_WORLD, Retrieval.make_plots)
 
     #Finishing pogram
     end = time.time()
     _lgr.info('Model run OK')
     _lgr.info(' Elapsed time (s) = '+str(end-start))
+    if retrieval_method == RetrievalStrategyEnum.Nested_Sampling:
+        return Retrieval
