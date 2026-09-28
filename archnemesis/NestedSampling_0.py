@@ -39,13 +39,15 @@ solve = NotImplemented
 
 class NestedSampling_0:
     
-    def __init__(self, N_LIVE_POINTS=400):
+    def __init__(self, N_LIVE_POINTS=400, nemesisC=False):
         
         """
         Inputs
         ------
         @param N_LIVE_POINTS: int,
             Number of live points in retrieval 
+        @param nemesisC: bool,
+            Use the NEMESIS C forward model when True.
 
         Methods
         -------
@@ -68,7 +70,7 @@ class NestedSampling_0:
             solve = _solve
         
         self.N_LIVE_POINTS = N_LIVE_POINTS
-        return
+        self.nemesisC = nemesisC
 
     def chi_squared(self, a,b,err):
         """
@@ -86,7 +88,10 @@ class NestedSampling_0:
         original_stdout = sys.stdout  
         try:
             sys.stdout = open(os.devnull, 'w')  # Redirect stdout
-            YN = self.ForwardModel.nemesisfm()
+            if self.nemesisC:
+                YN = self.ForwardModel.nemesisCfm()
+            else:
+                YN = self.ForwardModel.nemesisfm()
         finally:
             sys.stdout.close()  # Close the devnull
             sys.stdout = original_stdout  # Restore the original stdout
@@ -288,7 +293,7 @@ class NestedSampling_0:
 
         plt.show()
         
-def coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,NS_prefix='chains/'):
+def coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stellar,Surface,CIA,Layer,Telluric,NS_prefix='chains/',nemesisC=False):
     """
         FUNCTION NAME : coreretNS()
         
@@ -334,7 +339,7 @@ def coreretNS(runname,Variables,Measurement,Atmosphere,Spectroscopy,Scatter,Stel
     #size = comm.Get_size()
 
     # Defining the NestedSampling class
-    NestedSampling = NestedSampling_0()
+    NestedSampling = NestedSampling_0(nemesisC=nemesisC)
     
     NestedSampling.ForwardModel = ForwardModel_0(runname=runname, Atmosphere=Atmosphere,Surface=Surface,
                                   Measurement=Measurement,Spectroscopy=Spectroscopy,Telluric=Telluric,

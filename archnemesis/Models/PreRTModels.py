@@ -18,7 +18,7 @@ import archnemesis.Data.constants as const
 from archnemesis.helpers import h5py_helper
 from archnemesis.helpers.maths_helper import ngauss
 from archnemesis.Scatter_0 import kk_new_sub
-from archnemesis.enums import AtmosphericProfileType
+from archnemesis.enums import AtmosphericProfileType, Gas
 from archnemesis.enums import WaveUnit
 
 import logging
@@ -2188,7 +2188,6 @@ class Model32(PreRTModelBase):
         
         return
 
-
 class Model43(PreRTModelBase):
     """
         Temperature profile from double grey analytic formulation (Parmentier and Guillot (2014) and Line et al. (2013))  
@@ -2605,54 +2604,46 @@ class Model43(PreRTModelBase):
 
 class Model45(PreRTModelBase):
     """
-        Variable deep tropospheric and stratospheric abundances, along with tropospheric humidity.
+        Irwin gas model: Variable deep tropospheric and stratospheric abundances,
+        along with tropospheric humidity.
+
+        Supports CH4 (gas 6), NH3 (gas 11), and H2S (gas 36).
+        The H2S saturation law describes solid ice below 187.6 K.
+        The three state-vector entries are ln(deep VMR), ln(humidity),
+        and ln(stratospheric VMR), in that order.
     """
     
     id : int = 45
 
+    # ln(saturation pressure / bar) = A + B / T.
+    # CH4 and NH3 use the coefficients from the Fortran Irwin routines.
+    _svp_coefficients = {
+        Gas.CH4: (10.6815, -1163.83),
+        Gas.NH3: (17.3471, -3930.55),
+        Gas.H2S: (12.953, -2706.2),
+    }
+
     def __init__(
             self, 
             state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
             n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-            
             atm_profile_type : AtmosphericProfileType,
-            #   ENUM that tells us what kind of atmospheric profile this model instance represents
         ):
-        """
-            Initialise an instance of the model.
-        """
         super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
         
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model.
-        # NOTE: It is best to define these in the same order and with the
-        # same names as they are saved to the state vector, and use the same
-        # names and ordering when they are passed to the `self.calculate(...)` 
-        # class method.
         self.parameters = (
-            ModelParameter('deep_vmr', slice(0,1), 'deep (topospheric) gas volume mixing ratio', 'RATIO'),
+            ModelParameter('deep_vmr', slice(0,1), 'deep (tropospheric) gas volume mixing ratio', 'RATIO'),
             ModelParameter('humidity', slice(1,2), 'relative humidity of gas', 'RATIO'),
             ModelParameter('strato_vmr', slice(2,3), 'high (stratospheric) gas volume mixing ratio', 'RATIO'),
         )
-        
         return
-
 
     @classmethod
     def calculate(
             cls, 
             atm : "Atmosphere_0",
-            #   Instance of Atmosphere_0 class we are operating upon
-            
             atm_profile_type : AtmosphericProfileType,
-            #   ENUM of atmospheric profile type we are altering.
-            
             atm_profile_idx : int | None,
-            #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
-            
             tropo, 
             humid, 
             strato, 
@@ -2660,45 +2651,25 @@ class Model45(PreRTModelBase):
         ) -> tuple["Atmosphere_0", np.ndarray]:
 
         """
-            FUNCTION NAME : model45()
+            FUNCTION NAME : Model45.calculate
 
             DESCRIPTION :
-
-                Irwin CH4 model. Variable deep tropospheric and stratospheric abundances,
-                along with tropospheric humidity.
+                Irwin gas model. Variable deep tropospheric and stratospheric abundances,
+                along with tropospheric humidity. As in Fortran Model45, condensation is
+                triggered at full saturation, then humidity scales the saturated
+                abundance. The stratospheric and deep abundance caps follow.
 
             INPUTS :
-
-                atm :: Python class defining the atmosphere
-
-                atm_profile_type :: AtmosphericProfileType
-                    ENUM of atmospheric profile type we are altering.
-                
-                atm_profile_idx : int | None
-                    Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
-
-                tropo :: Deep methane VMR
-
-                humid :: Relative methane humidity in the troposphere
-
-                strato :: Stratospheric methane VMR
-
-            OPTIONAL INPUTS:
-
-                MakePlot :: If True, a summary plot is generated
+                tropo :: Deep gas VMR
+                humid :: Relative gas humidity in the troposphere
+                strato :: Stratospheric gas VMR
 
             OUTPUTS :
-
-                atm :: Updated atmospheric class
-                xmap(npro) :: Matrix of relating funtional derivatives to 
-                                                 elements in state vector
-
-            CALLING SEQUENCE:
-
-                atm,xmap = model45(atm, atm_profile_type, atm_profile_idx, tropo, humid, strato)
-
-            MODIFICATION HISTORY : Joe Penn (09/10/2024)
-
+                atm :: Updated atmosphere
+                xnewgrad(3, NP) :: Derivatives of VMR with respect to
+                    ln(tropo), ln(humid), and ln(strato), respectively.
+                    These are derivatives within the selected branch; a
+                    derivative across a branch discontinuity is not defined.
         """
 
         _lgr.debug(f'{atm_profile_type=} {atm_profile_idx=} {tropo=} {humid=} {strato=}')
@@ -2708,40 +2679,59 @@ class Model45(PreRTModelBase):
             _lgr.error(_msg)
             raise ValueError(_msg)
             
-        SCH40 = 10.6815
-        SCH41 = -1163.83
-        # psvp is in bar
+        if atm_profile_idx is None:
+            raise ValueError('Model45 requires a gas profile index')
+        gas_id = atm.ID[atm_profile_idx]
+        if gas_id not in cls._svp_coefficients:
+            raise ValueError(f'Model45 is not set up for gas ID {gas_id}; expected 6, 11, or 36')
+        svp_a, svp_b = cls._svp_coefficients[gas_id]
+
         NP = atm.NP
 
         xnew = np.zeros(NP)
-        xnewgrad = np.zeros(NP)
-        pch4 = np.zeros(NP)
+        xnewgrad = np.zeros((3, NP))
+        partial_pressure = np.zeros(NP)
         pbar = np.zeros(NP)
         psvp = np.zeros(NP)
 
         for i in range(NP):
-            pbar[i] = atm.P[i] /100000#* 1.013
-            tmp = SCH40 + SCH41 / atm.T[i]
+            pbar[i] = atm.P[i] / 100000.0  # Convert Pascal to Bar
+
+            # Calculate saturation pressure in bar for the selected gas.
+            tmp = svp_a + svp_b / atm.T[i]
             psvp[i] = 1e-30 if tmp < -69.0 else np.exp(tmp)
 
-            pch4[i] = tropo * pbar[i]
-            if pch4[i] / psvp[i] > 1.0:
-                pch4[i] = psvp[i] * humid
+            # 1. Start with Deep VMR
+            partial_pressure[i] = tropo * pbar[i]
+            active_parameter = 0
 
-            if pbar[i] < 0.1 and pch4[i] / pbar[i] > strato:
-                pch4[i] = pbar[i] * strato
+            # 2. Check Condensation (Humidity limit)
+            if partial_pressure[i] / psvp[i] > 1.0:
+                partial_pressure[i] = psvp[i] * humid
+                active_parameter = 1
 
-            if pbar[i] > 0.5 and pch4[i] / pbar[i] > tropo:
-                pch4[i] = pbar[i] * tropo
-                xnewgrad[i] = 1.0
+            # 3. Stratospheric Cap (Photochemistry/Depletion)
+            # Cap VMR if pressure is low (< 0.1 bar)
+            if pbar[i] < 0.1 and partial_pressure[i] / pbar[i] > strato:
+                partial_pressure[i] = pbar[i] * strato
+                active_parameter = 2
 
-            xnew[i] = pch4[i] / pbar[i]
+            # 4. Enforce Deep VMR (Deep Atmosphere > 0.5 bar)
+            # Supersaturated humidity can exceed the deep abundance; apply
+            # Model45's final cap and replace the active derivative as well.
+            if pbar[i] > 0.5 and partial_pressure[i] / pbar[i] > tropo:
+                partial_pressure[i] = pbar[i] * tropo
+                active_parameter = 0
+
+            xnew[i] = partial_pressure[i] / pbar[i]
+            # Within each branch VMR is proportional to the active parameter,
+            # so d(VMR)/d(ln(parameter)) equals VMR itself.
+            xnewgrad[active_parameter, i] = xnew[i]
 
         _lgr.debug(f'{xnew=}')
         atm.VMR[:, atm_profile_idx] = xnew
 
         return atm, xnewgrad
-
 
     @classmethod
     def from_apr_to_state_vector(
@@ -2762,20 +2752,19 @@ class Model45(PreRTModelBase):
             runname : str,
             sxminfac : float,
         ) -> Self:
+        if varident[0] not in cls._svp_coefficients:
+            raise ValueError(f'Model45 is not set up for gas ID {varident[0]}; expected 6, 11, or 36')
         ix_0 = ix
-        #******** Irwin CH4 model. Represented by tropospheric and stratospheric methane 
-        #******** abundances, along with methane humidity. 
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
+        # Irwin gas model: deep VMR, humidity, stratospheric VMR.
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float')
         tropo = tmp[0]
         etropo = tmp[1]
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float')
         humid = tmp[0]
         ehumid = tmp[1]
-        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float') # Use "!" as comment character in *.apr files
+        tmp = np.fromstring(f.readline().rsplit('!',1)[0], sep=' ',count=2,dtype='float')
         strato = tmp[0]
         estrato = tmp[1]
-
-
 
         x0[ix] = np.log(tropo)
         lx[ix] = 1
@@ -2799,7 +2788,7 @@ class Model45(PreRTModelBase):
         ix = ix + 1
 
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
+        assert issubclass(cls, model_classification[0]), "Model base class mismatch"
 
         return cls(ix_0, ix-ix_0, model_classification[1])
     
@@ -2815,16 +2804,14 @@ class Model45(PreRTModelBase):
             ndust : int,
             nlocations : int,
         ) -> Self:
+        if varident[0] not in cls._svp_coefficients:
+            raise ValueError(f'Model45 is not set up for gas ID {varident[0]}; expected 6, 11, or 36')
         ix_0 = ix
-        #******** Irwin CH4 model. Represented by tropospheric and stratospheric methane 
-        #******** abundances, along with methane humidity. 
+        # Irwin gas model bookmark.
         ix = ix + 3
-
         model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
-        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification from Variables_0::classify_model_type_from_varident"
-
+        assert issubclass(cls, model_classification[0]), "Model base class mismatch"
         return cls(ix_0, ix-ix_0, model_classification[1])
-
 
     def calculate_from_subprofretg(
             self,
@@ -2834,14 +2821,6 @@ class Model45(PreRTModelBase):
             ivar : int,
             xmap : np.ndarray,
         ) -> None:
-        #Model 45. Irwin CH4 model. Variable deep tropospheric and stratospheric abundances,
-            #along with tropospheric humidity.
-        #***************************************************************
-        #tropo = np.exp(forward_model.Variables.XN[ix])   # Deep tropospheric abundance
-        #humid = np.exp(forward_model.Variables.XN[ix+1])  # Humidity
-        #strato = np.exp(forward_model.Variables.XN[ix+2])  # Stratospheric abundance
-        
-        #forward_model.AtmosphereX,xmap1 = self.calculate(forward_model.AtmosphereX, ipar, tropo, humid, strato)
         
         atm = forward_model.AtmosphereX
         atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
@@ -2854,9 +2833,7 @@ class Model45(PreRTModelBase):
         )
         
         forward_model.AtmosphereX = atm
-        xmap[ix, ipar, :] = xmap1
-
-        #ix = ix + forward_model.Variables.NXVAR[ivar]
+        xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
         return
 
 
@@ -3204,6 +3181,10 @@ class Model47(PreRTModelBase):
         xmap[self.state_vector_slice, ipar, 0:forward_model.AtmosphereX.NP] = xmap1
         
         return
+
+
+
+
 
 
 class Model49(PreRTModelBase):
@@ -5904,217 +5885,231 @@ class Model444(PreRTModelBase):
         Allows for retrieval of the particle size distribution and imaginary refractive index.
     """
     
-    id : int = 444
-
+    id: int = 444
 
     def __init__(
-            self, 
-            state_vector_start : int, 
-            #   Index of the state vector where parameters from this model start
-            
-            n_state_vector_entries : int,
-            #   Number of parameters for this model stored in the state vector
-            
-            haze_params : dict[str,Any],
-            #   Optical constants for the aerosol species (haze) this model represents
-            
-            aerosol_species_index : int,
-            #   Index of the aerosol species that this model pertains to
-            
-            scattering_type_id : int,
-            #   The scattering type this model uses
-        ):
+        self,
+        state_vector_start: int,
+        n_state_vector_entries: int,
+        haze_params: dict[str, Any],
+        aerosol_species_index: int,
+        scattering_type_id: int,
+    ):
         """
-            Initialise an instance of the model.
+        Initialise an instance of the model.
         """
         super().__init__(state_vector_start, n_state_vector_entries)
-        
-        # Define sub-slices of the state vector that correspond to
-        # parameters of the model
+
+        # State-vector layout: [ ln(a), ln(b), ln(k_im[0]), ln(k_im[1]), ... ]
         self.parameters = (
-            ModelParameter('particle_size_distribution_params', slice(0,2), 'Values that define the particle size distribution'),
-            ModelParameter('imaginary_ref_idx', slice(2,None), 'Imaginary refractive index of the particle size distribution'),
+            ModelParameter(
+                "particle_size_distribution_params",
+                slice(0, 2),
+                "Values that define the particle size distribution (stored ln-space).",
+            ),
+            ModelParameter(
+                "imaginary_ref_idx",
+                slice(2, None),
+                "Imaginary refractive index samples across the haze file grid (stored ln-space).",
+            ),
         )
-        
-        # Store model-specific constants on the model instance for easy access later
+
         self.haze_params = haze_params
         self.aerosol_species_idx = aerosol_species_index
         self.scattering_type_id = scattering_type_id
 
+    @staticmethod
+    def _get_darkening_for_species(Scatter: "Scatter_0", idust: int) -> float:
+        """
+        Robustly read the darkening factor for species idust; default to 1.0.
+        Does not modify REFIND_IM; only returns the factor.
+        """
+        try:
+            val = getattr(Scatter, "DARKENING_PARAMETER", None)
+            if val is None:
+                return 1.0
+            # Accept list/np.ndarray; guard for short arrays
+            if np.ndim(val) == 0:
+                return float(val)
+            if idust < len(val):
+                return float(val[idust])
+            return 1.0
+        except Exception:
+            return 1.0
 
     @classmethod
     def calculate(
-            cls, 
-            Scatter : "Scatter_0",
-            #   Scatter_0 instance of the retrieval setup we are calculating this model for
-            
-            idust : int,
-            #   Aerosol species index we are calculating this model for
-            
-            iscat : int,
-            #   scattering type we are using for this mode. NOTE: this is always set to 1 for now
-            
-            xprof : np.ndarray[["nparam"],float],
-            #   The slice of the state vector that parameters of this model are held in.
-            
-            haze_params : dict[str,Any] ,
-            #   A dictionary of constants for the aerosol being represented by this model.
-            
-        ) -> "Scatter_0":
+        cls,
+        Scatter: "Scatter_0",
+        idust: int,
+        iscat: int,
+        xprof: np.ndarray[["nparam"], float],
+        haze_params: dict[str, Any],
+    ) -> "Scatter_0":
         """
-            FUNCTION NAME : model444()
+        FUNCTION NAME : model444()
 
-            DESCRIPTION :
+        DESCRIPTION :
+            NEMESIS model 444. Retrieves particle size distribution parameters and
+            an imaginary refractive index spectrum. Applies a darkening multiplier
+            from Scatter.DARKENING_PARAMETER[idust] (default 1.0).
 
-                Function defining the model parameterisation 444 in NEMESIS.
+        INPUTS :
+            Scatter    :: Scattering container
+            idust      :: Index of the aerosol distribution (0 .. NDUST-1)
+            iscat      :: Flag indicating the particle size distribution
+            xprof      :: [ ln(a), ln(b), ln(k_im[0..]) ]
+            haze_params:: Haze constants read from 444 file (WAVE, NREAL, WAVE_REF, WAVE_NORM)
 
-                Allows for retrieval of the particle size distribution and imaginary refractive index.
+        OUTPUTS :
+            Scatter :: Updated Scatter class
+        """
+        _lgr.debug(f"{idust=} {iscat=} {xprof=} {type(xprof)=}")
+        for key in ("WAVE", "NREAL", "WAVE_REF", "WAVE_NORM"):
+            _lgr.debug(f"haze_params[{key}] : {type(haze_params[key])} = {haze_params[key]}")
 
-            INPUTS :
-
-                Scatter :: Python class defining the scattering parameters
-                idust :: Index of the aerosol distribution to be modified (from 0 to NDUST-1)
-                iscat :: Flag indicating the particle size distribution
-                xprof :: Contains the size distribution parameters and imaginary refractive index
-                haze_params :: Read from 444 file. Contains relevant constants.
-
-            OPTIONAL INPUTS:
-
-
-            OUTPUTS :
-
-                Scatter :: Updated Scatter class
-
-            CALLING SEQUENCE:
-
-                Scatter = model444(Scatter,idust,iscat,xprof,haze_params)
-
-            MODIFICATION HISTORY : Joe Penn (11/9/2024)
-
-        """   
-        _lgr.debug(f'{idust=} {iscat=} {xprof=} {type(xprof)=}')
-        for item in ('WAVE', 'NREAL', 'WAVE_REF', 'WAVE_NORM'):
-            _lgr.debug(f'haze_params[{item}] : {type(haze_params[item])} = {haze_params[item]}')
-
-        a = np.exp(xprof[0])
-        b = np.exp(xprof[1])
+        # Particle size distribution parameters (stored in ln-space)
+        a = float(np.exp(xprof[0]))
+        b = float(np.exp(xprof[1]))
         if iscat == 1:
-            pars = (a,b,(1-3*b)/b)
+            pars = (a, b, (1 - 3 * b) / b)
         elif iscat == 2:
-            pars = (a,b,0)
+            pars = (a, b, 0.0)
         elif iscat == 4:
-            pars = (a,0,0)
+            pars = (a, 0.0, 0.0)
         else:
-            _lgr.warning(f'ISCAT = {iscat} not implemented for model 444 yet! Defaulting to iscat = 1.')
-            pars = (a,b,(1-3*b)/b)
+            _lgr.warning(f"ISCAT = {iscat} not implemented for model 444 yet! Defaulting to iscat = 1.")
+            pars = (a, b, (1 - 3 * b) / b)
 
-        Scatter.WAVER = haze_params['WAVE']
-        Scatter.REFIND_IM = np.exp(xprof[2:])
-        reference_nreal = haze_params['NREAL']
-        reference_wave = haze_params['WAVE_REF']
-        normalising_wave = haze_params['WAVE_NORM']
-        if len(Scatter.REFIND_IM) == 1:
-            Scatter.REFIND_IM = Scatter.REFIND_IM * np.ones_like(Scatter.WAVER)
+        # Set wavelength grid and base (unscaled) imaginary refractive index
+        Scatter.WAVER = haze_params["WAVE"]
+        k_im_base = np.exp(xprof[2:])  # may be length-1 scalar or spectrum samples
 
-        Scatter.REFIND_REAL = kk_new_sub(np.array(Scatter.WAVER), np.array(Scatter.REFIND_IM), reference_wave, reference_nreal)
+        # Obtain darkening multiplier for this species (defaults to 1.0 if absent)
+        darkening = cls._get_darkening_for_species(Scatter, idust)
 
+        # Apply darkening to the imaginary refractive index definition
+        if np.size(k_im_base) == 1:
+            # Broadcast to the haze wavelength grid after scaling
+            k_im = float(darkening) * float(k_im_base) * np.ones_like(Scatter.WAVER, dtype=float)
+        else:
+            k_im = float(darkening) * np.array(k_im_base, dtype=float)
 
+        Scatter.REFIND_IM = k_im
+
+        # Real refractive index via KK transform anchored at (WAVE_REF, NREAL)
+        reference_nreal = float(haze_params["NREAL"])
+        reference_wave = float(haze_params["WAVE_REF"])
+        normalising_wave = float(haze_params["WAVE_NORM"])
+
+        Scatter.REFIND_REAL = kk_new_sub(
+            np.array(Scatter.WAVER, dtype=float),
+            np.array(Scatter.REFIND_IM, dtype=float),
+            reference_wave,
+            reference_nreal,
+        )
+
+        # Build phase function / optical properties for this species
         Scatter.makephase(idust, iscat, pars)
 
-        xextnorm = np.interp(normalising_wave,Scatter.WAVE,Scatter.KEXT[:,idust])
-        Scatter.KEXT[:,idust] = Scatter.KEXT[:,idust]/xextnorm
-        Scatter.KSCA[:,idust] = Scatter.KSCA[:,idust]/xextnorm
-        return Scatter
+        # Normalise extinction and scattering at the specified normalising wavelength
+        xextnorm = np.interp(normalising_wave, Scatter.WAVE, Scatter.KEXT[:, idust])
+        Scatter.KEXT[:, idust] = Scatter.KEXT[:, idust] / xextnorm
+        Scatter.KSCA[:, idust] = Scatter.KSCA[:, idust] / xextnorm
 
+        _lgr.debug(
+            f"Model444: applied darkening={darkening:.6g}; normalised at {normalising_wave}"
+        )
+        return Scatter
 
     @classmethod
     def from_apr_to_state_vector(
-            cls,
-            variables : "Variables_0",
-            f : IO,
-            varident : np.ndarray[[3],int],
-            varparam : np.ndarray[["mparam"],float],
-            ix : int,
-            lx : np.ndarray[["mx"],int],
-            x0 : np.ndarray[["mx"],float],
-            sx : np.ndarray[["mx","mx"],float],
-            inum : np.ndarray[["mx"],int],
-            npro : int,
-            ngas : int,
-            ndust : int,
-            nlocations : int,
-            runname : str,
-            sxminfac : float,
-        ) -> Self:
+        cls,
+        variables: "Variables_0",
+        f: IO,
+        varident: np.ndarray[[3], int],
+        varparam: np.ndarray[["mparam"], float],
+        ix: int,
+        lx: np.ndarray[["mx"], int],
+        x0: np.ndarray[["mx"], float],
+        sx: np.ndarray[["mx", "mx"], float],
+        inum: np.ndarray[["mx"], int],
+        npro: int,
+        ngas: int,
+        ndust: int,
+        nlocations: int,
+        runname: str,
+        sxminfac: float,
+    ) -> "Model444":
+        """
+        Read the 444 haze file and pack state vector with ln-PSD params and ln(k_im) samples.
+        Preserves legacy covariance-building behaviour including optional correlation length.
+        """
         ix_0 = ix
-        #******** model for retrieving an aerosol particle size distribution and imaginary refractive index spectrum
-        
-        _lgr.debug(f'{ix=}')
-        s = f.readline().split()    
-        haze_f = open(s[0],'r')
+
+        # Read haze file path
+        s = f.readline().split()
+        haze_f = open(s[0], "r")
+
         haze_waves = []
-        for j in range(2):
+
+        # First two lines: ln(a), ln(b), with uncertainties
+        for _ in range(2):
             line = haze_f.readline().split()
             xai, xa_erri = line[:2]
-
             x0[ix] = np.log(float(xai))
             lx[ix] = 1
-            sx[ix,ix] = (float(xa_erri)/float(xai))**2.
+            sx[ix, ix] = (float(xa_erri) / float(xai)) ** 2.0
+            ix += 1
 
-            ix = ix + 1
-        _lgr.debug(f'{ix=}')
+        # Meta and grid
+        nwave, clen = haze_f.readline().split("!")[0].split()
+        vref, nreal_ref = haze_f.readline().split("!")[0].split()
+        v_od_norm = haze_f.readline().split("!")[0]
 
-        nwave, clen = haze_f.readline().split('!')[0].split()
-        vref, nreal_ref = haze_f.readline().split('!')[0].split()
-        v_od_norm = haze_f.readline().split('!')[0]
-        _lgr.debug(f'{nwave=} {clen=} {vref=} {nreal_ref=} {v_od_norm=}')
-
-        for j in range(int(nwave)):
+        # k_im samples (ln) with uncertainties
+        for _ in range(int(nwave)):
             line = haze_f.readline().split()
             v, xai, xa_erri = line[:3]
-
             x0[ix] = np.log(float(xai))
             lx[ix] = 1
-            sx[ix,ix] = (float(xa_erri)/float(xai))**2.
-
-            ix = ix + 1
+            sx[ix, ix] = (float(xa_erri) / float(xai)) ** 2.0
+            ix += 1
             haze_waves.append(float(v))
-
             if float(clen) < 0:
                 break
-        _lgr.debug(f'{ix=}')
 
-        aerosol_species_idx = varident[1]-1
+        aerosol_species_idx = int(varident[1]) - 1
 
         haze_params = dict()
-        haze_params['NX'] = 2+len(haze_waves)
-        haze_params['WAVE'] = haze_waves
-        haze_params['NREAL'] = float(nreal_ref)
-        haze_params['WAVE_REF'] = float(vref)
-        haze_params['WAVE_NORM'] = float(v_od_norm)
+        haze_params["NX"] = 2 + len(haze_waves)
+        haze_params["WAVE"] = haze_waves
+        haze_params["NREAL"] = float(nreal_ref)
+        haze_params["WAVE_REF"] = float(vref)
+        haze_params["WAVE_NORM"] = float(v_od_norm)
 
-        varparam[0] = 2+len(haze_waves)
+        varparam[0] = 2 + len(haze_waves)
         varparam[1] = float(clen)
         varparam[2] = float(vref)
         varparam[3] = float(nreal_ref)
         varparam[4] = float(v_od_norm)
 
+        # Optional spectral correlation for ln(k_im)
         if float(clen) > 0:
+            # Start of the ln(k_im) block within this model's parameters
+            start = ix - int(nwave)
             for j in range(int(nwave)):
                 for k in range(int(nwave)):
-
-                    delv = haze_waves[k]-haze_waves[j]
-                    arg = abs(delv/float(clen))
+                    delv = haze_waves[k] - haze_waves[j]
+                    arg = abs(delv / float(clen))
                     xfac = np.exp(-arg)
                     if xfac >= sxminfac:
-                        sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
-                        sx[ix+k,ix+j] = sx[ix+j,ix+k]
-        _lgr.debug(f'{ix=}')
-        
-        scattering_type_id = 1 # Should add a way to alter this value from the input files.
+                        sx[start + j, start + k] = np.sqrt(sx[start + j, start + j] * sx[start + k, start + k]) * xfac
+                        sx[start + k, start + j] = sx[start + j, start + k]
 
-        return cls(ix_0, ix-ix_0, haze_params, aerosol_species_idx, scattering_type_id)
+        scattering_type_id = 1  # Future: allow this to be set from input
 
+        return cls(ix_0, ix - ix_0, haze_params, aerosol_species_idx, scattering_type_id)
 
     @classmethod
     def from_bookmark(
@@ -6157,25 +6152,23 @@ class Model444(PreRTModelBase):
 
 
     def calculate_from_subprofretg(
-            self,
-            forward_model : "ForwardModel_0",
-            ix : int,
-            ipar : int,
-            ivar : int,
-            xmap : np.ndarray,
-        ) -> None:
-        
-        # NOTE:
-        # ix is not required as we have stored that information on the model instance
-        # ipar is ignored for this model
-        # ivar is ignored for this model
-        # xmap is ignored for this model
+        self,
+        forward_model: "ForwardModel_0",
+        ix: int,
+        ipar: int,
+        ivar: int,
+        xmap: np.ndarray,
+    ) -> None:
+        """
+        Apply this model's effect to Scatter, consuming any darkening already placed
+        by Model501 (or defaulting to 1.0 if absent).
+        """
         forward_model.ScatterX = self.calculate(
             forward_model.ScatterX,
             self.aerosol_species_idx,
             self.scattering_type_id,
             self.get_state_vector_slice(forward_model.Variables.XN),
-            self.haze_params
+            self.haze_params,
         )
 
 
@@ -6560,73 +6553,90 @@ class Model447(PreRTModelBase):
         raise NotImplementedError
 
 
+
+
 class Model500(PreRTModelBase):
     """
         This allows the retrieval of CIA opacity with a gaussian basis.
         Assumes a constant P/T dependence.
-    """
-    id : int = 500
 
+        .apr format expected (two lines for this variable block):
+            <amplitudes_filename>
+            <vlo> <vhi>
+    """
+    id: int = 500
+
+    def __init__(
+        self,
+        state_vector_start: int,
+        n_state_vector_entries: int,
+        icia: int,
+        nbasis: int,
+        vlo: float,
+        vhi: float,
+        atm_profile_type: AtmosphericProfileType = AtmosphericProfileType.NOT_PRESENT,
+    ):
+        """
+        Initialise an instance of the model.
+        """
+        super().__init__(state_vector_start, n_state_vector_entries, atm_profile_type)
+
+        self.icia = icia
+        self.nbasis = nbasis
+        self.vlo = vlo
+        self.vhi = vhi
+
+        # Define the layout of the state vector for this model
+        self.parameters = (
+            ModelParameter(
+                'amplitudes',
+                slice(0, self.nbasis),
+                'Amplitudes of each gaussian in the basis (stored in log-space).',
+                'cm-1/amagat^2'
+            ),
+        )
 
     @classmethod
-    def calculate(cls, k_cia, waven, icia, vlo, vhi, nbasis, amplitudes):
+    def calculate(cls, k_cia: np.ndarray, waven: np.ndarray, icia: int, vlo: float, vhi: float, nbasis: int, amplitudes: np.ndarray) -> np.ndarray:
         """
-            FUNCTION NAME : model500()
-
-            DESCRIPTION :
-
-                Function defining the model parameterisation 500.
-                This allows the retrieval of CIA opacity with a gaussian basis.
-                Assumes a constant P/T dependence.
-
-            INPUTS :
-
-                cia :: CIA class
-
-                icia :: CIA pair to be modelled
-
-                vlo :: Lower wavenumber bound
-
-                vhi :: Upper wavenumber bound
-
-                nbasis :: Number of gaussians in the basis
-
-                amplitudes :: Amplitudes of each gaussian
-
-
-            OUTPUTS :
-
-                cia :: Updated CIA class
-                xmap :: Gradient (not implemented)
-
-            CALLING SEQUENCE:
-
-                cia,xmap = model500(cia, icia, nbasis, amplitudes)
-
-            MODIFICATION HISTORY : Joe Penn (14/01/25)
-
+        Calculates the new CIA profile based on Gaussian basis functions.
         """
+        # Find the indices in the wavenumber array closest to the bounds.
+        ilo = np.argmin(np.abs(waven - vlo))
+        ihi = np.argmin(np.abs(waven - vhi))
 
-        ilo = np.argmin(np.abs(waven-vlo))
-        ihi = np.argmin(np.abs(waven-vhi))
-        width = (ihi - ilo)/nbasis          # Width of the Gaussian functions
+        # --- Validation Block ---
+        if ihi <= ilo:
+            _lgr.error(
+                f"Model 500: Invalid wavenumber range for CIA pair {icia}. "
+                f"Resulted in an empty slice (ilo={ilo}, ihi={ihi}).\n"
+                f"  - Provided Range: vlo={vlo:.2f}, vhi={vhi:.2f}\n"
+                f"  - CIA Data Range: waven.min()={waven.min():.2f}, waven.max()={waven.max():.2f}\n"
+                "  - Check your .apr file to ensure vlo < vhi and the range overlaps the CIA data."
+            )
+            raise ValueError("Model 500 failed due to invalid wavenumber range.")
+
+        if icia >= k_cia.shape[0]:
+            raise IndexError(
+                f"Model 500: CIA pair index {icia} is out of bounds. "
+                f"The CIA data has only {k_cia.shape[0]} pairs (indexed 0 to {k_cia.shape[0]-1})."
+            )
+        # --- End Validation ---
+
+        width = (ihi - ilo) / nbasis
         centers = np.linspace(ilo, ihi, int(nbasis))
 
         def gaussian_basis(x, centers, width):
             return np.exp(-((x[:, None] - centers[None, :])**2) / (2 * width**2))
 
-        x = np.arange(ilo,ihi+1)
-
+        x = np.arange(ilo, ihi + 1)
         G = gaussian_basis(x, centers, width)
         gaussian_cia = G @ amplitudes
 
-        k_cia = k_cia * 0
+        new_k_cia = k_cia.copy()
+        new_k_cia[icia, :, :, ilo:ihi+1] = gaussian_cia
 
-        k_cia[icia,:,:,ilo:ihi+1] = gaussian_cia
-
-        xmap = np.zeros(1)
-        return k_cia,xmap
-
+        return new_k_cia
 
     @classmethod
     def from_apr_to_state_vector(
@@ -6649,41 +6659,62 @@ class Model500(PreRTModelBase):
         ) -> Self:
         ix_0 = ix
 
+        # The CIA pair index is the second element of the varident array.
+        icia = int(varident[1])
+
+        # Line 1: amplitudes filename
         s = f.readline().split()
-        amp_f = open(s[0],'r')
+        with open(s[0], 'r') as amp_f:
+            # Line 2: CIA bounds (vlo vhi)
+            bounds = f.readline().split()
+            if len(bounds) < 2:
+                raise ValueError("Model500 .apr expects a second line with 'vlo vhi' after the filename.")
+            vlo = float(bounds[0])
+            vhi = float(bounds[1])
 
-        tmp = np.fromfile(amp_f,sep=' ',count=2,dtype='float')
+            # amplitudes file: first line -> nbasis, correlation length
+            tmp = np.fromfile(amp_f, sep=' ', count=2, dtype='float')
+            nbasis = int(tmp[0])
+            clen = float(tmp[1])
 
-        nbasis = int(tmp[0])
-        clen = float(tmp[1])
+            # Read a priori values for basis function amplitudes
+            for j in range(nbasis):
+                tmp_amp = np.fromfile(amp_f, sep=' ', count=2, dtype='float')
+                amp_val, amp_err = float(tmp_amp[0]), float(tmp_amp[1])
 
-        amp = np.zeros([nbasis])
-        eamp = np.zeros([nbasis])
+                x0[ix + j] = np.log(amp_val)
+                lx[ix + j] = 1
+                sx[ix + j, ix + j] = (amp_err / amp_val)**2.
+                inum[ix + j] = 1
 
-        for j in range(nbasis):
-            tmp = np.fromfile(amp_f,sep=' ',count=2,dtype='float')
-            amp[j] = float(tmp[0])
-            eamp[j] = float(tmp[1])
+            # Calculate covariance between basis function amplitudes
+            for j in range(nbasis):
+                for k in range(nbasis):
+                    deli = j - k
+                    arg = abs(deli / clen)
+                    xfac = np.exp(-arg)
+                    if xfac >= sxminfac:
+                        sx[ix + j, ix + k] = np.sqrt(sx[ix + j, ix + j] * sx[ix + k, ix + k]) * xfac
+                        sx[ix + k, ix + j] = sx[ix + j, ix + k]
 
-            lx[ix+j] = 1
-            x0[ix+j] = np.log(amp[j])
-            sx[ix+j,ix+j] = ( eamp[j]/amp[j]  )**2.
+        ix_end = ix + nbasis
 
-        for j in range(nbasis):
-            for k in range(nbasis):
+        # Persist the definition needed by .pre/.raw readers, which only
+        # retain VARIDENT, VARPARAM, and the state vector, not the .apr files.
+        varparam[0:3] = (nbasis, vlo, vhi)
 
-                deli = j-k
-                arg = abs(deli/clen)
-                xfac = np.exp(-arg)
-                if xfac >= sxminfac:
-                    sx[ix+j,ix+k] = np.sqrt(sx[ix+j,ix+j]*sx[ix+k,ix+k])*xfac
-                    sx[ix+k,ix+j] = sx[ix+j,ix+k]
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        assert issubclass(cls, model_classification[0]), "Model base class must agree with the classification"
 
-        varparam[0] = nbasis
-        ix = ix + nbasis
-
-        return cls(ix_0, ix-ix_0)
-
+        return cls(
+            state_vector_start=ix_0,
+            n_state_vector_entries=ix_end - ix_0,
+            icia=icia,
+            nbasis=nbasis,
+            vlo=vlo,
+            vhi=vhi,
+            atm_profile_type=model_classification[1]
+        )
 
     @classmethod
     def from_bookmark(
@@ -6699,9 +6730,14 @@ class Model500(PreRTModelBase):
         ) -> Self:
         ix_0 = ix
         nbasis = int(varparam[0])
-        ix = ix + nbasis
-
-        return cls(ix_0, ix-ix_0)
+        vlo, vhi = float(varparam[1]), float(varparam[2])
+        if nbasis < 1 or not np.isfinite([vlo, vhi]).all() or vhi <= vlo:
+            raise ValueError(
+                'Model500 bookmark is missing a valid basis count or spectral bounds; '
+                'recreate it from the .apr file.'
+            )
+        model_classification = variables.classify_model_type_from_varident(varident, ngas, ndust)
+        return cls(ix_0, nbasis, int(varident[1]), nbasis, vlo, vhi, model_classification[1])
 
 
     def calculate_from_subprofretg(
@@ -6713,25 +6749,187 @@ class Model500(PreRTModelBase):
             xmap : np.ndarray,
         ) -> None:
 
-        icia = forward_model.Variables.VARIDENT[ivar,1]
+        # Get the amplitudes from the state vector. This handles log-space values.
+        (amplitudes,) = self.get_parameter_values_from_state_vector(
+            forward_model.Variables.XN, forward_model.Variables.LX
+        )
 
-        if forward_model.Measurement.ISPACE == WaveUnit.Wavelength_um:
-            vlo = 1e4/(forward_model.SpectroscopyX.WAVE.max())
-            vhi = 1e4/(forward_model.SpectroscopyX.WAVE.min())
-        else:
-            vlo = forward_model.SpectroscopyX.WAVE.min()
-            vhi = forward_model.SpectroscopyX.WAVE.max()
+        # A very small scaling factor was present in the original code.
+        # This might be better handled in the a priori data itself.
+        amplitudes = np.atleast_1d(amplitudes) * 1e-40
 
-        nbasis = forward_model.Variables.VARPARAM[ivar,0]
-        amplitudes = np.exp(forward_model.Variables.XN[ix:ix+forward_model.Variables.NXVAR[ivar]])*1e-40
+        # Call the calculation method using the stored instance variables
+        new_k_cia = self.calculate(
+            k_cia=forward_model.CIA.K_CIA,
+            waven=forward_model.CIA.WAVEN,
+            icia=self.icia,
+            vlo=self.vlo,
+            vhi=self.vhi,
+            nbasis=self.nbasis,
+            amplitudes=amplitudes
+        )
 
-        new_k_cia, xmap1 = self.calculate(forward_model.CIA.K_CIA.copy(), forward_model.CIA.WAVEN, icia, vlo, vhi, nbasis, amplitudes)
-
+        # Update the forward model's CIA data
         forward_model.CIA.K_CIA = new_k_cia
-        forward_model.CIAX.K_CIA = new_k_cia
 
-        ix = ix + forward_model.Variables.NXVAR[ivar]
+        # Update the working copy of the CIA data as well
+        if hasattr(forward_model, 'CIAX') and forward_model.CIAX is not None:
+            forward_model.CIAX.K_CIA = new_k_cia
 
+        # Gradients (xmap) are not calculated by this model.
+        return
+
+
+
+
+class Model501(PreRTModelBase):
+    """
+    Multiplier on the imaginary refractive index spectrum of an aerosol species.
+    Useful for brightening/darkening a pre-fitted nimag spectrum with model 444.
+
+    Design:
+      - State vector holds ln(darkening_parameter), i.e. positive multiplier via log-flag.
+      - During subprofretg, writes exp(param) into `Scatter.DARKENING_PARAMETER[idust]`.
+
+    Parameters
+    ----------
+    darkening_parameter : dimensionless (stored ln in state vector)
+        Multiplier applied to the imaginary refractive index spectrum for the
+        specified aerosol species.
+    """
+
+    id: int = 501
+
+    def __init__(
+        self,
+        state_vector_start: int,
+        n_state_vector_entries: int,
+        aerosol_species_index: int,
+    ):
+        super().__init__(state_vector_start, n_state_vector_entries)
+        self.parameters = (
+            ModelParameter(
+                "darkening_parameter",
+                slice(0, 1),
+                "Multiplier applied to the imaginary refractive index spectrum "
+                "for the specified aerosol species (stored in log-space).",
+            ),
+        )
+        self.aerosol_species_idx = aerosol_species_index
+
+    @classmethod
+    def calculate(
+        cls,
+        Scatter: "Scatter_0",
+        idust: int,
+        xparam: np.ndarray[["nparam"], float],
+    ) -> "Scatter_0":
+        """
+        Set the darkening multiplier used by downstream scattering models.
+
+        Inputs
+        ------
+        Scatter : Scatter_0
+        idust   : int
+            Aerosol species index to be affected.
+        xparam  : array-like
+            [ ln(darkening_parameter) ]
+        """
+        darkening = float(np.exp(xparam[0]))
+
+        # Ensure the attribute exists and is long enough; fill with ones by default.
+        if not hasattr(Scatter, "DARKENING_PARAMETER") or Scatter.DARKENING_PARAMETER is None:
+            # Try to infer NDUST from existing arrays; fall back to at least idust+1
+            ndust = None
+            if hasattr(Scatter, "KEXT") and Scatter.KEXT is not None and hasattr(Scatter.KEXT, "shape"):
+                if len(Scatter.KEXT.shape) >= 2:
+                    ndust = int(Scatter.KEXT.shape[1])
+            if ndust is None:
+                ndust = int(idust + 1)
+            Scatter.DARKENING_PARAMETER = np.ones(ndust, dtype=float)
+
+        # Extend if the array is too short
+        if idust >= len(Scatter.DARKENING_PARAMETER):
+            extra = idust + 1 - len(Scatter.DARKENING_PARAMETER)
+            Scatter.DARKENING_PARAMETER = np.concatenate(
+                [Scatter.DARKENING_PARAMETER, np.ones(extra, dtype=float)]
+            )
+
+        Scatter.DARKENING_PARAMETER[idust] = darkening
+        _lgr.debug(f"Model501: set DARKENING_PARAMETER[{idust}] = {darkening:.6g}")
+
+        return Scatter
+
+    @classmethod
+    def from_bookmark(
+        cls, variables, varident, varparam, ix, npro, ngas, ndust, nlocations,
+    ) -> "Model501":
+        return cls(ix, 1, int(varident[1]) - 1)
+
+    @classmethod
+    def from_apr_to_state_vector(
+        cls,
+        variables: "Variables_0",
+        f: IO,
+        varident: np.ndarray[[3], int],
+        varparam: np.ndarray[["mparam"], float],
+        ix: int,
+        lx: np.ndarray[["mx"], int],
+        x0: np.ndarray[["mx"], float],
+        sx: np.ndarray[["mx", "mx"], float],
+        inum: np.ndarray[["mx"], int],
+        npro: int,
+        ngas: int,
+        ndust: int,
+        nlocations: int,
+        runname: str,
+        sxminfac: float,
+    ) -> "Model501":
+        """
+        Read apriori for model 501 and pack state vector / covariance.
+        Format in .apr file (one line):
+            scaling_factor  uncertainty
+
+        Behaviour:
+          - scaling_factor must be > 0
+          - store ln(scaling_factor) in x0[ix], set lx[ix]=1, variance=(unc/scale)^2
+        """
+        ix_0 = ix
+
+        vals = np.fromfile(f, sep=" ", count=2, dtype=float)
+        if vals.size != 2:
+            raise ValueError("Model 501 expects two floats: <scaling_factor> <uncertainty>")
+
+        xfac = float(vals[0])
+        err = float(vals[1])
+        if not (xfac > 0.0):
+            raise ValueError("Model 501: scaling factor must be > 0")
+
+        x0[ix] = np.log(xfac)
+        lx[ix] = 1
+        sx[ix, ix] = (err / xfac) ** 2.0
+        ix += 1
+
+        aerosol_species_idx = int(varident[1]) - 1
+
+        return cls(ix_0, ix - ix_0, aerosol_species_idx)
+
+    def calculate_from_subprofretg(
+        self,
+        forward_model: "ForwardModel_0",
+        ix: int,
+        ipar: int,
+        ivar: int,
+        xmap: np.ndarray,
+    ) -> None:
+        """
+        Push the darkening multiplier onto Scatter for the appropriate species.
+        """
+        forward_model.ScatterX = self.calculate(
+            forward_model.ScatterX,
+            self.aerosol_species_idx,
+            self.get_state_vector_slice(forward_model.Variables.XN),
+        )
 
 class Model666(PreRTModelBase):
     """
@@ -7330,8 +7528,6 @@ class Model999(PreRTModelBase):
 
         #ipar = -1
         ix = ix + forward_model.Variables.NXVAR[ivar]
-
-
 
 
 

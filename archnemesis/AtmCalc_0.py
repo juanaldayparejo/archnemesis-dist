@@ -157,7 +157,7 @@ class AtmCalc_0:
         self.EMISS_ANG = EMISS_ANG
         self.SOL_ANG = SOL_ANG
         self.AZI_ANG = AZI_ANG
-        self.IPZEN = IPZEN
+        self.IPZEN = ZenithAngleOrigin(IPZEN)
         self.path_calc = path_calc
         #self.WF = WF
         #self.NETFLUX = NETFLUX

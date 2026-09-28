@@ -31,7 +31,7 @@ import matplotlib as matplotlib
 from numba import jit
 
 from archnemesis.helpers import h5py_helper
-from archnemesis.enums import InstrumentLineshape, WaveUnit, SpectraUnit
+from archnemesis.enums import InstrumentLineshape, WaveUnit, SpectraUnit, ZenithAngleOrigin
 from archnemesis import gauss_lobatto
 
 
@@ -116,6 +116,9 @@ class Measurement_0:
         Emission angle of each averaging point needed to reconstruct the FOV (when NAV > 1)
     AZI_ANG : 2D array, float (NGEOM,NAV)
         Azimuth angle of each averaging point needed to reconstruct the FOV (when NAV > 1)
+    IPZEN : ZenithAngleOrigin
+        Origin of angle-defined rays: 0 = bottom layer, 1 = zero altitude, 2 = atmosphere top.
+        Explicit limb rays use TANHE instead.
     TANHE : 2D array, float (NGEOM,NAV)
         Tangent height of each averaging point needed to reconstruct the FOV (when NAV > 1)
         (For limb or solar occultation observations)
@@ -240,10 +243,12 @@ class Measurement_0:
             V_DOPPLER=0.0, 
             NCONV=np.array([1],dtype="int32"), 
             NAV=np.array([1],dtype="int32"),
+            IPZEN=ZenithAngleOrigin.BOTTOM,
     ):
 
         #Input parameters
         self.runname = runname
+        self.IPZEN = ZenithAngleOrigin(IPZEN)
         self.NGEOM = NGEOM
         self.FWHM = FWHM
         #self.ISPACE = ISPACE
@@ -331,6 +336,8 @@ class Measurement_0:
         """
         Assess whether the different variables have the correct dimensions and types
         """
+
+        ZenithAngleOrigin(self.IPZEN)
 
         #Checking some common parameters to all cases
         assert isinstance(self.NGEOM, (int, np.integer)), 'NGEOM must be int'
@@ -568,6 +575,9 @@ class Measurement_0:
                     dset.attrs['title'] = "Wavelength for normalisation"
                     dset.attrs['units'] = 'um'
 
+            dset = h5py_helper.store_data(grp, "IPZEN", int(self.IPZEN))
+            dset.attrs["title"] = "Zenith angle origin: 0 bottom, 1 zero altitude, 2 top"
+
             #Writing the number of geometries
             dset = h5py_helper.store_data(grp, 'NGEOM', self.NGEOM)
             dset.attrs['title'] = "Number of measurement geometries"
@@ -758,6 +768,9 @@ class Measurement_0:
                 raise ValueError('error :: Measurement is not defined in HDF5 file')
             else:
 
+                self.IPZEN = ZenithAngleOrigin.BOTTOM
+                if 'Measurement/IPZEN' in f:
+                    self.IPZEN = ZenithAngleOrigin(int(f['Measurement/IPZEN'][()]))
                 self.NGEOM = h5py_helper.retrieve_data(f, 'Measurement/NGEOM', np.int32)
                 self.ISPACE = h5py_helper.retrieve_data(f, 'Measurement/ISPACE', lambda x:  WaveUnit(np.int32(x)))
                 self.IFORM = h5py_helper.retrieve_data(f, 'Measurement/IFORM', lambda x:  SpectraUnit(np.int32(x)))
@@ -825,11 +838,30 @@ class Measurement_0:
                          
     #################################################################################################################
             
+    def read_zen(self):
+        """Read the optional legacy .zen angle origin (default: bottom layer).
+
+        Like NEMESIS, this setting applies to angle-defined rays only, not to
+        explicit limb rays whose tangent heights are supplied in the .spx file.
+        """
+        self.IPZEN = ZenithAngleOrigin.BOTTOM
+        try:
+            with open(self.runname + '.zen') as f:
+                value = f.readline().split('!')[0].strip().split()
+        except FileNotFoundError:
+            return
+        try:
+            self.IPZEN = ZenithAngleOrigin(int(value[0]))
+        except (IndexError, ValueError) as exc:
+            raise ValueError(f'{self.runname}.zen: expected IPZEN 0, 1, or 2') from exc
+
     def read_spx(self):
     
         """
         Read the .spx file and fill the attributes and parameters of the Measurement class.
         """
+
+        self.read_zen()
 
         #Opening file
         f = open(self.runname+'.spx','r')

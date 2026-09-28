@@ -2719,6 +2719,7 @@ class ForwardModel_0:
 
         """
 
+        self.MeasurementX.IPZEN = self.Measurement.IPZEN
         self.MeasurementX.NGEOM = 1
         self.MeasurementX.FWHM = self.Measurement.FWHM
         self.MeasurementX.IFORM = SpectraUnit(self.Measurement.IFORM)
@@ -2976,10 +2977,12 @@ class ForwardModel_0:
         #Based on the atmospheric layering, we calculate each atmospheric path (at each tangent height)
         #NCALC = 1    #Number of calculations (geometries) to be performed
         AtmCalc_List = []
+        # Explicit limb angles are 90 degrees at the tangent layer, independent of .zen.
         iAtmCalc = AtmCalc_0(
             Layer,
             path_observer_pointing=path_observer_pointing,
-            IPZEN=ZenithAngleOrigin.BOTTOM,
+            IPZEN=(Measurement.IPZEN if Scatter.EMISS_ANG >= 0.0
+                   else ZenithAngleOrigin.BOTTOM),
             BOTLAY=botlay,
             ANGLE=angle,
             EMISS_ANG=Scatter.EMISS_ANG,
@@ -3088,12 +3091,14 @@ class ForwardModel_0:
         #Based on the atmospheric layering, we calculate each atmospheric path (at each tangent height)
         #NCALC = 1    #Number of calculations (geometries) to be performed
         AtmCalc_List = []
+        # Explicit limb angles are 90 degrees at the tangent layer, independent of .zen.
         iAtmCalc = AtmCalc_0(
             Layer,
             path_observer_pointing = path_observer_pointing,
             BOTLAY=botlay,
             ANGLE=angle,
-            IPZEN=ZenithAngleOrigin.BOTTOM,
+            IPZEN=(Measurement.IPZEN if Scatter.EMISS_ANG >= 0.0
+                   else ZenithAngleOrigin.BOTTOM),
             EMISS_ANG=Scatter.EMISS_ANG,
             SOL_ANG=Scatter.SOL_ANG,
             AZI_ANG=Scatter.AZI_ANG,
@@ -4128,8 +4133,9 @@ class ForwardModel_0:
             phasex[:,0:self.ScatterX.NDUST,:] = np.transpose((phase_function[:,0:self.ScatterX.NDUST,ipath] * np.transpose(self.LayerX.TAUCLSCAT[:,:,:],axes=(1,0,2))),axes=(1,2,0))
             phasex[:,self.ScatterX.NDUST,:] = np.transpose(phase_function[:,self.ScatterX.NDUST,ipath] * np.transpose(self.LayerX.TAURAY[:,:]))
             phase = np.sum(phasex,axis=1) #(NWAVE,NLAY)
-            phase[phase>0] = phase[phase>0] / (self.LayerX.TAURAY[phase>0] + self.LayerX.TAUSCAT[phase>0])
-
+            tau_scat = self.LayerX.TAURAY + self.LayerX.TAUSCAT
+            mask = tau_scat > 0
+            phase[mask] = phase[mask] / tau_scat[mask]
             #Selecting properties across the path
             NLAYIN = self.PathX.NLAYIN[ipath]
             EMTEMP = self.PathX.EMTEMP[0:NLAYIN,ipath]
@@ -4137,7 +4143,12 @@ class ForwardModel_0:
             EMOMEGA = omega[:,:,self.PathX.LAYINC[0:NLAYIN,ipath]]
 
             #Calculating the spectrum
-            SPECOUT[:,:,ipath] = calc_singlescatt_plane_spectrum(self.MeasurementX.ISPACE,self.SpectroscopyX.WAVE,TAUTOT_LAYINC[:,:,0:NLAYIN,ipath],EMTEMP,EMOMEGA,EMPHASE,self.SurfaceX.TSURF,EMISSIVITY,BRDF[:,ipath],solar,sol_ang[ipath],emiss_ang[ipath])
+            SPECOUT[:,:,ipath] = calc_singlescatt_plane_spectrum(
+                self.MeasurementX.ISPACE, self.SpectroscopyX.WAVE,
+                self.LayerX.TAUTOT[:,:,self.PathX.LAYINC[0:NLAYIN,ipath]], # Passed Vertical Depth
+                EMTEMP, EMOMEGA, EMPHASE, self.SurfaceX.TSURF,
+                EMISSIVITY, BRDF[:,ipath], solar, sol_ang[ipath], emiss_ang[ipath]
+            )
     
             #Changing the units of the spectra
             SPECOUT[:,:,ipath] = (SPECOUT[:,:,ipath].T * xfac).T
@@ -4959,6 +4970,9 @@ class ForwardModel_0:
 
         SPEC = np.transpose(SPEC, (2, 1, 0))
         return SPEC
+
+
+
 
     ###############################################################################################
     def calc_brdf_matrix(self,WAVEC=None,Scatter=None,Surface=None):
@@ -6295,97 +6309,76 @@ def calc_thermal_emission_spectrumg(ISPACE,WAVE,TAUTOT_PATH,dTAUTOT_PATH,NVMR,TE
 
 ###############################################################################################
 #@jit(nopython=True)
-def calc_singlescatt_plane_spectrum(ISPACE,WAVE,TAUTOT_PATH,TEMP,OMEGA,PHASE,TSURF,EMISSIVITY,BRDF,SOLFLUX,SOL_ANG,EMISS_ANG):
+def calc_singlescatt_plane_spectrum(ISPACE,WAVE,TAUTOT_VERT,TEMP,OMEGA,PHASE,TSURF,EMISSIVITY,BRDF,SOLFLUX,SOL_ANG,EMISS_ANG):
+    """Calculate plane-parallel single-scattering radiance.
 
-
+    ``TAUTOT_VERT`` contains the *vertical* extinction optical depth of each
+    layer.  Both the direct solar beam and the emergent beam are attenuated.
+    The layer-integrated single-scattering solution is evaluated analytically.
     """
-    FUNCTION NAME : thermal_emission()
+    NWAVE, NG, NLAYIN = TAUTOT_VERT.shape
 
-    DESCRIPTION : Function to calculate the spectrum considering only thermal emission from 
-                  the surface and atmosphere (no scattering and no solar component)
+    mu = np.cos(np.deg2rad(EMISS_ANG))
+    mu0 = np.cos(np.deg2rad(SOL_ANG))
+    if mu <= 0.0:
+        raise ValueError(
+            'Plane-parallel single scattering requires EMISS_ANG < 90 degrees'
+        )
 
-    INPUTS : 
-
-        ISPACE :: Flag indicating the spectral units (0 - Wavenumber in cm-1 ; 1 - Wavelength in um)
-        WAVE(NWAVE) :: Wavenumber of wavelength array
-        TAUTOT_PATH(NWAVE,NG,NLAYIN) :: Total optical depth along the line-of-sight in each layer and wavelength
-        TEMP(NLAYIN) :: Temperature of each layer along the path (K)
-        PRESS(NLAYIN) :: Pressure of each layer along the path (Pa)
-        OMEGA(NWAVE,NG,NLAYIN) :: Single scattering albedo of each layer along the path
-        PHASE(NWAVE,NLAYIN) :: Average phase function of each layer along the path
-        TSURF :: Surface temperature (K) - If TSURF<0, then the planet is considered not to have surface
-        EMISSIVITY(NWAVE) :: Emissivity of the surface
-        BRDF(NWAVE) :: Bidirectional reflectance distributon function at the required geometry
-        SOLFLUX(NWAVE) :: Solar flux at the top of the atmosphere (W cm-2 um-1 or W cm-2 (cm-1)-1)
-        SOL_ANG :: Incident angle (degrees)
-        EMISS_ANG :: Emission angle (degrees)
-
-    OPTIONAL INPUTS:  none
-
-    OUTPUTS : 
-
-	    SPECOUT(NWAVE,NG) :: Spectrum in W cm-2 sr-1 (cm-1)-1 or W cm-2 sr-1 um-1
- 
-    CALLING SEQUENCE:
-
-	    SPECOUT = calc_singlescatt_plane_spectrum(ISPACE,WAVE,TAUTOT_PATH,TEMP,PRESS,OMEGA,PHASE,TSURF,EMISSIVITY,BRDF,SOLFLUX,SOL_ANG,EMISS_ANG)
- 
-    MODIFICATION HISTORY : Juan Alday (29/07/2021)
-
-    """
-    
-    #Getting relevant array sizes
-    NWAVE = TAUTOT_PATH.shape[0]
-    NG = TAUTOT_PATH.shape[1]
-    NLAYIN = TAUTOT_PATH.shape[2]
-    
-    #Calculating angles
-    mu = np.cos(EMISS_ANG/180.*np.pi)
-    mu0 = np.cos(SOL_ANG/180.*np.pi)
-    ssfac = mu0/(mu0+mu)
-    
-    SPECOUT = np.zeros((NWAVE,NG))  #Output spectrum
+    SPECOUT = np.zeros((NWAVE, NG))
+    sun_visible = mu0 > 0.0
 
     for iwave in range(NWAVE):
         for ig in range(NG):
-            
-            #Initialising values
-            taud = 0.
-            trold = 1.
-            specg = 0.
-            
-            #Calculating the atmospheric contribution
-            #Looping through each layer along the path
+            tau_view_above = 0.0
+            tau_sun_above = 0.0
+            specg = 0.0
+
             for j in range(NLAYIN):
-                
-                omega_lay = OMEGA[iwave,ig,j]
-                phase_lay = PHASE[iwave,j]
-                taud += TAUTOT_PATH[iwave,ig,j]
-                tr = np.exp(-taud)
-                
-                #Scattering contribution
-                specg += (trold-tr)*ssfac*omega_lay*phase_lay*SOLFLUX[iwave]/(4.*np.pi) 
-                
-                #Thermal emission contribution
-                bb = planck(ISPACE,WAVE[iwave],TEMP[j])
-                specg += (trold-tr)*bb
-                
-                trold = tr
+                dtau = max(TAUTOT_VERT[iwave, ig, j], 0.0)
 
-            #Calculating surface contribution
-            if TSURF<=0.0: #No surface contribution, getting temperature from bottom of atm
-                radground = planck(ISPACE,WAVE[iwave],TEMP[NLAYIN-1])
+                trans_view_top = np.exp(-tau_view_above)
+                trans_view_bottom = np.exp(-(tau_view_above + dtau / mu))
+
+                # LTE thermal source integrated along the observer's path.
+                bb = planck(ISPACE, WAVE[iwave], TEMP[j])
+                specg += (trans_view_top - trans_view_bottom) * bb
+
+                if sun_visible and dtau > 0.0:
+                    # Exact single-scattering integral for a homogeneous layer:
+                    # integral exp[-tau/mu0] exp[-tau/mu] d(tau)/mu.
+                    attenuation_top = np.exp(-(tau_view_above + tau_sun_above))
+                    coupling = mu0 / (mu + mu0)
+                    layer_factor = 1.0 - np.exp(-dtau * (1.0 / mu + 1.0 / mu0))
+                    specg += (
+                        attenuation_top * coupling * layer_factor
+                        * OMEGA[iwave, ig, j] * PHASE[iwave, j]
+                        * SOLFLUX[iwave] / (4.0 * np.pi)
+                    )
+
+                tau_view_above += dtau / mu
+                if sun_visible:
+                    tau_sun_above += dtau / mu0
+
+            trans_surface_view = np.exp(-tau_view_above)
+
+            if TSURF <= 0.0:
+                radground = planck(ISPACE, WAVE[iwave], TEMP[NLAYIN - 1])
             else:
-                bbsurf = planck(ISPACE,WAVE[iwave],TSURF)
-                radground = bbsurf * EMISSIVITY[iwave]
+                radground = planck(ISPACE, WAVE[iwave], TSURF) * EMISSIVITY[iwave]
+            specg += trans_surface_view * radground
 
-            specg += trold * radground
-                
-            #Calculating reflectance from the ground
-            specg += trold*SOLFLUX[iwave]*mu0*BRDF[iwave]
-            
-            SPECOUT[iwave,ig] = specg
-            
+            # Direct sunlight reflected by the surface traverses the atmosphere
+            # once downward and once upward.
+            if sun_visible:
+                trans_surface_solar = np.exp(-tau_sun_above)
+                specg += (
+                    trans_surface_view * trans_surface_solar
+                    * SOLFLUX[iwave] * mu0 * BRDF[iwave]
+                )
+
+            SPECOUT[iwave, ig] = specg
+
     return SPECOUT
 
 
