@@ -214,7 +214,6 @@ class Model49(PreRTModelBase):
             scale_iso
         )
         
-        xmap[self.state_vector_slice, ipar, 0:forward_model.AtmosphereX.NP] = xmap1
-
+        xmap[self.state_vector_slice, :, 0:forward_model.AtmosphereX.NP] = xmap1
 
 
