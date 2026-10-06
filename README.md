@@ -27,51 +27,66 @@ For full documentation, visit [archnemesis.readthedocs.io](https://archnemesis.r
 
 ## Installation
 
-There are three main ways to install **archNEMESIS**, depending on your use case:
+archNEMESIS is tested with **Python 3.10–3.13**.
 
-### Installing from GitHub (developer mode)
+We recommend using a clean Python environment. Choose either Python's built-in `venv` or Conda (including Anaconda or Miniconda); either is fine for both installation methods below.
 
-The latest version of code has to be downloaded from [Github](https://github.com/juanaldayparejo/archnemesis-dist.git) under a [GNU General Public License v3](LICENSE). To do so, type in the command window:
+### Creating an environment
 
-```bash
-git clone https://github.com/juanaldayparejo/archnemesis-dist.git
-```
+#### Using `venv`
 
-Before installing archNEMESIS, we recommend users to create and load a new Python [virtual environment](https://docs.python.org/3/library/venv.html) for a clean install:
-
-```bash
-python -m venv name_of_virtual_environment/
-source name_of_virtual_environment/bin/activate
-```
-
-Then move into the package directory:
-
-```bash
-cd archnemesis-dist
-```
-
-Finally, we need to install the library. Given that archNEMESIS is a highly dynamic package were new additions are frequently introduced, we recommend installing the package but keeping it editable by typing:
-
-```bash
-pip install --editable .
-```
-
-This will install archNEMESIS, but with the ability to update any changes made to the code (e.g., when introducing new model parameterisations or methods). In addition, it will install all the required libraries archNEMESIS depends on.
-
-
-### Installing from PyPI
-
-The simplest way to install archNEMESIS is via PyPI.  
-We recommend doing this inside a clean Python virtual environment:
+Create a [virtual environment](https://docs.python.org/3/library/venv.html) with a supported Python version:
 
 ```bash
 python -m venv archnemesis-env
+```
+
+Activate it in `bash` or `zsh`:
+
+```bash
 source archnemesis-env/bin/activate
+```
+
+For `csh` or `tcsh`, use this instead:
+
+```csh
+source archnemesis-env/bin/activate.csh
+```
+
+#### Using Conda
+
+Alternatively, create and activate a Conda environment (Python 3.12 is used here):
+
+```bash
+conda create -n archnemesis python=3.12
+conda activate archnemesis
+```
+
+Conda manages the environment, but archNEMESIS itself is installed using `pip`.
+
+With your chosen environment active, select one of the following installation methods.
+
+### Installing from PyPI
+
+For the latest stable release, run:
+
+```bash
 pip install archnemesis
 ```
 
-This will install the latest stable release of the package along with its dependencies.
-It is the recommended method if you just want to use the library without editing the source code.
+This installs archNEMESIS along with its dependencies. It is the recommended method if you want to use the library without editing the source code.
+
+### Installing from GitHub (developer mode)
+
+For the latest development version, clone the repository, move into its directory, and install in editable mode. The code is available under a [GNU General Public License v3](LICENSE).
+
+```bash
+git clone https://github.com/juanaldayparejo/archnemesis-dist.git
+cd archnemesis-dist
+pip install --editable .
+```
+
+This installs archNEMESIS along with its required dependencies while keeping the source editable. Changes to the local source code are reflected without reinstalling the package.
 
 ## Downloading archNEMESIS spectroscopic databases
 
