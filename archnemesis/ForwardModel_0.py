@@ -2239,6 +2239,9 @@ class ForwardModel_0:
             if self.SpectroscopyX.NGAS>0:
                 self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
 
+            #Changing the classes taken into account the parameters in the state vector
+            _ = self.subprofretg()  #xmap
+
             #Applying the Telluric transmission if its Spectroscopy exists
             if self.TelluricX is not None:
                 if self.TelluricX.Spectroscopy is not None:
