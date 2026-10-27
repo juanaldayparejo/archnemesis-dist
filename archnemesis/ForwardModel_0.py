@@ -5952,7 +5952,7 @@ def calc_tau_rayleighls(ISPACE,WAVEC,ID,ISO,VMR,TOTAM):
     comp[:,3] = fnh3[:]                           #NH3
     
     #loschpm3 is molecules per cubic micron at STP
-    loschpm3 = 2.687e19 * CUBIC_CM_TO_CUBIC_MICRON
+    loschpm3 = 2.687e19 / CUBIC_CM_TO_CUBIC_MICRON   # constant = 1e12
     
     if ISPACE==WaveUnitEnum.Wavenumber_cm:
         wl = 1./WAVEC * CM_TO_MICRON  #Wavelength in microns
