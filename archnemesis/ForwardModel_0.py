@@ -2179,16 +2179,13 @@ class ForwardModel_0:
         self.NCores = int(n_jobs_internal)
         # ------------------------------
         
-        #try:
-        #    # Turn off warning and below logging
-        #    archnemesis.cfg.logs.push_packagewide_level(logging.ERROR)
-        #    
-        #    # model the spectrum
-        #    SPECMOD = nemesis_method()
-        #finally:
-        #    archnemesis.cfg.logs.pop_packagewide_level()
-        
-        SPECMOD = nemesis_method()
+        # Turn off warning and below logging
+        archnemesis.cfg.logs.push_packagewide_level(logging.ERROR)
+        try:
+            # model the spectrum
+            SPECMOD = nemesis_method()
+        finally:
+            archnemesis.cfg.logs.pop_packagewide_level()
 
         if SPECMOD is not None:
             ik = 0

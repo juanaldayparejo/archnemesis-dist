@@ -151,5 +151,31 @@ def resetLogFormat(progress : bool = False):
         log_stdout_hdlr.setFormatter(pkg_formatter)
         log_stderr_hdlr.setFormatter(pkg_formatter)
 
+
+_packagewide_level_stack : list[tuple[int,int]] = []
+
+def set_packagewide_level(log_level : int):
+    """
+    Sets the logging level of the package and progress loggers at once.
+    """
+    pkg_lgr.setLevel(log_level)
+    progress_lgr.setLevel(log_level)
+
+def push_packagewide_level(log_level : int):
+    """
+    Saves the current packagewide logging level and sets it to `log_level`.
+    Undo with `pop_packagewide_level()`.
+    """
+    _packagewide_level_stack.append((pkg_lgr.level, progress_lgr.level))
+    set_packagewide_level(log_level)
+
+def pop_packagewide_level():
+    """
+    Restores the packagewide logging level saved by the last `push_packagewide_level(...)`.
+    """
+    pkg_level, progress_level = _packagewide_level_stack.pop()
+    pkg_lgr.setLevel(pkg_level)
+    progress_lgr.setLevel(progress_level)
+
 def __getattr__(name):
     return getattr(logging, name)
