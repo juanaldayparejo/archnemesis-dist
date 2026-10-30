@@ -25,6 +25,7 @@ from typing import Any, Callable
 from functools import partial
 import os
 from copy import deepcopy
+import copy
 
 import numpy as np
 import scipy as sp
@@ -1678,7 +1679,7 @@ class ForwardModel_0:
 
             #Call process_IAV to calculate FM at each emission ray
             results = Parallel(n_jobs=n_jobs)(
-                delayed(self.process_IAV)(IAV,IGEOM,return_grad=False)
+                delayed(copy.copy(self).process_IAV)(IAV,IGEOM,return_grad=False)
                 for IAV in range(self.Measurement.NAV[IGEOM])
             )
             results_array = np.vstack(results)  #(NAV,NWAVE)
@@ -1794,7 +1795,7 @@ class ForwardModel_0:
 
             #Call process_IAV to calculate FM at each emission ray
             results = Parallel(n_jobs=n_jobs)(
-                delayed(self.process_IAV)(IAV,IGEOM,return_grad=True)
+                delayed(copy.copy(self).process_IAV)(IAV,IGEOM,return_grad=True)
                 for IAV in range(self.Measurement.NAV[IGEOM])
             )
             
@@ -2421,9 +2422,8 @@ class ForwardModel_0:
             # Limit by total cores AND total models needed
             n_jobs_jac = min(total_cores, nfm)
             
-            # 2. Determine Inner Parallelism (Disc Integration)
-            # Distribute remaining cores to internal tasks. Ensure at least 1.
-            n_jobs_internal = max(1, total_cores // n_jobs_jac)
+            # 2. Inner Parallelism (Disc Integration): sequential (nested Parallel calls run on threads)
+            n_jobs_internal = 1
             
             base_chunk_size = nfm // n_jobs_jac
             remainder = nfm % n_jobs_jac
@@ -2435,7 +2435,7 @@ class ForwardModel_0:
                 xnx, ixrun, nemesisSO, nemesisL, nemesisC, nemesisdisc, nemesisPT, YNtot, nfm, n_jobs_internal
             ) for i in range(n_jobs_jac)]
 
-            results = Parallel(n_jobs=n_jobs_jac)(
+            results = Parallel(n_jobs=total_cores)(
                 delayed(self.chunked_execution)(chunk) for chunk in chunks
             )
             
