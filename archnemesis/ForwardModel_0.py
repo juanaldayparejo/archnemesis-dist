@@ -4859,12 +4859,11 @@ class ForwardModel_0:
             # Derivative with respect to fraction
             #dktdF = (kthi - ktlo) * dfhldF + (ktlophi - ktloplo) * dfhhdF
                         
-            #Cheking that interpolation can be performed to the calculation wavenumbers
+            #Only the calculation wavenumbers covered by the CIA table get a contribution (zero outside)
             sum1 = np.zeros(NWAVEC)  #Temporary array to store the contribution from all CIA pairs
-            if( (CIA.WAVEN.min()<=WAVEN.min()) & (CIA.WAVEN.max()>=WAVEN.max()) ):
-                
-                inwave1 = np.where( (WAVEN>=CIA.WAVEN.min()) & (WAVEN<=CIA.WAVEN.max()) )[0]
-                
+            inwave1 = np.where( (WAVEN>=CIA.WAVEN.min()) & (WAVEN<=CIA.WAVEN.max()) )[0]
+            if len(inwave1)>0:
+
                 for ipair in range(CIA.NPAIR):
                     
                     #Getting the indices of the two gases in the CIA pair
