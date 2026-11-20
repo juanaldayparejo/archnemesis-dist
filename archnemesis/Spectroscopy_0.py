@@ -1643,11 +1643,6 @@ class Spectroscopy_0:
 
             t_l = temp[ipoint]
 
-            if t_l < np.min(TEMP):
-                t_l = np.min(TEMP)
-            if t_l > np.max(TEMP):
-                t_l = np.max(TEMP)
-
             ip = np.searchsorted(PRESS, p_l) - 1
             if ip < 0:
                 ip = 0
@@ -1664,17 +1659,24 @@ class Spectroscopy_0:
                 Tn = TEMP
                 Tn2 = TEMP
             
+            #Clamping the temperature to the range tabulated at each pressure level (as in get_klblg.f)
+            t1 = min(max(t_l, Tn[0]), Tn[-1])
+            t2 = min(max(t_l, Tn2[0]), Tn2[-1])
             
-            it1 = np.searchsorted(Tn, t_l) - 1
+            it1 = np.searchsorted(Tn, t1) - 1
+            if it1 < 0:
+                it1 = 0
             if it1 >= len(Tn)-1:
                 it1 = len(Tn)-2
-            u1 = (t_l-Tn[it1])/(Tn[it1+1]-Tn[it1])
+            u1 = (t1-Tn[it1])/(Tn[it1+1]-Tn[it1])
             du1dt = 1./(Tn[it1+1]-Tn[it1])
             
-            it2 = np.searchsorted(Tn2, t_l) - 1
+            it2 = np.searchsorted(Tn2, t2) - 1
+            if it2 < 0:
+                it2 = 0
             if it2 >= len(Tn2)-1:
                 it2 = len(Tn2)-2
-            u2 = (t_l-Tn2[it2])/(Tn2[it2+1]-Tn2[it2])
+            u2 = (t2-Tn2[it2])/(Tn2[it2+1]-Tn2[it2])
             du2dt = 1./(Tn2[it2+1]-Tn2[it2])
             
             klo1 = np.zeros((self.NWAVE,self.NGAS))
@@ -1743,7 +1745,7 @@ class Spectroscopy_0:
             dkgooddT[igood[0],ipoint,igood[1]] = kgood[igood[0],ipoint,igood[1]] * dxdt
             
 
-            ibad = np.where( (klo1<=0.0) & (klo2<=0.0) & (khi1<=0.0) & (khi2<=0.0) )
+            ibad = np.where( (klo1<=0.0) | (klo2<=0.0) | (khi1<=0.0) | (khi2<=0.0) )   #Linear interpolation if any corner is zero
             
             kgood[ibad[0],ipoint,ibad[1]] = (1.0-v)*(1.0-u1)*(klo1[ibad[0],ibad[1]])\
                                                   + v*(1.0-u2)*(khi1[ibad[0],ibad[1]])\
@@ -1807,11 +1809,6 @@ class Spectroscopy_0:
 
             t_l = temp[ipoint]
 
-            if t_l < np.min(TEMP):
-                t_l = np.min(TEMP)
-            if t_l > np.max(TEMP):
-                t_l = np.max(TEMP)
-
             ip = np.searchsorted(PRESS, p_l) - 1
             if ip < 0:
                 ip = 0
@@ -1828,21 +1825,24 @@ class Spectroscopy_0:
                 Tn = TEMP
                 Tn2 = TEMP
             
+            #Clamping the temperature to the range tabulated at each pressure level (as in get_klbl.f)
+            t1 = min(max(t_l, Tn[0]), Tn[-1])
+            t2 = min(max(t_l, Tn2[0]), Tn2[-1])
                 
-            it1 = np.searchsorted(Tn, t_l) - 1
+            it1 = np.searchsorted(Tn, t1) - 1
             if it1 < 0:
                 it1 = 0
             if it1 >= len(Tn) - 1:
                 it1 = len(Tn) - 2
-            u1 = (t_l - Tn[it1]) / (Tn[it1 + 1] - Tn[it1])
+            u1 = (t1 - Tn[it1]) / (Tn[it1 + 1] - Tn[it1])
                 
                 
-            it2 = np.searchsorted(Tn2, t_l) - 1
+            it2 = np.searchsorted(Tn2, t2) - 1
             if it2 < 0:
                 it2 = 0
             if it2 >= len(Tn2) - 1:
                 it2 = len(Tn2) - 2
-            u2 = (t_l - Tn2[it2]) / (Tn2[it2 + 1] - Tn2[it2])
+            u2 = (t2 - Tn2[it2]) / (Tn2[it2 + 1] - Tn2[it2])
 
             
             klo1 = np.zeros((self.NWAVE, self.NGAS))
@@ -1903,7 +1903,7 @@ class Spectroscopy_0:
 
             kgood[igood[0], ipoint, igood[1]] = np.exp(kgood[igood[0], ipoint, igood[1]])
 
-            ibad = np.where((klo1 <= 0.0) & (klo2 <= 0.0) & (khi1 <= 0.0) & (khi2 <= 0.0))
+            ibad = np.where((klo1 <= 0.0) | (klo2 <= 0.0) | (khi1 <= 0.0) | (khi2 <= 0.0))   # Linear interpolation if any corner is zero
 
             kgood[ibad[0], ipoint, ibad[1]] = (
                 (1.0 - v) * (1.0 - u1) * klo1[ibad[0], ibad[1]]
