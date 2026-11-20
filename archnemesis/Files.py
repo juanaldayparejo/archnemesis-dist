@@ -540,6 +540,9 @@ def read_input_files(runname):
     #Reading .sha file if FWHM>0.0
     if Measurement.FWHM > 0.0:
         Measurement.read_sha()
+        #Reading .fwh file if it exists (FWHM varying with wavelength)
+        if os.path.exists(runname+'.fwh')==True:
+            Measurement.read_fwh()
     #Reading .fil if FWHM<0.0
     elif Measurement.FWHM < 0.0:
         Measurement.read_fil()

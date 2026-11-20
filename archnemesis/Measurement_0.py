@@ -282,6 +282,9 @@ class Measurement_0:
         self.NFIL = None  #np.zeros(NCONV)
         self.VFIL = None  #np.zeros(NFIL,NCONV)
         self.AFIL = None  #np.zeros(NFIL,NCONV)
+
+        self.VFWHM = None  #np.zeros(NFWHM) Waves at which the FWHM is tabulated (.fwh file), optional
+        self.XFWHM = None  #np.zeros(NFWHM) FWHM at each of those waves
         
         self.VFMERR = None  # np.zeros(NVFMERR)
         self.AFMERR = None  # np.zeros(NVFMERR)
@@ -1083,6 +1086,40 @@ class Measurement_0:
         lineshape = int(s[0])
         self.ISHAPE = InstrumentLineshapeEnum(lineshape)
         self.build_ils()
+
+    #################################################################################################################
+
+    def read_fwh(self):
+        """
+        Read the .fwh file, which tabulates the variation of the FWHM of the instrument
+        lineshape with wavelength/wavenumber. If present, it replaces the constant FWHM
+        in the convolution with the lineshape (only used if FWHM>0).
+        """
+
+        with open(self.runname+'.fwh','r') as f:
+            nfwhm = int(f.readline().split()[0])
+            vfwhm = np.zeros(nfwhm)
+            xfwhm = np.zeros(nfwhm)
+            for i in range(nfwhm):
+                s = f.readline().split()
+                vfwhm[i] = float(s[0])
+                xfwhm[i] = float(s[1])
+
+        self.VFWHM = vfwhm
+        self.XFWHM = xfwhm
+
+    #################################################################################################################
+
+    def calc_fwhm_conv(self,IGEOM=0):
+        """
+        Calculate the FWHM of the instrument lineshape at each convolution wave of a given geometry.
+        It is constant (FWHM) unless it has been tabulated as a function of wave (VFWHM,XFWHM).
+        """
+
+        vconv = self.VCONV[0:self.NCONV[IGEOM],IGEOM]
+        if self.VFWHM is not None:
+            return np.interp(vconv,self.VFWHM,self.XFWHM)
+        return np.full(len(vconv),float(self.FWHM))
 
     #################################################################################################################
 
@@ -2088,16 +2125,21 @@ class Measurement_0:
 
         if self.FWHM>0.0:
 
+            #Using the largest FWHM if it varies with wave (.fwh file)
+            fwhm = self.FWHM
+            if self.VFWHM is not None:
+                fwhm = max([self.calc_fwhm_conv(igeom).max() for igeom in range(self.NGEOM)])
+
             if self.ISHAPE==InstrumentLineshapeEnum.Square:
-                dv = 0.5*self.FWHM
+                dv = 0.5*fwhm
             elif self.ISHAPE==InstrumentLineshapeEnum.Triangular:
-                dv = self.FWHM
+                dv = fwhm
             elif self.ISHAPE==InstrumentLineshapeEnum.Gaussian:
-                dv = 3.* 0.5 * self.FWHM / np.sqrt(np.log(2.0))
+                dv = 3.* 0.5 * fwhm / np.sqrt(np.log(2.0))
             elif self.ISHAPE==InstrumentLineshapeEnum.Hamming:
-                dv = self.FWHM
+                dv = fwhm
             else:
-                dv = 3.*self.FWHM
+                dv = 3.*fwhm
 
             if IGEOM is not None:
                 wavemin = self.VCONV[0,IGEOM] - dv
@@ -2185,12 +2227,12 @@ class Measurement_0:
                 IG = 0
                 if ModSpec.ndim!=2:
                     raise ValueError('error in lblconv :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
-                SPECONV = lblconv_ngeom(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
+                SPECONV = lblconv_ngeom(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.calc_fwhm_conv(IG))
             else:
                 if ModSpec.ndim!=1:
                     raise ValueError('error in lblconv :: ModSpec must have 1 dimensions (NWAVE)')
                 IG = IGEOM
-                SPECONV = lblconv(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
+                SPECONV = lblconv(len(Wave),wavecorr,ModSpec,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.calc_fwhm_conv(IG))
             
         elif self.FWHM<0.0:  #Convolution with VFIL,AFIL
             if IGEOM=='All':
@@ -2250,7 +2292,6 @@ class Measurement_0:
 
         #Accounting for the Doppler shift that was previously introduced
         NWAVE = len(Wave)
-        print(f'TESTING: {NWAVE=} {ModSpec.shape=} {ModGrad.shape=}')
         wavecorr = self.correct_doppler_shift(Wave)
 
         if self.FWHM>0.0:   #Convolution with ISHAPE
@@ -2261,14 +2302,14 @@ class Measurement_0:
                     raise ValueError('error in lblconvg :: ModSpec must have 2 dimensions (NWAVE,NGEOM)')
                 if ModGrad.ndim!=3:
                     raise ValueError('error in lblconvg :: ModGrad must have 3 dimensions (NWAVE,NGEOM,NX)')
-                SPECONV,dSPECONV = lblconvg_ngeom(NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
+                SPECONV,dSPECONV = lblconvg_ngeom(NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.calc_fwhm_conv(IG))
             else:
                 if ModSpec.ndim!=1:
                     raise ValueError('error in lblconvg :: ModSpec must have 1 dimensions (NWAVE)')
                 if ModGrad.ndim!=2:
                     raise ValueError('error in lblconvg :: ModGrad must have 2 dimensions (NWAVE,NX)')
                 IG = IGEOM
-                SPECONV,dSPECONV = lblconvg(NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.FWHM)
+                SPECONV,dSPECONV = lblconvg(NWAVE,wavecorr,ModSpec,ModGrad,self.NCONV[IG],self.VCONV[:,IG],self.ISHAPE,self.calc_fwhm_conv(IG))
             
         elif self.FWHM<0.0:  #Convolution with VFIL, AFIL
 
@@ -3393,7 +3434,7 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
                         (2) Gaussian
                         (3) Hamming
                         (4) Hanning
-            fwhm :: Full width at half maximum of the ILS
+            fwhm(nconv) :: Full width at half maximum of the ILS at each convolution wavenumber
 
         OPTIONAL INPUTS: none
         
@@ -3417,7 +3458,7 @@ def lblconv(nwave,vwave,y,nconv,vconv,ishape,fwhm):
     nfw = 3.
 
     for j in range(nconv):
-        yfwhm = fwhm
+        yfwhm = fwhm[j]
         vcen = vconv[j]
         if ishape==InstrumentLineshapeEnum.Square:
             v1 = vcen-0.5*yfwhm
@@ -3497,7 +3538,7 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
                         (2) Gaussian
                         (3) Hamming
                         (4) Hanning
-            fwhm :: Full width at half maximum of the ILS
+            fwhm(nconv) :: Full width at half maximum of the ILS at each convolution wavenumber
 
         OPTIONAL INPUTS: none
         
@@ -3521,12 +3562,12 @@ def lblconv_ngeom(nwave,vwave,y,nconv,vconv,ishape,fwhm):
         yout = np.zeros((nconv,ngeom))
         ynor = np.zeros((nconv,ngeom))
 
-        if fwhm>0.0:
+        if fwhm.min()>0.0:
             #Set total width of Hamming/Hanning function window in terms of
             #numbers of FWHMs for ISHAPE=3 and ISHAPE=4
             nfw = 3.
             for j in range(nconv):
-                yfwhm = fwhm
+                yfwhm = fwhm[j]
                 vcen = vconv[j]
                 if ishape==InstrumentLineshapeEnum.Square:
                     v1 = vcen-0.5*yfwhm
@@ -3740,7 +3781,7 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
                         (2) Gaussian
                         (3) Hamming
                         (4) Hanning
-            fwhm :: Full width at half maximum of the ILS
+            fwhm(nconv) :: Full width at half maximum of the ILS at each convolution wavenumber
 
         OPTIONAL INPUTS: none
         
@@ -3773,7 +3814,7 @@ def lblconvg_ngeom(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
         #numbers of FWHMs for ISHAPE=3 and ISHAPE=4
         nfw = 3.
         for j in range(nconv):
-            yfwhm = fwhm
+            yfwhm = fwhm[j]
             vcen = vconv[j]
             if ishape==InstrumentLineshapeEnum.Square:
                 v1 = vcen-0.5*yfwhm
@@ -3854,7 +3895,7 @@ def lblconvg(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
                         (2) Gaussian
                         (3) Hamming
                         (4) Hanning
-            fwhm :: Full width at half maximum of the ILS
+            fwhm(nconv) :: Full width at half maximum of the ILS at each convolution wavenumber
 
         OPTIONAL INPUTS: none
         
@@ -3886,7 +3927,7 @@ def lblconvg(nwave,vwave,y,dydx,nconv,vconv,ishape,fwhm):
         #numbers of FWHMs for ISHAPE=3 and ISHAPE=4
         nfw = 3.
         for j in range(nconv):
-            yfwhm = fwhm
+            yfwhm = fwhm[j]
             vcen = vconv[j]
             if ishape==InstrumentLineshapeEnum.Square:
                 v1 = vcen-0.5*yfwhm
