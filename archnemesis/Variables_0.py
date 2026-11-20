@@ -538,9 +538,13 @@ class Variables_0:
         f' =  ( f(x+h) - f(x) ) / h
         """
 
-        #Generally, we use h = 0.05*x
+        #Generally, we use h = 0.1*sqrt(SA), i.e. 0.1 x the a priori error (as in NEMESIS)
+        #If the a priori covariance matrix is not defined, we use h = 0.05*x
         dstep = np.zeros(self.NX)
-        dstep[:] = self.XN * 0.05
+        if getattr(self,'SA',None) is not None:
+            dstep[:] = 0.1 * np.sqrt(np.diag(self.SA))
+        else:
+            dstep[:] = self.XN * 0.05
 
         #Changing the step size for certain parameterisations
         ix = 0
