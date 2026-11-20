@@ -2458,11 +2458,12 @@ class ForwardModel_0:
             else:
                 ifm = i
 
-            xn1 = self.Variables.XN[inum[i]] * 1.05
-            if xn1==0.0:
-                xn1=0.05
             if self.Variables.FIX[inum[i]] == 0:
-                KK[:,inum[i]] = (YNtot[:,ifm]-YN)/(xn1-self.Variables.XN[inum[i]])
+                dx = xnx[inum[i],inum[i]+1] - xnx[inum[i],0]   #Step actually applied to this element
+                KK[:,inum[i]] = (YNtot[:,ifm]-YN)/dx
+
+        #Restoring the unperturbed state vector (execute_fm overwrites it when run in this process)
+        self.Variables.XN = xnx[:,0].copy()
 
         return YN,KK
 
