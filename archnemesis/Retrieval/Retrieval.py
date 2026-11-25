@@ -992,7 +992,7 @@ class Retrieval:
 								_lgr.debug(f'Calling "{component_writer}"')
 								component_writer(self.runname)
 							case "write_cov" :
-								component_writer(self.runname, self.Variables)
+								component_writer(self.runname, self.Variables, NPRO=self.Atmosphere.NP)
 							case "write_mre" :
 								component_writer(self.runname, self.Variables, self.Measurement)
 							case "write_raw" :

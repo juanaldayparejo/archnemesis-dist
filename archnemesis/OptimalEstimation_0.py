@@ -874,14 +874,17 @@ class OptimalEstimation_0:
 
         f.close()  
 
-    def write_cov(self,runname,Variables,pickle=False):
+    def write_cov(self,runname,Variables,pickle=False,NPRO=1):
         """
-        Write information about the Optimal Estimation matrices into the .cov file
+        Write information about the Optimal Estimation matrices into the .cov file,
+        in the same layout as write_covariance.f in Fortran NEMESIS
 
         @param runname: str
             Name of the NEMESIS run
         @param Variables: class
             Python class describing the different parameterisations retrieved
+        @param NPRO: int
+            Number of levels in the atmospheric profiles (written in the header)
         """
         fname = runname+'.cov'
         if self.SM is None:
@@ -892,8 +895,7 @@ class OptimalEstimation_0:
             #Open file
             f = open(fname,'w')
 
-            npro=1
-            f.write("%i %i\n" % (npro,Variables.NVAR))
+            f.write("%i %i\n" % (NPRO,Variables.NVAR))
 
             for ivar in range(Variables.NVAR):
                 f.write("%i \t %i \t %i\n" % (Variables.VARIDENT[ivar,0],Variables.VARIDENT[ivar,1],Variables.VARIDENT[ivar,2]))
@@ -915,13 +917,15 @@ class OptimalEstimation_0:
                 for j in range(self.NX):
                     f.write("%10.8e\n" % (self.AA[i,j]))
 
-            for i in range(self.NX):
-                for j in range(self.NY):
-                    f.write("%10.8e\n" % (self.DD[i,j]))
-
+            #Gain matrix DD(NX,NY) one spectral point at a time and
+            #Jacobian KK(NY,NX) one state vector element at a time, as in Fortran
             for i in range(self.NY):
                 for j in range(self.NX):
-                    f.write("%10.8e\n" % (self.KK[i,j]))
+                    f.write("%10.8e\n" % (self.DD[j,i]))
+
+            for i in range(self.NX):
+                for j in range(self.NY):
+                    f.write("%10.8e\n" % (self.KK[j,i]))
 
             for i in range(self.NY):
                 f.write("%10.8e\n" % (self.SE[i,i]))
@@ -934,91 +938,29 @@ class OptimalEstimation_0:
             filehandler = open(runname+'.cov',"wb")
             pickle.dump(self,filehandler,pickle.HIGHEST_PROTOCOL)
 
-    def read_cov(self,runname,Variables=None,pickle=False):
+    def read_cov(self,runname,Variables=None,pickle=False,legacy_archnemesis_layout=False):
         """
-        Write information about the Optimal Estimation matrices into the .cov file
+        Read the Optimal Estimation matrices from the .cov file
 
         @param runname: str
             Name of the NEMESIS run
         @param Variables: class
             Python class describing the different parameterisations retrieved
+        @param legacy_archnemesis_layout: bool
+            If True, read the gain matrix and Jacobian in the transposed order
+            used by archNEMESIS write_cov() before November 2026
         """
 
         if pickle==False:
-            if Variables==None:
-                Variables=Variables_0()
-        
-            f = open(runname+'.cov','r')
+            from archnemesis.Files import read_cov
 
-            #Reading variables that were retrieved
-            tmp = np.fromfile(f,sep=' ',count=2,dtype='int')
-            npro = int(tmp[0])
-            nvar = int(tmp[1])
+            npro,nvar,varident,varparam,nx,ny,sa,sm,sn,st,se,aa,dd,kk = \
+                read_cov(runname,legacy_archnemesis_layout=legacy_archnemesis_layout)
 
-            varident = np.zeros([nvar,3],dtype='int')
-            varparam = np.zeros([nvar,5],dtype='int')
-            for i in range(nvar):
-                tmp = np.fromfile(f,sep=' ',count=3,dtype='int')
-                varident[i,:] = tmp[:]
-
-                tmp = np.fromfile(f,sep=' ',count=5,dtype='float')
-                varparam[i,:] = tmp[:] 
-
-            Variables.NVAR = nvar
-            Variables.VARIDENT = varident
-            Variables.VARPARAM = varparam
-            Variables.calc_NXVAR(npro)
-
-            #Reading optimal estimation matrices
-            tmp = np.fromfile(f,sep=' ',count=2,dtype='int')
-            nx = int(tmp[0])
-            ny = int(tmp[1])
-
-            sa = np.zeros([nx,nx])
-            sm = np.zeros([nx,nx])
-            sn = np.zeros([nx,nx])
-            st = np.zeros([nx,nx])
-            aa = np.zeros([nx,nx])
-            dd = np.zeros([nx,ny])
-            kk = np.zeros([ny,nx])
-            se = np.zeros([ny,ny])
-            for i in range(nx):
-                for j in range(nx):
-                    tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-                    sa[i,j] = tmp[0]
-                for j in range(nx):
-                    tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-                    sm[i,j] = tmp[0]
-                for j in range(nx):
-                    tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-                    sn[i,j] = tmp[0]
-                for j in range(nx):
-                    tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-                    st[i,j] = tmp[0]
-
-
-            for i in range(nx):
-                for j in range(nx):
-                    tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-                    aa[i,j] = tmp[0]
-
-
-            for i in range(nx):
-                for j in range(ny):
-                    tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-                    dd[i,j] = tmp[0]
-
-
-            for i in range(ny):
-                for j in range(nx):
-                    tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-                    kk[i,j] = tmp[0]
-
-            for i in range(ny):
-                tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-                se[i,i] = tmp[0]
-
-            f.close()
+            if Variables is not None:
+                Variables.NVAR = nvar
+                Variables.VARIDENT = varident
+                Variables.VARPARAM = varparam
 
             self.NX = nx
             self.NY = ny

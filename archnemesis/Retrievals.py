@@ -320,7 +320,7 @@ def retrieval_nemesis(
         if legacy_files is False:
             Retrieval.write_output_hdf5(runname,Variables)
         else:
-            Retrieval.write_cov(runname,Variables,pickle=False)
+            Retrieval.write_cov(runname,Variables,pickle=False,NPRO=Atmosphere.NP)
             Retrieval.write_mre(runname,Variables,Measurement)
             Retrieval.write_raw(runname,Variables,Atmosphere)
             

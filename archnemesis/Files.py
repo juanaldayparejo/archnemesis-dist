@@ -763,7 +763,7 @@ def read_mre(runname,MakePlot=False):
 
 ###############################################################################################
 
-def read_cov(runname,MakePlot=False):
+def read_cov(runname,MakePlot=False,legacy_archnemesis_layout=False):
     
     
     """
@@ -772,12 +772,17 @@ def read_cov(runname,MakePlot=False):
         DESCRIPTION :
         
             Reads the the .cov file with the standard Nemesis format
+            (as written by write_covariance.f in Fortran NEMESIS)
         
         INPUTS :
         
             runname :: Name of the Nemesis run
         
-        OPTIONAL INPUTS: none
+        OPTIONAL INPUTS:
+        
+            legacy_archnemesis_layout :: If True, read the gain matrix and Jacobian
+                            in the transposed order used by archNEMESIS write_cov()
+                            before November 2026. Those files have npro=1 in the header.
         
         OUTPUTS :
         
@@ -812,8 +817,13 @@ def read_cov(runname,MakePlot=False):
     npro = int(tmp[0])
     nvar = int(tmp[1])
     
+    if npro==1 and not legacy_archnemesis_layout:
+        _lgr.warning(f'read_cov :: {runname}.cov has npro=1 in its header. If it was written by archNEMESIS '
+                     'before November 2026, the gain matrix and Jacobian are transposed: '
+                     'use legacy_archnemesis_layout=True')
+    
     varident = np.zeros([nvar,3],dtype='int')
-    varparam = np.zeros([nvar,5],dtype='int')
+    varparam = np.zeros([nvar,5],dtype='float')
     for i in range(nvar):
         tmp = np.fromfile(f,sep=' ',count=3,dtype='int')
         varident[i,:] = tmp[:]
@@ -827,48 +837,31 @@ def read_cov(runname,MakePlot=False):
     nx = int(tmp[0])
     ny = int(tmp[1])
 
+    def _read(n):
+        tmp = np.fromfile(f,sep=' ',count=n,dtype='float')
+        if tmp.size != n:
+            raise ValueError(f'read_cov :: {runname}.cov ended early')
+        return tmp
 
-    sa = np.zeros([nx,nx])
-    sm = np.zeros([nx,nx])
-    sn = np.zeros([nx,nx])
-    st = np.zeros([nx,nx])
-    aa = np.zeros([nx,nx])
-    dd = np.zeros([nx,ny])
-    kk = np.zeros([ny,nx])
-    se = np.zeros([ny,ny])
-    for i in range(nx):
-        for j in range(nx):
-            tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-            sa[i,j] = tmp[0]
-        for j in range(nx):
-            tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-            sm[i,j] = tmp[0]
-        for j in range(nx):
-            tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-            sn[i,j] = tmp[0]
-        for j in range(nx):
-            tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-            st[i,j] = tmp[0]
+    #SA, SM, SN and ST are written row by row, interleaved
+    tmp = _read(4*nx*nx).reshape(nx,4,nx)
+    sa = tmp[:,0,:].copy()
+    sm = tmp[:,1,:].copy()
+    sn = tmp[:,2,:].copy()
+    st = tmp[:,3,:].copy()
 
-    for i in range(nx):
-        for j in range(nx):
-            tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-            aa[i,j] = tmp[0]
-    
-    
-    for i in range(nx):
-        for j in range(ny):
-            tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-            dd[i,j] = tmp[0]
+    aa = _read(nx*nx).reshape(nx,nx)
 
-    for i in range(ny):
-        for j in range(nx):
-            tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-            kk[i,j] = tmp[0]
-    
-    for i in range(ny):
-        tmp = np.fromfile(f,sep=' ',count=1,dtype='float')
-        se[i,i] = tmp[0]
+    if legacy_archnemesis_layout:
+        dd = _read(nx*ny).reshape(nx,ny)
+        kk = _read(ny*nx).reshape(ny,nx)
+    else:
+        #Fortran writes dd(nx,ny) one spectral point at a time
+        #and kk(ny,nx) one state vector element at a time
+        dd = _read(ny*nx).reshape(ny,nx).T.copy()
+        kk = _read(nx*ny).reshape(nx,ny).T.copy()
+
+    se = np.diag(_read(ny))
 
     f.close()
 
