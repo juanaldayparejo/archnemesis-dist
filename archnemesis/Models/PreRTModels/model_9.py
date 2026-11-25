@@ -68,9 +68,9 @@ class Model9(PreRTModelBase):
         # names and ordering when they are passed to the `self.calculate(...)` 
         # class method.
         self.parameters = (
-            ModelParameter('tau', slice(2,3), 'Total integrated column density of the cloud (aerosol)', r'$m^{-2}$'),
+            ModelParameter('tau', slice(0,1), 'Total opacity of the cloud (at the normalising wavelength of the cross sections)'),
             ModelParameter('frac_scale_height', slice(1,2), 'Fractional scale height (decays above `h_ref` zero below)', 'km'),
-            ModelParameter('h_ref', slice(0,1), 'Base height of cloud profile', 'km'),
+            ModelParameter('h_ref', slice(2,3), 'Base height of cloud profile', 'km'),
         )
         
         return
@@ -88,7 +88,7 @@ class Model9(PreRTModelBase):
             #   Index of the atmospheric profile we are altering (or None if the profile type does not have multiples)
             
             tau,
-            #   Total integrated column density of the cloud (m-2)
+            #   Total opacity of the cloud (the column is renormalised to tau in calc_tau_dust)
             
             fsh,
             #   Fractional scale height (km)
@@ -115,7 +115,7 @@ class Model9(PreRTModelBase):
 
                 atm :: Python class defining the atmosphere
 
-                tau :: Total integrated column density of the cloud (m-2)
+                tau :: Total opacity of the cloud (the column is renormalised to tau in calc_tau_dust)
 
                 fsh :: Fractional scale height (km)
 
@@ -151,6 +151,7 @@ class Model9(PreRTModelBase):
         #Calculating the actual atmospheric scale height in each level
         R = const.R
         scale = R * atm.T / (atm.MOLWT * atm.GRAV)   #scale height (m)
+        rho = atm.calc_rho()   #density of the atmosphere at each level
 
         #This gradient is calcualted numerically (in this function) as it is too hard otherwise
         xprof = np.zeros(atm.NP)
@@ -215,12 +216,17 @@ class Model9(PreRTModelBase):
             totcol = simpson(ND,x=atm.H)
             ND = ND / totcol * xdeep
 
+            #Specific density (particles per unit mass of atmosphere), as Q in subprofretg.f.
+            #The column is renormalised to tau in calc_tau_dust (DUST_RENORMALISATION), as gsetrad.f does
+            ND = ND / rho
+
             if itest==0:
                 xprof[:] = ND[:]
             else:
                 xmap[itest-1,:] = (ND[:]-xprof[:])/dx
 
         atm.DUST[0:atm.NP,atm_profile_idx] = xprof
+        atm.DUST_RENORMALISATION[atm_profile_idx] = tau   #the cloud opacity is tau
 
         return atm,xmap
 
@@ -340,6 +346,8 @@ class Model9(PreRTModelBase):
             *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
         )
         
+        #State vector element holding tau, needed for the gradients of the renormalisation in calc_tau_dust
+        atm.DUST_RENORMALISATION_IX[atm_profile_idx] = self.state_vector_start
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
         
