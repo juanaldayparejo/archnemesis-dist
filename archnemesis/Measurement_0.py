@@ -31,6 +31,7 @@ import matplotlib as matplotlib
 from numba import jit
 
 from archnemesis.helpers import h5py_helper
+from scipy.integrate import trapezoid
 from archnemesis.enum import InstrumentLineshapeEnum, WaveUnitEnum, SpectraUnitEnum, ZenithAngleOriginEnum
 from archnemesis import gauss_lobatto
 
@@ -4199,7 +4200,7 @@ def integrate_filter(nwave,vwave,y,nconv,vconv,nfil,vfil,afil):
             afil_interp = np.interp(vwave[inwave],vfil[0:nfil[j],j],afil[0:nfil[j],j])
             
             #Integrating the product of the spectrum and the filter function
-            yout[j] = np.trapz(y[inwave] * afil_interp, vwave[inwave])
+            yout[j] = trapezoid(y[inwave] * afil_interp, vwave[inwave])
             
     return yout
 
@@ -4256,7 +4257,7 @@ def integrate_filter_ngeom(nwave,vwave,y,nconv,vconv,nfil,vfil,afil):
             afil_interp = np.interp(vwave[inwave],vfil[0:nfil[j],j],afil[0:nfil[j],j])
             
             #Integrating the product of the spectrum and the filter function
-            yout[j,:] = np.trapz(y[inwave,:] * afil_interp[:, None], vwave[inwave], axis=0)
+            yout[j,:] = trapezoid(y[inwave,:] * afil_interp[:, None], vwave[inwave], axis=0)
 
     return yout
 
@@ -4317,9 +4318,9 @@ def integrate_filterg(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil):
             afil_interp = np.interp(vwave[inwave],vfil[0:nfil[j],j],afil[0:nfil[j],j])
             
             #Integrating the product of the spectrum and the filter function
-            yout[j] = np.trapz(y[inwave] * afil_interp, vwave[inwave])
+            yout[j] = trapezoid(y[inwave] * afil_interp, vwave[inwave])
             for k in range(nx):
-                gradout[j,k] = np.trapz(dydx[inwave,k] * afil_interp, vwave[inwave])
+                gradout[j,k] = trapezoid(dydx[inwave,k] * afil_interp, vwave[inwave])
 
     return yout,gradout
 
@@ -4381,10 +4382,10 @@ def integrate_filterg_ngeom(nwave,vwave,y,dydx,nconv,vconv,nfil,vfil,afil):
             afil_interp = np.interp(vwave[inwave],vfil[0:nfil[j],j],afil[0:nfil[j],j])
             
             #Integrating the product of the spectrum and the filter function
-            yout[j,:] = np.trapz(y[inwave,:] * afil_interp[:, None], vwave[inwave], axis=0)
+            yout[j,:] = trapezoid(y[inwave,:] * afil_interp[:, None], vwave[inwave], axis=0)
             
             for k in range(nx):
-                gradout[j,:,k] = np.trapz(dydx[inwave,:,k] * afil_interp[:, None], vwave[inwave], axis=0)
+                gradout[j,:,k] = trapezoid(dydx[inwave,:,k] * afil_interp[:, None], vwave[inwave], axis=0)
 
     return yout,gradout
 
