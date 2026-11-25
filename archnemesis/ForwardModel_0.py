@@ -2554,6 +2554,12 @@ class ForwardModel_0:
 
         """
 
+        #Make sure the reference vmrs add up to 1 before applying the models, scaling all gases
+        #(as subprofretg.f does after reading the reference profile)
+        if self.AtmosphereX.AMFORM == AtmosphericProfileFormatEnum.CALC_MOLECULAR_WEIGHT_SCALE_VMR_TO_ONE:
+            self.AtmosphereX.adjust_VMR(ISCALE=np.ones(self.AtmosphereX.NVMR,dtype='int32'),apply_svp=False)
+            self.AtmosphereX.calc_molwt()
+
         #Checking if hydrostatic equilibrium needs to be used for any parameterisation
         if self.Variables.JPRE!=-1:
             self.adjust_hydrostat = True

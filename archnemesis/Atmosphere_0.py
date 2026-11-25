@@ -705,11 +705,11 @@ class Atmosphere_0:
 
     ##################################################################################
 
-    def adjust_VMR(self, ISCALE=[1,1,1,1,1,1]):
+    def adjust_VMR(self, ISCALE=[1,1,1,1,1,1], apply_svp=True):
 
         """
         Subroutine to adjust the vmrs at a particular level to add up to 1.0.
-        Also limits vmrs to svp if specified in .vpf.
+        Also limits vmrs to svp if specified in .vpf (unless apply_svp is False).
         ISCALE :: Flag to indicate if gas vmr can be scaled(1) or not (0).
         """
 
@@ -754,6 +754,8 @@ class Atmosphere_0:
 
             self.edit_VMR(vmr)
             
+        if not apply_svp:
+            return
             
         for i in range(len(self.ID)):
             if (self.ID[i],self.ISO[i]) in self.SVP.keys():
