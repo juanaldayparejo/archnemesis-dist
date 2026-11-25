@@ -192,6 +192,8 @@ class Model54(PreRTModelBase):
             forward_model.Variables.XN, forward_model.Variables.LX)
         atm, xmap1 = self.calculate(atm, atm_profile_type, atm_profile_idx,
                                     xdeep, pknee, xwid, xwid1, self.phaze, self.whaze)
+        #State vector element holding the cloud opacity, needed for the gradients of the renormalisation in calc_tau_dust
+        atm.DUST_RENORMALISATION_IX[atm_profile_idx] = self.state_vector_start
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
         return

@@ -246,6 +246,10 @@ class Model66(PreRTModelBase):
                                            self.phaze1, self.whaze1, self.phaze2, self.whaze2)
         self.pcond = pcond
         forward_model.Variables.VARPARAM[ivar, 6] = pcond     # as VARPARAM(IVAR,7) in Fortran
+        #State vector elements holding the cloud opacities, needed for the gradients of the renormalisation in calc_tau_dust
+        for jspec, ioff in ((self.jspec1, 5), (self.jspec2, 8)):
+            if 0 < jspec <= atm.NDUST:
+                atm.DUST_RENORMALISATION_IX[jspec-1] = self.state_vector_start + ioff
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:atm.NP] = xmap1
         return
