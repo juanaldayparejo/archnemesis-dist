@@ -453,7 +453,7 @@ class Telluric_0:
         if self.Spectroscopy.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES:  #LBL-table
 
             #Calculating the cross sections for each gas in each layer
-            k = self.Spectroscopy.calc_klbl(len(tlay),play/101325.,tlay,WAVECALC=self.Spectroscopy.WAVE)
+            k = self.Spectroscopy.calc_klbl(len(tlay),play/101325.,tlay)
 
             TAUGAS = np.zeros((self.Spectroscopy.NWAVE,self.Spectroscopy.NG,len(tlay),self.Spectroscopy.NGAS))  #Vertical opacity of each gas in each layer
 
