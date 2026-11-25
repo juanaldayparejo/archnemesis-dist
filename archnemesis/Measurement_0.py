@@ -1138,7 +1138,17 @@ class Measurement_0:
 
         vconv = self.VCONV[0:self.NCONV[IGEOM],IGEOM]
         if self.VFWHM is not None:
-            return np.interp(vconv,self.VFWHM,self.XFWHM)
+            #Linear interpolation, extrapolating from the two end points outside the table (as VERINT)
+            isort = np.argsort(self.VFWHM)
+            vf = np.asarray(self.VFWHM,dtype=float)[isort]
+            xf = np.asarray(self.XFWHM,dtype=float)[isort]
+            fwhm = np.interp(vconv,vf,xf)
+            if len(vf)>1:
+                lo = vconv<vf[0]
+                hi = vconv>vf[-1]
+                fwhm[lo] = xf[0] + (xf[1]-xf[0])/(vf[1]-vf[0]) * (vconv[lo]-vf[0])
+                fwhm[hi] = xf[-1] + (xf[-1]-xf[-2])/(vf[-1]-vf[-2]) * (vconv[hi]-vf[-1])
+            return fwhm
         return np.full(len(vconv),float(self.FWHM))
 
     #################################################################################################################
