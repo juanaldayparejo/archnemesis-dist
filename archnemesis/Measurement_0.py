@@ -691,6 +691,18 @@ class Measurement_0:
                 dset.attrs['title'] = "ILS in each spectral bin"
                 dset.attrs['unit'] = ""
 
+            if self.FWHM > 0.0 and self.VFWHM is not None:
+
+                dset = h5py_helper.store_data(grp, 'VFWHM', self.VFWHM)
+                dset.attrs['title'] = "Spectral points at which the FWHM of the instrument lineshape is tabulated (.fwh file)"
+                if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
+                    dset.attrs['unit'] = "Wavenumber / cm-1"
+                elif self.ISPACE==WaveUnitEnum.Wavelength_um:
+                    dset.attrs['unit'] = "Wavelength / um"
+
+                dset = h5py_helper.store_data(grp, 'XFWHM', self.XFWHM)
+                dset.attrs['title'] = "FWHM of the instrument lineshape at each VFWHM (replaces FWHM)"
+
             if self.VFMERR is not None:
                 
                 if self.ISPACE==WaveUnitEnum.Wavenumber_cm:
@@ -819,6 +831,10 @@ class Measurement_0:
                     self.NFIL = h5py_helper.retrieve_data(f, 'Measurement/NFIL', np.array)
                     self.VFIL = h5py_helper.retrieve_data(f, 'Measurement/VFIL', np.array)
                     self.AFIL = h5py_helper.retrieve_data(f, 'Measurement/AFIL', np.array)
+
+                if 'Measurement/VFWHM' in f:
+                    self.VFWHM = h5py_helper.retrieve_data(f, 'Measurement/VFWHM', np.array)
+                    self.XFWHM = h5py_helper.retrieve_data(f, 'Measurement/XFWHM', np.array)
 
                 if 'Measurement/VFMERR' in f:
                     self.VFMERR = h5py_helper.retrieve_data(f, 'Measurement/VFMERR', np.array)
