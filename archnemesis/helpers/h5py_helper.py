@@ -295,7 +295,7 @@ def store_data(
             dtype = int
         elif isinstance(data, (bool, np.bool_)):
             dtype = bool
-        elif isinstance(data, (str, np.str_, np.dtype('T').type)):
+        elif isinstance(data, (str, np.str_)):
             dtype = h5py.string_dtype()
         
     
