@@ -1090,14 +1090,17 @@ class Measurement_0:
 
     #################################################################################################################
 
-    def read_fwh(self):
+    def read_fwh(self,runname=None):
         """
         Read the .fwh file, which tabulates the variation of the FWHM of the instrument
         lineshape with wavelength/wavenumber. If present, it replaces the constant FWHM
         in the convolution with the lineshape (only used if FWHM>0).
         """
 
-        with open(self.runname+'.fwh','r') as f:
+        if runname is None:
+            runname = self.runname
+
+        with open(runname+'.fwh','r') as f:
             nfwhm = int(f.readline().split()[0])
             vfwhm = np.zeros(nfwhm)
             xfwhm = np.zeros(nfwhm)
@@ -1121,6 +1124,67 @@ class Measurement_0:
         if self.VFWHM is not None:
             return np.interp(vconv,self.VFWHM,self.XFWHM)
         return np.full(len(vconv),float(self.FWHM))
+
+    #################################################################################################################
+
+    def conv_boxcar(self,Wave,Y,IGEOM=0,nstep=20):
+        """
+        Convolve a spectrum calculated with k-tables with a square instrument function of
+        width FWHM (or the width at each convolution wave from the .fwh file), as in cirsconv.f:
+        the spectrum is extended linearly beyond each end if needed, fitted with a natural cubic
+        spline, and averaged over each bin with the trapezoidal rule using nstep points.
+
+        Parameters
+        ----------
+        Wave : 1D array (NWAVE)
+            Calculation wavelengths or wavenumbers (increasing)
+        Y : array (NWAVE,...)
+            Spectrum (and/or gradients) at the calculation waves; any trailing dimensions are
+            convolved independently
+
+        Other Parameters
+        ----------------
+        IGEOM : int
+            Geometry whose convolution waves are used
+
+        Returns
+        -------
+        YOUT : array (NCONV,...)
+            Convolved spectrum
+        """
+
+        Wave = np.asarray(Wave,dtype='float64')
+        Y = np.asarray(Y,dtype='float64')
+        if len(Wave)<2:
+            raise ValueError('error in conv_boxcar :: need at least two calculation waves')
+
+        vconv = self.VCONV[0:self.NCONV[IGEOM],IGEOM]
+        widths = self.calc_fwhm_conv(IGEOM)
+        wext = float(self.FWHM)   #as in cirsconv.f, also when the width varies (.fwh)
+
+        #Extending the spectrum linearly beyond the ends if the bins are not covered
+        x = Wave
+        y = Y
+        if vconv[-1]>(Wave[-1]-wext/2.):
+            xn = vconv[-1] + wext
+            yn = Y[-1] + (Y[-1]-Y[-2])/(Wave[-1]-Wave[-2]) * (xn-Wave[-1])
+            x = np.concatenate([x,[xn]])
+            y = np.concatenate([y,yn[None,...]])
+        if vconv[0]<(Wave[0]+wext/2.):
+            x0 = vconv[0] - wext
+            y0 = Y[0] + (Y[1]-Y[0])/(Wave[1]-Wave[0]) * (x0-Wave[0])
+            x = np.concatenate([[x0],x])
+            y = np.concatenate([y0[None,...],y])
+
+        spl = scipy.interpolate.CubicSpline(x,y,axis=0,bc_type='natural')
+
+        #Trapezoidal average over each bin
+        frac = np.linspace(-0.5,0.5,nstep)
+        xi = vconv[:,None] + frac[None,:]*widths[:,None]      #(NCONV,nstep)
+        yi = spl(xi)                                          #(NCONV,nstep,...)
+        yout = (yi.sum(axis=1) - 0.5*(yi[:,0]+yi[:,-1])) / (nstep-1)
+
+        return yout
 
     #################################################################################################################
 
@@ -2390,6 +2454,10 @@ class Measurement_0:
         nstep = 20
         NWAVE = len(Wave)
 
+        #Width varying with wave (.fwh file), if not already loaded
+        if self.FWHM>0.0 and self.VFWHM is None and FWHMEXIST!='' and os.path.exists(FWHMEXIST+'.fwh'):
+            self.read_fwh(FWHMEXIST)
+
         if IGEOM=='All':
 
             #It is assumed all geometries cover the same spectral range
@@ -2399,7 +2467,8 @@ class Measurement_0:
 
             if self.FWHM>0.0:
 
-                raise ValueError('error in conv :: IGEOM=All with FWHM>0 has not yet been implemented')
+                #Square bin, as in cirsconv.f
+                yout[:,:] = self.conv_boxcar(Wave,ModSpec,IGEOM=IG,nstep=nstep)
 
             elif self.FWHM==0.0:
                 
@@ -2420,77 +2489,8 @@ class Measurement_0:
 
             if self.FWHM>0.0:
 
-                nwave1 = NWAVE
-                wave1 = np.zeros(nwave1+2)
-                y1 = np.zeros(nwave1+2)
-                wave1[1:nwave1+1] = Wave
-                y1[1:nwave1+1] = ModSpec[0:NWAVE]
-
-                #Extrapolating the last wavenumber
-                iup = 0
-                if(self.VCONV[self.NCONV[IGEOM],IGEOM]>(Wave.max()-self.FWHM/2.)):
-                    nwave1 = nwave1 +1
-                    wave1[nwave1-1] = self.VCONV[self.NCONV[IGEOM],IGEOM] + self.FWHM
-                    frac = (ModSpec[NWAVE-1]-ModSpec[NWAVE-2])/(Wave[NWAVE-1]-Wave[NWAVE-2])
-                    y1[nwave1-1] = ModSpec[NWAVE-1] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
-                    iup=1
-
-                #Extrapolating the first wavenumber
-                idown = 0
-                if(self.VCONV[0,IGEOM]<(Wave.min()+self.FWHM/2.)):
-                    nwave1 = nwave1 + 1
-                    wave1[0] = self.VCONV[0,IGEOM] - self.FWHM
-                    frac = (ModSpec[1] - ModSpec[2])/(Wave[1]-Wave[0])
-                    y1[0] = ModSpec[0] + frac * (wave1[0] - Wave[0])
-                    idown = 1
-
-                #Re-shaping the spectrum
-                nwave = self.NWAVE + iup + idown
-                wave = wave1[1-idown:nwave-(1-iup)]
-                y = y1[1-idown:nwave-(1-iup)]
-
-                #Checking if .fwh file exists (indicating that FWHM varies with wavelength)
-                ifwhm = 0
-                if os.path.exists(FWHMEXIST+'.fwh')==True:
-
-                    #Reading file
-                    f = open(FWHMEXIST+'.fwh')
-                    s = f.readline().split()
-                    nfwhm = int(s[0])
-                    vfwhm = np.zeros(nfwhm)
-                    xfwhm = np.zeros(nfwhm)
-                    for ifwhm in range(nfwhm):
-                        s = f.readline().split()
-                        vfwhm[ifwhm] = float(s[0])
-                        xfwhm[ifwhm] = float(s[1])
-                    f.close()
-
-                    ffwhm = sp.interpolate.interp1d(vfwhm,xfwhm)
-                    ifwhm==1
-
-                fy = sp.interpolate.CubicSpline(wave,y)
-                for ICONV in range(self.NCONV[IGEOM]):
-                    
-                    if ifwhm==1:
-                        yfwhm = ffwhm(self.VCONV[ICONV,IGEOM])
-                    else:
-                        yfwhm = self.FWHM
-
-                    x1 = self.VCONV[ICONV,IGEOM] - yfwhm/2.
-                    x2 = self.VCONV[ICONV,IGEOM] + yfwhm/2.
-                    delx = (x2-x1)/(nstep-1)
-                    xi = np.linspace(x1,x2,nstep)
-                    yi = fy(xi)
-                    
-                    yold=None
-                    for j in range(nstep):
-                        if j==0:
-                            sum1 = 0.0 
-                        else:
-                            sum1 = sum1 + (yi[j] - yold) * delx/2.
-                        yold = yi[j]
-
-                    yout[ICONV] = sum1 / yfwhm
+                #Square bin, as in cirsconv.f
+                yout[:] = self.conv_boxcar(Wave,ModSpec[0:NWAVE],IGEOM=IGEOM,nstep=nstep)
 
             elif self.FWHM==0.0:
 
@@ -2573,6 +2573,10 @@ class Measurement_0:
         nstep = 20
         NWAVE = len(Wave)
 
+        #Width varying with wave (.fwh file), if not already loaded
+        if self.FWHM>0.0 and self.VFWHM is None and FWHMEXIST!='' and os.path.exists(FWHMEXIST+'.fwh'):
+            self.read_fwh(FWHMEXIST)
+
         if IGEOM=='All':
 
             #It is assumed all geometries cover the same spectral range
@@ -2585,7 +2589,9 @@ class Measurement_0:
 
             if self.FWHM>0.0:
 
-                raise ValueError('error in convg :: IGEOM=All with FWHM>0 has not yet been implemented')
+                #Square bin, as in cirsconv.f (each gradient convolved like the spectrum)
+                yout[:,:] = self.conv_boxcar(Wave,ModSpec,IGEOM=IG,nstep=nstep)
+                gradout[:,:,:] = self.conv_boxcar(Wave,ModGrad,IGEOM=IG,nstep=nstep)
 
             elif self.FWHM==0.0:
 
@@ -2613,107 +2619,9 @@ class Measurement_0:
 
             if self.FWHM>0.0:
 
-                nwave1 = NWAVE
-                wave1 = np.zeros(nwave1+2)
-                y1 = np.zeros(nwave1+2)
-                grad1 = np.zeros((nwave1+2,NX))
-                wave1[1:nwave1+1] = Wave
-                y1[1:nwave1+1] = ModSpec[0:NWAVE]
-                grad1[1:nwave1+1,:] = ModGrad[0:NWAVE,:]
-
-                #Extrapolating the last wavenumber
-                iup = 0
-                if(self.VCONV[self.NCONV[IGEOM],IGEOM]>(Wave.max()-self.FWHM/2.)):
-                    nwave1 = nwave1 +1
-                    wave1[nwave1-1] = self.VCONV[self.NCONV[IGEOM],IGEOM] + self.FWHM
-                    frac = (ModSpec[NWAVE-1]-ModSpec[NWAVE-2])/(Wave[NWAVE-1]-Wave[NWAVE-2])
-                    y1[nwave1-1] = ModSpec[NWAVE-1] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
-                    grad1[nwave1-1,:] = ModGrad[NWAVE-1,:] + frac * (wave1[nwave1-1]-Wave[NWAVE-1])
-                    iup=1
-
-                #Extrapolating the first wavenumber
-                idown = 0
-                if(self.VCONV[0,IGEOM]<(Wave.min()+self.FWHM/2.)):
-                    nwave1 = nwave1 + 1
-                    wave1[0] = self.VCONV[0,IGEOM] - self.FWHM
-                    frac = (ModSpec[1] - ModSpec[2])/(Wave[1]-Wave[0])
-                    y1[0] = ModSpec[0] + frac * (wave1[0] - Wave[0])
-                    grad1[0,:] = ModGrad[0,:] + frac * (wave1[0] - Wave[0])
-                    idown = 1
-
-                #Re-shaping the spectrum
-                nwave = nwave1 + iup + idown
-                wave = np.zeros(nwave)
-                y = np.zeros(nwave)
-                grad = np.zeros((nwave,NX))
-                if((idown==1) & (iup==1)):
-                    wave[:] = wave1[:]
-                    y[:] = y1[:]
-                    grad[:,:] = grad1[:,:]
-                elif((idown==1) & (iup==0)):
-                    wave[0:nwave] = wave1[0:nwave1-1]
-                    y[0:nwave] = y1[0:nwave1-1]
-                    grad[0:nwave,:] = grad1[0:nwave1-1,:]
-                elif((idown==0) & (iup==1)):
-                    wave[0:nwave] = wave1[1:nwave1]
-                    y[0:nwave] = y1[1:nwave1]
-                    grad[0:nwave,:] = grad1[1:nwave1,:]
-                else:
-                    wave[0:nwave] = wave1[1:nwave1-1]
-                    y[0:nwave] = y1[1:nwave1-1]
-                    grad[0:nwave,:] = grad1[1:nwave1-1,:]
-
-                #Checking if .fwh file exists (indicating that FWHM varies with wavelength)
-                ifwhm = 0
-                if os.path.exists(FWHMEXIST+'.fwh')==True:
-
-                    #Reading file
-                    f = open(FWHMEXIST+'.fwh')
-                    s = f.readline().split()
-                    nfwhm = int(s[0])
-                    vfwhm = np.zeros(nfwhm)
-                    xfwhm = np.zeros(nfwhm)
-                    for ifwhm in range(nfwhm):
-                        s = f.readline().split()
-                        vfwhm[ifwhm] = float(s[0])
-                        xfwhm[ifwhm] = float(s[1])
-                    f.close()
-
-                    ffwhm = interpolate.interp1d(vfwhm,xfwhm)
-                    ifwhm==1
-
-                fy = interpolate.CubicSpline(wave,y)
-                fpy = []
-                for IX in range(NX):
-                    fpy1 = interpolate.CubicSpline(wave,grad[:,IX])
-                    fpy.append(fpy1)
-
-                _lgr.info(fpy)
-                _lgr.info('error in convg :: This part of the programme has not been tested yet')
-                raise ValueError()
-                
-                for ICONV in range(self.NCONV[IGEOM]):
-                    
-                    if ifwhm==1:
-                        yfwhm = ffwhm(self.VCONV[ICONV,IGEOM])
-                    else:
-                        yfwhm = self.FWHM
-
-                    x1 = self.VCONV[ICONV,IGEOM] - yfwhm/2.
-                    x2 = self.VCONV[ICONV,IGEOM] + yfwhm/2.
-                    delx = (x2-x1)/(nstep-1)
-                    xi = np.linspace(x1,x2,nstep)
-                    yi = fy(xi)
-                    
-                    yold=None
-                    for j in range(nstep):
-                        if j==0:
-                            sum1 = 0.0 
-                        else:
-                            sum1 = sum1 + (yi[j] - yold) * delx/2.
-                        yold = yi[j]
-
-                    yout[ICONV] = sum1 / yfwhm
+                #Square bin, as in cirsconv.f (each gradient convolved like the spectrum)
+                yout[:] = self.conv_boxcar(Wave,ModSpec[0:NWAVE],IGEOM=IGEOM,nstep=nstep)
+                gradout[:,:] = self.conv_boxcar(Wave,ModGrad[0:NWAVE,:],IGEOM=IGEOM,nstep=nstep)
 
             elif self.FWHM==0.0:
 
