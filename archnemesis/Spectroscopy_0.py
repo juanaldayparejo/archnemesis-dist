@@ -2140,6 +2140,66 @@ class Spectroscopy_0:
 
 
     ######################################################################################################
+    def _ktable_pt_coeffs(self,press1,temp1):
+        """
+        Indices and weights to interpolate the k-tables to pressure press1 (atm) and temperature temp1 (K),
+        as in get_k.f / get_kg.f: log(p) and T are clamped to the table range (T per pressure level
+        if the temperatures depend on pressure, NT<0).
+
+        Returns ip, v, (it1,u1,dudt1), (it2,u2,dudt2), where 1 refers to pressure level ip and 2 to ip+1
+        """
+        PRESS = np.log(self.PRESS)
+        p_l = min(max(np.log(press1),PRESS.min()),PRESS.max())
+        ip = int(np.clip(np.searchsorted(PRESS,p_l)-1,0,len(PRESS)-2))
+        v = (p_l-PRESS[ip])/(PRESS[ip+1]-PRESS[ip])
+
+        if self.NT<0:
+            TEMPS = (self.TEMP[ip],self.TEMP[ip+1])
+        else:
+            TEMPS = (self.TEMP,self.TEMP)
+
+        coeffs = []
+        for Tn in TEMPS:
+            t1 = min(max(temp1,Tn[0]),Tn[-1])
+            it = int(np.clip(np.searchsorted(Tn,t1)-1,0,len(Tn)-2))
+            coeffs.append( (it, (t1-Tn[it])/(Tn[it+1]-Tn[it]), 1./(Tn[it+1]-Tn[it])) )
+
+        return ip,v,coeffs[0],coeffs[1]
+
+    ######################################################################################################
+
+    def _ktable_interp_pt(self,press1,temp1,linear=False):
+        """
+        Interpolate the k-tables (self.K) to pressure press1 (atm) and temperature temp1 (K), as in
+        get_k.f / get_kg.f: the interpolation is linear in log(k) unless any of the four table corners
+        is <= 0 at the first g-ordinate, in which case it is linear in k for all g-ordinates.
+
+        Returns k(NWAVE,NG,NGAS) and dk/dT(NWAVE,NG,NGAS)
+        """
+        ip,v,(it1,u1,dudt1),(it2,u2,dudt2) = self._ktable_pt_coeffs(press1,temp1)
+
+        y1 = self.K[:,:,ip,it1,:]
+        y4 = self.K[:,:,ip,it1+1,:]
+        y2 = self.K[:,:,ip+1,it2,:]
+        y3 = self.K[:,:,ip+1,it2+1,:]
+
+        if linear:
+            klog = np.zeros((self.K.shape[0],1,self.K.shape[4]),dtype=bool)
+        else:
+            klog = ((y1[:,0,:]>0.0) & (y2[:,0,:]>0.0) & (y3[:,0,:]>0.0) & (y4[:,0,:]>0.0))[:,None,:]
+
+        Y1,Y2,Y3,Y4 = [np.where(klog,np.log(np.maximum(y,1.0e-37)),y) for y in (y1,y2,y3,y4)]
+
+        x = (1.0-v)*((1.0-u1)*Y1 + u1*Y4) + v*((1.0-u2)*Y2 + u2*Y3)
+        dxdt = (1.0-v)*(Y4-Y1)*dudt1 + v*(Y3-Y2)*dudt2
+
+        k = np.where(klog,np.exp(np.where(klog,x,0.0)),x)
+        dkdt = np.where(klog,k*dxdt,dxdt)
+
+        return k,dkdt
+
+    ######################################################################################################
+
     def calc_kg(self,npoints,press,temp,WAVECALC=None,MakePlot=False):
         """
         Calculate the k-coefficients at a given pressure and temperature
@@ -2170,78 +2230,7 @@ class Spectroscopy_0:
         kgood = np.zeros([self.NWAVE,self.NG,npoints,self.NGAS])
         dkgooddT = np.zeros([self.NWAVE,self.NG,npoints,self.NGAS])
         for ipoint in range(npoints):
-            press1 = press[ipoint]
-            temp1 = temp[ipoint]
-
-            #Getting the levels just above and below the desired points
-            lpress  = np.log(press1)
-            ip = np.argmin(np.abs(self.PRESS-press1))
-
-            if self.PRESS[ip]>=press1:
-                iphi = ip
-                if ip==0:
-                    lpress = np.log(self.PRESS[0])
-                    ipl = 0
-                    iphi = 1
-                else:
-                    ipl = ip - 1
-            elif self.PRESS[ip]<press1:
-                ipl = ip
-                if ip==self.NP-1:
-                    lpress = np.log(self.PRESS[self.NP-1])
-                    iphi = self.NP - 1
-                    ipl = self.NP - 2
-                else:
-                    iphi = ip + 1
-
-            it = np.argmin(np.abs(self.TEMP-temp1))
-
-            if self.TEMP[it]>=temp1:
-                ithi = it
-                if it==0:
-                    temp1 = self.TEMP[0]
-                    itl = 0
-                    ithi = 1
-                else:
-                    itl = it - 1
-            elif self.TEMP[it]<temp1:
-                itl = it
-                if it==self.NT-1:
-                    temp1 = self.TEMP[self.NT-1]
-                    ithi = self.NT - 1
-                    itl = self.NT -2
-                else:
-                    ithi = it + 1
-
-            plo = np.log(self.PRESS[ipl])
-            phi = np.log(self.PRESS[iphi])
-            tlo = self.TEMP[itl]
-            thi = self.TEMP[ithi]
-            klo1 = np.zeros([self.NWAVE,self.NG,self.NGAS])
-            klo2 = np.zeros([self.NWAVE,self.NG,self.NGAS])
-            khi1 = np.zeros([self.NWAVE,self.NG,self.NGAS])
-            khi2 = np.zeros([self.NWAVE,self.NG,self.NGAS])
-            klo1[:] = self.K[:,:,ipl,itl,:]
-            klo2[:] = self.K[:,:,ipl,ithi,:]
-            khi2[:] = self.K[:,:,iphi,ithi,:]
-            khi1[:] = self.K[:,:,iphi,itl,:]
-
-            #Interpolating to get the k-coefficients at desired p-T
-            v = (lpress-plo)/(phi-plo)
-            u = (temp1-tlo)/(thi-tlo)
-            dudt = 1./(thi-tlo)
-
-            igood = np.where( (klo1>0.0) & (klo2>0.0) & (khi1>0.0) & (khi2>0.0) )
-            kgood[igood[0],igood[1],ipoint,igood[2]] = (1.0-v)*(1.0-u)*np.log(klo1[igood[0],igood[1],igood[2]]) + v*(1.0-u)*np.log(khi1[igood[0],igood[1],igood[2]]) + v*u*np.log(khi2[igood[0],igood[1],igood[2]]) + (1.0-v)*u*np.log(klo2[igood[0],igood[1],igood[2]])
-            kgood[igood[0],igood[1],ipoint,igood[2]] = np.exp(kgood[igood[0],igood[1],ipoint,igood[2]])
-            dxdt = (-np.log(klo1[igood[0],igood[1],igood[2]])*(1.0-v) - np.log(khi1[igood[0],igood[1],igood[2]])*v + np.log(khi2[igood[0],igood[1],igood[2]])*v + np.log(klo2[igood[0],igood[1],igood[2]]) * (1.0-v))*dudt
-            dkgooddT[igood[0],igood[1],ipoint,igood[2]] = kgood[igood[0],igood[1],ipoint,igood[2]] * dxdt
-
-            ibad = np.where( (klo1<=0.0) & (klo2<=0.0) & (khi1<=0.0) & (khi2<=0.0) )
-            kgood[ibad[0],ibad[1],ipoint,ibad[2]] = (1.0-v)*(1.0-u)*klo1[ibad[0],ibad[1],ibad[2]] + v*(1.0-u)*khi1[ibad[0],ibad[1],ibad[2]] + v*u*khi2[ibad[0],ibad[1],ibad[2]] + (1.0-v)*u*klo2[ibad[0],ibad[1],ibad[2]]
-            dxdt = (-klo1[ibad[0],ibad[1],ibad[2]]*(1.0-v) - khi1[ibad[0],ibad[1],ibad[2]]*v + khi2[ibad[0],ibad[1],ibad[2]]*v + klo2[ibad[0],ibad[1],ibad[2]] * (1.0-v))*dudt
-            dkgooddT[ibad[0],ibad[1],ipoint,ibad[2]] = dxdt
-
+            kgood[:,:,ipoint,:],dkgooddT[:,:,ipoint,:] = self._ktable_interp_pt(press[ipoint],temp[ipoint])
 
         #Checking that the calculation wavenumbers coincide with the wavenumbers in the k-tables
         ##########################################################################################
@@ -2317,87 +2306,9 @@ class Spectroscopy_0:
         #############################################################################
 
         #K (NWAVE,NG,NPOINTS,NGAS)
-        TEMP = self.TEMP
-        PRESS = self.PRESS
-        NP = self.NP
-        NT = self.NT
-        
         kgood = np.zeros([self.NWAVE,self.NG,npoints,self.NGAS])
-        #dkgooddT = np.zeros([self.NWAVE,self.NG,npoints,self.NGAS])
         for ipoint in range(npoints):
-            press1 = press[ipoint]
-            temp1 = temp[ipoint]
-
-            # Find pressure grid points above and below current layer pressure
-            ip = np.abs(PRESS - press1).argmin()
-            if PRESS[ip] >= press1:
-                ip_high = ip
-                if ip == 0:
-                    press1 = PRESS[0]
-                    ip_low = 0
-                    ip_high = 1
-                else:
-                    ip_low = ip - 1
-            elif PRESS[ip] < press1:
-                ip_low = ip
-                if ip == NP - 1:
-                    press1 = PRESS[NP - 1]
-                    ip_high = NP - 1
-                    ip_low = NP - 2
-                else:
-                    ip_high = ip + 1
-
-            # Find temperature grid points above and below current layer temperature
-            it = np.abs(TEMP - temp1).argmin()
-            if TEMP[it] >= temp1:
-                it_high = it
-                if it == 0:
-                    temp1 = TEMP[0]
-                    it_low = 0
-                    it_high = 1
-                else:
-                    it_low = it - 1
-            elif TEMP[it] < temp1:
-                it_low = it
-                if it == NT - 1:
-                    temp1 = TEMP[NT - 1]
-                    it_high = NT - 1
-                    it_low = NT - 2
-                else:
-                    it_high = it + 1
-
-            lpress = np.log(press1)
-            plo = np.log(self.PRESS[ip_low])
-            phi = np.log(self.PRESS[ip_high])
-            tlo = self.TEMP[it_low]
-            thi = self.TEMP[it_high]
-            klo1 = np.zeros([self.NWAVE,self.NG,self.NGAS])
-            klo2 = np.zeros([self.NWAVE,self.NG,self.NGAS])
-            khi1 = np.zeros([self.NWAVE,self.NG,self.NGAS])
-            khi2 = np.zeros([self.NWAVE,self.NG,self.NGAS])
-            klo1[:] = self.K[:,:,ip_low,it_low,:]
-            klo2[:] = self.K[:,:,ip_low,it_high,:]
-            khi2[:] = self.K[:,:,ip_high,it_high,:]
-            khi1[:] = self.K[:,:,ip_high,it_low,:]
-
-            #Interpolating to get the k-coefficients at desired p-T
-            v = (lpress-plo)/(phi-plo)
-            u = (temp1-tlo)/(thi-tlo)
-
-            igood = np.where( (klo1>0.0) & (klo2>0.0) & (khi1>0.0) & (khi2>0.0) )
-            
-            
-            if linear is True:
-                #Linear interpolation
-                kgood[igood[0],igood[1],ipoint,igood[2]] = (1.0-v)*(1.0-u)*(klo1[igood[0],igood[1],igood[2]]) + v*(1.0-u)*(khi1[igood[0],igood[1],igood[2]]) + v*u*(khi2[igood[0],igood[1],igood[2]]) + (1.0-v)*u*(klo2[igood[0],igood[1],igood[2]])
-            else:
-                #Logarithmic interpolation
-                kgood[igood[0],igood[1],ipoint,igood[2]] = (1.0-v)*(1.0-u)*(np.log(klo1[igood[0],igood[1],igood[2]])) + v*(1.0-u)*(np.log(khi1[igood[0],igood[1],igood[2]])) + v*u*(np.log(khi2[igood[0],igood[1],igood[2]])) + (1.0-v)*u*(np.log(klo2[igood[0],igood[1],igood[2]]))
-                kgood[igood[0],igood[1],ipoint,igood[2]] = np.exp(kgood[igood[0],igood[1],ipoint,igood[2]])
-            
-            ibad = np.where( (klo1<=0.0) & (klo2<=0.0) & (khi1<=0.0) & (khi2<=0.0) )
-            kgood[ibad[0],ibad[1],ipoint,ibad[2]] = (1.0-v)*(1.0-u)*klo1[ibad[0],ibad[1],ibad[2]] + v*(1.0-u)*khi1[ibad[0],ibad[1],ibad[2]] + v*u*khi2[ibad[0],ibad[1],ibad[2]] + (1.0-v)*u*klo2[ibad[0],ibad[1],ibad[2]]
-
+            kgood[:,:,ipoint,:] = self._ktable_interp_pt(press[ipoint],temp[ipoint],linear=linear)[0]
 
         #Checking that the calculation wavenumbers coincide with the wavenumbers in the k-tables
         ##########################################################################################
