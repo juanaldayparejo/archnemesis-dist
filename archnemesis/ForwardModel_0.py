@@ -5053,8 +5053,13 @@ class ForwardModel_0:
                 Layer.CONT[:, i] = Layer.CONT[:, i] / Layer.CONT[:, i].sum() * 1e4 * self.AtmosphereX.DUST_RENORMALISATION[i]
 
             if Scatter.NWAVE > 2:
-                f_kext =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KEXT[:, i], kind='cubic')
-                f_ksca =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KSCA[:, i], kind='cubic')
+                #Natural cubic spline, as cspline/csplint in cirsrad_wave.f
+                isort = np.argsort(Scatter.WAVE)
+                wsort = np.asarray(Scatter.WAVE)[isort]
+                if (WAVEC.min() < wsort[0]) or (WAVEC.max() > wsort[-1]):
+                    raise ValueError('error calc_tau_dust :: Spectral range for calculation is outside of range in which the Aerosol properties are defined')
+                f_kext =sp.interpolate.CubicSpline(wsort, Scatter.KEXT[isort, i], bc_type='natural')
+                f_ksca =sp.interpolate.CubicSpline(wsort, Scatter.KSCA[isort, i], bc_type='natural')
             else:
                 f_kext =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KEXT[:, i])
                 f_ksca =sp.interpolate.interp1d(Scatter.WAVE, Scatter.KSCA[:, i])
