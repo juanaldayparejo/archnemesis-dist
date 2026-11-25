@@ -383,6 +383,9 @@ class Model47(PreRTModelBase):
             if forward_model.Variables.LX[self.state_vector_start+i] == 1:
                 xmap1[i,:] = xmap1[i,:] * xn_params_1d[i]
 
+        #State vector element holding tau, needed for the gradients of the renormalisation in calc_tau_dust
+        atm.DUST_RENORMALISATION_IX[atm_profile_idx] = self.state_vector_start
+
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:forward_model.AtmosphereX.NP] = xmap1
         

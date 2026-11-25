@@ -191,6 +191,7 @@ class Atmosphere_0:
         self.DUST = None # np.zeros((NP,NDUST)) or np.zeros((NP,NDUST,NLOCATIONS)) #particles per m3
         self.DUST_UNITS_FLAG = None # np.zeros(NDUST), -1 for legacy units (g cm^-3), None for standard (number m^-3)
         self.DUST_RENORMALISATION = {} # flags for normalising clouds to specific opacity
+        self.DUST_RENORMALISATION_IX = {} # state vector index of the opacity each renormalised cloud is scaled to (for the gradients)
         self.PARAH2 = None # np.zeros(NP) 
         
         self.SVP = {} # Flags for limiting gas profiles to saturated profiles (from .vpf file)

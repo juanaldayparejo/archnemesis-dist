@@ -728,7 +728,7 @@ class ForwardModel_0:
 
                 #Mapping the gradients from Profile properties to elements in state vector
                 _lgr.info('Mapping gradients from Profile to State Vector')
-                dSPEC1 = map2xvec(dSPEC2,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+                dSPEC1 = map2xvec(dSPEC2,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,self.renormalise_dust_xmap(xmap))
                 #(NWAVE,NPATH,NX)
                 del dSPEC2
 
@@ -1115,7 +1115,7 @@ class ForwardModel_0:
 
                 #Mapping the gradients from Profile properties to elements in state vector
                 _lgr.info('Mapping gradients from Profile to State Vector')
-                dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+                dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,self.renormalise_dust_xmap(xmap))
                 #(NWAVE,NPATH,NX)
                 del dSPECOUT1
 
@@ -1220,7 +1220,7 @@ class ForwardModel_0:
 
             #Mapping the gradients from Profile properties to elements in state vector
             _lgr.info('Mapping gradients from Profile to State Vector')
-            dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+            dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,self.renormalise_dust_xmap(xmap))
             #(NWAVE,NPATH,NX)
             del dSPECOUT1
 
@@ -1482,7 +1482,7 @@ class ForwardModel_0:
 
         #Mapping the gradients from Profile properties to elements in state vector
         _lgr.info('Mapping gradients from Profile to State Vector')
-        dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+        dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,self.renormalise_dust_xmap(xmap))
         #(NWAVE,NPATH,NX)
         del dSPECOUT1
 
@@ -1955,7 +1955,7 @@ class ForwardModel_0:
 
             #Mapping the gradients from Profile properties to elements in state vector
             _lgr.info('Mapping gradients from Profile to State Vector')
-            dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+            dSPECOUT = map2xvec(dSPECOUT1,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,self.renormalise_dust_xmap(xmap))
             #(NWAVE,NPATH,NX)
             del dSPECOUT1
 
@@ -2076,7 +2076,7 @@ class ForwardModel_0:
 
             #Mapping the gradients from Profile properties to elements in state vector
             _lgr.info('Mapping gradients from Profile to State Vector')
-            dSPEC1X = map2xvec(dSPEC2X,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,xmap)
+            dSPEC1X = map2xvec(dSPEC2X,self.SpectroscopyX.NWAVE,self.AtmosphereX.NVMR,self.AtmosphereX.NDUST,self.AtmosphereX.NP,self.PathX.NPATH,self.Variables.NX,self.renormalise_dust_xmap(xmap))
             #(NWAVE,NPATH,NX)
             del dSPEC2X
 
@@ -4960,6 +4960,52 @@ class ForwardModel_0:
             
         return tau_cia_layer,dtau_cia_layer
 
+    def renormalise_dust_xmap(self, xmap):
+        """
+        Correct the functional derivatives of the aerosol profiles (xmap) for the renormalisation
+        applied in calc_tau_dust() to the aerosol populations listed in AtmosphereX.DUST_RENORMALISATION
+        (models 32 and 47), whose layer amounts are scaled so that the column adds up to 1e4*tau.
+
+        Since the layer amounts are linear in the profile (CONT = DCO @ DUST), the renormalisation is
+        equivalent to scaling the profile D by F = S/(w.D), with S = 1e4*tau and w = sum of DCO over layers, so
+
+            d(F D)/dx = F ( dD/dx - D (w.dD/dx)/(w.D) ) + D/(w.D) dS/dx
+
+        where dS/dx is only non-zero for the state vector element holding tau.
+
+        @param xmap: array (NX,NVMR+2+NDUST,NP)
+            Functional derivatives of the atmospheric profiles with respect to the state vector
+        """
+        atm = self.AtmosphereX
+        if len(atm.DUST_RENORMALISATION)==0:
+            return xmap
+
+        if xmap.ndim!=3:
+            _lgr.warning('renormalise_dust_xmap :: aerosol renormalisation not accounted for in the gradients with multiple locations')
+            return xmap
+
+        w = self.LayerX.DCO.sum(axis=0)   #d(sum of layer amounts)/d(profile) (NP)
+
+        xmap = xmap.copy()
+        for idust,tau in atm.DUST_RENORMALISATION.items():
+            ipar = atm.NVMR + 1 + idust
+            D = atm.DUST[:,idust]
+            wD = w @ D
+            S = 1.0e4 * tau
+            X = xmap[:,ipar,:]
+            X = S/wD * (X - np.outer(X @ w, D)/wD)
+            if idust in atm.DUST_RENORMALISATION_IX:
+                ix = atm.DUST_RENORMALISATION_IX[idust]
+                dtaudx = tau if self.Variables.LX[ix]==1 else 1.0
+                X[ix,:] += D/wD * 1.0e4 * dtaudx
+            else:
+                _lgr.warning(f'renormalise_dust_xmap :: state vector index of tau unknown for aerosol {idust}; gradient wrt tau omitted')
+            xmap[:,ipar,:] = X
+
+        return xmap
+
+    ###############################################################################################
+
     def calc_tau_dust(self, WAVEC=None, Scatter=None, Layer=None, MakePlot=False):
         """
         Calculate the aerosol opacity in each atmospheric layer
@@ -5588,7 +5634,7 @@ def map2xvec(dSPECIN,NWAVE,NVMR,NDUST,NPRO,NPATH,NX,xmap):
         
         CALLING SEQUENCE:
         
-            dSPECOUT = map2xvec(dSPECIN,NWAVE,NVMR,NDUST,NPRO,NPATH,NX,xmap)
+            dSPECOUT = map2xvec(dSPECIN,NWAVE,NVMR,NDUST,NPRO,NPATH,NX,self.renormalise_dust_xmap(xmap))
         
         MODIFICATION HISTORY : Juan Alday (25/07/2021)
         
