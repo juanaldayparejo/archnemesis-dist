@@ -215,8 +215,8 @@ class Model47(PreRTModelBase):
             # First parameter derivative: xmap[0, ipar, j] = X1[j] / tau
             xmap[0, j] = X1[j] / tau  # XDEEP is tau
 
-            # Derivative of X1[j] with respect to Y0 (pref)
-            xmap[1, j] = 2.0 * (Y - Y0) / XWID ** 2 * X1[j]
+            # Derivative of X1[j] with respect to pref (Y0 = ln(pref))
+            xmap[1, j] = 2.0 * (Y - Y0) / XWID ** 2 * X1[j] / pref
 
             # Derivative of X1[j] with respect to XWID (fwhm)
             xmap[2, j] = (2.0 * ((Y - Y0) ** 2) / XWID ** 3 - 1.0 / XWID) * X1[j]
@@ -367,13 +367,22 @@ class Model47(PreRTModelBase):
         atm = forward_model.AtmosphereX
         atm_profile_type, atm_profile_idx = atm.ipar_to_atm_profile_type(ipar)
         
+        xn_params = self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+
         atm, xmap1 = self.calculate(
             atm, 
             atm_profile_type, 
             atm_profile_idx,
-            *self.get_parameter_values_from_state_vector(forward_model.Variables.XN, forward_model.Variables.LX)
+            *xn_params
         )
-        
+
+        #xmap1 holds derivatives with respect to the parameter values; convert to the state vector elements
+        #carried in log space
+        xn_params_1d = np.concatenate([np.atleast_1d(v) for v in xn_params])
+        for i in range(self.n_state_vector_entries):
+            if forward_model.Variables.LX[self.state_vector_start+i] == 1:
+                xmap1[i,:] = xmap1[i,:] * xn_params_1d[i]
+
         forward_model.AtmosphereX = atm
         xmap[self.state_vector_slice, ipar, 0:forward_model.AtmosphereX.NP] = xmap1
         
