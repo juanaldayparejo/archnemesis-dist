@@ -92,10 +92,12 @@ def retrieval_nemesis(
     ######################################################
     ######################################################
     #    RUN FORWARD MODEL ONLY IF NITER < 0
+    #    (NITER = 0 goes through coreretOE, which computes the
+    #    Jacobian and error matrices without iterating, as in Fortran)
     ######################################################
     ######################################################
-    if Retrieval.NITER <= 0:
-        _lgr.info('Only running forward model as NITER <= 0')
+    if Retrieval.NITER < 0:
+        _lgr.info('Only running forward model as NITER < 0')
         
         retrieval_method = None
         
@@ -151,7 +153,7 @@ def retrieval_nemesis(
         Retrieval.AA = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
         Retrieval.SM = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
         Retrieval.SN = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
-        Retrieval.ST = np.full((Retrieval.NX, Retrieval.NX), fill_value=np.nan)
+        Retrieval.ST = np.array(Variables.SA, copy=True) # errors stay as a priori for NITER < 0, as in Fortran
         
         if Measurement.SPECMOD is not None:
             if Retrieval.YN is None:
