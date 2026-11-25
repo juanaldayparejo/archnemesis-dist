@@ -2705,7 +2705,7 @@ def read_ktable(filename,wavemin,wavemax):
 
         g_ord = np.zeros(ng)
         del_g = np.zeros(ng)
-        templevels = np.zeros(ntemp)
+        N1 = abs(ntemp)   #ntemp<0: temperatures depend on pressure, templevels(npress,N1)
         presslevels = np.zeros(npress)
         g_ord[:] = np.fromfile(f,dtype='float32',count=ng)
         del_g[:] = np.fromfile(f,dtype='float32',count=ng)
@@ -2718,9 +2718,12 @@ def read_ktable(filename,wavemin,wavemax):
         ioff = ioff + 2*nbytes_float32
 
         presslevels[:] = np.fromfile(f,dtype='float32',count=npress)
-        templevels[:] = np.fromfile(f,dtype='float32',count=ntemp)
+        if ntemp<0:
+            templevels = np.fromfile(f,dtype='float32',count=npress*N1).reshape(npress,N1).astype('float64')
+        else:
+            templevels = np.fromfile(f,dtype='float32',count=ntemp)
 
-        ioff = ioff + npress*nbytes_float32+ntemp*nbytes_float32
+        ioff = ioff + npress*nbytes_float32+templevels.size*nbytes_float32
 
         #Reading central wavelengths in non-uniform grid
         if delv>0.0:
@@ -2740,19 +2743,19 @@ def read_ktable(filename,wavemin,wavemax):
         #Reading the k-coefficients
         #######################################
 
-        k_g = np.zeros([nwave,ng,npress,ntemp], dtype=np.float64)
+        k_g = np.zeros([nwave,ng,npress,N1], dtype=np.float64)
 
         #Jumping until we get to the minimum wavenumber
-        njump = npress*ntemp*ng*ins[0]
+        njump = npress*N1*ng*ins[0]
         ioff = njump*nbytes_float32 + (irec0-1)*nbytes_float32
         f.seek(ioff,0)
 
         #Reading the coefficients we require
-        k_out = np.fromfile(f,dtype='float32',count=ntemp*npress*ng*nwave)
+        k_out = np.fromfile(f,dtype='float32',count=N1*npress*ng*nwave)
         il = 0
         for ik in range(nwave):
             for i in range(npress):
-                for j in range(ntemp):
+                for j in range(N1):
                     k_g[ik,:,i,j] = (k_out[il:il+ng] / BINARY_K_ABS_PACK_INTO_FLOAT_FACTOR)
                     il = il + ng
 
@@ -2872,7 +2875,8 @@ def write_ktable(filename,gasID,isoID,g_ord,del_g,presslevels,templevels,nwave,v
         g_ord(ng) :: g-ordinates
         del_g(ng) :: g-intervals
         presslevels(npress) :: Pressure levels (atm)
-        templevels(ntemp) :: Temperature levels (K)
+        templevels(ntemp) or (npress,ntemp) :: Temperature levels (K); if 2D, the temperatures
+                                                depend on pressure and NT=-ntemp is written
         nwave :: Number of spectral points
         vmin :: Minimum wavenumber/wavelength
         delv :: Increment in wavenumber/wavelength
@@ -2887,12 +2891,14 @@ def write_ktable(filename,gasID,isoID,g_ord,del_g,presslevels,templevels,nwave,v
     # Dimensions
     ng = g_ord.size
     npress = presslevels.size
-    ntemp = templevels.size
+    templevels = np.asarray(templevels)
+    ntemp = templevels.shape[-1]
+    ntemp_header = -ntemp if templevels.ndim==2 else ntemp
 
     # -------------------------
     # Compute IREC0 (in float32 words)
     # -------------------------
-    irec0 = (10 + 2*ng + 3 + npress + ntemp)
+    irec0 = (10 + 2*ng + 3 + npress + templevels.size)
 
     if delv <= 0.0:
         irec0 += nwave
@@ -2906,7 +2912,7 @@ def write_ktable(filename,gasID,isoID,g_ord,del_g,presslevels,templevels,nwave,v
         np.float32(delv).tofile(f)
         np.float32(fwhm).tofile(f)
         np.int32(npress).tofile(f)
-        np.int32(ntemp).tofile(f)
+        np.int32(ntemp_header).tofile(f)
         np.int32(ng).tofile(f)
         np.int32(gasID).tofile(f)
         np.int32(isoID).tofile(f)
