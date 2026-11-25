@@ -132,33 +132,22 @@ class Model444(PreRTModelBase):
             _lgr.warning(f"ISCAT = {iscat} not implemented for model 444 yet! Defaulting to iscat = 1.")
             pars = (a, b, (1 - 3 * b) / b)
 
-        # Set wavelength grid and base (unscaled) imaginary refractive index
-        Scatter.WAVER = haze_params["WAVE"]
-        k_im_base = np.exp(xprof[2:])  # may be length-1 scalar or spectrum samples
-
-        # Obtain darkening multiplier for this species (defaults to 1.0 if absent)
+        # Base (unscaled) imaginary refractive index at the 444-file nodes, with darkening multiplier
+        k_im_base = np.exp(np.asarray(xprof[2:], dtype=float))
         darkening = cls._get_darkening_for_species(Scatter, idust)
+        k_im_nodes = float(darkening) * k_im_base
 
-        # Apply darkening to the imaginary refractive index definition
-        if np.size(k_im_base) == 1:
-            # Broadcast to the haze wavelength grid after scaling
-            k_im = float(darkening) * float(k_im_base) * np.ones_like(Scatter.WAVER, dtype=float)
-        else:
-            k_im = float(darkening) * np.array(k_im_base, dtype=float)
-
-        Scatter.REFIND_IM = k_im
-
-        # Real refractive index via KK transform anchored at (WAVE_REF, NREAL)
+        # Refractive index computed as in NEMESIS-Fortran (gsetrad.f, model 444 block):
+        # ln(n_imag) is interpolated (VERINT, with linear extrapolation) onto the Scatter.WAVE grid,
+        # and n_real is obtained by Kramers-Kronig on that grid (constant NREAL if a single n_imag is given).
+        # Previously KK was applied on the 444 nodes and n_imag was interpolated linearly in makephase,
+        # overestimating absorption between widely spaced nodes.
         reference_nreal = float(haze_params["NREAL"])
         reference_wave = float(haze_params["WAVE_REF"])
         normalising_wave = float(haze_params["WAVE_NORM"])
-
-        Scatter.REFIND_REAL = kk_new_sub(
-            np.array(Scatter.WAVER, dtype=float),
-            np.array(Scatter.REFIND_IM, dtype=float),
-            reference_wave,
-            reference_nreal,
-        )
+        Scatter.WAVER, Scatter.REFIND_REAL, Scatter.REFIND_IM = refind_nemesis(
+            Scatter, np.asarray(haze_params["WAVE"], float), np.log(k_im_nodes),
+            reference_wave, reference_nreal)
 
         # Build phase function / optical properties for this species
         Scatter.makephase(idust, iscat, pars)
@@ -323,3 +312,47 @@ class Model444(PreRTModelBase):
             self.get_state_vector_slice(forward_model.Variables.XN),
             self.haze_params,
         )
+
+
+def _verint(x, y, xin):
+    """Port of VERINT (radtran/path/verint.f): linear interpolation, extrapolating with the first/last segment."""
+    x = np.asarray(x, float); y = np.asarray(y, float)
+    if x[0] > x[-1]:
+        x, y = x[::-1], y[::-1]
+    i = np.clip(np.searchsorted(x, xin, side='right'), 1, len(x)-1)
+    return y[i-1] + (y[i]-y[i-1])*(xin-x[i-1])/(x[i]-x[i-1])
+
+
+def refind_nemesis(Scatter, haze_waves, log_nimag, reference_wave, reference_nreal):
+    """
+    Refractive index for model 444, as in NEMESIS gsetrad.f (model 444 block).
+
+    haze_waves and reference_wave are in the spectral units of the calculation (Scatter.ISPACE),
+    as in the 444 file. ln(n_imag) is interpolated onto the Scatter.WAVE grid with VERINT in those
+    units. n_real is obtained by Kramers-Kronig with kk_new_sub applied on the wavelength grid (um),
+    which reproduces NEMESIS kk_new_sub (applied in wavenumber) to ~4e-4. If a single n_imag is
+    retrieved, n_real is constant and equal to reference_nreal.
+
+    Returns (WAVER, REFIND_REAL, REFIND_IM), with WAVER in um and in ascending order, as expected
+    by Scatter_0.makephase.
+    """
+    from archnemesis.enum import WaveUnitEnum
+    wave = np.asarray(Scatter.WAVE, float)
+    log_nimag = np.asarray(log_nimag, float)
+    if len(log_nimag) == 1:
+        nimag = np.exp(log_nimag[0])*np.ones_like(wave)
+    else:
+        nimag = np.exp(_verint(haze_waves, log_nimag, wave))
+
+    if Scatter.ISPACE == WaveUnitEnum.Wavenumber_cm:
+        wavel, reference_wavel = 1.0e4/wave, 1.0e4/reference_wave
+    else:
+        wavel, reference_wavel = wave, reference_wave
+    iord = np.argsort(wavel)
+    wavel, nimag = wavel[iord], nimag[iord]
+
+    if len(log_nimag) == 1:
+        nreal = reference_nreal*np.ones_like(wavel)
+    else:
+        nreal = kk_new_sub(wavel, nimag, reference_wavel, reference_nreal)
+    return wavel, nreal, nimag
