@@ -1157,7 +1157,8 @@ class Retrieval:
 						  apriori : bool = False,
 						  include_tau_gas : bool = True,
 						  include_tau_dust : bool = True,
-						  include_tau_cia : bool = True
+						  include_tau_cia : bool = True,
+						  include_telluric : bool = True,
 						):
 		"""
 		Run a forward model simulation
@@ -1194,6 +1195,10 @@ class Retrieval:
 			forward_model_instance.Variables.XN = self.Variables.XA
 			forward_model_instance.Variables.SX = self.Variables.SA
 		
+		if include_telluric is not True:
+			if forward_model_instance.Telluric is not None:
+				Telluric_Spectroscopy = copy.deepcopy(forward_model_instance.Telluric.Spectroscopy)
+				forward_model_instance.Telluric.Spectroscopy = None
 
 		#Selecting the forward model type
 		nemesis_method = forward_model_instance.select_nemesis_fm(
@@ -1220,6 +1225,9 @@ class Retrieval:
 		self.Layer = forward_model_instance.LayerX
 		self.Spectroscopy = forward_model_instance.SpectroscopyX
 		self.Measurement.edit_SPECMOD(modelled_spectra)
+		if include_telluric is not True:
+			if forward_model_instance.Telluric is not None:
+				self.Telluric.Spectroscopy = Telluric_Spectroscopy
 		
 		self._set_optimal_estimation_setup_from_measurement()
 		self._set_optimal_estimation_setup_from_variables(forward_model_instance.Variables)
