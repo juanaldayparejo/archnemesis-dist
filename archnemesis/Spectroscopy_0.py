@@ -1524,6 +1524,88 @@ class Spectroscopy_0:
                 raise ValueError('error in Spectroscopy :: ILBL must be either 0 (K-tables) or 2 (LBL-tables)')
 
     ######################################################################################################
+    def optimise_tables(self, Measurement, IGEOM=0, apply_doppler=True):
+        """
+        Optimise the spectral points of the absorption coefficients or k-coefficients based on 
+        the spectral points of the measurements to be fitted
+
+        Parameters
+        -----------------------
+        @param Measurement: class
+            The Measurement class containing the spectral points to be fitted
+        
+            
+        Optional parameters
+        -----------------------
+        @param IGEOM: int
+            The geometry index of the measurement to be fitted (default=0)
+        @param apply_doppler: bool
+            Whether to apply the Doppler shift for calculating the required wavelength range (default=True)
+        """
+
+        #Calculating the optimised wavelength array
+        #############################################################
+
+        iwaves = [] #Indices of the spectral points to keep
+        if Measurement.FWHM != 0.0:
+
+            
+            for iconv in range(len(Measurement.NFIL)):
+
+                wavemin = Measurement.VFIL[0,iconv]
+                wavemax = Measurement.VFIL[Measurement.NFIL[iconv]-1,iconv]
+
+                if apply_doppler==True:
+                    wavemin = Measurement.invert_doppler_shift(wavemin)
+                    wavemax = Measurement.invert_doppler_shift(wavemax)
+
+                iwl = np.where( (self.WAVE>=wavemin) & (self.WAVE<=wavemax) )[0]
+                iwaves.append(iwl)
+
+            iwaves = np.unique(np.concatenate(iwaves))
+
+        if Measurement.FWHM == 0.0:
+
+            for iconv in range(Measurement.NCONV[IGEOM]):
+
+                if apply_doppler==True:
+                    wavex = Measurement.invert_doppler_shift(Measurement.VCONV[iconv,IGEOM])
+                else:
+                    wavex = Measurement.VCONV[iconv,IGEOM]
+
+                iwl = np.searchsorted(self.WAVE, wavex, side='right') - 1
+                if iwl < 0:
+                    iwl = 0
+
+                iwh = np.searchsorted(self.WAVE, wavex, side='left')
+                if iwh >= self.NWAVE:
+                    iwh = self.NWAVE - 1
+
+                iwaves.append(iwl)
+                iwaves.append(iwh)
+
+        iwaves = np.unique(iwaves)
+        iwaves = np.sort(iwaves)
+
+        #Updating parameters in class
+        ######################################################
+
+        if self.ILBL!=SpectralCalculationModeEnum.LINE_BY_LINE_RUNTIME:
+
+            self.NWAVE = len(iwaves)
+            self.WAVE = self.WAVE[iwaves]
+
+            if self.ONLINE is False:
+                #Tables must be read and stored on memory
+                if self.ILBL==SpectralCalculationModeEnum.K_TABLES: #K-tables
+                    self.edit_K(self.K[iwaves,:,:,:,:])
+                elif self.ILBL==SpectralCalculationModeEnum.LINE_BY_LINE_TABLES: #LBL-tables
+                    self.edit_K(self.K[iwaves,:,:,:])
+                else:
+                    raise ValueError('error in Spectroscopy :: ILBL must be either 0 (K-tables) or 2 (LBL-tables)')
+
+
+    ######################################################################################################
     def write_table_hdf5(self,ID,ISO,filename):
         """
         Write information on the look-up tables loaded in the Spectroscopy class into an HDF5 file

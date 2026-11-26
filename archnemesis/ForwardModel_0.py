@@ -495,6 +495,7 @@ class ForwardModel_0:
             self.SpectroscopyX = deepcopy(self.Spectroscopy)
             if self.SpectroscopyX.NGAS>0:
                 self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                self.SpectroscopyX.optimise_tables(self.Measurement,IGEOM=IGEOM,apply_doppler=True)
 
             #Initialise array for averaging spectra (if required by NAV>1)
             SPEC = np.zeros(self.SpectroscopyX.NWAVE)
@@ -671,6 +672,7 @@ class ForwardModel_0:
             self.SpectroscopyX = deepcopy(self.Spectroscopy)
             if self.SpectroscopyX.NGAS>0:
                 self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                self.SpectroscopyX.optimise_tables(self.Measurement,IGEOM=IGEOM,apply_doppler=True)
 
             #Initialise array for averaging spectra (if required by NAV>1)
             SPEC = np.zeros(self.SpectroscopyX.NWAVE)
@@ -868,6 +870,7 @@ class ForwardModel_0:
                 #Reading tables in the required wavelength range
                 if self.SpectroscopyX.NGAS>0:
                     self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                    self.SpectroscopyX.optimise_tables(self.Measurement,apply_doppler=True)
 
                 #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
                 self.adjust_hydrostat = False
@@ -941,6 +944,7 @@ class ForwardModel_0:
             #Reading tables in the required wavelength range
             if self.SpectroscopyX.NGAS>0:
                 self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                self.SpectroscopyX.optimise_tables(self.Measurement,apply_doppler=True)
 
             #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
             self.adjust_hydrostat = False
@@ -1083,6 +1087,7 @@ class ForwardModel_0:
                 #Reading tables in the required wavelength range
                 if self.SpectroscopyX.NGAS>0:
                     self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                    self.SpectroscopyX.optimise_tables(self.Measurement,apply_doppler=True)
 
                 #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
                 self.adjust_hydrostat = False
@@ -1187,6 +1192,7 @@ class ForwardModel_0:
             #Reading tables in the required wavelength range
             if self.SpectroscopyX.NGAS>0:
                 self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                self.SpectroscopyX.optimise_tables(self.Measurement,apply_doppler=True)
 
             #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
             self.adjust_hydrostat = False
@@ -1321,6 +1327,7 @@ class ForwardModel_0:
         #Reading tables in the required wavelength range
         if self.SpectroscopyX.NGAS>0:
             self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            self.SpectroscopyX.optimise_tables(self.Measurement,apply_doppler=True)
 
         #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
         self.adjust_hydrostat = False
@@ -1449,6 +1456,7 @@ class ForwardModel_0:
         #Reading tables in the required wavelength range
         if self.SpectroscopyX.NGAS>0:
             self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            self.SpectroscopyX.optimise_tables(self.Measurement,apply_doppler=True)
 
         #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
         self.adjust_hydrostat = False
@@ -1589,6 +1597,7 @@ class ForwardModel_0:
         #Reading tables in the required wavelength range
         if self.SpectroscopyX.NGAS>0:
             self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            self.SpectroscopyX.optimise_tables(self.Measurement,apply_doppler=True)
 
         #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
         self.adjust_hydrostat = True
@@ -1676,6 +1685,7 @@ class ForwardModel_0:
             self.SpectroscopyX = deepcopy(self.Spectroscopy)
             if self.SpectroscopyX.NGAS>0:
                 self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                self.SpectroscopyX.optimise_tables(self.Measurement,IGEOM=IGEOM,apply_doppler=True)
 
             #Call process_IAV to calculate FM at each emission ray
             results = Parallel(n_jobs=n_jobs)(
@@ -1792,6 +1802,7 @@ class ForwardModel_0:
             self.SpectroscopyX = deepcopy(self.Spectroscopy)
             if self.SpectroscopyX.NGAS>0:
                 self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                self.SpectroscopyX.optimise_tables(self.Measurement,IGEOM=IGEOM,apply_doppler=True)
 
             #Call process_IAV to calculate FM at each emission ray
             results = Parallel(n_jobs=n_jobs)(
@@ -1915,6 +1926,7 @@ class ForwardModel_0:
         #Reading tables in the required wavelength range
         if self.SpectroscopyX.NGAS>0:
             self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+            self.SpectroscopyX.optimise_tables(self.Measurement,apply_doppler=True)
 
         #Setting up flag not to re-compute levels based on hydrostatic equilibrium (unless pressure or tangent altitude are retrieved)
         self.adjust_hydrostat = True
@@ -2236,6 +2248,7 @@ class ForwardModel_0:
             self.SpectroscopyX = deepcopy(self.Spectroscopy)
             if self.SpectroscopyX.NGAS>0:
                 self.SpectroscopyX.read_tables(wavemin=wavecalc_min,wavemax=wavecalc_max)
+                self.SpectroscopyX.optimise_tables(self.Measurement,IGEOM=IGEOM,apply_doppler=True)
 
             #Changing the classes taken into account the parameters in the state vector
             _ = self.subprofretg()  #xmap
