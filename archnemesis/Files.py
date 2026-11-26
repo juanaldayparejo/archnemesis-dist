@@ -708,18 +708,27 @@ def read_mre(runname,MakePlot=False):
             raise ValueError(f"Expected 3 integers for varident, got: {parts}")
         varident[i, :] = np.array(parts, dtype=int)
 
-        # 3) The next line is the varparam (5 floats)
+        # 3) The next lines are the varparam (5 floats per line). 
+        #    Will read as many varparam as defined iteratively.
+        #    More future proof than earlier versions.
+        #    Loop is broken when 'i ix xa' row is read.
+        j = 0
         line = f.readline().strip()
-        parts = line.split()
-        if len(parts) != 5:
-            raise ValueError(f"Expected 5 floats for varparam, got: {parts}")
-        varparam[i, :] = np.array(parts, dtype=float)
-            
-        # 4) The next line is typically the header for data lines ("i, ix, xa ...")
-        #    We just read it and ignore.
-        f.readline()
+        while 'ix' not in line:
+            parts = line.split()
+            if len(parts) != 5:
+                raise ValueError(f"Expected 5 extra floats for varparam, got: {parts}")
 
-        # 5) Now read each profile line for this variable
+            # Expand varparam if it needs more columns (units of 5)
+            if j+5 > varparam.shape[1]:
+                npad = ((0,0),(0,5))
+                varparam = np.pad(varparam, npad, 'constant', constant_values=0.0)
+
+            varparam[i, j:j+5] = np.array(parts, dtype=float)
+            j += 5
+            line = f.readline().strip()
+
+        # 4) Now read each profile line for this variable
         #    We know the data lines each have 6 columns.
         varlines = []
         while True:
